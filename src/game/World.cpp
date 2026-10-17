@@ -2356,6 +2356,7 @@ void World::stepRemainder(float dt) {
     if (const char* ap = aimPitchEnv)     // diagnostic: force the aim pitch (rad)
         player_.pawn().setAimPitch((float)std::atof(ap));
     { sysprof::Scope sp(sysprof::Anim); player_.pawn().updateAnimation(dt); }
+    drainAnimNotifies();   // [Systems] authored body notifies: every participant's anim windows of this step
     { sysprof::Scope sp(sysprof::WpnPres); tickWeaponPresentation(dt); }
     { sysprof::Scope sp(sysprof::Vehicle); tickVehicleBoost(dt); }
     static const bool animLog = std::getenv("WFC_ANIMLOG") != nullptr;
@@ -4981,6 +4982,30 @@ const Sweep kWeaponSweeps[] = {{0.19f, 0.35f, false, {250, 250, 350}}};
 const Sweep kWhirlSweeps[] = {{0.9f, 0.4f, true, {450, 450, 200}}, {1.6f, 0.4f, true, {450, 450, 200}}, {2.2f, 0.4f, true, {450, 450, 200}},
                               {2.8f, 0.4f, true, {450, 450, 200}}, {3.4f, 0.4f, true, {450, 450, 200}}, {4.0f, 0.4f, true, {450, 450, 200}},
                               {4.54f, 0.4f, true, {450, 450, 200}}, {5.19f, 0.4f, true, {450, 450, 200}}};
+}
+
+// Hands every participant's anim windows of this step to Systems' notify dispatcher (presentation only).
+void World::drainAnimNotifies() {
+    static const char* logEnv = std::getenv("WFC_ANIMNOTIFYLOG");   // diagnostic
+    const int logMp = !logEnv ? -2 : (logEnv[0] == 'p' ? std::atoi(logEnv + 1) : localPlayer_);
+    auto drain = [this, logMp](Character& c, int mp) {
+        const std::map<std::string, ChassisDef::ClipSource>& src = c.chassis().clipSources;
+        for (const Character::AnimWindow& w : c.animWindows()) {
+            auto it = src.find(w.clip->name);
+            if (it == src.end()) continue;   // no authored source (not a chassis clip): no notifies to fire
+            if (mp == logMp)
+                LOG_INFO("ANIMNOTIFY %s.%s [%.3f, %.3f) w %.2f", it->second.animSet.c_str(), it->second.sequence.c_str(), w.t0, w.t1, w.weight);
+            onAnimNotifyWindow(mp, it->second.animSet.c_str(), it->second.sequence.c_str(), w.t0, w.t1, false, w.weight);
+        }
+        c.clearAnimWindows();
+    };
+    drain(player_.pawn(), localPlayer_);
+    for (MatchOpponent* o : opponents_) drain(o->pawn(), o->matchPlayer());
+}
+
+// [Systems] fills: fire the authored notify rows of (animSet, sequence) with time in [t0, t1). Gameplay's stub.
+void World::onAnimNotifyWindow(int matchPlayer, const char* animSet, const char* sequence, float t0, float t1, bool backwards, float weight) {
+    (void)matchPlayer; (void)animSet; (void)sequence; (void)t0; (void)t1; (void)backwards; (void)weight;
 }
 
 void World::startLocalMelee(bool whirlwind) {

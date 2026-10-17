@@ -182,6 +182,15 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
             if (!r.name.empty() && !r.source.empty()) d.robotAnims.push_back(r);
         }
     }
+    for (const char* form : {"robot", "vehicle"}) {
+        const assets::Json& an = c[form]["animations"];
+        for (size_t i = 0; i < an.size(); ++i) {
+            const std::string name = an[i]["name"].asString(), set = an[i]["source_animset"].asString();
+            if (name.empty() || set.empty()) continue;
+            const std::string seq = an[i]["sequence"].asString();
+            d.clipSources.emplace(name, ChassisDef::ClipSource{set, seq.empty() ? name : seq});
+        }
+    }
     if (d.robotGlb.empty() || platform::dataFileSize(extRoot + d.robotGlb) < 0) { d.loadError = "robot.glb missing for " + id; return false; }
     if (d.vehicleGlb.empty() || platform::dataFileSize(extRoot + d.vehicleGlb) < 0) { d.loadError = "vehicle.glb missing for " + id; return false; }
 

@@ -1334,6 +1334,9 @@ private:
     float lockTimer_ = 0.0f, holdLockTimer_ = 0.0f;
     bool locked_ = false;
     void startLocalMelee(bool whirlwind);
+    void drainAnimNotifies();
+    // One body animation layer's playing-time window [t0, t1) this step (Systems: the authored AnimNotifies in it).
+    void onAnimNotifyWindow(int matchPlayer, const char* animSet, const char* sequence, float t0, float t1, bool backwards, float weight);
     void tickLocalMelee(float dt);
     bool deferredKillstreak_ = false;
     int lockedClip_ = 0;

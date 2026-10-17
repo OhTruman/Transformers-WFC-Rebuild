@@ -6,6 +6,7 @@
 // Defaults below are the Optimus ("Truck") values the rebuild used before Pass 22, so a missing field keeps behaviour.
 #pragma once
 #include <cmath>
+#include <map>
 #include <string>
 #include <vector>
 #include "core/Config.h"
@@ -104,6 +105,10 @@ struct ChassisDef {
     std::string vehicleSkelGltf;   // character.json vehicle.source_gltf (the death sockets' mesh key)
     std::string robotSkelGltf;
     std::vector<AnimRef> robotAnims;
+    // Clip name -> its authored AnimSet object path and SequenceName (character.json robot / vehicle animations: source_animset,
+    // sequence), as the authored notify rows key them.
+    struct ClipSource { std::string animSet, sequence; };
+    std::map<std::string, ClipSource> clipSources;
     std::string armGltf, armAnimGltf;         // ArmBlueprint (umodel content paths)
     SocketDef weaponPrimary, weaponSecondary; // robot WeaponSocket_Primary / _Secondary
     SocketDef vehicleWeapon;                  // vehicle WeaponSocket_Primary

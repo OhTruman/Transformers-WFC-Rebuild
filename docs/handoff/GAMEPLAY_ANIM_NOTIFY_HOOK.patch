@@ -1,0 +1,219 @@
+diff --git a/src/game/Character.cpp b/src/game/Character.cpp
+index 06d172b8..31341538 100644
+--- a/src/game/Character.cpp
++++ b/src/game/Character.cpp
+@@ -209,6 +209,7 @@ void Character::robotLocomotion(const assets::SkinnedModel& mdl, float dt) {
+     for (int i = 0; i < 8; ++i) {
+         if (clips[i] < 0 || w[i] <= 1e-3f) continue;
+         float t = locoPhase_ * mdl.clips[(size_t)clips[i]].duration;
++        traceClip(mdl, clips[i], t, true, w[i]);
+         if (total <= 0.0f) {
+             assets::samplePose(mdl, clips[i], t, true, basePose_);
+             total = w[i];
+@@ -333,6 +334,7 @@ void Character::playClip(const assets::SkinnedModel& mdl, int clip, bool loop, f
+     beginBase(mdl, clip, blendOnChange);
+     animName_ = mdl.clips[(size_t)clip].name;
+     assets::samplePose(mdl, clip, animTime_, loop, basePose_);
++    traceClip(mdl, clip, animTime_, loop, 1.0f);
+     finishBaseBlend(dt);
+ }
+ 
+@@ -429,6 +431,7 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
+             reloadMask_[i] = isRoot ? 0.0f : (1.0f - R.upperMask[i]) * standW;
+         }
+         assets::samplePose(mdl, R.reloadClip, reloadT_, false, layerPose_);
++        traceClip(mdl, R.reloadClip, reloadT_, false, reloadW_);
+         assets::blendPose(finalPose_, layerPose_, reloadW_, finalPose_, &reloadMask_);
+         assets::blendPoseMeshSpace(mdl, finalPose_, layerPose_, reloadW_, R.upperMask, finalPose_);
+     }
+@@ -441,6 +444,7 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
+         actionW_ = approach(actionW_, on ? 1.0f : 0.0f, dt, 0.15f);
+         if (actionW_ > 0.0f) {
+             assets::samplePose(mdl, actionClip_, std::min(actionT_, len), false, layerPose_);
++            traceClip(mdl, actionClip_, std::min(actionT_, len), false, actionW_);
+             if (actionUpper_) assets::blendPoseMeshSpace(mdl, finalPose_, layerPose_, actionW_, R.upperMask, finalPose_);
+             else {
+                 actionMask_.assign(R.upperMask.size(), 1.0f);
+@@ -482,6 +486,7 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
+     hoverW_ = approach(hoverW_, (vehRig && steady) ? 1.0f : 0.0f, dt, core::config::kSlotBlend);
+     if (vehRig && hoverW_ > 0.0f) {
+         assets::samplePose(mdl, vehicleRig_.hoverAddClip, hoverT_, true, layerPose_, /*additive*/ true);
++        traceClip(mdl, vehicleRig_.hoverAddClip, hoverT_, true, hoverW_);
+         assets::addPose(finalPose_, layerPose_, hoverW_);
+     }
+ 
+@@ -503,9 +508,33 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
+ }
+ 
+ // Pick the base-layer source from the movement state, then apply the overlay layers.
++// The traced layers -> notify windows against the previous update (see Character.h AnimWindow).
++void Character::endAnimTrace() {
++    if (animWindows_.size() > 256) animWindows_.clear();   // never drained (no World loop): bounded
++    for (const AnimTrace& a : animTrace_) {
++        const float dur = a.clip->duration;
++        float t1 = a.t;
++        if (a.loop && dur > 0.0f) { t1 = std::fmod(t1, dur); if (t1 < 0.0f) t1 += dur; }
++        const AnimTrace* p = nullptr;
++        for (const AnimTrace& q : animTracePrev_) if (q.clip == a.clip) { p = &q; break; }
++        if (!p) { const float t0 = std::max(0.0f, t1 - animTraceDt_); if (t1 > t0) animWindows_.push_back({a.clip, t0, t1, a.weight}); continue; }
++        float t0 = p->t;
++        if (a.loop && dur > 0.0f) { t0 = std::fmod(t0, dur); if (t0 < 0.0f) t0 += dur; }
++        if (t1 > t0) animWindows_.push_back({a.clip, t0, t1, a.weight});
++        else if (t1 < t0) {
++            if (a.loop && dur > t0) animWindows_.push_back({a.clip, t0, dur, a.weight});
++            if (t1 > 0.0f) animWindows_.push_back({a.clip, 0.0f, t1, a.weight});   // the wrap's second part / a restarted one-shot
++        }
++    }
++    animTracePrev_.swap(animTrace_);
++    animTrace_.clear();
++}
++
+ void Character::updateAnimation(float dt) {
+     const assets::SkinnedModel* mdl = currentModel();
+     if (!mdl || !mdl->valid()) return;
++    animTrace_.clear(); animTraceDt_ = dt;
++    struct TraceEnd { Character* c; ~TraceEnd() { c->endAnimTrace(); } } traceEnd{this};   // every return path
+     if (robotModel_ && !robotRig_.built && robotModel_->valid()) buildRobotRig(*robotModel_);
+     if (vehicleModel_ && !vehicleRig_.built && vehicleModel_->valid()) buildVehicleRig(*vehicleModel_);
+ 
+@@ -539,6 +568,7 @@ void Character::updateAnimation(float dt) {
+                 animTime_ = std::min(t, nm->clips[(size_t)ic].duration);
+                 animName_ = nm->clips[(size_t)ic].name;
+                 assets::samplePose(*mdl, ic, animTime_, false, basePose_);
++                traceClip(*mdl, ic, animTime_, false, 1.0f);
+                 finalizePose(*mdl, dt);
+                 updatePartner(animTime_);
+                 return;
+diff --git a/src/game/Character.h b/src/game/Character.h
+index 5f31c48d..9c6a106d 100644
+--- a/src/game/Character.h
++++ b/src/game/Character.h
+@@ -359,6 +359,10 @@ public:
+ 
+     // Advance the animation state machine + CPU-skin into the pose buffer (call once per step).
+     void updateAnimation(float dt);
++    // Anim notify windows (presentation): each traced layer's [t0, t1) since the previous update; World drains them per step.
++    struct AnimWindow { const assets::AnimClip* clip; float t0, t1, weight; };
++    const std::vector<AnimWindow>& animWindows() const { return animWindows_; }
++    void clearAnimWindows() { animWindows_.clear(); }
+ 
+     // World transform of a bone of the currently displayed model (this step's pose).
+     bool boneWorld(const std::string& bone, core::Mat4& out) const {
+@@ -583,6 +587,17 @@ private:
+     int clip_ = -1;                  // active base-layer source (clip index or kVehicleHoverKey)
+     float animTime_ = 0.0f;
+     std::string animName_ = "-";
++    struct AnimTrace { const assets::AnimClip* clip; float t, weight; bool loop; };
++    std::vector<AnimTrace> animTrace_, animTracePrev_;   // this update's / the previous update's sampled layers
++    std::vector<AnimWindow> animWindows_;
++    float animTraceDt_ = 0.0f;
++    void traceClip(const assets::SkinnedModel& mdl, int clip, float t, bool loop, float weight) {
++        if (clip < 0 || (size_t)clip >= mdl.clips.size() || weight <= 0.0f) return;
++        const assets::AnimClip* c = &mdl.clips[(size_t)clip];
++        for (AnimTrace& a : animTrace_) if (a.clip == c) { if (weight > a.weight) a.weight = weight; return; }
++        animTrace_.push_back({c, t, weight, loop});
++    }
++    void endAnimTrace();
+     mutable render::MeshData poseBuf_;
+     // Deferred vertex skinning (bones per step, vertices on the draw that needs them): see updateAnimation / ensureSkinned.
+     const assets::SkinnedModel* bodySkinModel_ = nullptr;
+diff --git a/src/game/ChassisDef.cpp b/src/game/ChassisDef.cpp
+index 4830c9bf..0ae9c09a 100644
+--- a/src/game/ChassisDef.cpp
++++ b/src/game/ChassisDef.cpp
+@@ -182,6 +182,15 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
+             if (!r.name.empty() && !r.source.empty()) d.robotAnims.push_back(r);
+         }
+     }
++    for (const char* form : {"robot", "vehicle"}) {
++        const assets::Json& an = c[form]["animations"];
++        for (size_t i = 0; i < an.size(); ++i) {
++            const std::string name = an[i]["name"].asString(), set = an[i]["source_animset"].asString();
++            if (name.empty() || set.empty()) continue;
++            const std::string seq = an[i]["sequence"].asString();
++            d.clipSources.emplace(name, ChassisDef::ClipSource{set, seq.empty() ? name : seq});
++        }
++    }
+     if (d.robotGlb.empty() || platform::dataFileSize(extRoot + d.robotGlb) < 0) { d.loadError = "robot.glb missing for " + id; return false; }
+     if (d.vehicleGlb.empty() || platform::dataFileSize(extRoot + d.vehicleGlb) < 0) { d.loadError = "vehicle.glb missing for " + id; return false; }
+ 
+diff --git a/src/game/ChassisDef.h b/src/game/ChassisDef.h
+index a0822451..803d22dc 100644
+--- a/src/game/ChassisDef.h
++++ b/src/game/ChassisDef.h
+@@ -6,6 +6,7 @@
+ // Defaults below are the Optimus ("Truck") values the rebuild used before Pass 22, so a missing field keeps behaviour.
+ #pragma once
+ #include <cmath>
++#include <map>
+ #include <string>
+ #include <vector>
+ #include "core/Config.h"
+@@ -104,6 +105,10 @@ struct ChassisDef {
+     std::string vehicleSkelGltf;   // character.json vehicle.source_gltf (the death sockets' mesh key)
+     std::string robotSkelGltf;
+     std::vector<AnimRef> robotAnims;
++    // Clip name -> its authored AnimSet object path and SequenceName (character.json robot / vehicle animations: source_animset,
++    // sequence), as the authored notify rows key them.
++    struct ClipSource { std::string animSet, sequence; };
++    std::map<std::string, ClipSource> clipSources;
+     std::string armGltf, armAnimGltf;         // ArmBlueprint (umodel content paths)
+     SocketDef weaponPrimary, weaponSecondary; // robot WeaponSocket_Primary / _Secondary
+     SocketDef vehicleWeapon;                  // vehicle WeaponSocket_Primary
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 3373a1cf..e4cb5c50 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -2317,6 +2317,7 @@ void World::stepRemainder(float dt) {
+     if (const char* ap = aimPitchEnv)     // diagnostic: force the aim pitch (rad)
+         player_.pawn().setAimPitch((float)std::atof(ap));
+     { sysprof::Scope sp(sysprof::Anim); player_.pawn().updateAnimation(dt); }
++    drainAnimNotifies();   // [Systems] authored body notifies: every participant's anim windows of this step
+     { sysprof::Scope sp(sysprof::WpnPres); tickWeaponPresentation(dt); }
+     { sysprof::Scope sp(sysprof::Vehicle); tickVehicleBoost(dt); }
+     static const bool animLog = std::getenv("WFC_ANIMLOG") != nullptr;
+@@ -4944,6 +4945,30 @@ const Sweep kWhirlSweeps[] = {{0.9f, 0.4f, true, {450, 450, 200}}, {1.6f, 0.4f,
+                               {4.54f, 0.4f, true, {450, 450, 200}}, {5.19f, 0.4f, true, {450, 450, 200}}};
+ }
+ 
++// Hands every participant's anim windows of this step to Systems' notify dispatcher (presentation only).
++void World::drainAnimNotifies() {
++    static const char* logEnv = std::getenv("WFC_ANIMNOTIFYLOG");   // diagnostic
++    const int logMp = !logEnv ? -2 : (logEnv[0] == 'p' ? std::atoi(logEnv + 1) : localPlayer_);
++    auto drain = [this, logMp](Character& c, int mp) {
++        const std::map<std::string, ChassisDef::ClipSource>& src = c.chassis().clipSources;
++        for (const Character::AnimWindow& w : c.animWindows()) {
++            auto it = src.find(w.clip->name);
++            if (it == src.end()) continue;   // no authored source (not a chassis clip): no notifies to fire
++            if (mp == logMp)
++                LOG_INFO("ANIMNOTIFY %s.%s [%.3f, %.3f) w %.2f", it->second.animSet.c_str(), it->second.sequence.c_str(), w.t0, w.t1, w.weight);
++            onAnimNotifyWindow(mp, it->second.animSet.c_str(), it->second.sequence.c_str(), w.t0, w.t1, false, w.weight);
++        }
++        c.clearAnimWindows();
++    };
++    drain(player_.pawn(), localPlayer_);
++    for (MatchOpponent* o : opponents_) drain(o->pawn(), o->matchPlayer());
++}
++
++// [Systems] fills: fire the authored notify rows of (animSet, sequence) with time in [t0, t1). Gameplay's stub.
++void World::onAnimNotifyWindow(int matchPlayer, const char* animSet, const char* sequence, float t0, float t1, bool backwards, float weight) {
++    (void)matchPlayer; (void)animSet; (void)sequence; (void)t0; (void)t1; (void)backwards; (void)weight;
++}
++
+ void World::startLocalMelee(bool whirlwind) {
+     if (localPlayerDead()) return;
+     startMeleeFor(player_.pawn(), localPlayer_, whirlwind, player_.controller().viewYaw());
+diff --git a/src/game/World.h b/src/game/World.h
+index 337821c0..a30e61ac 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1333,6 +1333,9 @@ private:
+     float lockTimer_ = 0.0f, holdLockTimer_ = 0.0f;
+     bool locked_ = false;
+     void startLocalMelee(bool whirlwind);
++    void drainAnimNotifies();
++    // One body animation layer's playing-time window [t0, t1) this step (Systems: the authored AnimNotifies in it).
++    void onAnimNotifyWindow(int matchPlayer, const char* animSet, const char* sequence, float t0, float t1, bool backwards, float weight);
+     void tickLocalMelee(float dt);
+     bool deferredKillstreak_ = false;
+     int lockedClip_ = 0;

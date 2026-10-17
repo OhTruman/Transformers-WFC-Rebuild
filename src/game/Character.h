@@ -359,6 +359,10 @@ public:
 
     // Advance the animation state machine + CPU-skin into the pose buffer (call once per step).
     void updateAnimation(float dt);
+    // Anim notify windows (presentation): each traced layer's [t0, t1) since the previous update; World drains them per step.
+    struct AnimWindow { const assets::AnimClip* clip; float t0, t1, weight; };
+    const std::vector<AnimWindow>& animWindows() const { return animWindows_; }
+    void clearAnimWindows() { animWindows_.clear(); }
 
     // World transform of a bone of the currently displayed model (this step's pose).
     bool boneWorld(const std::string& bone, core::Mat4& out) const {
@@ -583,6 +587,17 @@ private:
     int clip_ = -1;                  // active base-layer source (clip index or kVehicleHoverKey)
     float animTime_ = 0.0f;
     std::string animName_ = "-";
+    struct AnimTrace { const assets::AnimClip* clip; float t, weight; bool loop; };
+    std::vector<AnimTrace> animTrace_, animTracePrev_;   // this update's / the previous update's sampled layers
+    std::vector<AnimWindow> animWindows_;
+    float animTraceDt_ = 0.0f;
+    void traceClip(const assets::SkinnedModel& mdl, int clip, float t, bool loop, float weight) {
+        if (clip < 0 || (size_t)clip >= mdl.clips.size() || weight <= 0.0f) return;
+        const assets::AnimClip* c = &mdl.clips[(size_t)clip];
+        for (AnimTrace& a : animTrace_) if (a.clip == c) { if (weight > a.weight) a.weight = weight; return; }
+        animTrace_.push_back({c, t, weight, loop});
+    }
+    void endAnimTrace();
     mutable render::MeshData poseBuf_;
     // Deferred vertex skinning (bones per step, vertices on the draw that needs them): see updateAnimation / ensureSkinned.
     const assets::SkinnedModel* bodySkinModel_ = nullptr;

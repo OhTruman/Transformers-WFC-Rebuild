@@ -209,6 +209,7 @@ void Character::robotLocomotion(const assets::SkinnedModel& mdl, float dt) {
     for (int i = 0; i < 8; ++i) {
         if (clips[i] < 0 || w[i] <= 1e-3f) continue;
         float t = locoPhase_ * mdl.clips[(size_t)clips[i]].duration;
+        traceClip(mdl, clips[i], t, true, w[i]);
         if (total <= 0.0f) {
             assets::samplePose(mdl, clips[i], t, true, basePose_);
             total = w[i];
@@ -333,6 +334,7 @@ void Character::playClip(const assets::SkinnedModel& mdl, int clip, bool loop, f
     beginBase(mdl, clip, blendOnChange);
     animName_ = mdl.clips[(size_t)clip].name;
     assets::samplePose(mdl, clip, animTime_, loop, basePose_);
+    traceClip(mdl, clip, animTime_, loop, 1.0f);
     finishBaseBlend(dt);
 }
 
@@ -429,6 +431,7 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
             reloadMask_[i] = isRoot ? 0.0f : (1.0f - R.upperMask[i]) * standW;
         }
         assets::samplePose(mdl, R.reloadClip, reloadT_, false, layerPose_);
+        traceClip(mdl, R.reloadClip, reloadT_, false, reloadW_);
         assets::blendPose(finalPose_, layerPose_, reloadW_, finalPose_, &reloadMask_);
         assets::blendPoseMeshSpace(mdl, finalPose_, layerPose_, reloadW_, R.upperMask, finalPose_);
     }
@@ -441,6 +444,7 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
         actionW_ = approach(actionW_, on ? 1.0f : 0.0f, dt, 0.15f);
         if (actionW_ > 0.0f) {
             assets::samplePose(mdl, actionClip_, std::min(actionT_, len), false, layerPose_);
+            traceClip(mdl, actionClip_, std::min(actionT_, len), false, actionW_);
             if (actionUpper_) assets::blendPoseMeshSpace(mdl, finalPose_, layerPose_, actionW_, R.upperMask, finalPose_);
             else {
                 actionMask_.assign(R.upperMask.size(), 1.0f);
@@ -482,6 +486,7 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
     hoverW_ = approach(hoverW_, (vehRig && steady) ? 1.0f : 0.0f, dt, core::config::kSlotBlend);
     if (vehRig && hoverW_ > 0.0f) {
         assets::samplePose(mdl, vehicleRig_.hoverAddClip, hoverT_, true, layerPose_, /*additive*/ true);
+        traceClip(mdl, vehicleRig_.hoverAddClip, hoverT_, true, hoverW_);
         assets::addPose(finalPose_, layerPose_, hoverW_);
     }
 
@@ -503,9 +508,33 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
 }
 
 // Pick the base-layer source from the movement state, then apply the overlay layers.
+// The traced layers -> notify windows against the previous update (see Character.h AnimWindow).
+void Character::endAnimTrace() {
+    if (animWindows_.size() > 256) animWindows_.clear();   // never drained (no World loop): bounded
+    for (const AnimTrace& a : animTrace_) {
+        const float dur = a.clip->duration;
+        float t1 = a.t;
+        if (a.loop && dur > 0.0f) { t1 = std::fmod(t1, dur); if (t1 < 0.0f) t1 += dur; }
+        const AnimTrace* p = nullptr;
+        for (const AnimTrace& q : animTracePrev_) if (q.clip == a.clip) { p = &q; break; }
+        if (!p) { const float t0 = std::max(0.0f, t1 - animTraceDt_); if (t1 > t0) animWindows_.push_back({a.clip, t0, t1, a.weight}); continue; }
+        float t0 = p->t;
+        if (a.loop && dur > 0.0f) { t0 = std::fmod(t0, dur); if (t0 < 0.0f) t0 += dur; }
+        if (t1 > t0) animWindows_.push_back({a.clip, t0, t1, a.weight});
+        else if (t1 < t0) {
+            if (a.loop && dur > t0) animWindows_.push_back({a.clip, t0, dur, a.weight});
+            if (t1 > 0.0f) animWindows_.push_back({a.clip, 0.0f, t1, a.weight});   // the wrap's second part / a restarted one-shot
+        }
+    }
+    animTracePrev_.swap(animTrace_);
+    animTrace_.clear();
+}
+
 void Character::updateAnimation(float dt) {
     const assets::SkinnedModel* mdl = currentModel();
     if (!mdl || !mdl->valid()) return;
+    animTrace_.clear(); animTraceDt_ = dt;
+    struct TraceEnd { Character* c; ~TraceEnd() { c->endAnimTrace(); } } traceEnd{this};   // every return path
     if (robotModel_ && !robotRig_.built && robotModel_->valid()) buildRobotRig(*robotModel_);
     if (vehicleModel_ && !vehicleRig_.built && vehicleModel_->valid()) buildVehicleRig(*vehicleModel_);
 
@@ -539,6 +568,7 @@ void Character::updateAnimation(float dt) {
                 animTime_ = std::min(t, nm->clips[(size_t)ic].duration);
                 animName_ = nm->clips[(size_t)ic].name;
                 assets::samplePose(*mdl, ic, animTime_, false, basePose_);
+                traceClip(*mdl, ic, animTime_, false, 1.0f);
                 finalizePose(*mdl, dt);
                 updatePartner(animTime_);
                 return;
