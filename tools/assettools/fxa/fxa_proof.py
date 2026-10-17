@@ -65,14 +65,18 @@ def main(actor='Trypticon', anim='DX_TRPTCN_LK004350'):
             val[name] = s
         rows = {}
         for b in x['bones']:
-            rot = np.tile([1.0, 0, 0, 0], (len(ts), 1)); pos = np.zeros((len(ts), 3))
+            acc = np.tile([1.0, 0, 0, 0], (len(ts), 1)); pos = np.zeros((len(ts), 3)); scl = np.zeros((len(ts), 3))
             for l in b['links']:
                 s = val.get(l['node'])
                 if s is None: continue
-                # link rot = the bone's absolute rotation at node value 1 -> delta from rest = conj(rest) * rot; dpos is a delta
+                # spec (CAMPAIGN_FACEFX_RE.md, pose hook): link rot = the bone's absolute rotation at value 1; delta = conj(rest)*rot;
+                # rotation = normalize(1 + sum v * (delta - 1)) (nlerp of the deltas); translation / scale add v * dPos / v * dScale
                 rest = np.array(b['rest_rot'], float); conj = rest * np.array([1, -1, -1, -1])
                 dq = qmul(conj[None, :], np.array(l['rot'], float)[None, :])[0]
-                pos += s[:, None] * np.array(l['dpos']); rot = qmul(rot, slerp_id(dq, np.clip(np.abs(s), 0, None)))
+                if dq[0] < 0: dq = -dq
+                acc = acc + s[:, None] * (dq - np.array([1.0, 0, 0, 0]))
+                pos += s[:, None] * np.array(l['dpos']); scl += s[:, None] * np.array(l['dscale'])
+            rot = acc / np.linalg.norm(acc, axis=1)[:, None]
             rows[b['name']] = (pos, rot)
         res[mode] = rows
         with open(os.path.join(HERE, 'proof_%s_%s.csv' % (anim, mode)), 'w') as fo:
@@ -94,7 +98,11 @@ def main(actor='Trypticon', anim='DX_TRPTCN_LK004350'):
             for v in t:
                 r = find(v)
                 if r: return r
-    w = find(A.cue(a['cue']))
+    w = find(A.cue(a['cue'])) if a['cue'] else None
+    if not w:
+        out = {'actor': os.path.basename(f), 'anim': anim, 'curves': len(cur), 'start': a['start'], 'end': a['end'], 'b': a['b'],
+               'wave': 'none in the cue tree: CSVs written, no voice comparison'}
+        print(out); return out
     wp = os.path.join(os.path.dirname(P.EA), w['wav'])
     with wave.open(wp) as wf:
         sr = wf.getframerate(); ch = wf.getnchannels(); raw = wf.readframes(wf.getnframes())

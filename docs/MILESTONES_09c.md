@@ -2328,3 +2328,16 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   MP finding (data left unchanged by rule): Escalation maps BrokenHope (17) and Remnant (16) also place TnWeaponPickupFactory
   that MP gameplay.json omits. Integration decision: PACKAGE 7 queue item (MP fidelity, data regen + Gameplay consumption;
   not a package 6 change, MP data is frozen for the gate). AssetTools -> item 2 (D2 bsp_alignment, A2 collision gap).
+2026-10-17 01:35 AssetTools items 2-4 DONE (assettools/checkpoint 8919438; summary, chapter docs, backlog, CAMPAIGN_FACEFX_RE.md,
+  fxa_proof.py copied by file). bsp_alignment was a parser bug, not geometry: m04_bsp located each ModelComponent's model by a
+  byte search that also matched the tag stream's terminating None index (D2_COR_TNL3_Art_m: index 868 = the model's export
+  index, 212 components skipped, 747 "unaccounted" nodes); fixed (search from byte 4), bsp_alignment COMPLETE (difference 0)
+  on all 10 chapters, MP bsp audits identical on all 10. A2 gap EXPLAINED: SMCA_10261's 5 components are WallDeco / BridgeArchTop
+  meshes with no collision (none in UE3 either); the ATTENTION came from 125 mesh-less Courtyard components, now explained by
+  the audit (MP identical on Berth / Gorge); structure audit PASS on all 10. FaceFX: cinematic slope = i8 / 127 x the header
+  f32 (every slope peaks at |127|, r 0.83 with key tangents); phonemeId = FaceFX ARPAbet order (42 entries, all on the right
+  mouth targets, SIL alone unmapped; strong hypothesis, names not in the exe). Pose-hook spec for Gameplay in
+  CAMPAIGN_FACEFX_RE.md (replace, not add, the face bones; test Optimus DX_OPRIME_LK002649 at t = 1.0 s vs reference CSVs,
+  tolerance 1e-4 pos / 1e-3 quat). Escalation weapon-pickup regen line added to CAMPAIGN_BACKLOG (package 7).
+  Next for AssetTools: backlog 5 (campaign player starts / walk graph seeding; the audit's walk-graph checks are empty in the
+  campaign because they seed from MP player-start classes).
