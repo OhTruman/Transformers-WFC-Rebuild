@@ -2673,7 +2673,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
               // lighting gives way by the same weight. uRtGloss = WFC_RT_REFLSTRENGTH (Realistic only; 0 = off).
               "uniform float uRtGloss;\n" +
               // X6 (Realistic programs only - Faithful compiles the original text exactly): uRtX6 = (gate floor, damp amount,
-              // 1 / patch size m, damp highlight gain); 0 = off. Damp = up-facing ground (world Y, metres) x value noise patches
+              // 1 / patch size m, the damp sheen floor); 0 = off. Damp = up-facing ground (world Y, metres) x value noise patches
               std::string(x6Build ?
               "uniform vec4 uRtX6;\n"
               "float wfcX6Hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n"
@@ -2683,7 +2683,10 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
               "    if (uRtX6.y <= 0.0) return 0.0;\n"
               "    vec2 q = vPos.xz * uRtX6.z;\n"
               "    float pn = wfcX6Noise(q) * 0.7 + wfcX6Noise(q * 3.7 + 17.0) * 0.3;\n"
-              "    return uRtX6.y * smoothstep(0.6, 0.9, normalize(vNrm).y) * smoothstep(0.42, 0.62, pn);\n"
+              // (round 3: the damp amount sets the patches' coverage; inside a patch the film is whole - round 1's amount x
+              // mask left the ground half rough, a reflection blurred over ~5 mips: darker blotches, no sheen)
+              "    float t0 = mix(0.78, 0.38, uRtX6.y);\n"
+              "    return smoothstep(0.6, 0.9, normalize(vNrm).y) * smoothstep(t0, t0 + 0.08, pn);\n"
               "}\n" : "") +
               "vec3 wfcRtGlossMix(vec3 c, float sp, vec3 spec, vec3 n, vec3 V) {\n"
               "    if (uRtReflOn == 0 || uRtGloss <= 0.0) return c;\n"
@@ -2699,19 +2702,21 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
               std::string(x6Build ?
               "    float wet = wfcX6Wet();\n"
               "    gate = max(gate, max(uRtX6.x, wet));\n"
-              "    c *= 1.0 - 0.25 * wet;\n" : "") +
+              "    c *= 1.0 - 0.2 * wet;\n" : "") +
               "    if (gate <= 0.0) return c;\n"
               "    vec4 p = uRtReflVP * vec4(vPos, 1.0);\n"
               "    if (p.w <= 0.0) return c;\n"
               "    vec2 uv = p.xy / p.w * 0.5 + 0.5;\n"
               "    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return c;\n"
               "    float rough = clamp(pow(2.0 / (max(sp, 0.0) + 2.0), 0.25), 0.02, 1.0);\n"   // (perceptual roughness: Blinn-Phong n -> GGX alpha, its square root)
-              + std::string(x6Build ? "    rough = mix(rough, 0.08, wet * 0.85);\n" : "") +   // (X6: a damp film is smooth)
+              + std::string(x6Build ? "    rough = mix(rough, 0.05, wet);\n" : "") +   // (X6: a damp film is smooth)
               "    ivec2 rs = textureSize(uRtRefl, 0);\n"
               "    vec4 r = textureLod(uRtRefl, uv, uRtReflLod + rough * log2(float(max(rs.x, rs.y))));\n"
               "    if (r.a <= 1e-3) return c;\n"
               "    float NoV = clamp(dot(normalize(n), normalize(V)), 0.0, 1.0);\n"
               "    float k = (0.04 + (max(1.0 - rough, 0.04) - 0.04) * pow(1.0 - NoV, 5.0)) * gate * uRtGloss * clamp(r.a, 0.0, 1.0);\n"
+              // (X6 round 3: a damp film shows its sheen at play angles too - a floor on the reflection's share, x6sheen)
+              + std::string(x6Build ? "    k = max(k, wet * uRtX6.w * uRtGloss * clamp(r.a, 0.0, 1.0));\n" : "") +
               // (item 3) a rough surface keeps most of its own lighting at grazing angles: the layer's share is capped by
               // the roughness (rim bands no longer turn into the dark geometry they reflect)
               "    k = min(k, 0.25 + 0.75 * (1.0 - rough) * (1.0 - rough));\n"
@@ -2834,15 +2839,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
             const size_t s = mainLM.find(spec, at);
             const size_t u = mainLM.find("uniform int uVertexLM;");
             if (s != std::string::npos && u != std::string::npos) {
-                mainLM.insert(s + spec.size(), "        c += o.SpecularColor * Ls * uRtLMSpec;   // (X2: the extra over the original)\n" +
-                    // X6: a damp patch is a smooth film whatever the material underneath: the same three directional
-                    // lightmap lobes at a sharp exponent, not tinted by the material's specular colour (water is clear)
-                    std::string(x6Build ?
-                    "        { float wt = wfcX6Wet(); if (wt > 0.0) { float SPw = max(SP, 160.0);\n"
-                    "            vec3 Lw = pow(max(clamp(dot(normalize(n + LMB0), R), 0.0, 1.0), 0.0001), SPw) * l0 * uLMScale[0]\n"
-                    "                    + pow(max(clamp(dot(normalize(n + LMB1), R), 0.0, 1.0), 0.0001), SPw) * l1 * uLMScale[1]\n"
-                    "                    + pow(max(clamp(dot(normalize(n + LMB2), R), 0.0, 1.0), 0.0001), SPw) * l2 * uLMScale[2];\n"
-                    "            c += Lw * (wt * uRtX6.w); } }\n" : ""));
+                mainLM.insert(s + spec.size(), "        c += o.SpecularColor * Ls * uRtLMSpec;   // (X2: the extra over the original)\n");
                 mainLM.insert(u, "uniform float uRtLMSpec;   // (X2) the Realistic lightmap specular's extra gain\n");
             }
         }
@@ -3989,7 +3986,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
                     if (!rtdef::envSet("WFC_X6_DAMP"))
                         for (const auto& mx : kMapX6) if (dataDir_.find(mx.map) != std::string::npos) x6Damp_ = mx.damp;
                 }
-                Uniform4f(ULOC(P, "uRtX6"), rtdef::x6Refl(), x6Damp_, 1.0f / rtdef::x6Scale(), rtdef::x6Spec());
+                Uniform4f(ULOC(P, "uRtX6"), rtdef::x6Refl(), x6Damp_, 1.0f / rtdef::x6Scale(), rtdef::x6Sheen());
             } else Uniform4f(ULOC(P, "uRtX6"), 0.0f, 0.0f, 0.0f, 0.0f);
             UniformMatrix4fv(ULOC(P, "uRtReflVP"), 1, GL_FALSE, rtReflVP_);
         }
