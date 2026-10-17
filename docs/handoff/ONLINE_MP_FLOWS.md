@@ -387,25 +387,26 @@ Tests (frontend, all headless, before any network exists):
 
 ---
 
-## 6. Decisions for the user (D) and open RE questions (R)
+## 6. Decisions (D) and open RE questions (R)
 
-- **D1** Display name: reuse the Accounts screen's account name as the online display name, or a separate field?
-- **D2** "Unable to Host" on PC: keep the original NAT text, or a PC text ("No connection could be opened for others
-  to join.")?
-- **D3** Unlocks in online sessions: trust each player's lobby loadout (friends-first), everything unlocked, or a host
-  setting (profile doc open question 5).
-- **D4** Ready: keep the original gate (every player has a character + the host starts), or add an explicit Ready
-  toggle (PC EXTENSION)? Recommendation: the original gate.
-- **D5** Idle kick in private and friends sessions: on (original 180 s) or off?
-- **D6** Join while a match runs, phase 1 (the original allowed it; faithful late join comes in phase 1b): wait in the
-  lobby until the match returns (recommended), or refuse with the original "game is full or no longer available" text?
-- **D7** Voice chat (the original had it: MaxRemoteTalkers 30, HeadsetState column): in scope or not?
-- **D8** XP online: the original gave XP only in public matches. Private online games with friends: no XP (faithful),
-  or XP (PC ADAPTATION, as offline bot matches today)?
-- **D9** Host loss: faithful end of session (recommended for phase 1) or host migration (phase 1b)?
-- **D10** Mixed PC / browser lobbies: cap Player Limit to 5 v 5 automatically while a browser peer is in, or refuse
-  browser joins into larger lobbies?
-- **D11** Show each member's platform ("PC" / "Web") in the lobby list?
+Decided 2026-10-17 by Integration (rebuild-07), faithful where the original defines a rule. D7 waits for the user.
+
+- **D1 decided:** the Accounts screen's account name is the online display name (no separate field).
+- **D2 decided:** "Unable to Host" keeps the original title; the message is a PC text ("No connection could be opened
+  for others to join."). The original NAT wording is kept wherever it still applies.
+- **D3 decided:** phase 1 (friends / private sessions) trusts each player's lobby loadout; a host-authoritative unlock
+  check comes with public matches.
+- **D4 decided:** the original gate - every player has a character, teams balanced (when Team Balancing is on), the
+  host starts. No Ready toggle.
+- **D5 decided:** the idle kick is on at the original 180 s in every session (public and private).
+- **D6 decided:** in phase 1, a player joining during a match waits in the host's game lobby ("Match in progress") and
+  enters with everyone for the next match; faithful join in progress (state transfer, bot slot) comes in phase 1b.
+- **D7 pending (user decision):** voice chat (the original had it: MaxRemoteTalkers 30, the HeadsetState column).
+- **D8 decided:** faithful - no XP in private online games (the original's bUsesStats false / CanGainXp rule).
+- **D9 decided:** host loss ends the session in phase 1 (the original's "The game has ended because the host has
+  quit."); host migration comes in phase 1b.
+- **D10 decided:** while a browser peer is in the lobby, Player Limit is capped to 5 v 5 automatically.
+- **D11 decided:** the lobby list shows each member's platform ("PC" / "Web").
 - **R1** How a joiner entered a running versus match in the original (spawn at once or on the respawn timer, team
   choice, advertising during the match). The flag itself is CONFIRMED true [CDO].
 - **R2** Versus party size limit (the numbers behind "`g only supports a party size of `i").
