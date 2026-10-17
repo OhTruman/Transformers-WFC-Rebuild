@@ -3318,6 +3318,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Quality finding: auto-D uses srtt / 2 as the one-way latency, so asymmetric latency under-provisions D (client stalled 24 s in
   rttjump); fix approved: lead-based D (per-peer min lead in PONG, raise by the shortfall, cap 15). Disk: packages 4 + 5
   deleted, F: 16 -> 60 GB; package 6 = Rebuild-Systems/work/playtest_slim (renamed at promotion).
-2026-10-17 15:07 MERGED a53fca66 particles set (Trail2 chains + spawn time in seconds; eye PASS Rendering + RE). Lens-flare patch received (8 files
+2026-10-17 15:07 MERGED 377bb25a particles set (log line corrected: a53fca66 was a log commit; the merge script read the wrong branch) (Trail2 chains + spawn time in seconds; eye PASS Rendering + RE). Lens-flare patch received (8 files
   + per-map lens_flares.json + 4 materials); held for RE's two decode answers (Reflection_01's +0xE4 intensity, DistMap_Color
   layout = the sun tint) and the Gorge open-sky pass after them; door timing (c) closed (133 ms shots, open by ~1.6 s = authored).
+2026-10-17 15:08 Frontend CARD FREE 15:07: Voice Settings click VERIFIED on screen (popup mouse fix), WEAPON 2 wheel label VERIFIED, options
+  rows present; bot-row help line missing (page has no hint widget: Frontend writes the lobby footer hint), settings page overlay
+  flaw (lobby footer shows through: fix in progress); spectate not shown because a 1 s respawn beats the 3 s corpse view
+  (correct; needs a longer-respawn mode). One more ~2-min capture later.
