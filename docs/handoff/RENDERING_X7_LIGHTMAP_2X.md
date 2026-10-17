@@ -62,3 +62,18 @@ GI pages at 2x the lightmap page (same UV, 4x texels):
 - Bridge texel packing: 1 h.
 - Tuning / seams: 2-3 h.
 - Captures, identity, eye sheet: 2 h.
+
+## Update 2026-10-17 ~09:30: built as "same UVs at 2x" (822dcc5d)
+
+Measured page sizes change the design:
+- Every MP map's lightmap pages are ≤ 512 wide (764 of ~890 are 256 x 256), so a 2x GI page fits the texel packing.
+- Page coverage is ~72 %, not 45 %. Per-sub charts would save only ~25 % of the memory.
+
+So X7 is the simple version: GI pages (bridge + GL arrays) at 2x their lightmap page, same UVs. All lookups are
+normalised, so nothing needs a remap. The calibration reads the bake at its own size.
+- Memory: ~4x today's GI pages (Streets ~69 MB → ~275 MB on D3D12, the same again for the GL arrays).
+- Load passes: ~4x.
+- WFC_X7=0 gives 1x.
+
+The chart packing stays a later lossless-memory item. Next: Gorge / Streets views X7 off vs on, the RT GI load / VRAM
+lines, eye sheet, identity.
