@@ -2173,3 +2173,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Off / Faithful 5v5 (wasm32 4 GB pass, OPFS, COOP/COEP, GLSL ES 3.00); 360 / PS3 = option C snapshot clients
   (Xenos / RSX renderers, modified hardware = a legal question); mobile side-load only; 8 open questions. With the
   determinism audit, the netcode design and the profile / stats design the phase 0 set is done; code after package 6.
+  2026-10-16 19:24 RESPIN REGRESS (9350f19b vs base, RT off, lights-off - base, best p90 of 2; 4078e47b -> 9350f19b):
+  Berth +1.83 -> +1.29; Seed +2.09 -> +1.34; Complex +1.66 -> +1.03; Rust +1.91 -> +1.29; Debris +3.35 -> +2.29;
+  Streets +1.88 -> +1.20; Molten +2.07 -> +1.26; Gorge +3.76 -> +2.64 (the static-pose fix recovers 0.5-1.1 ms per
+  map; effect lights +0.04..+0.12; same match everywhere); still 8/8 REPORT with the death-body attribution. Delta
+  FAST 9350f19b: PASS 59 / KNOWN 1 / PRODUCT FAIL 0 / HARNESS FAIL 0, mapswitch 6/6. Step 2b hold 19:24 (~15 min).
