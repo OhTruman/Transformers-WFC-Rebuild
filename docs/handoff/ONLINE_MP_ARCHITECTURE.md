@@ -293,6 +293,16 @@ peer and dropped afterwards (the peer's address is then the key).
   differs refuses to start and exits to the lobby with the original's "settings changed" text, instead of desyncing later. The
   members' own URL-from-local-rows path is replaced by the published record (Integration decision).
 
+### 10.4 Load gate: no sim before AllLoaded (REQUIREMENT, from a Frontend capture, 2026-10-17)
+- **The capture:** on FakeSession nothing held the World, so the match ran behind the "Waiting for players" screen and the player
+  died three times unseen.
+- **Rule:** from the host's matchLoaded until AllLoaded the World does not step. The start tick is AllLoaded.value; the frontend
+  closes the loading screen on AllLoaded.
+- **LockstepLayer:** a World step needs tick N's bundle; no bundle exists before the start tick, so lockstep holds it by construction.
+- **The Application loop** (which steps the World itself today) checks a session gate before every step: `ISession::simHeld()`
+  (true until the start tick). The real SessionLayer and FakeSession both implement it. FakeSession holds until its AllLoaded, so
+  offline / fake flows behave the same. Camera, HUD and audio keep running while held.
+
 ## 11. Phases and exit criteria
 
 | phase | scope | exit criteria |
