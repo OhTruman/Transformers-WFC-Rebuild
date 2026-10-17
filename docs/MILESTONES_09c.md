@@ -2464,3 +2464,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Merged today: a2ee795b local death sound (audio only), 24c6618c SecondsBeforeInactive map-FX freeze default ON (Systems rows
   i-iii agree; Molten run-to-run 1-2 level noise floor documented). Debug builds OK. AssetTools matinee export merged (d2ed2698).
   Card: Rendering X6 round 3 (Gorge + Streets first) -> Gameplay 2-min re-crop -> Experimental presenter loop.
+2026-10-17 07:13 Rendering X6 round 3 (cand17, five maps): FAILS the eye sheet (work/wobble/x6c_eyesheet.png; Integration agrees): damp
+  patches darker and flatter (the layer replaces up to 35 % of the lit floor with a reflection darker than the floor in these
+  interiors), matte wall unchanged (no plastic), only Gorge's street view reads wet. Round 4 = additive sheen (film keeps its
+  lighting, gains F_wet x reflection of bright sources) in code; 10-min slot on request. Card -> Gameplay deathcam re-crop (2 min)
+  -> Experimental (load-stall boots, presenter loop). Merged: 3a19b47a Frontend session boundary as code (Session.h ISession 10
+  calls / 17 events, FakeSession.h, GameFlow::setSession unset = offline; wfc_frontend_tests exit 0). Docs merged: ONLINE_MP_
+  FLOWS / FRONTEND_TESTS / UI_STRINGS (decisions D1-D11 taken, D7 voice chat = user), NETCODE_HARNESS.md + load-stall.ps1,
+  EXPERIMENTAL_HANG_DUMPS.md, GAMEPLAY_HOVER_RESULT.md, CAMPAIGN_KISMET_HANDLERS_RE.md, CAMPAIGN_MATINEE_RUNTIME_RE.md.
