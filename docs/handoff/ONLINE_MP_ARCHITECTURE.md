@@ -290,14 +290,17 @@ peer and dropped afterwards (the peer's address is then the key).
   seed travel beside it in the same event.
 - **Members** launch from the record and never from their local profile rows; presentation settings stay local.
 - **Version check:** the first bundle carries a hash of (launch record, the exe's sim build id). A member whose record or build
-  differs refuses to start and exits to the lobby with the original's "settings changed" text, instead of desyncing later. The
+  differs refuses to start and exits to the lobby with the original's "settings changed" text, instead of desyncing later.
+  The record check is part of the load gate (10.4): no AllLoaded, so no tick, until every peer's hash matches. The
   members' own URL-from-local-rows path is replaced by the published record (Integration decision).
 
 ### 10.4 Load gate: no sim before AllLoaded (REQUIREMENT, from a Frontend capture, 2026-10-17)
 - **The capture:** on FakeSession nothing held the World, so the match ran behind the "Waiting for players" screen and the player
   died three times unseen.
-- **Rule:** from the host's matchLoaded until AllLoaded the World does not step. The start tick is AllLoaded.value; the frontend
-  closes the loading screen on AllLoaded.
+- **Rule (Integration):** from the host's matchLoaded until AllLoaded the World does not step.
+  - The host sends AllLoaded only after EVERY peer has reported loaded AND each peer's launch-record hash (10.3) matched.
+  - All peers then start together at sim tick 0: AllLoaded.value = 0, the first bundle is tick 0 + D.
+  - The frontend closes the loading screen on AllLoaded.
 - **LockstepLayer:** a World step needs tick N's bundle; no bundle exists before the start tick, so lockstep holds it by construction.
 - **The Application loop** (which steps the World itself today) checks a session gate before every step: `ISession::simHeld()`
   (true until the start tick). The real SessionLayer and FakeSession both implement it. FakeSession holds until its AllLoaded, so
