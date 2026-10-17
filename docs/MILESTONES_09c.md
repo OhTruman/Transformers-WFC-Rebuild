@@ -3139,3 +3139,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   remain: launchMatch does not apply humans[localSeat].selection (300 vs 330 hp, split at tick 601) and the local pawn alone gets
   ~0.6 m/s vertical velocity on the first InProgress step (a path outside the seat path) -> Gameplay priority 1; headless repro.
   Systems sends the launch switch alone for the head.
+2026-10-17 13:22 MERGED b7d3588f the net launch from the seat order (Application_Net; bundles identical every tick; the tick-602 local-pawn split
+  remains until Gameplay's fix). Replay switch (WFC_NET_RECORD / WFC_NET_REPLAY) queued after NET.identity. Head for
+  Experimental's independent identity row = b7d3588f (expect the known 602 split until Gameplay's fix).
