@@ -156,6 +156,51 @@ def parse_lightmap_1d(nat):
     return {'count': count, 'samples_hex': data.hex(), 'scales': scales}
 
 
+def light_record(repo, cref, M):
+    # one LightComponent (class defaults, its tags, LightingChannels) at the UE matrix M -> the lighting.json record
+    cls = repo.cls(cref)
+    c = dict(LIGHT_DEFAULTS)
+    if cls == 'PointLightComponent': c.update(POINT_DEFAULTS)
+    if cls == 'SpotLightComponent': c.update(POINT_DEFAULTS); c.update(SPOT_DEFAULTS)
+    c.update({k2: v for k2, v in (repo.obj(cref) or {}).items()})
+    ch = dict(CHANNEL_DEFAULTS)
+    for t in c.get('LightingChannels') or []:
+        if isinstance(t, dict) and 'name' in t: ch[t['name']] = bool(t['value'])
+    pos = M[3, :3]; xaxis = M[0, :3]
+    col = fcolor_rgb(c.get('LightColor'))
+    return {
+        'name': cref.split('.')[-1], 'class': cls,
+        'position': ue_to_gltf_pos(pos), 'direction': ue_to_gltf_dir(xaxis),
+        'color_srgb8': col[:3], 'brightness': c.get('Brightness'),
+        'radius_m': (c.get('Radius') or 0) * 0.01, 'falloff_exponent': c.get('FalloffExponent'),
+        'inner_cone_deg': c.get('InnerConeAngle'), 'outer_cone_deg': c.get('OuterConeAngle'),
+        'enabled': bool(c.get('bEnabled', True)), 'cast_shadows': bool(c.get('CastShadows', True)),
+        'cast_static_shadows': bool(c.get('CastStaticShadows', True)),
+        'built_into_lightmap': bool(c.get('bHasLightEverBeenBuiltIntoLightMap', False)),
+        'channels': ch, 'affects_classification': c.get('LightAffectsClassification'),
+        'lower_color_srgb8': fcolor_rgb(c.get('LowerColor'))[:3],
+        'lower_brightness': c.get('LowerBrightness', 0.0),
+        # modulated (projected) shadow inputs; defaults from Engine Default__LightComponent /
+        # Default__PointLightComponent (CastDynamicShadows True, ModShadowColor (0,0,0,1),
+        # ShadowFalloffExponent 2.0). ModShadowColor is an FLinearColor (no conversion).
+        'light_guid': [int(x) & 0xFFFFFFFF for x in (c.get('LightGuid') or [0, 0, 0, 0])],
+        # DirectLightEnv relevance (native 0x82DD3EF0): RadiusOfInfluence, class default -1 (UE units)
+        'radius_of_influence_m': (c.get('RadiusOfInfluence') if c.get('RadiusOfInfluence') is not None else -1.0) * 0.01,
+        'use_volumes': bool(c.get('bUseVolumes', False)),
+        'only_same_levels': bool(c.get('bOnlyAffectSameAndSpecifiedLevels', False)),
+        'has_light_function': c.get('Function') is not None,
+        'cast_dynamic_shadows': bool(c.get('CastDynamicShadows', True)),
+        'cast_composite_shadow': bool(c.get('bCastCompositeShadow', False)),
+        'force_dynamic': bool(c.get('bForceDynamicLight', False)),
+        'mod_shadow_color': list(c.get('ModShadowColor') or [0.0, 0.0, 0.0, 1.0]),
+        'shadow_falloff_exponent': c.get('ShadowFalloffExponent', 2.0),
+        # copied into the DirectLightEnv shadow record (+0x70 / +0x74; 0 -> SystemSettings 128 / 1024)
+        'min_shadow_resolution': int(c.get('MinShadowResolution') or 0),
+        'max_shadow_resolution': int(c.get('MaxShadowResolution') or 0),
+        'ue_matrix': M.tolist(),
+    }
+
+
 def lights(repo, pkg_index):
     p = repo.pkgs[pkg_index]; pr = repo.readers[pkg_index]
     res = []
@@ -168,47 +213,37 @@ def lights(repo, pkg_index):
         mats = np.frombuffer(raw[:64 * len(comps)], '>f4').reshape(-1, 4, 4).astype('f8')
         for k, cref in enumerate(comps):
             if not cref: continue
-            cls = repo.cls(cref)
-            c = dict(LIGHT_DEFAULTS)
-            if cls == 'PointLightComponent': c.update(POINT_DEFAULTS)
-            if cls == 'SpotLightComponent': c.update(POINT_DEFAULTS); c.update(SPOT_DEFAULTS)
-            c.update({k2: v for k2, v in (repo.obj(cref) or {}).items()})
-            ch = dict(CHANNEL_DEFAULTS)
-            for t in c.get('LightingChannels') or []:
-                if isinstance(t, dict) and 'name' in t: ch[t['name']] = bool(t['value'])
-            M = mats[k]
-            pos = M[3, :3]; xaxis = M[0, :3]
-            col = fcolor_rgb(c.get('LightColor'))
-            res.append({
-                'name': cref.split('.')[-1], 'class': cls,
-                'position': ue_to_gltf_pos(pos), 'direction': ue_to_gltf_dir(xaxis),
-                'color_srgb8': col[:3], 'brightness': c.get('Brightness'),
-                'radius_m': (c.get('Radius') or 0) * 0.01, 'falloff_exponent': c.get('FalloffExponent'),
-                'inner_cone_deg': c.get('InnerConeAngle'), 'outer_cone_deg': c.get('OuterConeAngle'),
-                'enabled': bool(c.get('bEnabled', True)), 'cast_shadows': bool(c.get('CastShadows', True)),
-                'cast_static_shadows': bool(c.get('CastStaticShadows', True)),
-                'built_into_lightmap': bool(c.get('bHasLightEverBeenBuiltIntoLightMap', False)),
-                'channels': ch, 'affects_classification': c.get('LightAffectsClassification'),
-                'lower_color_srgb8': fcolor_rgb(c.get('LowerColor'))[:3],
-                'lower_brightness': c.get('LowerBrightness', 0.0),
-                # modulated (projected) shadow inputs; defaults from Engine Default__LightComponent /
-                # Default__PointLightComponent (CastDynamicShadows True, ModShadowColor (0,0,0,1),
-                # ShadowFalloffExponent 2.0). ModShadowColor is an FLinearColor (no conversion).
-                'light_guid': [int(x) & 0xFFFFFFFF for x in (c.get('LightGuid') or [0, 0, 0, 0])],
-                # DirectLightEnv relevance (native 0x82DD3EF0): RadiusOfInfluence, class default -1 (UE units)
-                'radius_of_influence_m': (c.get('RadiusOfInfluence') if c.get('RadiusOfInfluence') is not None else -1.0) * 0.01,
-                'use_volumes': bool(c.get('bUseVolumes', False)),
-                'only_same_levels': bool(c.get('bOnlyAffectSameAndSpecifiedLevels', False)),
-                'has_light_function': c.get('Function') is not None,
-                'cast_dynamic_shadows': bool(c.get('CastDynamicShadows', True)),
-                'cast_composite_shadow': bool(c.get('bCastCompositeShadow', False)),
-                'mod_shadow_color': list(c.get('ModShadowColor') or [0.0, 0.0, 0.0, 1.0]),
-                'shadow_falloff_exponent': c.get('ShadowFalloffExponent', 2.0),
-                # copied into the DirectLightEnv shadow record (+0x70 / +0x74; 0 -> SystemSettings 128 / 1024)
-                'min_shadow_resolution': int(c.get('MinShadowResolution') or 0),
-                'max_shadow_resolution': int(c.get('MaxShadowResolution') or 0),
-                'ue_matrix': M.tolist(),
-            })
+            res.append(light_record(repo, cref, mats[k]))
+    return res
+
+
+# placed light ACTORS outside the cooked StaticLightCollectionActors (e.g. Remnant's PointLightToggleable_1918: bToggleable,
+# bForceDynamicLight, never built into a lightmap - RE): the actor's LightComponent at its Location / Rotation
+STANDALONE_LIGHT_CLASSES = ('PointLightToggleable', 'PointLightMovable', 'SpotLightToggleable', 'SpotLightMovable',
+                            'PointLight', 'SpotLight')
+
+
+def standalone_lights(repo, pkg_index):
+    p = repo.pkgs[pkg_index]; pr = repo.readers[pkg_index]
+    res = []
+    for i, e in enumerate(p.exports):
+        if p.class_name(e) not in STANDALONE_LIGHT_CLASSES: continue
+        if '.TheWorld.PersistentLevel.' not in p.object_path(i + 1): continue   # (prefab archetypes are templates)
+        tags, _ = pr.read_object(i + 1)
+        d = tags_to_dict(tags)
+        lc = d.get('LightComponent')
+        cref = lc.get('ref') if isinstance(lc, dict) else None
+        if not cref: continue
+        loc = d.get('Location') or [0.0, 0.0, 0.0]
+        rot = d.get('Rotation') or [0, 0, 0]
+        if isinstance(rot, dict): rot = [rot.get('Pitch', 0), rot.get('Yaw', 0), rot.get('Roll', 0)]
+        pitch, yaw = rot[0] * np.pi / 32768.0, rot[1] * np.pi / 32768.0
+        M = np.eye(4)
+        M[0, :3] = [np.cos(pitch) * np.cos(yaw), np.cos(pitch) * np.sin(yaw), np.sin(pitch)]
+        M[3, :3] = loc[:3]
+        r = light_record(repo, cref, M)
+        r['standalone_actor'] = p.object_path(i + 1).split('.')[-1]
+        res.append(r)
     return res
 
 
@@ -808,6 +843,20 @@ def main():
         json.dump(d, open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
         print(mapname, len(d['fogs']), 'enabled height fog layers:', [(f['object'].split('.')[-1], f['Height'], f['Density']) for f in d['fogs']])
         return
+    if len(sys.argv) > 3 and sys.argv[1] == '--standalone-only':
+        # <map> <src lighting.json> <out dir>: the same file + the placed light actors its 'lights' lack (by LightGuid)
+        from ue3obj import map_packages
+        mapname, src, out = sys.argv[2], sys.argv[3], sys.argv[4]
+        pkgs, _persistent = map_packages(mapname)
+        repo = Repo(pkgs)
+        d = json.load(open(src, encoding='utf-8'))
+        have = {tuple(l['light_guid']) for l in d['lights']}
+        add = [l for pi in range(len(pkgs)) for l in standalone_lights(repo, pi) if tuple(l['light_guid']) not in have]
+        d['lights'] += add
+        os.makedirs(out, exist_ok=True)
+        json.dump(d, open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
+        print(mapname, len(add), 'standalone lights added:', [(l['standalone_actor'], l['class'], l['brightness'], l['radius_m']) for l in add])
+        return
     mapname, out, umodel_dir = sys.argv[1], sys.argv[2], sys.argv[3]
     os.makedirs(os.path.join(out, 'lightmaps'), exist_ok=True)
     from ue3obj import map_packages
@@ -830,6 +879,9 @@ def main():
     for pi in range(len(pkgs)):
         L += lights(repo, pi)
         F = F or fog(repo, pi)
+    have = {tuple(l['light_guid']) for l in L}
+    for pi in range(len(pkgs)):
+        L += [l for l in standalone_lights(repo, pi) if tuple(l['light_guid']) not in have]
     PP = postprocess(mapname, out)
     decals(repo, out, mapname, lm_keys=set(props))   # (texture-lightmap keys: decals sample their receiver's)
     atl = sorted({a for r in props.values() for a in r['coeffs']})
