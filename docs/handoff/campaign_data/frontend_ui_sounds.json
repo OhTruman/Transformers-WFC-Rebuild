@@ -1,0 +1,477 @@
+{
+ "FrontEnd_GFX.gfx": {
+  "sounds": {
+   "BUTTON_ACCEPT": [
+    "inputEvent@44"
+   ],
+   "BUTTON_BACK": [
+    "inputEvent@44"
+   ],
+   "BUTTON_DOWN": [
+    "findDirectionalFocus@44"
+   ],
+   "BUTTON_START": [
+    "inputEvent@23"
+   ],
+   "BUTTON_UP": [
+    "findDirectionalFocus@44"
+   ]
+  },
+  "sound_grep": {
+   "BUTTON_START": "C",
+   "BUTTON_ACCEPT": "C",
+   "BUTTON_BACK": "C",
+   "BUTTON_UP": "C",
+   "BUTTON_DOWN": "C"
+  },
+  "transitions": []
+ },
+ "CampaignSelect_GFX.gfx": {
+  "sounds": {
+   "BUTTON_ACCEPT": [
+    "inputEvent@130",
+    "onRelease@130"
+   ],
+   "BUTTON_BACK": [
+    "inputEvent@130"
+   ],
+   "BUTTON_DOWN": [
+    "findDirectionalFocus@130"
+   ],
+   "BUTTON_UP": [
+    "findDirectionalFocus@130",
+    "onRollOver@130"
+   ]
+  },
+  "sound_grep": {
+   "BUTTON_UP": "C",
+   "BUTTON_ACCEPT": "C",
+   "BUTTON_BACK": "C",
+   "BUTTON_DOWN": "C"
+  },
+  "transitions": [
+   "UpdateSelectorState: background_mc 0.5s easeout {callback: thisClip.assignSelectorFocus, _height: r}",
+   "UpdateSelectorState: frameBottom_mc 0.5s easeout {_y: (r1 / 2)}",
+   "UpdateSelectorState: frameTop_mc 0.5s easeout {_y: (r1 / -2)}",
+   "factionSelected: autobotBG_mc 0.5s easeout {_alpha: 0}",
+   "factionSelected: autobot_mc 0.5s easeout {_alpha: 0}",
+   "factionSelected: currentFocus 0.5s easeout {_yscale: 360, _xscale: 360, _alpha: 10, _x: -240}",
+   "factionSelected: currentFocus.glow_mc 0.5s easeout {_alpha: 0}",
+   "factionSelected: currentFocus.name_txt 0.5s easeout {_alpha: 0}",
+   "factionSelected: decepticonBG_mc 0.5s easeout {_alpha: 0}",
+   "factionSelected: decepticon_mc 0.5s easeout {_alpha: 0}",
+   "factionSelected: factSelectTitle_mc 0.5s easeout {_alpha: 0}",
+   "selectionUpdated: MissionInfoClip 0.5s easeout {_alpha: 100, _x: 0}",
+   "selectionUpdated: autobotBG_mc 0.5s easeout {_x: -200}",
+   "selectionUpdated: autobotBG_mc 0.5s easeout {_x: 200}",
+   "selectionUpdated: autobotMask_mc 0.5s easeout {_x: -200}",
+   "selectionUpdated: autobotMask_mc 0.5s easeout {_x: 200}",
+   "selectionUpdated: autobot_mc 0.5s easeout {_yscale: 110, _xscale: 110, _x: 0}",
+   "selectionUpdated: autobot_mc 0.5s easeout {_yscale: 90, _xscale: 90, _x: -200}",
+   "selectionUpdated: decepticonBG_mc 0.5s easeout {_x: -200}",
+   "selectionUpdated: decepticonBG_mc 0.5s easeout {_x: 200}",
+   "selectionUpdated: decepticonMask_mc 0.5s easeout {_x: -200}",
+   "selectionUpdated: decepticonMask_mc 0.5s easeout {_x: 200}",
+   "selectionUpdated: decepticon_mc 0.5s easeout {_yscale: 110, _xscale: 110, _x: 0}",
+   "selectionUpdated: decepticon_mc 0.5s easeout {_yscale: 90, _xscale: 90, _x: 200}",
+   "selectionUpdated: r6 0.5s easeout {callback: r6.removeMe, _alpha: 0, _x: -50}",
+   "selectionUpdated: r6 0.5s easeout {callback: r6.removeMe, _alpha: 0, _x: 50}"
+  ]
+ },
+ "CharacterSelect_GFX.gfx": {
+  "sounds": {
+   "BUTTON_ACCEPT": [
+    "inputEvent@173",
+    "onRelease@173"
+   ],
+   "BUTTON_BACK": [
+    "inputEvent@173"
+   ],
+   "BUTTON_DOWN": [
+    "findDirectionalFocus@173"
+   ],
+   "BUTTON_UP": [
+    "findDirectionalFocus@173",
+    "onRollOver@173"
+   ]
+  },
+  "sound_grep": {
+   "BUTTON_UP": "C",
+   "BUTTON_ACCEPT": "C",
+   "BUTTON_BACK": "C",
+   "BUTTON_DOWN": "C"
+  },
+  "transitions": []
+ },
+ "CustomTransformers_GFX.gfx": {
+  "sounds": {
+   "BUTTON_ACCEPT": [
+    "<anon>@63",
+    "inputEvent@406",
+    "onRelease@406"
+   ],
+   "BUTTON_BACK": [
+    "inputEvent@406"
+   ],
+   "BUTTON_DOWN": [
+    "<anon>@59",
+    "findDirectionalFocus@406"
+   ],
+   "BUTTON_UP": [
+    "<anon>@59",
+    "findDirectionalFocus@406",
+    "onRollOver@406"
+   ]
+  },
+  "sound_grep": {
+   "BUTTON_DOWN": "C",
+   "BUTTON_UP": "C",
+   "BUTTON_ACCEPT": "C",
+   "BUTTON_BACK": "C"
+  },
+  "transitions": [
+   "closeMenu: _parent.footer_mc.customizeButtonHints_mc 0.2s easeout {_alpha: 100}",
+   "closeMenu: _parent.header_mc 0.2s easeout {_alpha: 100}",
+   "occluderClose: topMenuElements[r3] 0.2s easeout {_alpha: 100}",
+   "onClick: topMenuElements[r3] 0.2s easeout {_alpha: 0}",
+   "setTabColor: tab_mc 0.2s easeout {color: parseInt(tabColor)}",
+   "shiftCenter: charLevel_txt 0.2s easeout {color: 9105663}",
+   "shiftCenter: thisClip 0.4s easeout {callback: thisClip.expandMenu, _y: _parent.overvie}",
+   "showCountdown: thisClip 0.5s easeout {_alpha: 0, _y: (InitPositionY + 10)}",
+   "showCountdown: thisClip 0.5s easeout {_alpha: 100, _y: InitPositionY}"
+  ]
+ },
+ "DifficultySelect_GFX.gfx": {
+  "sounds": {
+   "BUTTON_ACCEPT": [
+    "inputEvent@40",
+    "onRelease@40"
+   ],
+   "BUTTON_BACK": [
+    "inputEvent@40"
+   ],
+   "BUTTON_DOWN": [
+    "findDirectionalFocus@40"
+   ],
+   "BUTTON_UP": [
+    "findDirectionalFocus@40",
+    "onRollOver@40"
+   ]
+  },
+  "sound_grep": {
+   "BUTTON_UP": "C",
+   "BUTTON_ACCEPT": "C",
+   "BUTTON_BACK": "C",
+   "BUTTON_DOWN": "C"
+  },
+  "transitions": []
+ },
+ "ExtrasMenu_GFX.gfx": {
+  "sounds": {
+   "BUTTON_ACCEPT": [
+    "inputEvent@97",
+    "onRelease@97"
+   ],
+   "BUTTON_BACK": [
+    "inputEvent@97"
+   ],
+   "BUTTON_DOWN": [
+    "findDirectionalFocus@97"
+   ],
+   "BUTTON_UP": [
+    "findDirectionalFocus@97",
+    "onRollOver@97"
+   ]
+  },
+  "sound_grep": {
+   "BUTTON_UP": "C",
+   "BUTTON_ACCEPT": "C",
+   "BUTTON_BACK": "C",
+   "BUTTON_DOWN": "C"
+  },
+  "transitions": [
+   "selectionUpdated: ConceptButtonArray[r2] 2s easeout {_alpha: 50}",
+   "selectionUpdated: ConceptImageClip 0.4s easeout {_alpha: 100, _x: 0}",
+   "selectionUpdated: centerFooter_mc 2s easeout {_alpha: 100}",
+   "selectionUpdated: leftArrow_mc 0.5s easeout {_alpha: 0}",
+   "selectionUpdated: r3 0.4s easeout {callback: r3.removeMe, _alpha: 0, _x: -50}",
+   "selectionUpdated: r3 0.4s easeout {callback: r3.removeMe, _alpha: 0, _x: 50}",
+   "selectionUpdated: rightArrow_mc 0.5s easeout {_alpha: 0}"
+  ]
+ },
+ "SettingsMenu_GFX.gfx": {
+  "sounds": {
+   "BUTTON_ACCEPT": [
+    "inputEvent@228",
+    "inputEvent@63",
+    "inputEvent@72",
+    "inputEvent@75",
+    "inputEvent@76",
+    "inputEvent@77",
+    "inputEvent@82",
+    "inputEvent@83",
+    "onRelease@228"
+   ],
+   "BUTTON_BACK": [
+    "inputEvent@228",
+    "inputEvent@63",
+    "inputEvent@72",
+    "inputEvent@75",
+    "inputEvent@76",
+    "inputEvent@77",
+    "inputEvent@82",
+    "inputEvent@83"
+   ],
+   "BUTTON_DOWN": [
+    "findDirectionalFocus@228"
+   ],
+   "BUTTON_UP": [
+    "findDirectionalFocus@228",
+    "onRollOver@228"
+   ]
+  },
+  "sound_grep": {
+   "BUTTON_ACCEPT": "C",
+   "BUTTON_BACK": "C",
+   "BUTTON_UP": "C",
+   "BUTTON_DOWN": "C"
+  },
+  "transitions": [
+   "closeMenu: _backMenuRef 0.2s easeout {_alpha: 100}",
+   "selectCloseMenu: _backMenuRef 0.2s easeout {_alpha: 100}",
+   "selectionUpdated: this 0.2s easeout {_y: (0 - this.currentFocus._y)}"
+  ]
+ },
+ "PauseMenu_GFX.gfx": {
+  "sounds": {
+   "BUTTON_ACCEPT": [
+    "inputEvent@519",
+    "onRelease@519"
+   ],
+   "BUTTON_BACK": [
+    "inputEvent@519"
+   ],
+   "BUTTON_DOWN": [
+    "findDirectionalFocus@519"
+   ],
+   "BUTTON_UP": [
+    "findDirectionalFocus@519",
+    "onRollOver@519"
+   ]
+  },
+  "sound_grep": {
+   "BUTTON_ACCEPT": "C",
+   "BUTTON_BACK": "C",
+   "BUTTON_UP": "C",
+   "BUTTON_DOWN": "C"
+  },
+  "transitions": [
+   "closeMenu: _root.bg2_mc 1s easeout {_alpha: 0}",
+   "selectionUpdated: this 0.2s easeout {_y: (0 - this.currentFocus._y)}"
+  ]
+ },
+ "ChallengeMenu_GFX.gfx": {
+  "sounds": {
+   "BUTTON_ACCEPT": [
+    "inputEvent@42",
+    "inputEvent@None",
+    "onRelease@None"
+   ],
+   "BUTTON_BACK": [
+    "inputEvent@42",
+    "inputEvent@None"
+   ],
+   "BUTTON_DOWN": [
+    "findDirectionalFocus@None"
+   ],
+   "BUTTON_UP": [
+    "findDirectionalFocus@None",
+    "onRollOver@None"
+   ]
+  },
+  "sound_grep": {
+   "BUTTON_ACCEPT": "C",
+   "BUTTON_BACK": "C",
+   "BUTTON_UP": "C",
+   "BUTTON_DOWN": "C"
+  },
+  "transitions": []
+ },
+ "Brightness_GFX.gfx": {
+  "sounds": {
+   "BUTTON_ACCEPT": [
+    "inputEvent@16",
+    "inputEvent@42",
+    "onRelease@42"
+   ],
+   "BUTTON_BACK": [
+    "inputEvent@42"
+   ],
+   "BUTTON_DOWN": [
+    "findDirectionalFocus@42"
+   ],
+   "BUTTON_UP": [
+    "findDirectionalFocus@42",
+    "onRollOver@42"
+   ]
+  },
+  "sound_grep": {
+   "BUTTON_ACCEPT": "C",
+   "BUTTON_UP": "C",
+   "BUTTON_BACK": "C",
+   "BUTTON_DOWN": "C"
+  },
+  "transitions": []
+ },
+ "MessagePrompt_GFX.gfx": {
+  "sounds": {
+   "BUTTON_ACCEPT": [
+    "inputEvent@23"
+   ],
+   "BUTTON_BACK": [
+    "inputEvent@23"
+   ],
+   "BUTTON_DOWN": [
+    "findDirectionalFocus@23"
+   ],
+   "BUTTON_UP": [
+    "findDirectionalFocus@23"
+   ]
+  },
+  "sound_grep": {
+   "BUTTON_ACCEPT": "C",
+   "BUTTON_BACK": "C",
+   "BUTTON_UP": "C",
+   "BUTTON_DOWN": "C"
+  },
+  "transitions": []
+ },
+ "TextPrompt_GFX.gfx": {
+  "sounds": {
+   "BUTTON_ACCEPT": [
+    "inputEvent@17"
+   ],
+   "BUTTON_BACK": [
+    "inputEvent@17"
+   ],
+   "BUTTON_DOWN": [
+    "findDirectionalFocus@17"
+   ],
+   "BUTTON_UP": [
+    "findDirectionalFocus@17"
+   ]
+  },
+  "sound_grep": {
+   "BUTTON_ACCEPT": "C",
+   "BUTTON_BACK": "C",
+   "BUTTON_UP": "C",
+   "BUTTON_DOWN": "C"
+  },
+  "transitions": []
+ },
+ "SharedComponents_GFX.gfx": {
+  "sounds": {
+   "BUTTON_ACCEPT": [
+    "inputEvent@63",
+    "onRelease@63"
+   ],
+   "BUTTON_BACK": [
+    "inputEvent@63"
+   ],
+   "BUTTON_DOWN": [
+    "findDirectionalFocus@63",
+    "widgetInputEvent@63"
+   ],
+   "BUTTON_UP": [
+    "findDirectionalFocus@63",
+    "onRollOver@63",
+    "widgetInputEvent@63"
+   ]
+  },
+  "sound_grep": {
+   "BUTTON_ACCEPT": "C",
+   "BUTTON_BACK": "C",
+   "BUTTON_UP": "C",
+   "BUTTON_DOWN": "C"
+  },
+  "transitions": [
+   "currentSelectionChanged: arrowLeft_mc 0.2s easeout {color: 16777215, _alpha: 100}",
+   "currentSelectionChanged: arrowLeft_mc 0.2s easeout {color: 5289429, _alpha: 50}",
+   "currentSelectionChanged: arrowLeft_mc 0.5s easeout {color: 5289429, _alpha: 25}",
+   "currentSelectionChanged: arrowRight_mc 0.2s easeout {color: 16777215, _alpha: 100}",
+   "currentSelectionChanged: arrowRight_mc 0.2s easeout {color: 5289429, _alpha: 50}",
+   "currentSelectionChanged: arrowRight_mc 0.5s easeout {color: 5289429, _alpha: 25}",
+   "currentSelectionChanged: seperator_mc.arrowLeft_mc 0.2s easeout {color: 16777215, _alpha: 100}",
+   "currentSelectionChanged: seperator_mc.arrowLeft_mc 0.3s easeout {color: 16777215, _alpha: 25}",
+   "currentSelectionChanged: seperator_mc.arrowRight_mc 0.2s easeout {color: 16777215, _alpha: 100}",
+   "currentSelectionChanged: seperator_mc.arrowRight_mc 0.3s easeout {color: 16777215, _alpha: 25}"
+  ]
+ },
+ "EndGameStats_GFX.gfx": {
+  "sounds": {
+   "BUTTON_BACK": [
+    "closeEndGameStats@None"
+   ]
+  },
+  "sound_grep": {
+   "BUTTON_BACK": "C"
+  },
+  "transitions": [
+   "showXpTotal: xpBar_mc.xpEarned_mc 0.4s easeout {_alpha: 0, _yscale: 0}",
+   "showXpTotal: xpBar_mc.xpEarned_mc 0.4s easeout {_alpha: 100, _yscale: 100}",
+   "showXpTotal: xpBar_mc.xpToNextLevel_mc 0.4s easeout {_alpha: 0, _yscale: 0}",
+   "showXpTotal: xpBar_mc.xpToNextLevel_mc 0.4s easeout {_alpha: 100, _yscale: 100}"
+  ]
+ },
+ "PlayerList_GFX.gfx": {
+  "sounds": {
+   "BUTTON_ACCEPT": [
+    "inputEvent@None",
+    "onRelease@None"
+   ],
+   "BUTTON_BACK": [
+    "inputEvent@None"
+   ],
+   "BUTTON_DOWN": [
+    "findDirectionalFocus@None"
+   ],
+   "BUTTON_UP": [
+    "customInputEvent@99",
+    "findDirectionalFocus@None",
+    "onRollOver@None"
+   ]
+  },
+  "sound_grep": {
+   "BUTTON_UP": "C",
+   "BUTTON_ACCEPT": "C",
+   "BUTTON_BACK": "C",
+   "BUTTON_DOWN": "C"
+  },
+  "transitions": []
+ },
+ "CampaignGameOver_GFX.gfx": {
+  "sounds": {
+   "BUTTON_ACCEPT": [
+    "inputEvent@None",
+    "onRelease@None"
+   ],
+   "BUTTON_BACK": [
+    "inputEvent@None"
+   ],
+   "BUTTON_DOWN": [
+    "findDirectionalFocus@None"
+   ],
+   "BUTTON_UP": [
+    "findDirectionalFocus@None",
+    "onRollOver@None"
+   ]
+  },
+  "sound_grep": {
+   "BUTTON_UP": "C",
+   "BUTTON_ACCEPT": "C",
+   "BUTTON_BACK": "C",
+   "BUTTON_DOWN": "C"
+  },
+  "transitions": []
+ }
+}

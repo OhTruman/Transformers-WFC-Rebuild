@@ -192,3 +192,78 @@ sprite script). Data: `notes/data/hud_entry_audit.json`.
 3. `TnVersusGameOverMessage` is now decoded (step 2). Ours can drop its PARTIAL tag: forfeit / tie precedence and the winner
    announcer for everyone.
 4. The MVP achievement goes to every player tied for the top score, only with more than one PRI and XP enabled.
+
+## Part (2): front-end UI sounds and menu transitions
+
+Generator: `tools/gfx_sound_map.py`, writing `notes/data/frontend_ui_sounds.json` / `.md`. It covers every `Sound.PlaySound` cue in
+16 offline front-end and shared movies, with the function it sits in, plus the open / close / select / focus interps.
+
+**Ours** = the cue name in Rebuild src (C) / data (D).
+
+**The original's whole front-end UI sound vocabulary is five movie-side cues** (CONFIRMED, exhaustive over those movies):
+
+| UI cue | Ours | Movies | Where (function@sprite, first 4) |
+|---|---|---|---|
+| BUTTON_ACCEPT | C | Brightness, CampaignGameOver, CampaignSelect, ChallengeMenu, CharacterSelect, CustomTransformers, DifficultySelect, ExtrasMenu, FrontEnd, MessagePrompt, PauseMenu, PlayerList, SettingsMenu, SharedComponents, TextPrompt | <anon>@63; inputEvent@130; inputEvent@16; inputEvent@17 |
+| BUTTON_BACK | C | Brightness, CampaignGameOver, CampaignSelect, ChallengeMenu, CharacterSelect, CustomTransformers, DifficultySelect, EndGameStats, ExtrasMenu, FrontEnd, MessagePrompt, PauseMenu, PlayerList, SettingsMenu, SharedComponents, TextPrompt | closeEndGameStats@None; inputEvent@130; inputEvent@17; inputEvent@173 |
+| BUTTON_DOWN | C | Brightness, CampaignGameOver, CampaignSelect, ChallengeMenu, CharacterSelect, CustomTransformers, DifficultySelect, ExtrasMenu, FrontEnd, MessagePrompt, PauseMenu, PlayerList, SettingsMenu, SharedComponents, TextPrompt | <anon>@59; findDirectionalFocus@130; findDirectionalFocus@17; findDirectionalFocus@173 |
+| BUTTON_START | C | FrontEnd | inputEvent@23 |
+| BUTTON_UP | C | Brightness, CampaignGameOver, CampaignSelect, ChallengeMenu, CharacterSelect, CustomTransformers, DifficultySelect, ExtrasMenu, FrontEnd, MessagePrompt, PauseMenu, PlayerList, SettingsMenu, SharedComponents, TextPrompt | <anon>@59; customInputEvent@99; findDirectionalFocus@130; findDirectionalFocus@17 |
+
+**Rules:**
+- **Focus move** = `BUTTON_UP` / `BUTTON_DOWN`, from each movie's `findDirectionalFocus` (and selector `customInputEvent`):
+  - by direction moved, not per element;
+  - left / right selectors reuse up / down (SharedComponents);
+  - there is **no separate tab sound**: Customize's tabs use the same focus path.
+- **Accept** = `BUTTON_ACCEPT` (inputEvent buttonA); **back** = `BUTTON_BACK` (buttonB, and `closeEndGameStats`); **title "press
+  start"** = `BUTTON_START` (FrontEnd only).
+- **Cue resolution:** `PlaySound('X')` → `BL_HUD_INTERFACE.X` SoundCues (H: the interface prefixes the HUD package):
+  - BUTTON_ACCEPT −18 dB, two layers: front `BUTTON_ACCEPT_03` + `_LSRS` rear at −6 dB;
+  - BUTTON_BACK −18 dB, `BUTTON_BACK_02` + `_LSRS`;
+  - BUTTON_UP / BUTTON_DOWN −15 dB, single `*_FLANGE`;
+  - BUTTON_START −15 dB, `BUTTON_ACCEPT_02` + `_LSRS`;
+  - all 2D, unpausable, priority 255.
+  - Ours: `SoundCues.inc` carries all five with both layers (the LSRS rear at −6 dB, 0.707) [C], which matches.
+- **No other front-end UI sound exists in the movies.** Engine-side menu music and stingers (e.g. `MP_LEVEL_UP_MX_STNG`,
+  announcer) are game events, covered in parts (1) and (3).
+
+**Menu transitions** (the movies' own interps; all easeout unless noted). Ours runs these when its Scaleform host executes the AS.
+Driven-by-ours is not separable by grep (AS-internal):
+
+| Movie | Transition interps (open / close / show / hide / focus …) |
+|---|---|
+| FrontEnd_GFX | - |
+| CampaignSelect_GFX | UpdateSelectorState: background_mc 0.5s easeout {callback: thisClip.assignSelectorFocus, _height: r}; UpdateSelectorState: frameBottom_mc 0.5s easeout {_y: (r1 / 2)}; UpdateSelectorState: frameTop_mc 0.5s easeout {_y: (r1 / -2)}; factionSelected: autobotBG_mc 0.5s easeout {_alpha: 0}; factionSelected: autobot_mc 0.5s easeout {_alpha: 0}; factionSelected: currentFocus 0.5s easeout {_yscale: 360, _xscale: 360, _alpha: 10, _x: -240}; factionSelected: currentFocus.glow_mc 0.5s easeout {_alpha: 0}; factionSelected: currentFocus.name_txt 0.5s easeout {_alpha: 0} |
+| CharacterSelect_GFX | - |
+| CustomTransformers_GFX | closeMenu: _parent.footer_mc.customizeButtonHints_mc 0.2s easeout {_alpha: 100}; closeMenu: _parent.header_mc 0.2s easeout {_alpha: 100}; occluderClose: topMenuElements[r3] 0.2s easeout {_alpha: 100}; onClick: topMenuElements[r3] 0.2s easeout {_alpha: 0}; setTabColor: tab_mc 0.2s easeout {color: parseInt(tabColor)}; shiftCenter: charLevel_txt 0.2s easeout {color: 9105663}; shiftCenter: thisClip 0.4s easeout {callback: thisClip.expandMenu, _y: _parent.overvie}; showCountdown: thisClip 0.5s easeout {_alpha: 0, _y: (InitPositionY + 10)} |
+| DifficultySelect_GFX | - |
+| ExtrasMenu_GFX | selectionUpdated: ConceptButtonArray[r2] 2s easeout {_alpha: 50}; selectionUpdated: ConceptImageClip 0.4s easeout {_alpha: 100, _x: 0}; selectionUpdated: centerFooter_mc 2s easeout {_alpha: 100}; selectionUpdated: leftArrow_mc 0.5s easeout {_alpha: 0}; selectionUpdated: r3 0.4s easeout {callback: r3.removeMe, _alpha: 0, _x: -50}; selectionUpdated: r3 0.4s easeout {callback: r3.removeMe, _alpha: 0, _x: 50}; selectionUpdated: rightArrow_mc 0.5s easeout {_alpha: 0} |
+| SettingsMenu_GFX | closeMenu: _backMenuRef 0.2s easeout {_alpha: 100}; selectCloseMenu: _backMenuRef 0.2s easeout {_alpha: 100}; selectionUpdated: this 0.2s easeout {_y: (0 - this.currentFocus._y)} |
+| PauseMenu_GFX | closeMenu: _root.bg2_mc 1s easeout {_alpha: 0}; selectionUpdated: this 0.2s easeout {_y: (0 - this.currentFocus._y)} |
+| ChallengeMenu_GFX | - |
+| Brightness_GFX | - |
+| MessagePrompt_GFX | - |
+| TextPrompt_GFX | - |
+| SharedComponents_GFX | currentSelectionChanged: arrowLeft_mc 0.2s easeout {color: 16777215, _alpha: 100}; currentSelectionChanged: arrowLeft_mc 0.2s easeout {color: 5289429, _alpha: 50}; currentSelectionChanged: arrowLeft_mc 0.5s easeout {color: 5289429, _alpha: 25}; currentSelectionChanged: arrowRight_mc 0.2s easeout {color: 16777215, _alpha: 100}; currentSelectionChanged: arrowRight_mc 0.2s easeout {color: 5289429, _alpha: 50}; currentSelectionChanged: arrowRight_mc 0.5s easeout {color: 5289429, _alpha: 25}; currentSelectionChanged: seperator_mc.arrowLeft_mc 0.2s easeout {color: 16777215, _alpha: 100}; currentSelectionChanged: seperator_mc.arrowLeft_mc 0.3s easeout {color: 16777215, _alpha: 25} |
+| EndGameStats_GFX | showXpTotal: xpBar_mc.xpEarned_mc 0.4s easeout {_alpha: 0, _yscale: 0}; showXpTotal: xpBar_mc.xpEarned_mc 0.4s easeout {_alpha: 100, _yscale: 100}; showXpTotal: xpBar_mc.xpToNextLevel_mc 0.4s easeout {_alpha: 0, _yscale: 0}; showXpTotal: xpBar_mc.xpToNextLevel_mc 0.4s easeout {_alpha: 100, _yscale: 100} |
+| PlayerList_GFX | - |
+| CampaignGameOver_GFX | - |
+
+- **Common pattern:**
+  - list scroll on selection: `this._y → −currentFocus._y` over 0.2 s (Settings, Pause);
+  - closing a sub-menu fades the parent back in (0.2 s);
+  - Pause close fades `bg2_mc` out over 1 s;
+  - shared selector arrows tint white / α100 on change (0.2 s) and settle to 0x50B5D5 α50 → α25 (0.5 s);
+  - CampaignSelect faction pick: the selector frame resizes (0.5 s); the unpicked faction fades 0.5 s and the picked one scales
+    up.
+- FrontEnd_GFX, CharacterSelect, DifficultySelect, Challenges, Brightness and the prompts animate through timeline frames
+  (gotoAndPlay labels) rather than named interps. Not enumerated here.
+
+**Findings (part 2):**
+1. The UI sound set is complete and matches in ours: 5 cues, both layers, levels.
+2. There's no hidden per-menu or tab sound to add.
+3. Transitions are movie-side. Fidelity depends on the Scaleform host running the AS interp controller
+   (`_global.addInterp` / `updateInterpObjects`: per-frame easeout or linear tweening with overshoot). That's the one shared
+   piece every transition above relies on.
+
+**Audit 3 complete.**
