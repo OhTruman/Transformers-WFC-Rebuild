@@ -72,6 +72,7 @@
 - **Queued for Systems (after the weapon items):**
   1. **World::onAnimNotifyWindow(matchPlayer, animSet, sequence, t0, t1, backwards, weight):** one call per active sequence per pawn per step; a loop wrap splits into two windows. Presentation only.
   2. **The hit-surface physmat:** AssetTools/manifests/maps/<MAP>/collision_weapon_physmat.json (physmats[], meshes{runs [first_tri, count, physmat_index]}, glb_sha256). At load, expand to a per-triangle uint16 beside the weapon collision triangles (skip and log on a sha mismatch); return it from CollisionWorld::segmentHit / the weapon trace; carry it in the impact event to Systems' spawnImpact / impact sound.
+     - The data is READY: AssetTools 2c1d9ba, 10 MP maps (doc MP_COLLISION_PHYSMAT.md). Runs are [first_tri, count, physmat_index, rule]; the root engine_default_physmat "ENV_PHYSMAT_p.Metal_PHYSMAT": map index 0 / unresolved to it in the hit result (UE3 behaviour).
 - **Queued (proposed, after the perf levers, batched with transforming actors):** the dying vehicle keeps collision until the gib (blocks pawns / projectiles / traces; car / tank 0.2-0.75 s, jet 4-5 s), and the hull gib blocks the world + hitscan (RE VEHICLE_DEATH_PRESENTATION_RE.md 2babd61). Sim-side, so an identity change.
 - **Added to the queue (after hover):** the 32 TnTransformingWorldActor doors / bridges have no collision
   (`docs/handoff/MP_TRANSFORMING_ACTORS.md` + AssetTools `manifests/maps/mp_transforming_actors.json`). Plan: dynamic sets from the
