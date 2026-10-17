@@ -1,0 +1,3780 @@
+[
+ {
+  "chassis": "Car",
+  "iconic": "Bumblebee",
+  "robodef": "TR_BumbleBee_ROBODEF_p.BumbleBee_ROBODEF",
+  "form": "TnCarFormBlueprint",
+  "vehicle": "TR_BumbleBee_VEHDEF_p.BumbleBeeVehicleForm",
+  "hover_fx": [
+   "CarHover_A_01_FX@Hover_LB",
+   "CarHover_A_01_FX@Hover_LF",
+   "CarHover_A_01_FX@Hover_RB",
+   "CarHover_A_01_FX@Hover_RF"
+  ],
+  "boost_fx": [
+   "bumble_boost_small1_FX@BoostSocket_L",
+   "bumble_boost_small1_FX@BoostSocket_R"
+  ],
+  "jump_fx": [
+   "CarJump_01_FX@JumpBoostSocket_C",
+   "CarJump_01_FX@JumpBoostSocket_R",
+   "CarJump_01_FX@JumpBoostSocket_L"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_BUMBLEBEE_BOOST_START",
+   "Auto_Boost_Wheels": "VEH_BUMBLEBEE_BOOST_WHEELS",
+   "Auto_Boost_Loop": "VEH_BUMBLEBEE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_BUMBLEBEE_BOOST_END",
+   "Auto_Jump_Start": "VEH_BUMBLEBEE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_BUMBLEBEE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_BUMBLEBEE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_BUMBLEBEE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_BUMBLEBEE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_BUMBLEBEE_HOVER_LAND_LIGHT",
+   "Auto_Boost_Dash": "VEH_BUMBLEBEE_BOOST_DASH"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Car_Bumblebee_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverCar_Bumblebee_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverCar_Bumblebee_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Car_Bumblebee_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Car_Bumblebee_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Car_Bumblebee_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "Sound:BEE_CAR_CAR2BOT_START"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:BEE_BOT_BOT2CAR_START"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "CarTransformerMomentum"
+ },
+ {
+  "chassis": "Jet",
+  "iconic": "Starscream",
+  "robodef": "TR_StarScream_ROBODEF_p.StarScream_ROBODEF",
+  "form": "TnPlaneFormBlueprint",
+  "vehicle": "TR_StarScream_VEHDEF_p.StarScreamVehicleForm",
+  "hover_fx": [
+   "hover_plane_FX@HoverFront_L",
+   "hover_plane_FX@HoverFront_R",
+   "hover_plane_FX@HoverMid_L",
+   "hover_plane_FX@HoverMid_R",
+   "hover_plane_FX@HoverRear_L",
+   "hover_plane_FX@HoverRear_R"
+  ],
+  "boost_fx": [
+   "Afterburner_D_FX@BoostSocket_L",
+   "Afterburner_D_FX@BoostSocket_R",
+   "Trails_Jet_D_FX@WingTipSocket_L",
+   "Trails_Jet_D_FX@WingTipSocket_R",
+   "Trails_Jet_D_FX@VaporTrailSocket_L",
+   "Trails_Jet_D_FX@VaporTrailSocket_R"
+  ],
+  "jump_fx": [],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Engine_Hover_Ascend": "VEH_STARSCREAM_HOVER_FLIGHT_ASCEND",
+   "Auto_Engine_Hover_Ascend_Stop": "VEH_STARSCREAM_HOVER_FLIGHT_ASCEND_STOP",
+   "Auto_Engine_Hover_Descend": "VEH_STARSCREAM_HOVER_FLIGHT_DESCEND",
+   "Auto_Boost_Start": "VEH_STARSCREAM_BOOST_START",
+   "Auto_Boost_Loop": "VEH_STARSCREAM_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_STARSCREAM_BOOST_END",
+   "Auto_Hover_Boosters": "VEH_STARSCREAM_HOVER_BOOSTERS"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "HoverPlane_Starscream_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverPlane_Starscream_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "FlyingPlane_Starscream_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "HoverPlane_Starscream_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "HoverPlane_Starscream_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:STARSCREAM_JET2BOT_FULL"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:STARSCREAM_BOT2JET_FULL"
+   ],
+   "Transform_ToVehicle_SuperBoost_Robo": [
+    "Sound:VEH_SUPER_BOOST_CAR"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "PlaneTransformerMomentum"
+ },
+ {
+  "chassis": "Tank",
+  "iconic": "Megatron",
+  "robodef": "TR_Megatron_ROBODEF_p.Megatron_ROBODEF",
+  "form": "TnTankFormBlueprint",
+  "vehicle": "TR_Megatron_VEHDEF_p.MegatronVehicleForm",
+  "hover_fx": [
+   "hover_tank01_FX@HoverFX_RF",
+   "hover_tank01_FX@HoverFX_RB",
+   "hover_tank01_FX@HoverFX_LF",
+   "hover_tank01_FX@HoverFX_LB",
+   "hover_tank_02_FX@TargetingSocket"
+  ],
+  "boost_fx": [
+   "Afterburner_D_FX@BoostSocket_R",
+   "Afterburner_D_FX@BoostSocket_L"
+  ],
+  "jump_fx": [
+   "Jump_tank01_FX@HoverFX_LF",
+   "Jump_tank01_FX@HoverFX_LB",
+   "Jump_tank01_FX@HoverFX_RF",
+   "Jump_tank01_FX@HoverFX_RB"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Jump_Start": "VEH_MEGATRON_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_MEGATRON_DRIVE_JUMP_LOOP",
+   "Auto_Boost_Start": "VEH_MEGATRON_BOOST_START",
+   "Auto_Boost_Loop": "VEH_MEGATRON_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_MEGATRON_BOOST_END",
+   "Auto_Land_Wheels_Heavy": "VEH_MEGATRON_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_MEGATRON_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_MEGATRON_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_MEGATRON_LAND_LIGHT"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Tank_Megatron_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "Tank_Megatron_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Tank_Megatron_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Tank_Megatron_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Tank_Megatron_STRATEGY",
+    "TransitionTime": 1.5
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "Sound:MEGATRON_VEH2BOT"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:MEGATRON_BOT2VEH",
+    "Sound:MEGATRON_BOT2VEH_ENGINESTART"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "TankTransformerMomentum"
+ },
+ {
+  "chassis": "Truck",
+  "iconic": "Optimus Prime",
+  "robodef": "TR_Optimus_ROBODEF_p.Optimus_ROBODEF",
+  "form": "TnTruckFormBlueprint",
+  "vehicle": "TR_Optimus_VEHDEF_p.OptimusTruckForm",
+  "hover_fx": [
+   "CarHover_A_01_FX@HoverBooster_LBack",
+   "CarHover_A_01_FX@HoverBooster_RBack",
+   "CarHover_A_01_FX@HoverBooster_LFront",
+   "CarHover_A_01_FX@HoverBooster_RFront",
+   "CarHover_A_01_FX@HoverBooster_LBack2",
+   "CarHover_A_01_FX@HoverBooster_RBack2"
+  ],
+  "boost_fx": [
+   "bumble_boost_small1_FX@BoostSocket_L",
+   "bumble_boost_small1_FX@BoostSocket_R"
+  ],
+  "jump_fx": [
+   "Jump_FX@JumpBoostSocket_C",
+   "Jump_FX@JumpBoostSocket_R",
+   "Jump_FX@JumpBoostSocket_L"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_OPTIMUS_BOOST_START",
+   "Auto_Boost_Loop": "VEH_OPTIMUS_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_OPTIMUS_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_OPTIMUS_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_OPTIMUS_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_OPTIMUS_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_OPTIMUS_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_OPTIMUS_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_OPTIMUS_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_OPTIMUS_HOVER_LAND_LIGHT",
+   "Auto_Ram_Boost": "VEH_OPTIMUS_RAM_BOOST_START"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Truck_Optimus_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverTruck_Optimus_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverTruck_Optimus_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Truck_Optimus_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Truck_Optimus_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Truck_Optimus_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "Sound:OPTIMUS_VEH2BOT"
+   ],
+   "Transform_ToVehicle_SuperBoost_Robo": [
+    "Sound:VEH_SUPER_BOOST_TRUCK"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:OPTIMUS_BOT2VEH"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "TruckTransformerMomentum"
+ },
+ {
+  "chassis": "Truck7",
+  "iconic": "Optimus",
+  "robodef": "TR_Optimus_ROBODEF_p.Optimus_ROBODEF",
+  "form": "TnTruckFormBlueprint",
+  "vehicle": "TR_Optimus_VEHDEF_p.OptimusTruckForm",
+  "hover_fx": [
+   "CarHover_A_01_FX@HoverBooster_LBack",
+   "CarHover_A_01_FX@HoverBooster_RBack",
+   "CarHover_A_01_FX@HoverBooster_LFront",
+   "CarHover_A_01_FX@HoverBooster_RFront",
+   "CarHover_A_01_FX@HoverBooster_LBack2",
+   "CarHover_A_01_FX@HoverBooster_RBack2"
+  ],
+  "boost_fx": [
+   "bumble_boost_small1_FX@BoostSocket_L",
+   "bumble_boost_small1_FX@BoostSocket_R"
+  ],
+  "jump_fx": [
+   "Jump_FX@JumpBoostSocket_C",
+   "Jump_FX@JumpBoostSocket_R",
+   "Jump_FX@JumpBoostSocket_L"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_OPTIMUS_BOOST_START",
+   "Auto_Boost_Loop": "VEH_OPTIMUS_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_OPTIMUS_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_OPTIMUS_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_OPTIMUS_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_OPTIMUS_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_OPTIMUS_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_OPTIMUS_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_OPTIMUS_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_OPTIMUS_HOVER_LAND_LIGHT",
+   "Auto_Ram_Boost": "VEH_OPTIMUS_RAM_BOOST_START"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Truck_Optimus_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverTruck_Optimus_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverTruck_Optimus_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Truck_Optimus_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Truck_Optimus_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Truck_Optimus_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "Sound:OPTIMUS_VEH2BOT"
+   ],
+   "Transform_ToVehicle_SuperBoost_Robo": [
+    "Sound:VEH_SUPER_BOOST_TRUCK"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:OPTIMUS_BOT2VEH"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "TruckTransformerMomentum"
+ },
+ {
+  "chassis": "Car2",
+  "iconic": "Sideswipe",
+  "robodef": "TR_Sideswipe_ROBODEF_p.Sideswipe_ROBODEF",
+  "form": "TnCarFormBlueprint",
+  "vehicle": "TR_Sideswipe_VEHDEF_p.SideswipeVehicleForm",
+  "hover_fx": [
+   "CarHover_A_01_FX@Hover_LB",
+   "CarHover_A_01_FX@Hover_RB",
+   "CarHover_A_01_FX@Hover_LF",
+   "CarHover_A_01_FX@Hover_RF"
+  ],
+  "boost_fx": [
+   "Booster_1_FX@BoostSocket_C",
+   "Booster_1_FX@BoostSocket_R",
+   "Booster_1_FX@BoostSocket_L"
+  ],
+  "jump_fx": [
+   "CarJump_Small_FX@JumpBoostSocket_C",
+   "CarJump_Small_FX@JumpBoostSocket_L",
+   "CarJump_Small_FX@JumpBoostSocket_R"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_SIDESWIPE_BOOST_START",
+   "Auto_Boost_Loop": "VEH_SIDESWIPE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_SIDESWIPE_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_SIDESWIPE_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_SIDESWIPE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_SIDESWIPE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_SIDESWIPE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_SIDESWIPE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_SIDESWIPE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_SIDESWIPE_HOVER_LAND_LIGHT",
+   "Auto_Boost_Dash": "VEH_SIDESWIPE_BOOST_DASH"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Car_Sideswipe_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverCar_Sideswipe_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverCar_Sideswipe_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Car_Sideswipe_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Car_Sideswipe_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Car_Sideswipe_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToVehicle_ROBO": [
+    "Sound:SIDESWIPE_BOT2VEH"
+   ],
+   "Transform_ToRobot_ROBO": [
+    "Sound:SIDESWIPE_VEH2BOT"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "CarTransformerMomentum"
+ },
+ {
+  "chassis": "Car3",
+  "iconic": "Breakdown",
+  "robodef": "TR_Breakdown_ROBODEF_p.Breakdown_ROBODEF",
+  "form": "TnCarFormBlueprint",
+  "vehicle": "TR_Breakdown_VEHDEF_p.BreakdownVehicleForm",
+  "hover_fx": [
+   "CarHover_D_01_FX@Hover_LB",
+   "CarHover_D_01_FX@Hover_RB",
+   "CarHover_D_01_FX@Hover_LF",
+   "CarHover_D_01_FX@Hover_RF"
+  ],
+  "boost_fx": [
+   "Booster_1_FX@BoostSocket_L",
+   "Booster_1_FX@BoostSocket_R",
+   "Booster_1_FX@BoostSocket_L2",
+   "Booster_1_FX@BoostSocket_R2",
+   "Booster_1_FX@BoostSocket_L3",
+   "Booster_1_FX@BoostSocket_R3"
+  ],
+  "jump_fx": [
+   "CarJump_01_FX@JumpBoostSocket_L",
+   "CarJump_01_FX@JumpBoostSocket_R",
+   "CarJump_01_FX@JumpBoostSocket_C"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_BARRICADE_BOOST_START",
+   "Auto_Boost_Loop": "VEH_BARRICADE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_BARRICADE_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_BARRICADE_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_BARRICADE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_BARRICADE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_BARRICADE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_BARRICADE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_BARRICADE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_BARRICADE_HOVER_LAND_LIGHT",
+   "Auto_Boost_Dash": "VEH_BARRICADE_BOOST_DASH"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Car_Breakdown_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverCar_Breakdown_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverCar_Breakdown_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Car_Breakdown_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Car_Breakdown_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Car_Breakdown_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "Sound:BREAKDOWN_VEH2BOT"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:BREAKDOWN_BOT2VEH"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "CarTransformerMomentum"
+ },
+ {
+  "chassis": "Car4",
+  "iconic": "Barricade",
+  "robodef": "TR_Barricade_ROBODEF_p.Barricade_ROBODEF",
+  "form": "TnCarFormBlueprint",
+  "vehicle": "TR_Barricade_VEHDEF_p.BarricadeVehicleForm",
+  "hover_fx": [
+   "CarHover_D_01_FX@HoverBooster_LBack",
+   "CarHover_D_01_FX@HoverBooster_RBack",
+   "CarHover_D_01_FX@HoverBooster_LFront",
+   "CarHover_D_01_FX@HoverBooster_RFront"
+  ],
+  "boost_fx": [
+   "Afterburner_D_FX@BoostSocket_L"
+  ],
+  "jump_fx": [
+   "CarJump_01_FX@JumpBoostSocket_L",
+   "CarJump_01_FX@JumpBoostSocket_R",
+   "CarJump_01_FX@JumpBoostSocket_C"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_BARRICADE_BOOST_START",
+   "Auto_Boost_Loop": "VEH_BARRICADE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_BARRICADE_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_BARRICADE_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_BARRICADE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_BARRICADE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_BARRICADE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_BARRICADE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_BARRICADE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_BARRICADE_HOVER_LAND_LIGHT",
+   "Auto_Boost_Dash": "VEH_BARRICADE_BOOST_DASH"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Car_Barricade_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverCar_Barricade_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverCar_Barricade_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Car_Barricade_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Car_Barricade_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Car_Barricade_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToVehicle_ROBO": [
+    "Sound:BARRICADE_BOT2VEH"
+   ],
+   "Transform_ToRobot_ROBO": [
+    "Sound:BARRICADE_VEH2BOT"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "CarTransformerMomentum"
+ },
+ {
+  "chassis": "Car5",
+  "iconic": "Arcee",
+  "robodef": "TR_Arcee_ROBODEF_p.Arcee_ROBODEF",
+  "form": "TnCarFormBlueprint",
+  "vehicle": "TR_Arcee_VEHDEF_p.ArceeVehicleForm",
+  "hover_fx": [
+   "CarHover_A_01_FX@HoverBooster_LBack",
+   "CarHover_A_01_FX@HoverBooster_RBack",
+   "CarHover_A_01_FX@HoverBooster_LFront",
+   "CarHover_A_01_FX@HoverBooster_RFront"
+  ],
+  "boost_fx": [
+   "Afterburner_A_FX@BoostSocket_C"
+  ],
+  "jump_fx": [
+   "CarJump_01_FX@JumpBoostSocket_C",
+   "CarJump_01_FX@JumpBoostSocket_L",
+   "CarJump_01_FX@JumpBoostSocket_R"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_SIDESWIPE_BOOST_START",
+   "Auto_Boost_Loop": "VEH_SIDESWIPE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_SIDESWIPE_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_SIDESWIPE_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_SIDESWIPE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_SIDESWIPE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_SIDESWIPE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_SIDESWIPE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_SIDESWIPE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_SIDESWIPE_HOVER_LAND_LIGHT",
+   "Auto_Boost_Dash": "VEH_SIDESWIPE_BOOST_DASH"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Car_Arcee_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverCar_Arcee_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverCar_Arcee_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Car_Arcee_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Car_Arcee_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Car_Arcee_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToVehicle_ROBO": [
+    "Sound:ARCEE_BOT2VEH_8991"
+   ],
+   "Transform_ToRobot_ROBO": [
+    "Sound:ARCEE_VEH2BOT_13820"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "CarTransformerMomentum"
+ },
+ {
+  "chassis": "Car6",
+  "iconic": "Jazz",
+  "robodef": "TR_Jazz_ROBODEF_p.Jazz_ROBODEF",
+  "form": "TnCarFormBlueprint",
+  "vehicle": "TR_Jazz_VEHDEF_p.JazzVehicleForm",
+  "hover_fx": [
+   "CarHover_A_01_FX@Hover_LB",
+   "CarHover_A_01_FX@Hover_RB",
+   "CarHover_A_01_FX@Hover_LF",
+   "CarHover_A_01_FX@Hover_RF"
+  ],
+  "boost_fx": [
+   "Afterburner_A_FX@BoostSocket_R",
+   "Afterburner_A_FX@BoostSocket_L"
+  ],
+  "jump_fx": [
+   "CarJump_01_FX@JumpBoostSocket_C",
+   "CarJump_01_FX@JumpBoostSocket_L",
+   "CarJump_01_FX@JumpBoostSocket_R"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_SIDESWIPE_BOOST_START",
+   "Auto_Boost_Loop": "VEH_SIDESWIPE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_SIDESWIPE_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_SIDESWIPE_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_SIDESWIPE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_SIDESWIPE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_SIDESWIPE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_SIDESWIPE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_SIDESWIPE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_SIDESWIPE_HOVER_LAND_LIGHT",
+   "Auto_Boost_Dash": "VEH_SIDESWIPE_BOOST_DASH"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Car_Jazz_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverCar_Jazz_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverCar_Jazz_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Car_Jazz_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Car_Jazz_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Car_Jazz_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "Sound:BREAKDOWN_VEH2BOT"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:BREAKDOWN_BOT2VEH"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "CarTransformerMomentum"
+ },
+ {
+  "chassis": "Car7",
+  "iconic": "Deadend",
+  "robodef": "TR_Deadend_ROBODEF_p.Deadend_ROBODEF",
+  "form": "TnCarFormBlueprint",
+  "vehicle": "TR_Deadend_VEHDEF_p.DeadendVehicleForm",
+  "hover_fx": [
+   "CarHover_D_01_FX@HoverBooster_LBack",
+   "CarHover_D_01_FX@HoverBooster_RBack",
+   "CarHover_D_01_FX@HoverBooster_LFront",
+   "CarHover_D_01_FX@HoverBooster_RFront"
+  ],
+  "boost_fx": [
+   "Booster_1_FX@BoostSocket_L",
+   "Booster_1_FX@BoostSocket_R",
+   "Booster_1_FX@BoostSocket_L3",
+   "Booster_1_FX@BoostSocket_R3"
+  ],
+  "jump_fx": [],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_BARRICADE_BOOST_START",
+   "Auto_Boost_Loop": "VEH_BARRICADE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_BARRICADE_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_BARRICADE_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_BARRICADE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_BARRICADE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_BARRICADE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_BARRICADE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_BARRICADE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_BARRICADE_HOVER_LAND_LIGHT",
+   "Auto_Boost_Dash": "VEH_BARRICADE_BOOST_DASH"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Car_Deadend_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverCar_Deadend_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverCar_Deadend_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Car_Deadend_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Car_Deadend_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Car_Deadend_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "Sound:DEADEND_VEH2BOT"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:DEADEND_BOT2VEH"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "CarTransformerMomentum"
+ },
+ {
+  "chassis": "Car8",
+  "iconic": "DecepticonCarSoldier",
+  "robodef": "TR_SoldierCarDec_ROBODEF_p.SoldierCarMGDec_ROBODEF",
+  "form": "TnCarFormBlueprint",
+  "vehicle": "TR_SoldierCarDec_VEHDEF_p.SoldierCarMGDecVehicleForm",
+  "hover_fx": [
+   "CarHover_D_01_FX@HoverBooster_LBack",
+   "CarHover_D_01_FX@HoverBooster_RBack",
+   "CarHover_D_01_FX@HoverBooster_LFront",
+   "CarHover_D_01_FX@HoverBooster_RFront"
+  ],
+  "boost_fx": [],
+  "jump_fx": [],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_SOUNDWAVE_BOOST_START",
+   "Auto_Boost_Loop": "VEH_SOUNDWAVE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_SOUNDWAVE_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_SOUNDWAVE_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_SOUNDWAVE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_SOUNDWAVE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_SOUNDWAVE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_SOUNDWAVE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_SOUNDWAVE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_SOUNDWAVE_HOVER_LAND_LIGHT",
+   "Auto_Ram_Boost": "VEH_SOUNDWAVE_RAM_BOOST_START"
+  },
+  "robot_sounds": {
+   "TransformToRobotDialog": "SC004948",
+   "TransformToVehicleDialog": "SC004952"
+  },
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Car_Breakdown_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverCar_Breakdown_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverCar_Breakdown_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Car_Breakdown_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Car_Breakdown_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Car_Breakdown_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "Sound:AI_CAR_SOLDIER_TOBOT"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:AI_CAR_SOLDIER_TOVEH"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": null
+ },
+ {
+  "chassis": "Car9",
+  "iconic": "AutobotCarSoldier",
+  "robodef": "TR_SoldierCarAut_ROBODEF_p.SoldierCarMGAut_ROBODEF",
+  "form": "TnCarFormBlueprint",
+  "vehicle": "TR_SoldierCarAut_VEHDEF_p.SoldierCarMGAutVehicleForm",
+  "hover_fx": [
+   "CarHover_A_01_FX@HoverBooster_LBack",
+   "CarHover_A_01_FX@HoverBooster_LFront",
+   "CarHover_A_01_FX@HoverBooster_RFront",
+   "CarHover_A_01_FX@HoverBooster_RBack"
+  ],
+  "boost_fx": [
+   "Afterburner_A_FX@BoostSocket_L",
+   "Afterburner_A_FX@BoostSocket_R"
+  ],
+  "jump_fx": [],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_SOUNDWAVE_BOOST_START",
+   "Auto_Boost_Loop": "VEH_SOUNDWAVE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_SOUNDWAVE_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_SOUNDWAVE_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_SOUNDWAVE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_SOUNDWAVE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_SOUNDWAVE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_SOUNDWAVE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_SOUNDWAVE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_SOUNDWAVE_HOVER_LAND_LIGHT",
+   "Auto_Ram_Boost": "VEH_SOUNDWAVE_RAM_BOOST_START"
+  },
+  "robot_sounds": {
+   "TransformToRobotDialog": "SC004927",
+   "TransformToVehicleDialog": "SC004931"
+  },
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Truck_IronHide_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverTruck_IronHide_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverTruck_IronHide_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Truck_IronHide_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Truck_IronHide_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Truck_IronHide_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "Sound:AI_CAR_SOLDIER_TOBOT"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:AI_CAR_SOLDIER_TOVEH"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": null
+ },
+ {
+  "chassis": "Car10",
+  "iconic": "NeutralCarSoldier",
+  "robodef": "TR_SoldierCarNeu_ROBODEF_p.SoldierCarMGNeu_ROBODEF",
+  "form": "TnCarFormBlueprint",
+  "vehicle": "TR_SoldierCarNeu_VEHDEF_p.SoldierCarMGNeuVehicleForm",
+  "hover_fx": [],
+  "boost_fx": [],
+  "jump_fx": [],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_SOUNDWAVE_BOOST_START",
+   "Auto_Boost_Loop": "VEH_SOUNDWAVE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_SOUNDWAVE_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_SOUNDWAVE_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_SOUNDWAVE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_SOUNDWAVE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_SOUNDWAVE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_SOUNDWAVE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_SOUNDWAVE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_SOUNDWAVE_HOVER_LAND_LIGHT",
+   "Auto_Ram_Boost": "VEH_SOUNDWAVE_RAM_BOOST_START"
+  },
+  "robot_sounds": {
+   "TransformToRobotDialog": "SC004927",
+   "TransformToVehicleDialog": "SC004931"
+  },
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Truck_IronHide_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverTruck_IronHide_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverTruck_IronHide_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Truck_IronHide_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Truck_IronHide_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Truck_IronHide_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "Sound:AI_CAR_SOLDIER_TOBOT"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:AI_CAR_SOLDIER_TOVEH"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": null
+ },
+ {
+  "chassis": "Jet2",
+  "iconic": "Thundercracker",
+  "robodef": "TR_Thunder_ROBODEF_p.Thunder_ROBODEF",
+  "form": "TnPlaneFormBlueprint",
+  "vehicle": "TR_Thunder_VEHDEF_p.ThunderVehicleForm",
+  "hover_fx": [
+   "hover_plane_FX@Hover_F",
+   "hover_plane_FX@Hover_L",
+   "hover_plane_FX@Hover_R",
+   "hover_plane_FX@HoverMid_L",
+   "hover_plane_FX@HoverMid_R"
+  ],
+  "boost_fx": [
+   "Afterburner_D_FX@BoostSocket_L",
+   "Afterburner_D_FX@BoostSocket_R",
+   "Trails_Jet_D_FX@WingTipSocket_L",
+   "Trails_Jet_D_FX@WingTipSocket_R",
+   "Trails_Jet_D_FX@VaporTrailSocket_L",
+   "Trails_Jet_D_FX@VaporTrailSocket_R"
+  ],
+  "jump_fx": [],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Engine_Hover_Ascend": "VEH_STARSCREAM_HOVER_FLIGHT_ASCEND",
+   "Auto_Engine_Hover_Ascend_Stop": "VEH_STARSCREAM_HOVER_FLIGHT_ASCEND_STOP",
+   "Auto_Engine_Hover_Descend": "VEH_STARSCREAM_HOVER_FLIGHT_DESCEND",
+   "Auto_Boost_Start": "VEH_STARSCREAM_BOOST_START",
+   "Auto_Boost_Loop": "VEH_STARSCREAM_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_STARSCREAM_BOOST_END",
+   "Auto_Hover_Boosters": "VEH_STARSCREAM_HOVER_BOOSTERS"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "HoverPlane_Thundercracker_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverPlane_Thundercracker_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "FlyingPlane_Thundercracker_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "HoverPlane_Thundercracker_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "HoverPlane_Thundercracker_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:None"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:None"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "PlaneTransformerMomentum"
+ },
+ {
+  "chassis": "Jet3",
+  "iconic": "Skywarp",
+  "robodef": "TR_Skywarp_ROBODEF_p.Skywarp_ROBODEF",
+  "form": "TnPlaneFormBlueprint",
+  "vehicle": "TR_Skywarp_VEHDEF_p.SkywarpVehicleForm",
+  "hover_fx": [
+   "hover_plane_FX@Hover_F",
+   "hover_plane_FX@Hover_L",
+   "hover_plane_FX@Hover_R",
+   "hover_plane_FX@HoverMid_L",
+   "hover_plane_FX@HoverMid_R"
+  ],
+  "boost_fx": [
+   "Afterburner_D_FX@BoostSocket_L",
+   "Afterburner_D_FX@BoostSocket_R",
+   "Trails_Jet_D_FX@WingTipSocket_L",
+   "Trails_Jet_D_FX@WingTipSocket_R",
+   "Trails_Jet_D_FX@VaporTrailSocket_L",
+   "Trails_Jet_D_FX@VaporTrailSocket_R"
+  ],
+  "jump_fx": [],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Engine_Hover_Ascend": "VEH_STARSCREAM_HOVER_FLIGHT_ASCEND",
+   "Auto_Engine_Hover_Ascend_Stop": "VEH_STARSCREAM_HOVER_FLIGHT_ASCEND_STOP",
+   "Auto_Engine_Hover_Descend": "VEH_STARSCREAM_HOVER_FLIGHT_DESCEND",
+   "Auto_Boost_Start": "VEH_STARSCREAM_BOOST_START",
+   "Auto_Boost_Loop": "VEH_STARSCREAM_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_STARSCREAM_BOOST_END",
+   "Auto_Hover_Boosters": "VEH_STARSCREAM_HOVER_BOOSTERS"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "HoverPlane_Skywarp_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverPlane_Skywarp_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "FlyingPlane_Skywarp_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "HoverPlane_Skywarp_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "HoverPlane_Skywarp_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SKYWARP_JET2BOT"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:SKYWARP_BOT2JET"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "PlaneTransformerMomentum"
+ },
+ {
+  "chassis": "Jet4",
+  "iconic": "AirRaid",
+  "robodef": "TR_AirRaid_ROBODEF_p.AirRaid_ROBODEF",
+  "form": "TnPlaneFormBlueprint",
+  "vehicle": "TR_AirRaid_VEHDEF_p.AirRaidVehicleForm",
+  "hover_fx": [
+   "hover_plane_FX@Hover_F",
+   "hover_plane_FX@Hover_L",
+   "hover_plane_FX@Hover_R",
+   "hover_plane_FX@Hover_RightSide",
+   "hover_plane_FX@Hover_LeftSide"
+  ],
+  "boost_fx": [
+   "Afterburner_A_FX@BoostSocket_L",
+   "Afterburner_A_FX@BoostSocket_R",
+   "Trails_Jet_A_FX@WingTipSocket_L",
+   "Trails_Jet_A_FX@WingTipSocket_R",
+   "Trails_Jet_A_FX@VaporTrailSocket_L",
+   "Trails_Jet_A_FX@VaporTrailSocket_R"
+  ],
+  "jump_fx": [],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Engine_Hover_Ascend": "VEH_STARSCREAM_HOVER_FLIGHT_ASCEND",
+   "Auto_Engine_Hover_Ascend_Stop": "VEH_STARSCREAM_HOVER_FLIGHT_ASCEND_STOP",
+   "Auto_Engine_Hover_Descend": "VEH_STARSCREAM_HOVER_FLIGHT_DESCEND",
+   "Auto_Boost_Start": "VEH_STARSCREAM_BOOST_START",
+   "Auto_Boost_Loop": "VEH_STARSCREAM_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_STARSCREAM_BOOST_END",
+   "Auto_Hover_Boosters": "VEH_STARSCREAM_HOVER_BOOSTERS"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "HoverPlane_AirRaid_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverPlane_AirRaid_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "FlyingPlane_AirRaid_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "HoverPlane_AirRaid_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "HoverPlane_AirRaid_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "Sound:AIRRAID_VEH2BOT"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:AIRRAID_BOT2VEH"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "PlaneTransformerMomentum"
+ },
+ {
+  "chassis": "Jet5",
+  "iconic": "Jetfire",
+  "robodef": "TR_Jetfire_ROBODEF_p.Jetfire_ROBODEF",
+  "form": "TnPlaneFormBlueprint",
+  "vehicle": "TR_Jetfire_VEHDEF_p.JetfireVehicleForm",
+  "hover_fx": [
+   "hover_flyer02_A_FX@Hover_F",
+   "hover_flyer01_A_FX@Hover_L",
+   "hover_flyer01_A_FX@Hover_R"
+  ],
+  "boost_fx": [
+   "Afterburner_A_FX@BoostSocket_L",
+   "Afterburner_A_FX@BoostSocket_R",
+   "Trails_Jet_A_FX@WingTipSocket_L",
+   "Trails_Jet_A_FX@WingTipSocket_R",
+   "Trails_Jet_A_FX@VaporTrailSocket_L",
+   "Trails_Jet_A_FX@VaporTrailSocket_R"
+  ],
+  "jump_fx": [],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Engine_Hover_Ascend": "VEH_STARSCREAM_HOVER_FLIGHT_ASCEND",
+   "Auto_Engine_Hover_Ascend_Stop": "VEH_STARSCREAM_HOVER_FLIGHT_ASCEND_STOP",
+   "Auto_Engine_Hover_Descend": "VEH_STARSCREAM_HOVER_FLIGHT_DESCEND",
+   "Auto_Boost_Start": "VEH_STARSCREAM_BOOST_START",
+   "Auto_Boost_Loop": "VEH_STARSCREAM_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_STARSCREAM_BOOST_END",
+   "Auto_Hover_Boosters": "VEH_STARSCREAM_HOVER_BOOSTERS"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "HoverPlane_JetFire_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverPlane_JetFire_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "FlyingPlane_JetFire_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "HoverPlane_JetFire_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "HoverPlane_JetFire_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:JETFIRE_VEH2BOT"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:JETFIRE_BOT2VEH"
+   ],
+   "Transform_ToRobot_Hover_ROBO": [
+    "Sound:JETFIRE_VEH2BOT"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "PlaneTransformerMomentum"
+ },
+ {
+  "chassis": "Jet6",
+  "iconic": "SilverBolt",
+  "robodef": "TR_SilverBolt_ROBODEF_p.SilverBolt_ROBODEF",
+  "form": "TnPlaneFormBlueprint",
+  "vehicle": "TR_SilverBolt_VEHDEF_p.SilverBoltVehicleForm",
+  "hover_fx": [
+   "hover_plane_FX@Hover_F",
+   "hover_plane_FX@Hover_L",
+   "hover_plane_FX@Hover_R",
+   "hover_plane_FX@HoverMid_L",
+   "hover_plane_FX@HoverMid_R"
+  ],
+  "boost_fx": [
+   "Afterburner_A_FX@BoostSocket_L",
+   "Afterburner_A_FX@BoostSocket_R",
+   "Trails_Jet_A_FX@WingTipSocket_L",
+   "Trails_Jet_A_FX@WingTipSocket_R",
+   "Trails_Jet_A_FX@VaporTrailSocket_L",
+   "Trails_Jet_A_FX@VaporTrailSocket_R"
+  ],
+  "jump_fx": [],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Engine_Hover_Ascend": "VEH_STARSCREAM_HOVER_FLIGHT_ASCEND",
+   "Auto_Engine_Hover_Ascend_Stop": "VEH_STARSCREAM_HOVER_FLIGHT_ASCEND_STOP",
+   "Auto_Engine_Hover_Descend": "VEH_STARSCREAM_HOVER_FLIGHT_DESCEND",
+   "Auto_Boost_Start": "VEH_STARSCREAM_BOOST_START",
+   "Auto_Boost_Loop": "VEH_STARSCREAM_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_STARSCREAM_BOOST_END",
+   "Auto_Hover_Boosters": "VEH_STARSCREAM_HOVER_BOOSTERS"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "HoverPlane_SilverBolt_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverPlane_SilverBolt_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "FlyingPlane_SilverBolt_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "HoverPlane_SilverBolt_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "HoverPlane_SilverBolt_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToVehicle_ROBO": [
+    "Sound:SILVBERBOLT_BOT2VEH"
+   ],
+   "Transform_ToRobot_ROBO": [
+    "Sound:SILVBERBOLT_VEH2BOT"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "PlaneTransformerMomentum"
+ },
+ {
+  "chassis": "Jet7",
+  "iconic": "Shockwave",
+  "robodef": "TR_Shockwave_ROBODEF_p.Shockwave_ROBODEF",
+  "form": "TnPlaneFormBlueprint",
+  "vehicle": "TR_Shockwave_VEHDEF_p.ShockwaveVehicleForm",
+  "hover_fx": [
+   "hover_plane_FX@Hover_F",
+   "hover_plane_FX@Hover_L",
+   "hover_flyer01_D_FX@Hover_R",
+   "hover_plane_FX@HoverMid_L",
+   "hover_plane_FX@HoverMid_R"
+  ],
+  "boost_fx": [
+   "Afterburner_D_FX@BoostSocket_C",
+   "Trails_Jet_D_FX@WingTipSocket_L",
+   "Trails_Jet_D_FX@WingTipSocket_R",
+   "Trails_Jet_D_FX@VaporTrailSocket_L",
+   "Trails_Jet_D_FX@VaporTrailSocket_R"
+  ],
+  "jump_fx": [],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Engine_Hover_Ascend": "VEH_STARSCREAM_HOVER_FLIGHT_ASCEND",
+   "Auto_Engine_Hover_Ascend_Stop": "VEH_STARSCREAM_HOVER_FLIGHT_ASCEND_STOP",
+   "Auto_Engine_Hover_Descend": "VEH_STARSCREAM_HOVER_FLIGHT_DESCEND",
+   "Auto_Boost_Start": "VEH_STARSCREAM_BOOST_START",
+   "Auto_Boost_Loop": "VEH_STARSCREAM_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_STARSCREAM_BOOST_END",
+   "Auto_Hover_Boosters": "VEH_STARSCREAM_HOVER_BOOSTERS"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "HoverPlane_Shockwave_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverPlane_Shockwave_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "FlyingPlane_Shockwave_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "HoverPlane_Shockwave_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "HoverPlane_Shockwave_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToVehicle_ROBO": [
+    "Sound:RATCHET_BOT2VEH"
+   ],
+   "Transform_ToRobot_ROBO": [
+    "Sound:RATCHET_VEH2BOT"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "PlaneTransformerMomentum"
+ },
+ {
+  "chassis": "Jet8",
+  "iconic": "Slipstream",
+  "robodef": "TR_Slipstream_ROBODEF_p.Slipstream_ROBODEF",
+  "form": "TnPlaneFormBlueprint",
+  "vehicle": "TR_Slipstream_VEHDEF_p.SlipstreamVehicleForm",
+  "hover_fx": [
+   "hover_plane_FX@Hover_F",
+   "hover_plane_FX@Hover_R",
+   "hover_plane_FX@Hover_L",
+   "hover_plane_FX@HoverMid_R",
+   "hover_plane_FX@HoverMid_L"
+  ],
+  "boost_fx": [
+   "Afterburner_D_FX@BoostSocket_L",
+   "Afterburner_D_FX@BoostSocket_R",
+   "Trails_Jet_D_FX@WingTipSocket_L",
+   "Trails_Jet_D_FX@WingTipSocket_R",
+   "Trails_Jet_D_FX@VaporTrailSocket_L",
+   "Trails_Jet_D_FX@VaporTrailSocket_R"
+  ],
+  "jump_fx": [],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Engine_Hover_Ascend": "VEH_STARSCREAM_HOVER_FLIGHT_ASCEND",
+   "Auto_Engine_Hover_Ascend_Stop": "VEH_STARSCREAM_HOVER_FLIGHT_ASCEND_STOP",
+   "Auto_Engine_Hover_Descend": "VEH_STARSCREAM_HOVER_FLIGHT_DESCEND",
+   "Auto_Boost_Start": "VEH_STARSCREAM_BOOST_START",
+   "Auto_Boost_Loop": "VEH_STARSCREAM_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_STARSCREAM_BOOST_END",
+   "Auto_Hover_Boosters": "VEH_STARSCREAM_HOVER_BOOSTERS"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "HoverPlane_Slipstream_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverPlane_Slipstream_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "FlyingPlane_Slipstream_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "HoverPlane_Slipstream_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "HoverPlane_Slipstream_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "Sound:SLIPSTREAM_VEH2BOT"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:SLIPSTREAM_BOT2VEH"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "PlaneTransformerMomentum"
+ },
+ {
+  "chassis": "Tank2",
+  "iconic": "Brawl",
+  "robodef": "TR_Brawl_ROBODEF_p.Brawl_ROBODEF",
+  "form": "TnTankFormBlueprint",
+  "vehicle": "TR_Brawl_VEHDEF_p.BrawlVehicleForm",
+  "hover_fx": [
+   "hover_tank01_FX@Hover_R",
+   "hover_tank01_FX@Hover_L",
+   "hover_tank01_FX@Hover_B",
+   "hover_tank_02_FX@Hover_C"
+  ],
+  "boost_fx": [
+   "Afterburner_D_FX@BoostSocket_R",
+   "Afterburner_D_FX@BoostSocket_L",
+   "Afterburner_D_FX@BoostSocket_B"
+  ],
+  "jump_fx": [
+   "Jump_tank01_FX@HoverFX_R",
+   "Jump_tank01_FX@HoverFX_L",
+   "Jump_tank01_FX@HoverFX_B"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Jump_Start": "VEH_MEGATRON_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_MEGATRON_DRIVE_JUMP_LOOP",
+   "Auto_Boost_Start": "VEH_MEGATRON_BOOST_START",
+   "Auto_Boost_Loop": "VEH_MEGATRON_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_MEGATRON_BOOST_END",
+   "Auto_Land_Wheels_Heavy": "VEH_MEGATRON_LAND_HEAVY",
+   "Auto_Land_Hover_Heavy": "VEH_MEGATRON_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_MEGATRON_LAND_LIGHT",
+   "Auto_Land_Wheels_Light": "VEH_MEGATRON_LAND_LIGHT"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Tank_Brawl_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "Tank_Brawl_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Tank_Brawl_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Tank_Brawl_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Tank_Brawl_STRATEGY",
+    "TransitionTime": 1.5
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "Sound:BRAWL_VEH2BOT"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:BRAWL_BOT2VEH"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "TankTransformerMomentum"
+ },
+ {
+  "chassis": "Tank3",
+  "iconic": "Warpath",
+  "robodef": "TR_Warpath_ROBODEF_p.Warpath_ROBODEF",
+  "form": "TnTankFormBlueprint",
+  "vehicle": "TR_Warpath_VEHDEF_p.WarpathVehicleForm",
+  "hover_fx": [
+   "hover_tank01_FX@Hover_RF",
+   "hover_tank01_FX@Hover_RB",
+   "hover_tank01_FX@Hover_LF",
+   "hover_tank01_FX@Hover_LB",
+   "hover_tank_02_FX@Hover_C"
+  ],
+  "boost_fx": [
+   "Afterburner_A_FX@BoostSocket_R",
+   "Afterburner_A_FX@BoostSocket_L"
+  ],
+  "jump_fx": [
+   "Jump_tank01_FX@Hover_LF",
+   "Jump_tank01_FX@Hover_LB",
+   "Jump_tank01_FX@Hover_RF",
+   "Jump_tank01_FX@Hover_RB"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Jump_Start": "VEH_MEGATRON_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_MEGATRON_DRIVE_JUMP_LOOP",
+   "Auto_Boost_Start": "VEH_MEGATRON_BOOST_START",
+   "Auto_Boost_Loop": "VEH_MEGATRON_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_MEGATRON_BOOST_END",
+   "Auto_Land_Wheels_Heavy": "VEH_MEGATRON_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_MEGATRON_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_MEGATRON_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_MEGATRON_LAND_LIGHT"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Tank_Warpath_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "Tank_Warpath_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Tank_Warpath_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Tank_Warpath_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Tank_Warpath_STRATEGY",
+    "TransitionTime": 1.5
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "Sound:WARPATH_VEH2BOT"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:WARPATH_BOT2VEH"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "TankTransformerMomentum"
+ },
+ {
+  "chassis": "Tank4",
+  "iconic": "Scattershot",
+  "robodef": "TR_Scattershot_ROBODEF_p.Scattershot_ROBODEF",
+  "form": "TnTankFormBlueprint",
+  "vehicle": "TR_Scattershot_VEHDEF_p.ScattershotVehicleForm",
+  "hover_fx": [
+   "hover_tank01_FX@HoverFX_RF",
+   "hover_tank01_FX@HoverFX_RB",
+   "hover_tank01_FX@HoverFX_LF",
+   "hover_tank01_FX@HoverFX_LB",
+   "hover_tank_02_FX@TargetingSocket"
+  ],
+  "boost_fx": [
+   "Afterburner_A_FX@BoostSocket_R",
+   "Afterburner_A_FX@BoostSocket_L"
+  ],
+  "jump_fx": [
+   "Jump_tank01_FX@HoverFX_LF",
+   "Jump_tank01_FX@HoverFX_LB",
+   "Jump_tank01_FX@HoverFX_RF",
+   "Jump_tank01_FX@HoverFX_RB"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Jump_Start": "VEH_MEGATRON_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_MEGATRON_DRIVE_JUMP_LOOP",
+   "Auto_Boost_Start": "VEH_MEGATRON_BOOST_START",
+   "Auto_Boost_Loop": "VEH_MEGATRON_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_MEGATRON_BOOST_END",
+   "Auto_Land_Wheels_Heavy": "VEH_MEGATRON_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_MEGATRON_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_MEGATRON_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_MEGATRON_LAND_LIGHT"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Tank_Scattershot_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "Tank_Scattershot_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Tank_Scattershot_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Tank_Scattershot_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Tank_Scattershot_STRATEGY",
+    "TransitionTime": 1.5
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToVehicle_ROBO": [
+    "Sound:SCATTERSHOT_BOT2VEH"
+   ],
+   "Transform_ToRobot_ROBO": [
+    "Sound:SCATTERSHOT_VEH2BOT"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "TankTransformerMomentum"
+ },
+ {
+  "chassis": "Tank5",
+  "iconic": "Demolishor",
+  "robodef": "TR_Demolishor_ROBODEF_p.Demolishor_ROBODEF",
+  "form": "TnTankFormBlueprint",
+  "vehicle": "TR_Demolishor_VEHDEF_p.DemolishorVehicleForm",
+  "hover_fx": [
+   "hover_tank01_FX@HoverFX_R",
+   "hover_tank01_FX@HoverFX_L",
+   "hover_tank01_FX@HoverFX_B",
+   "hover_tank_02_FX@TargetingSocket"
+  ],
+  "boost_fx": [
+   "Afterburner_D_FX@BoostSocket_R",
+   "Afterburner_D_FX@BoostSocket_L",
+   "Afterburner_D_FX@BoostSocket_B"
+  ],
+  "jump_fx": [
+   "Jump_tank01_FX@HoverFX_R",
+   "Jump_tank01_FX@HoverFX_L",
+   "Jump_tank01_FX@HoverFX_B"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Jump_Start": "VEH_MEGATRON_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_MEGATRON_DRIVE_JUMP_LOOP",
+   "Auto_Boost_Start": "VEH_MEGATRON_BOOST_START",
+   "Auto_Boost_Loop": "VEH_MEGATRON_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_MEGATRON_BOOST_END",
+   "Auto_Land_Wheels_Heavy": "VEH_MEGATRON_LAND_HEAVY",
+   "Auto_Land_Hover_Heavy": "VEH_MEGATRON_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_MEGATRON_LAND_LIGHT",
+   "Auto_Land_Wheels_Light": "VEH_MEGATRON_LAND_LIGHT"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Tank_Demolishor_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "Tank_Demolishor_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Tank_Demolishor_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Tank_Demolishor_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Tank_Demolishor_STRATEGY",
+    "TransitionTime": 1.5
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "Sound:DEMOLISHER_VEH2BOT"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:DEMOLISHER_BOT2VEH"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "TankTransformerMomentum"
+ },
+ {
+  "chassis": "Truck2",
+  "iconic": "Ratchet",
+  "robodef": "TR_Ratchet_ROBODEF_p.Ratchet_ROBODEF",
+  "form": "TnTruckFormBlueprint",
+  "vehicle": "TR_Ratchet_VEHDEF_p.RatchetTruckForm",
+  "hover_fx": [
+   "CarHover_A_01_FX@Hover_LB",
+   "CarHover_A_01_FX@Hover_RB",
+   "CarHover_A_01_FX@Hover_LF",
+   "CarHover_A_01_FX@Hover_RF"
+  ],
+  "boost_fx": [
+   "Afterburner_A_FX@BoostSocket_L",
+   "Afterburner_A_FX@BoostSocket_R"
+  ],
+  "jump_fx": [
+   "CarJump_01_FX@JumpBoostSocket_L",
+   "CarJump_01_FX@JumpBoostSocket_R",
+   "CarJump_01_FX@JumpBoostSocket_C"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_SOUNDWAVE_BOOST_START",
+   "Auto_Boost_Loop": "VEH_SOUNDWAVE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_SOUNDWAVE_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_SOUNDWAVE_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_SOUNDWAVE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_SOUNDWAVE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_SOUNDWAVE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_SOUNDWAVE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_SOUNDWAVE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_SOUNDWAVE_HOVER_LAND_LIGHT",
+   "Auto_Ram_Boost": "VEH_OPTIMUS_RAM_BOOST_START"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Truck_Ratchet_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverTruck_Ratchet_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverTruck_Ratchet_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Truck_Ratchet_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Truck_Ratchet_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Truck_Ratchet_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToVehicle_ROBO": [
+    "Sound:RATCHET_BOT2VEH"
+   ],
+   "Transform_ToRobot_ROBO": [
+    "Sound:RATCHET_VEH2BOT"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "TruckTransformerMomentum"
+ },
+ {
+  "chassis": "Truck3",
+  "iconic": "Ironhide",
+  "robodef": "TR_Ironhide_ROBODEF_p.Ironhide_ROBODEF",
+  "form": "TnTruckFormBlueprint",
+  "vehicle": "TR_Ironhide_VEHDEF_p.IronhideTruckForm",
+  "hover_fx": [
+   "CarHover_A_01_FX@Hover_LB",
+   "CarHover_A_01_FX@Hover_RB",
+   "CarHover_A_01_FX@Hover_LF",
+   "CarHover_A_01_FX@Hover_RF"
+  ],
+  "boost_fx": [
+   "Afterburner_A_FX@BoostSocket_L",
+   "Afterburner_A_FX@BoostSocket_R"
+  ],
+  "jump_fx": [
+   "CarJump_01_FX@JumpBoostSocket_L",
+   "CarJump_01_FX@JumpBoostSocket_R",
+   "CarJump_01_FX@JumpBoostSocket_C"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_SOUNDWAVE_BOOST_START",
+   "Auto_Boost_Loop": "VEH_SOUNDWAVE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_SOUNDWAVE_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_SOUNDWAVE_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_SOUNDWAVE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_SOUNDWAVE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_SOUNDWAVE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_SOUNDWAVE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_SOUNDWAVE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_SOUNDWAVE_HOVER_LAND_LIGHT",
+   "Auto_Ram_Boost": "VEH_OPTIMUS_RAM_BOOST_START"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Truck_IronHide_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverTruck_IronHide_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverTruck_IronHide_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Truck_IronHide_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Truck_IronHide_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Truck_IronHide_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToVehicle_ROBO": [
+    "Sound:IRONHIDE_BOT2VEH"
+   ],
+   "Transform_ToRobot_ROBO": [
+    "Sound:IRONHIDE_VEH2BOT"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "TruckTransformerMomentum"
+ },
+ {
+  "chassis": "Truck4",
+  "iconic": "Soundwave",
+  "robodef": "TR_Soundwave_ROBODEF_p.Soundwave_ROBODEF",
+  "form": "TnTruckFormBlueprint",
+  "vehicle": "TR_Soundwave_VEHDEF_p.SoundwaveTruckForm",
+  "hover_fx": [
+   "CarHover_D_01_FX@Hover_LB",
+   "CarHover_D_01_FX@Hover_RB",
+   "CarHover_D_01_FX@Hover_LF",
+   "CarHover_D_01_FX@Hover_RF"
+  ],
+  "boost_fx": [
+   "Afterburner_D_FX@BoostSocket_L",
+   "Afterburner_D_FX@BoostSocket_R"
+  ],
+  "jump_fx": [
+   "CarJump_01_FX@JumpBoostSocket_L",
+   "CarJump_01_FX@JumpBoostSocket_R",
+   "CarJump_01_FX@JumpBoostSocket_C"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_SOUNDWAVE_BOOST_START",
+   "Auto_Boost_Loop": "VEH_SOUNDWAVE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_SOUNDWAVE_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_SOUNDWAVE_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_SOUNDWAVE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_SOUNDWAVE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_SOUNDWAVE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_SOUNDWAVE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_SOUNDWAVE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_SOUNDWAVE_HOVER_LAND_LIGHT",
+   "Auto_Ram_Boost": "VEH_SOUNDWAVE_RAM_BOOST_START"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Truck_Soundwave_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverTruck_Soundwave_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverTruck_Soundwave_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Truck_Soundwave_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Truck_Soundwave_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Truck_Soundwave_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToVehicle_ROBO": [
+    "Sound:SOUNDWAVE_BOT2VEH"
+   ],
+   "Transform_ToRobot_ROBO": [
+    "Sound:SOUNDWAVE_VEH2BOT"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "TruckTransformerMomentum"
+ },
+ {
+  "chassis": "Truck5",
+  "iconic": "Zeta Prime",
+  "robodef": "TR_ZetaPrime_ROBODEF_p.ZetaPrime_ROBODEF",
+  "form": "TnTruckFormBlueprint",
+  "vehicle": "TR_ZetaPrime_VEHDEF_p.ZetaPrimeTruckForm",
+  "hover_fx": [
+   "CarHover_A_01_FX@HoverBooster_LBack",
+   "CarHover_A_01_FX@HoverBooster_RBack",
+   "CarHover_A_01_FX@HoverBooster_LFront",
+   "CarHover_A_01_FX@HoverBooster_RFront"
+  ],
+  "boost_fx": [
+   "bumble_boost_small1_FX@BoostSocket_L",
+   "bumble_boost_small1_FX@BoostSocket_L2",
+   "bumble_boost_small1_FX@BoostSocket_R",
+   "bumble_boost_small1_FX@BoostSocket_R2"
+  ],
+  "jump_fx": [
+   "Jump_FX@JumpBoostSocket_C",
+   "Jump_FX@JumpBoostSocket_R",
+   "Jump_FX@JumpBoostSocket_L"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_SOUNDWAVE_BOOST_START",
+   "Auto_Boost_Loop": "VEH_SOUNDWAVE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_SOUNDWAVE_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_SOUNDWAVE_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_SOUNDWAVE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_SOUNDWAVE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_SOUNDWAVE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_SOUNDWAVE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_SOUNDWAVE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_SOUNDWAVE_HOVER_LAND_LIGHT",
+   "Auto_Ram_Boost": "VEH_SOUNDWAVE_RAM_BOOST_START"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Truck_ZetaPrime_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverTruck_ZetaPrime_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverTruck_ZetaPrime_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Truck_ZetaPrime_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Truck_ZetaPrime_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Truck_ZetaPrime_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "Sound:ZETA_VEH2BOT"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:ZETA_BOT2VEH"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "TruckTransformerMomentum"
+ },
+ {
+  "chassis": "Truck6",
+  "iconic": "Onslaught",
+  "robodef": "TR_Onslaught_ROBODEF_p.Onslaught_ROBODEF",
+  "form": "TnTruckFormBlueprint",
+  "vehicle": "TR_Onslaught_VEHDEF_p.OnslaughtTruckForm",
+  "hover_fx": [
+   "CarHover_D_01_FX@HoverBooster_LBack",
+   "CarHover_D_01_FX@HoverBooster_RBack",
+   "CarHover_D_01_FX@HoverBooster_LFront",
+   "CarHover_D_01_FX@HoverBooster_RFront"
+  ],
+  "boost_fx": [
+   "Afterburner_D_FX@BoostSocket_L"
+  ],
+  "jump_fx": [
+   "Jump_FX@JumpBoostSocket_C",
+   "Jump_FX@JumpBoostSocket_R",
+   "None@JumpBoostSocket_L"
+  ],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_SOUNDWAVE_BOOST_START",
+   "Auto_Boost_Loop": "VEH_SOUNDWAVE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_SOUNDWAVE_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_SOUNDWAVE_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_SOUNDWAVE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_SOUNDWAVE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_SOUNDWAVE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_SOUNDWAVE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_SOUNDWAVE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_SOUNDWAVE_HOVER_LAND_LIGHT",
+   "Auto_Ram_Boost": "VEH_SOUNDWAVE_RAM_BOOST_START"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Truck_Onslaught_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnHovering": {
+    "strategy": "HoverTruck_Onslaught_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverTruck_Onslaught_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Truck_Onslaught_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Truck_Onslaught_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Truck_Onslaught_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToVehicle_ROBO": [
+    "Sound:ONSLAUGHT_BOT2VEH"
+   ],
+   "Transform_ToRobot_ROBO": [
+    "Sound:ONSLAUGHT_VEH2BOT"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": "TruckTransformerMomentum"
+ },
+ {
+  "chassis": "Minion1",
+  "iconic": "Frenzy",
+  "robodef": "TR_Frenzy_ROBODEF_p.Frenzy_ROBODEF",
+  "form": "TnCarFormBlueprint",
+  "vehicle": "TR_SoldierCarDec_VEHDEF_p.SoldierCarDecVehicleForm",
+  "hover_fx": [
+   "CarHover_D_01_FX@HoverBooster_LBack",
+   "CarHover_D_01_FX@HoverBooster_RBack",
+   "CarHover_D_01_FX@HoverBooster_LFront",
+   "CarHover_D_01_FX@HoverBooster_RFront"
+  ],
+  "boost_fx": [
+   "Afterburner_D_FX@BoostSocket_L",
+   "Afterburner_D_FX@BoostSocket_R"
+  ],
+  "jump_fx": [],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_SOUNDWAVE_BOOST_START",
+   "Auto_Boost_Loop": "VEH_SOUNDWAVE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_SOUNDWAVE_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_SOUNDWAVE_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_SOUNDWAVE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_SOUNDWAVE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_SOUNDWAVE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_SOUNDWAVE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_SOUNDWAVE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_SOUNDWAVE_HOVER_LAND_LIGHT",
+   "Auto_Ram_Boost": "VEH_SOUNDWAVE_RAM_BOOST_START"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Tank_Megatron_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "Tank_Megatron_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Tank_Megatron_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Tank_Megatron_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Tank_Megatron_STRATEGY",
+    "TransitionTime": 1.5
+   }
+  },
+  "transform_notifies": {},
+  "acrobatics": "HeavySmallAcrobatics",
+  "momentum": null
+ },
+ {
+  "chassis": "Minion2",
+  "iconic": "Rumble",
+  "robodef": "TR_Rumble_ROBODEF_p.Rumble_ROBODEF",
+  "form": "TnCarFormBlueprint",
+  "vehicle": "TR_SoldierCarDec_VEHDEF_p.SoldierCarDecVehicleForm",
+  "hover_fx": [
+   "CarHover_D_01_FX@HoverBooster_LBack",
+   "CarHover_D_01_FX@HoverBooster_RBack",
+   "CarHover_D_01_FX@HoverBooster_LFront",
+   "CarHover_D_01_FX@HoverBooster_RFront"
+  ],
+  "boost_fx": [
+   "Afterburner_D_FX@BoostSocket_L",
+   "Afterburner_D_FX@BoostSocket_R"
+  ],
+  "jump_fx": [],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Boost_Start": "VEH_SOUNDWAVE_BOOST_START",
+   "Auto_Boost_Loop": "VEH_SOUNDWAVE_BOOST_LOOP",
+   "Auto_Boost_End": "VEH_SOUNDWAVE_BOOST_END",
+   "Auto_Boost_Wheels": "VEH_SOUNDWAVE_BOOST_WHEELS",
+   "Auto_Jump_Start": "VEH_SOUNDWAVE_DRIVE_JUMP_START",
+   "Auto_Jump_Loop": "VEH_SOUNDWAVE_DRIVE_JUMP_LOOP",
+   "Auto_Land_Wheels_Heavy": "VEH_SOUNDWAVE_WHEELS_LAND_HEAVY",
+   "Auto_Land_Wheels_Light": "VEH_SOUNDWAVE_WHEELS_LAND_LIGHT",
+   "Auto_Land_Hover_Heavy": "VEH_SOUNDWAVE_HOVER_LAND_HEAVY",
+   "Auto_Land_Hover_Light": "VEH_SOUNDWAVE_HOVER_LAND_LIGHT",
+   "Auto_Ram_Boost": "VEH_SOUNDWAVE_RAM_BOOST_START"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "Tank_Megatron_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "Tank_Megatron_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "Tank_Megatron_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "Tank_Megatron_STRATEGY",
+    "TransitionTime": 1.5
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "Tank_Megatron_STRATEGY",
+    "TransitionTime": 1.5
+   }
+  },
+  "transform_notifies": {},
+  "acrobatics": "SharedAcrobatics",
+  "momentum": null
+ },
+ {
+  "chassis": "Minion3",
+  "iconic": "Laserbeak",
+  "robodef": "TR_Laserbeak_ROBODEF_p.Laserbeak_ROBODEF",
+  "form": "TnPlaneFormBlueprint",
+  "vehicle": "TR_Laserbeak_ROBODEF_p.LaserbeakVehicleForm",
+  "hover_fx": [],
+  "boost_fx": [],
+  "jump_fx": [],
+  "damaged_fx": [],
+  "veh_sounds": {
+   "Auto_Engine_Hover_Ascend": "VEH_JET_SOLDIER_HOVER_FLIGHT_ASCEND",
+   "Auto_Engine_Hover_Ascend_Stop": "VEH_JET_SOLDIER_HOVER_FLIGHT_ASCEND_STOP",
+   "Auto_Engine_Hover_Descend": "VEH_JET_SOLDIER_HOVER_FLIGHT_DESCEND",
+   "Auto_Boost_Start": "MINION_LASERBEAK_BOOST_START",
+   "Auto_Boost_Loop": "MINION_LASERBEAK_BOOST_LOOP",
+   "Auto_Boost_End": "MINION_LASERBEAK_BOOST_END"
+  },
+  "robot_sounds": {},
+  "cameras": {
+   "TnDriving": {
+    "strategy": "HoverPlane_Slipstream_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnOverTheShoulder": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToRobo": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToVehicle": {
+    "strategy": "HoverPlane_Slipstream_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToShoulderSlam": {
+    "strategy": "ShoulderSlam_STRATEGY",
+    "TransitionTime": 0.75
+   },
+   "TnTransformToSuperBoost": {
+    "strategy": "FlyingPlane_Slipstream_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToHover": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldPush": {
+    "strategy": "HoverPlane_Slipstream_STRATEGY",
+    "TransitionTime": 1.0
+   },
+   "TnTransformToWhirlwind": {
+    "strategy": "OverTheShoulder_STRATEGY",
+    "TransitionTime": 1.5,
+    "TransitionOverrides": [
+     {
+      "PreviousStrategy": "GuidedMissile",
+      "TransitionTime": 0.0
+     }
+    ]
+   },
+   "TnTransformToShieldZone": {
+    "strategy": "HoverPlane_Slipstream_STRATEGY",
+    "TransitionTime": 1.0
+   }
+  },
+  "transform_notifies": {
+   "Transform_ToRobot_ROBO": [
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:STARSCREAM_JET2BOT_FULL"
+   ],
+   "Transform_ToVehicle_ROBO": [
+    "Sound:STARSCREAM_BOT2JET_FULL"
+   ],
+   "Transform_ToVehicle_SuperBoost_Robo": [
+    "Sound:VEH_SUPER_BOOST_CAR"
+   ]
+  },
+  "acrobatics": "SharedAcrobatics",
+  "momentum": null
+ }
+]
