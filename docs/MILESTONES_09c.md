@@ -2353,7 +2353,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (02:17:55-02:18:56 python + a structure-audit stage running into the hold until 02:21:59) ended 5 s before map 501's first
   rep; watchdog clean, reps agree; Experimental reruns 501 only (~5 min) after the untimed FAST delta and the 2b / 1b hold.
   Systems' GO BUILD = Experimental's "RERUN TIMED DONE".
-2026-10-17 03:40 USER SETS PACKAGE 7 SCOPE (03:35 / 03:37): "more reflective surfaces and damp sheen" (X6), "double ray trace
+2026-10-17 ~03:30 USER SETS PACKAGE 7 SCOPE (two messages after 2b TIMED DONE 03:26:55; this entry was first labelled 03:40 without reading the clock): "more reflective surfaces and damp sheen" (X6), "double ray trace
   lightmap resolution" (X7), the Streets haze tweak, "the brightness of saturation of mine explosions", "the Smart bot hover and
   squad follow polish", "the AMD driver leak", "and also the dead bodies everything you said we can do" (one draw per settled
   body, instanced gibs, Defrag latch removal, patch 2: decals, skeletal gibs, authored death camera, full momentum picker).
@@ -2364,7 +2364,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Also: 2b TIMED DONE 03:26:55; 1b Realistic + HD 2 + X3 at 1440p p50 9.7-11.9 ms (84-103 fps; 4078e47b read 105-137,
   explanation requested for the doc); 5v5 +0.06 ms; rerun hold (regress 501 + bodies 501) running; AssetTools chain stopped
   03:27, hold watchdog written untested (1b70368), resume after the gate.
-2026-10-17 04:25 USER RULE: "I just want the game to look beautiful. After it looks like a brand new game only then while we
+2026-10-17 ~03:34 USER RULE (entry first labelled 04:25 without reading the clock; clock read 03:36 right after): "I just want the game to look beautiful. After it looks like a brand new game only then while we
   optimize for more FPS at no extra cost to the Fidelity." Package 7 re-ordered: visual items first on every lane (Rendering X6,
   X7, Streets haze; Gameplay death-body patch 2 + Defrag latch, ride height, squad follow; Systems mine saturation), perf items
   after and only when a side-by-side eye check shows zero visible difference (e.g. X3 sun-ray mask corpses-only, live
