@@ -15,7 +15,9 @@ function Run([string]$bin, [string]$dir, [hashtable]$envs) {
                WFC_RENDER_DATA = 'F:/Transformers Rebuild/Rebuild/work/render'; WFC_GPULOST_DIALOG_S = '0'; WFC_DEATHAUDIOLOG = '1' }
     foreach ($k in $base.Keys) { Set-Item "env:$k" $base[$k] }
     foreach ($k in $envs.Keys) { if ($envs[$k] -ne '') { Set-Item "env:$k" $envs[$k] } }
-    $p = Start-Process -FilePath (Join-Path $bin 'wfc_rebuild.exe') -WorkingDirectory $dir -RedirectStandardOutput "$dir\out.txt" -RedirectStandardError "$dir\err.txt" -NoNewWindow -PassThru
+    # windowed runs as off_identity.ps1 / eyepass_run.ps1 launch them (a redirected, no-new-window start drew no frames there)
+    $p = if ($envs.ContainsKey('WFC_NULLRENDER')) { Start-Process -FilePath (Join-Path $bin 'wfc_rebuild.exe') -WorkingDirectory $dir -RedirectStandardOutput "$dir\out.txt" -RedirectStandardError "$dir\err.txt" -NoNewWindow -PassThru }
+         else { Start-Process -FilePath (Join-Path $bin 'wfc_rebuild.exe') -WorkingDirectory $dir -PassThru }
     $null = $p.Handle
     if (-not $p.WaitForExit(600000)) { & taskkill.exe /T /F /PID $p.Id | Out-Null; Write-Host "  TIMEOUT (killed PID $($p.Id))" }
 }

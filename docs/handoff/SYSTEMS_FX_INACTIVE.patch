@@ -680,7 +680,7 @@ diff -ruN a/src/render/gl/FxInactive.inc b/src/render/gl/FxInactive.inc
 +};
 diff -ruN a/src/render/gl/WfcMapFx.cpp b/src/render/gl/WfcMapFx.cpp
 --- a/src/render/gl/WfcMapFx.cpp	2026-10-16 23:19:24.000000000 -0500
-+++ b/src/render/gl/WfcMapFx.cpp	2026-10-17 05:30:47.981107000 -0500
++++ b/src/render/gl/WfcMapFx.cpp	2026-10-17 06:14:13.000376400 -0500
 @@ -33,6 +33,17 @@
  #include <cstring>
  #include <fstream>
@@ -721,19 +721,27 @@ diff -ruN a/src/render/gl/WfcMapFx.cpp b/src/render/gl/WfcMapFx.cpp
          }
      }
      statLiveParticles_ = 0;
-@@ -581,6 +600,11 @@
+@@ -581,6 +600,19 @@
                  for (int c = 0; c < 3; ++c) in.T[c] = L1[c] + o[c];
              }
          }
 +        if (in.sbi > 0.0f) {   // [Systems] UE3 PSC Tick: AccumTickTime > SecondsBeforeInactive and unrendered as long -> no tick
 +            in.sbiAccum += dt;
-+            if (in.sbiAccum > in.sbi && time_ - in.lastRenderTime > in.sbi) { ++statFxFrozen_; continue; }
++            if (in.sbiAccum > in.sbi && time_ - in.lastRenderTime > in.sbi) {
++                if (in.sbiFrozenAt < 0.0f) in.sbiFrozenAt = time_;
++                ++statFxFrozen_; continue;
++            }
++            if (in.sbiFrozenAt >= 0.0f) {   // rendered again: resumes where it froze (no catch-up)
++                static const bool log = std::getenv("WFC_FXINACTIVELOG") != nullptr;
++                if (log) LOG_INFO("FXINACTIVE resume %s (%s) after %.2f s frozen, t=%.2f", in.component.c_str(), in.system.c_str(), time_ - in.sbiFrozenAt, time_);
++                in.sbiFrozenAt = -1.0f;
++            }
 +            ++statFxTicked_;
 +        }
          // LOD: Automatic = by distance to the camera; DirectSet = level 0 (no code sets it)
          float dx = in.T[0] - camUE[0], dy = in.T[1] - camUE[1], dz = in.T[2] - camUE[2];
          float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-@@ -2102,8 +2126,35 @@
+@@ -2102,8 +2134,35 @@
          static std::vector<std::pair<uint32_t, uint32_t>> items;
          items.clear();
          for (size_t i = 0; i < fxInstances_.size(); ++i) {
@@ -770,7 +778,7 @@ diff -ruN a/src/render/gl/WfcMapFx.cpp b/src/render/gl/WfcMapFx.cpp
              for (size_t e = 0; e < in.emitters.size(); ++e)
                  if (!in.emitters[e].parts.empty()) items.push_back({(uint32_t)i, (uint32_t)e});
          }
-@@ -2119,6 +2170,7 @@
+@@ -2119,6 +2178,7 @@
          for (size_t i = 0; i < n; ++i) {                 // replay in instance order: the serial loop's call sequence
              FxOut& o = fxOut[i];
              sprites += o.sprites; meshes += o.meshes;
@@ -780,7 +788,7 @@ diff -ruN a/src/render/gl/WfcMapFx.cpp b/src/render/gl/WfcMapFx.cpp
                  if (c.kind == 0) {
 diff -ruN a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
 --- a/src/render/gl/WfcPipeline.h	2026-10-16 23:19:24.000000000 -0500
-+++ b/src/render/gl/WfcPipeline.h	2026-10-17 05:30:47.982111000 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-17 06:14:12.992850400 -0500
 @@ -1194,6 +1194,7 @@
      int anisotropy_ = 4;
      long fxPoolSeq_ = 0;
@@ -795,7 +803,7 @@ diff -ruN a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
          long poolSeq = 0;                     // > 0: an EmitterPool effect, in spawn order
 +        // [Systems] ParticleSystemComponent.SecondsBeforeInactive (FxInactive.inc; 0 = never): unrendered longer than this
 +        // and ticked longer than this, the component stops ticking - frozen, resumed when rendered again (UE3 PSC Tick).
-+        float sbi = 0.0f, sbiAccum = 0.0f, lastRenderTime = 0.0f;
++        float sbi = 0.0f, sbiAccum = 0.0f, lastRenderTime = 0.0f, sbiFrozenAt = -1.0f;   // sbiFrozenAt >= 0: frozen since then
 +        bool sbiHasBox = false; float sbiBox[6] = {0, 0, 0, 0, 0, 0};   // the template's fixed relative bounding box (UE, component space)
      };
      int nextFxId_ = 1;
