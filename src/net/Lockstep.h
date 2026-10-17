@@ -7,7 +7,8 @@
 //   1 CMDS  (unreliable) u8 type, u8 seat, u32 ack (the highest tick of YOUR seat I hold contiguously), u32 first, u8 count, count x 23
 //   2 HELLO (reliable)   u8 type, u8 seat, u64 launch hash (the launch record + sim build: a mismatch refuses the match)
 //   3 HASH  (reliable)   u8 type, u8 seat, u32 tick, u64 simStateHash (desync detector, every hashEvery ticks)
-//   4 BYE   (reliable)   u8 type, u8 seat
+//   4 BYE   (reliable)   u8 type, u8 seat, u32 last tick it simulated (0 = left mid-match). A peer that has every command up to that
+//                        tick finishes it and ends normally (the run's end point reached a tick apart); 0 from the host = host lost.
 //   5 PING  (unreliable) u8 type, u8 seat, u64 sender clock (us)   6 PONG (unreliable) u8 type, u8 seat, u64 the echoed clock
 // Input delay: each peer picks its OWN D (it only decides how far ahead this seat schedules its commands; every peer applies the same
 // streams to the same ticks, so the D values need not agree). Auto D (Config::delay <= 0) = ceil((SRTT / 2 + 4 x RTTVAR + 5 ms) / tick),
@@ -53,12 +54,14 @@ public:
     void submitLocal(uint32_t tick, const game::RemoteCommand& c);   // this seat's command for `tick` (encoded, stored, sent)
     bool haveAll(uint32_t tick) const;
     void command(int seat, uint32_t tick, game::RemoteCommand& out) const;   // decoded (also for this seat)
+    bool wire(int seat, uint32_t tick, WireCommand& out) const;              // the raw 23 bytes (WFC_NET_RECORD)
     uint64_t bundleHash(uint32_t tick) const;     // FNV over every seat's wire bytes for `tick` (transport / merge check)
     void reportHash(uint32_t tick, uint64_t h);   // own state hash (sent every hashEvery ticks, compared with the peers')
     void stalled(double ms);                      // the loop could not step this long (timeout + log accounting)
     void stepped(uint32_t tick, uint64_t stateHash);   // log row
     void forget(uint32_t belowTick);              // drop stored commands older than this
-    void bye();
+    void bye(uint32_t lastTick);
+    uint32_t endTick() const { return endTick_; }   // a peer finished the run at this tick (0 = none)
     Status status() const { return status_; }
     const std::string& statusText() const { return statusText_; }
     uint32_t localHigh() const { return localHigh_; }
@@ -80,6 +83,7 @@ private:
     std::map<uint32_t, uint64_t> ownHash_;
     std::map<uint32_t, std::vector<std::pair<int, uint64_t>>> peerHash_;
     uint32_t localHigh_ = 0;
+    uint32_t endTick_ = 0;
     int delay_ = 4;
     float srtt_ = 0.0f, rttvar_ = 0.0f;
     double lastPingMs_ = 0.0, lastDelayDropMs_ = 0.0;

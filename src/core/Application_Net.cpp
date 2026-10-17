@@ -9,7 +9,11 @@
 //   WFC_NET_TIMEOUT_S=t (10)  WFC_NET_DESYNC_AT=tick (TEST ONLY: this seat reports a flipped state hash at that tick)
 //   WFC_NET_PACE=1            real-time pacing: tick N steps no earlier than N x 1/60 s after the start (a real match's rhythm;
 //                             the impairment profiles' timed bursts / outages); unset = as fast as the commands arrive
-// Exit codes: 0 the match ended / the run's end point, 3 desync, 4 peer timeout, 5 host lost, 6 launch mismatch, 7 transport error.
+//   WFC_NET_RECORD=file       this peer writes every applied tick's commands (all seats, wire bytes) - the replay input
+//   WFC_NET_REPLAY=file       no network: one process runs the same launch record fed a recorded file's commands and writes the
+//                             same per-tick WFC_NET_LOG CSV (replay equivalence: its simhash stream must equal the live peers')
+// Exit codes: 0 the match ended / the run's end point, 3 desync, 4 peer timeout, 5 host lost, 6 launch mismatch, 7 transport error,
+// 8 replay file error / end of the recording.
 #include "core/Application.h"
 #include "core/Log.h"
 #include "game/World.h"
@@ -59,13 +63,11 @@ void Application::runNetMatch() {
     const int self = (int)env("WFC_NET_SLOT", 0), seats = (int)env("WFC_NET_SEATS", 2);
     const char* bind = std::getenv("WFC_NET_BIND");
     const char* url = std::getenv("WFC_MATCH_URL");
-    if (!bind || !url || seats < 2 || self < 0 || self >= seats) {
-        LOG_ERROR("NET: WFC_NET_SLOT needs WFC_NET_BIND, WFC_MATCH_URL and 0 <= slot < WFC_NET_SEATS (>= 2)");
+    const char* replay = std::getenv("WFC_NET_REPLAY");
+    if ((!bind && !replay) || !url || seats < 2 || self < 0 || self >= seats) {
+        LOG_ERROR("NET: WFC_NET_SLOT needs WFC_NET_BIND (or WFC_NET_REPLAY), WFC_MATCH_URL and 0 <= slot < WFC_NET_SEATS (>= 2)");
         exitCode_ = 7; return;
     }
-    std::string err;
-    std::unique_ptr<net::INetTransport> t = net::createUdpTransport(self, bind, parsePeers(std::getenv("WFC_NET_PEERS"), self, seats), err);
-    if (!t) { LOG_ERROR("NET transport: %s", err.c_str()); exitCode_ = 7; return; }
 
     // The launch record (ONLINE_MP_ARCHITECTURE 10.3): the URL, the seed and the seat table, identical on every peer; its hash is the
     // HELLO check. MatchLaunch::humans lists every human in seat order (this machine's included, at localSeat), so match player i is
@@ -99,6 +101,63 @@ void Application::runNetMatch() {
     for (int s = 0; s < seats; ++s) order[(size_t)s] = s;
     std::sort(order.begin(), order.end(), [&](int a, int b) { return seatMp[(size_t)a] < seatMp[(size_t)b]; });
     for (int s = 0; s < seats; ++s) LOG_INFO("NET seat %d -> match player %d%s", s, seatMp[(size_t)s], s == self ? " (local)" : "");
+    const float step = clock_.stepSeconds();
+    const float matchSeconds = (float)std::atof(std::getenv("WFC_MATCH_SECONDS") ? std::getenv("WFC_MATCH_SECONDS") : "0");
+
+    // Record / replay file: "WFCR" u32 version 1, u64 launch hash, u32 seats; then per applied tick: u32 tick + seats x 23 wire bytes.
+    if (replay) {
+        FILE* f = std::fopen(replay, "rb");
+        char magic[4] = {0}; uint32_t ver = 0, rseats = 0; uint64_t rhash = 0;
+        if (!f || std::fread(magic, 1, 4, f) != 4 || std::memcmp(magic, "WFCR", 4) != 0 || std::fread(&ver, 4, 1, f) != 1 ||
+            std::fread(&rhash, 8, 1, f) != 1 || std::fread(&rseats, 4, 1, f) != 1 || ver != 1 || (int)rseats != seats) {
+            LOG_ERROR("NET replay: %s is not a %d-seat WFC_NET_RECORD file", replay, seats);
+            if (f) std::fclose(f);
+            exitCode_ = 8; return;
+        }
+        if (rhash != lh) LOG_WARN("NET replay: the recording's launch hash %016llx differs from this launch's %016llx (another URL / seed / build)",
+                                  (unsigned long long)rhash, (unsigned long long)lh);
+        FILE* log = nullptr;
+        if (const char* lp = std::getenv("WFC_NET_LOG")) {
+            log = std::fopen(lp, "w");
+            if (log) std::fprintf(log, "tick,simhash,bundlehash,stall_ms,bytes_in,bytes_out,rtt_ms\n");
+        }
+        long steps = 0;
+        std::vector<net::WireCommand> rec((size_t)seats);
+        for (;;) {
+            uint32_t tick = 0;
+            if (std::fread(&tick, 4, 1, f) != 1) { LOG_INFO("NET replay: end of the recording after %ld ticks", steps); break; }
+            bool ok = true;
+            for (auto& w : rec) ok = ok && std::fread(w.data(), 1, w.size(), f) == w.size();
+            if (!ok || tick != (uint32_t)world_.simTick() + 1) { LOG_ERROR("NET replay: tick %u out of sequence (sim at %lld)", tick, (long long)world_.simTick()); exitCode_ = 8; break; }
+            uint64_t bh = 1469598103934665603ULL;
+            for (int s : order) {
+                game::RemoteCommand c;
+                net::decodeCommand(rec[(size_t)s], tick, c);
+                world_.applyRemoteCommand(seatMp[(size_t)s], c);
+            }
+            for (const auto& w : rec) bh = fnv(bh, w.data(), w.size());
+            world_.tick(step);
+            gameMode_.tick(world_, step);
+            ++steps;
+            if (log) std::fprintf(log, "%u,%016llx,%016llx,0.00,0,0,0.0\n", tick, (unsigned long long)world_.simStateHash(), (unsigned long long)bh);
+        }
+        if (log) std::fclose(log);
+        std::fclose(f);
+        LOG_INFO("NET replay done: %ld ticks from %s", steps, replay);
+        if (exitCode_ < 0) exitCode_ = 0;
+        return;
+    }
+
+    std::string err;
+    std::unique_ptr<net::INetTransport> t = net::createUdpTransport(self, bind, parsePeers(std::getenv("WFC_NET_PEERS"), self, seats), err);
+    if (!t) { LOG_ERROR("NET transport: %s", err.c_str()); exitCode_ = 7; return; }
+    FILE* recFile = nullptr;
+    if (const char* rp = std::getenv("WFC_NET_RECORD")) {
+        recFile = std::fopen(rp, "wb");
+        if (recFile) { const uint32_t ver = 1, ns = (uint32_t)seats; std::fwrite("WFCR", 1, 4, recFile); std::fwrite(&ver, 4, 1, recFile);
+                       std::fwrite(&lh, 8, 1, recFile); std::fwrite(&ns, 4, 1, recFile); }
+        else LOG_WARN("NET: cannot write the recording %s", rp);
+    }
 
     net::Lockstep::Config cfg;
     cfg.seats = seats; cfg.self = self; cfg.delay = (int)env("WFC_NET_DELAY", 0); cfg.hashEvery = (int)env("WFC_NET_HASH_EVERY", 60);   // delay 0 = auto from the RTT
@@ -117,8 +176,6 @@ void Application::runNetMatch() {
     }
     LOG_INFO("NET all %d seats here after %.2f s", seats, secsSince(t0));
 
-    const float step = clock_.stepSeconds();
-    const float matchSeconds = (float)std::atof(std::getenv("WFC_MATCH_SECONDS") ? std::getenv("WFC_MATCH_SECONDS") : "0");
     uint32_t nextLocal = 1;
     const bool pace = std::getenv("WFC_NET_PACE") != nullptr;
     long steps = 0;
@@ -139,6 +196,7 @@ void Application::runNetMatch() {
             std::this_thread::sleep_for(std::chrono::microseconds(500));
             continue;
         }
+        if (ls.endTick() > 0 && n > ls.endTick()) { LOG_INFO("NET end: a peer finished at tick %u", ls.endTick()); break; }
         if (!ls.haveAll(n)) {
             const auto w0 = std::chrono::steady_clock::now();
             std::this_thread::sleep_for(std::chrono::microseconds(200));
@@ -149,6 +207,10 @@ void Application::runNetMatch() {
             game::RemoteCommand c;
             ls.command(s, n, c);
             world_.applyRemoteCommand(seatMp[(size_t)s], c);
+        }
+        if (recFile) {   // the applied bundle, seat order (WFC_NET_RECORD)
+            std::fwrite(&n, 4, 1, recFile);
+            for (int s = 0; s < seats; ++s) { net::WireCommand w{}; ls.wire(s, n, w); std::fwrite(w.data(), 1, w.size(), recFile); }
         }
         world_.tick(step);
         gameMode_.tick(world_, step);
@@ -167,8 +229,9 @@ void Application::runNetMatch() {
         }
         if ((float)steps * step > 900.0f) { LOG_INFO("NET end: 900 s simulated (guard)"); break; }
     }
+    if (recFile) std::fclose(recFile);
     const int st = (int)ls.status();
-    if (st == 0) ls.bye();
+    if (st == 0) ls.bye((uint32_t)world_.simTick());
     LOG_INFO("NET done: %ld steps in %.1f s wall, status %d %s", steps, secsSince(tRun), st, ls.statusText().c_str());
     exitCode_ = st;
 }

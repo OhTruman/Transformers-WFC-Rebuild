@@ -185,10 +185,13 @@ void Lockstep::handle(const NetPacket& p) {
         updateDelay();
         break;
     }
-    case kBye:
-        LOG_INFO("NET seat %d left", seat);
-        if (seat == 0) fail(Status::HostLost, "the host left");
+    case kBye: {
+        const uint32_t last = d.size() >= 6 ? get32(&d[2]) : 0;
+        LOG_INFO("NET seat %d left (its last tick %u)", seat, last);
+        if (last > 0) endTick_ = endTick_ ? std::min(endTick_, last) : last;   // finish up to there, then end normally
+        else if (seat == 0) fail(Status::HostLost, "the host left");
         break;
+    }
     default: break;
     }
 }
@@ -252,6 +255,14 @@ void Lockstep::command(int seat, uint32_t tick, game::RemoteCommand& out) const 
     decodeCommand(it->second, tick, out);
 }
 
+bool Lockstep::wire(int seat, uint32_t tick, WireCommand& out) const {
+    const auto& m = cmds_[(size_t)seat];
+    auto it = m.find(tick);
+    if (it == m.end()) return false;
+    out = it->second;
+    return true;
+}
+
 uint64_t Lockstep::bundleHash(uint32_t tick) const {
     uint64_t h = 1469598103934665603ULL;
     for (const auto& m : cmds_) {
@@ -303,8 +314,8 @@ void Lockstep::forget(uint32_t belowTick) {
     for (auto& m : cmds_) while (!m.empty() && m.begin()->first < belowTick) m.erase(m.begin());
 }
 
-void Lockstep::bye() {
-    std::vector<uint8_t> b; put8(b, kBye); put8(b, (uint8_t)cfg_.self);
+void Lockstep::bye(uint32_t lastTick) {
+    std::vector<uint8_t> b; put8(b, kBye); put8(b, (uint8_t)cfg_.self); put32(b, lastTick);
     for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) t_.sendReliable(s, b.data(), b.size());
     for (int i = 0; i < 20; ++i) t_.service();   // flush best-effort (the peers' acks may not come back before exit)
     const NetStats st = t_.stats();

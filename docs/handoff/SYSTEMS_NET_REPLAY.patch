@@ -1,0 +1,219 @@
+diff -ruN a/src/core/Application_Net.cpp b/src/core/Application_Net.cpp
+--- a/src/core/Application_Net.cpp	2026-10-17 13:25:58.962779100 -0500
++++ b/src/core/Application_Net.cpp	2026-10-17 13:25:58.978332600 -0500
+@@ -9,7 +9,11 @@
+ //   WFC_NET_TIMEOUT_S=t (10)  WFC_NET_DESYNC_AT=tick (TEST ONLY: this seat reports a flipped state hash at that tick)
+ //   WFC_NET_PACE=1            real-time pacing: tick N steps no earlier than N x 1/60 s after the start (a real match's rhythm;
+ //                             the impairment profiles' timed bursts / outages); unset = as fast as the commands arrive
+-// Exit codes: 0 the match ended / the run's end point, 3 desync, 4 peer timeout, 5 host lost, 6 launch mismatch, 7 transport error.
++//   WFC_NET_RECORD=file       this peer writes every applied tick's commands (all seats, wire bytes) - the replay input
++//   WFC_NET_REPLAY=file       no network: one process runs the same launch record fed a recorded file's commands and writes the
++//                             same per-tick WFC_NET_LOG CSV (replay equivalence: its simhash stream must equal the live peers')
++// Exit codes: 0 the match ended / the run's end point, 3 desync, 4 peer timeout, 5 host lost, 6 launch mismatch, 7 transport error,
++// 8 replay file error / end of the recording.
+ #include "core/Application.h"
+ #include "core/Log.h"
+ #include "game/World.h"
+@@ -59,13 +63,11 @@
+     const int self = (int)env("WFC_NET_SLOT", 0), seats = (int)env("WFC_NET_SEATS", 2);
+     const char* bind = std::getenv("WFC_NET_BIND");
+     const char* url = std::getenv("WFC_MATCH_URL");
+-    if (!bind || !url || seats < 2 || self < 0 || self >= seats) {
+-        LOG_ERROR("NET: WFC_NET_SLOT needs WFC_NET_BIND, WFC_MATCH_URL and 0 <= slot < WFC_NET_SEATS (>= 2)");
++    const char* replay = std::getenv("WFC_NET_REPLAY");
++    if ((!bind && !replay) || !url || seats < 2 || self < 0 || self >= seats) {
++        LOG_ERROR("NET: WFC_NET_SLOT needs WFC_NET_BIND (or WFC_NET_REPLAY), WFC_MATCH_URL and 0 <= slot < WFC_NET_SEATS (>= 2)");
+         exitCode_ = 7; return;
+     }
+-    std::string err;
+-    std::unique_ptr<net::INetTransport> t = net::createUdpTransport(self, bind, parsePeers(std::getenv("WFC_NET_PEERS"), self, seats), err);
+-    if (!t) { LOG_ERROR("NET transport: %s", err.c_str()); exitCode_ = 7; return; }
+ 
+     // The launch record (ONLINE_MP_ARCHITECTURE 10.3): the URL, the seed and the seat table, identical on every peer; its hash is the
+     // HELLO check. MatchLaunch::humans lists every human in seat order (this machine's included, at localSeat), so match player i is
+@@ -99,6 +101,63 @@
+     for (int s = 0; s < seats; ++s) order[(size_t)s] = s;
+     std::sort(order.begin(), order.end(), [&](int a, int b) { return seatMp[(size_t)a] < seatMp[(size_t)b]; });
+     for (int s = 0; s < seats; ++s) LOG_INFO("NET seat %d -> match player %d%s", s, seatMp[(size_t)s], s == self ? " (local)" : "");
++    const float step = clock_.stepSeconds();
++    const float matchSeconds = (float)std::atof(std::getenv("WFC_MATCH_SECONDS") ? std::getenv("WFC_MATCH_SECONDS") : "0");
++
++    // Record / replay file: "WFCR" u32 version 1, u64 launch hash, u32 seats; then per applied tick: u32 tick + seats x 23 wire bytes.
++    if (replay) {
++        FILE* f = std::fopen(replay, "rb");
++        char magic[4] = {0}; uint32_t ver = 0, rseats = 0; uint64_t rhash = 0;
++        if (!f || std::fread(magic, 1, 4, f) != 4 || std::memcmp(magic, "WFCR", 4) != 0 || std::fread(&ver, 4, 1, f) != 1 ||
++            std::fread(&rhash, 8, 1, f) != 1 || std::fread(&rseats, 4, 1, f) != 1 || ver != 1 || (int)rseats != seats) {
++            LOG_ERROR("NET replay: %s is not a %d-seat WFC_NET_RECORD file", replay, seats);
++            if (f) std::fclose(f);
++            exitCode_ = 8; return;
++        }
++        if (rhash != lh) LOG_WARN("NET replay: the recording's launch hash %016llx differs from this launch's %016llx (another URL / seed / build)",
++                                  (unsigned long long)rhash, (unsigned long long)lh);
++        FILE* log = nullptr;
++        if (const char* lp = std::getenv("WFC_NET_LOG")) {
++            log = std::fopen(lp, "w");
++            if (log) std::fprintf(log, "tick,simhash,bundlehash,stall_ms,bytes_in,bytes_out,rtt_ms\n");
++        }
++        long steps = 0;
++        std::vector<net::WireCommand> rec((size_t)seats);
++        for (;;) {
++            uint32_t tick = 0;
++            if (std::fread(&tick, 4, 1, f) != 1) { LOG_INFO("NET replay: end of the recording after %ld ticks", steps); break; }
++            bool ok = true;
++            for (auto& w : rec) ok = ok && std::fread(w.data(), 1, w.size(), f) == w.size();
++            if (!ok || tick != (uint32_t)world_.simTick() + 1) { LOG_ERROR("NET replay: tick %u out of sequence (sim at %lld)", tick, (long long)world_.simTick()); exitCode_ = 8; break; }
++            uint64_t bh = 1469598103934665603ULL;
++            for (int s : order) {
++                game::RemoteCommand c;
++                net::decodeCommand(rec[(size_t)s], tick, c);
++                world_.applyRemoteCommand(seatMp[(size_t)s], c);
++            }
++            for (const auto& w : rec) bh = fnv(bh, w.data(), w.size());
++            world_.tick(step);
++            gameMode_.tick(world_, step);
++            ++steps;
++            if (log) std::fprintf(log, "%u,%016llx,%016llx,0.00,0,0,0.0\n", tick, (unsigned long long)world_.simStateHash(), (unsigned long long)bh);
++        }
++        if (log) std::fclose(log);
++        std::fclose(f);
++        LOG_INFO("NET replay done: %ld ticks from %s", steps, replay);
++        if (exitCode_ < 0) exitCode_ = 0;
++        return;
++    }
++
++    std::string err;
++    std::unique_ptr<net::INetTransport> t = net::createUdpTransport(self, bind, parsePeers(std::getenv("WFC_NET_PEERS"), self, seats), err);
++    if (!t) { LOG_ERROR("NET transport: %s", err.c_str()); exitCode_ = 7; return; }
++    FILE* recFile = nullptr;
++    if (const char* rp = std::getenv("WFC_NET_RECORD")) {
++        recFile = std::fopen(rp, "wb");
++        if (recFile) { const uint32_t ver = 1, ns = (uint32_t)seats; std::fwrite("WFCR", 1, 4, recFile); std::fwrite(&ver, 4, 1, recFile);
++                       std::fwrite(&lh, 8, 1, recFile); std::fwrite(&ns, 4, 1, recFile); }
++        else LOG_WARN("NET: cannot write the recording %s", rp);
++    }
+ 
+     net::Lockstep::Config cfg;
+     cfg.seats = seats; cfg.self = self; cfg.delay = (int)env("WFC_NET_DELAY", 0); cfg.hashEvery = (int)env("WFC_NET_HASH_EVERY", 60);   // delay 0 = auto from the RTT
+@@ -117,8 +176,6 @@
+     }
+     LOG_INFO("NET all %d seats here after %.2f s", seats, secsSince(t0));
+ 
+-    const float step = clock_.stepSeconds();
+-    const float matchSeconds = (float)std::atof(std::getenv("WFC_MATCH_SECONDS") ? std::getenv("WFC_MATCH_SECONDS") : "0");
+     uint32_t nextLocal = 1;
+     const bool pace = std::getenv("WFC_NET_PACE") != nullptr;
+     long steps = 0;
+@@ -139,6 +196,7 @@
+             std::this_thread::sleep_for(std::chrono::microseconds(500));
+             continue;
+         }
++        if (ls.endTick() > 0 && n > ls.endTick()) { LOG_INFO("NET end: a peer finished at tick %u", ls.endTick()); break; }
+         if (!ls.haveAll(n)) {
+             const auto w0 = std::chrono::steady_clock::now();
+             std::this_thread::sleep_for(std::chrono::microseconds(200));
+@@ -150,6 +208,10 @@
+             ls.command(s, n, c);
+             world_.applyRemoteCommand(seatMp[(size_t)s], c);
+         }
++        if (recFile) {   // the applied bundle, seat order (WFC_NET_RECORD)
++            std::fwrite(&n, 4, 1, recFile);
++            for (int s = 0; s < seats; ++s) { net::WireCommand w{}; ls.wire(s, n, w); std::fwrite(w.data(), 1, w.size(), recFile); }
++        }
+         world_.tick(step);
+         gameMode_.tick(world_, step);
+         ++steps;
+@@ -167,8 +229,9 @@
+         }
+         if ((float)steps * step > 900.0f) { LOG_INFO("NET end: 900 s simulated (guard)"); break; }
+     }
++    if (recFile) std::fclose(recFile);
+     const int st = (int)ls.status();
+-    if (st == 0) ls.bye();
++    if (st == 0) ls.bye((uint32_t)world_.simTick());
+     LOG_INFO("NET done: %ld steps in %.1f s wall, status %d %s", steps, secsSince(tRun), st, ls.statusText().c_str());
+     exitCode_ = st;
+ }
+diff -ruN a/src/net/Lockstep.cpp b/src/net/Lockstep.cpp
+--- a/src/net/Lockstep.cpp	2026-10-17 13:25:58.970304900 -0500
++++ b/src/net/Lockstep.cpp	2026-10-17 13:25:58.984353300 -0500
+@@ -185,10 +185,13 @@
+         updateDelay();
+         break;
+     }
+-    case kBye:
+-        LOG_INFO("NET seat %d left", seat);
+-        if (seat == 0) fail(Status::HostLost, "the host left");
++    case kBye: {
++        const uint32_t last = d.size() >= 6 ? get32(&d[2]) : 0;
++        LOG_INFO("NET seat %d left (its last tick %u)", seat, last);
++        if (last > 0) endTick_ = endTick_ ? std::min(endTick_, last) : last;   // finish up to there, then end normally
++        else if (seat == 0) fail(Status::HostLost, "the host left");
+         break;
++    }
+     default: break;
+     }
+ }
+@@ -252,6 +255,14 @@
+     decodeCommand(it->second, tick, out);
+ }
+ 
++bool Lockstep::wire(int seat, uint32_t tick, WireCommand& out) const {
++    const auto& m = cmds_[(size_t)seat];
++    auto it = m.find(tick);
++    if (it == m.end()) return false;
++    out = it->second;
++    return true;
++}
++
+ uint64_t Lockstep::bundleHash(uint32_t tick) const {
+     uint64_t h = 1469598103934665603ULL;
+     for (const auto& m : cmds_) {
+@@ -303,8 +314,8 @@
+     for (auto& m : cmds_) while (!m.empty() && m.begin()->first < belowTick) m.erase(m.begin());
+ }
+ 
+-void Lockstep::bye() {
+-    std::vector<uint8_t> b; put8(b, kBye); put8(b, (uint8_t)cfg_.self);
++void Lockstep::bye(uint32_t lastTick) {
++    std::vector<uint8_t> b; put8(b, kBye); put8(b, (uint8_t)cfg_.self); put32(b, lastTick);
+     for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) t_.sendReliable(s, b.data(), b.size());
+     for (int i = 0; i < 20; ++i) t_.service();   // flush best-effort (the peers' acks may not come back before exit)
+     const NetStats st = t_.stats();
+diff -ruN a/src/net/Lockstep.h b/src/net/Lockstep.h
+--- a/src/net/Lockstep.h	2026-10-17 13:25:58.976325900 -0500
++++ b/src/net/Lockstep.h	2026-10-17 13:25:58.990374100 -0500
+@@ -7,7 +7,8 @@
+ //   1 CMDS  (unreliable) u8 type, u8 seat, u32 ack (the highest tick of YOUR seat I hold contiguously), u32 first, u8 count, count x 23
+ //   2 HELLO (reliable)   u8 type, u8 seat, u64 launch hash (the launch record + sim build: a mismatch refuses the match)
+ //   3 HASH  (reliable)   u8 type, u8 seat, u32 tick, u64 simStateHash (desync detector, every hashEvery ticks)
+-//   4 BYE   (reliable)   u8 type, u8 seat
++//   4 BYE   (reliable)   u8 type, u8 seat, u32 last tick it simulated (0 = left mid-match). A peer that has every command up to that
++//                        tick finishes it and ends normally (the run's end point reached a tick apart); 0 from the host = host lost.
+ //   5 PING  (unreliable) u8 type, u8 seat, u64 sender clock (us)   6 PONG (unreliable) u8 type, u8 seat, u64 the echoed clock
+ // Input delay: each peer picks its OWN D (it only decides how far ahead this seat schedules its commands; every peer applies the same
+ // streams to the same ticks, so the D values need not agree). Auto D (Config::delay <= 0) = ceil((SRTT / 2 + 4 x RTTVAR + 5 ms) / tick),
+@@ -53,12 +54,14 @@
+     void submitLocal(uint32_t tick, const game::RemoteCommand& c);   // this seat's command for `tick` (encoded, stored, sent)
+     bool haveAll(uint32_t tick) const;
+     void command(int seat, uint32_t tick, game::RemoteCommand& out) const;   // decoded (also for this seat)
++    bool wire(int seat, uint32_t tick, WireCommand& out) const;              // the raw 23 bytes (WFC_NET_RECORD)
+     uint64_t bundleHash(uint32_t tick) const;     // FNV over every seat's wire bytes for `tick` (transport / merge check)
+     void reportHash(uint32_t tick, uint64_t h);   // own state hash (sent every hashEvery ticks, compared with the peers')
+     void stalled(double ms);                      // the loop could not step this long (timeout + log accounting)
+     void stepped(uint32_t tick, uint64_t stateHash);   // log row
+     void forget(uint32_t belowTick);              // drop stored commands older than this
+-    void bye();
++    void bye(uint32_t lastTick);
++    uint32_t endTick() const { return endTick_; }   // a peer finished the run at this tick (0 = none)
+     Status status() const { return status_; }
+     const std::string& statusText() const { return statusText_; }
+     uint32_t localHigh() const { return localHigh_; }
+@@ -80,6 +83,7 @@
+     std::map<uint32_t, uint64_t> ownHash_;
+     std::map<uint32_t, std::vector<std::pair<int, uint64_t>>> peerHash_;
+     uint32_t localHigh_ = 0;
++    uint32_t endTick_ = 0;
+     int delay_ = 4;
+     float srtt_ = 0.0f, rttvar_ = 0.0f;
+     double lastPingMs_ = 0.0, lastDelayDropMs_ = 0.0;
