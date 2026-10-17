@@ -8,7 +8,7 @@
 #   powershell -File tools/fidelity/matb_root.ps1 [-Name matB] [-Src <integration render>] [-Cand <matB/render>] [-Manifest <json>]
 param([string]$Name = "matB", [string]$Src = "F:\Transformers Rebuild\Rebuild\work\render",
       [string]$Cand = "F:\Transformers Rebuild\Rebuild-Systems\work\matB\render",
-      [string]$Manifest = "F:\Transformers Rebuild\Rebuild-Systems\work\matB\handoff\MATFIX_MANIFEST.json", [switch]$NoCandidate)   # (-NoCandidate: the same snapshot without (B) = the before arm)
+      [string]$Manifest = "F:\Transformers Rebuild\Rebuild-Systems\work\matB\handoff\MATFIX_MANIFEST.json", [switch]$NoCandidate, [string]$MapFxFrom = "")   # (-NoCandidate: the same snapshot without (B) = the before arm; -MapFxFrom <root>: each map's map_fx_runtime.json from that root, e.g. a pre-regen copy matching the exe)
 $ErrorActionPreference = "Stop"
 $O = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) "work\matb\${Name}_root"
 if (Test-Path $O) {   # junctions inside: remove them with rmdir first, never recursively through them
@@ -38,6 +38,7 @@ foreach ($d in Get-ChildItem $Src -Directory) {
         if ($c.PSIsContainer) { cmd /c mklink /J (Join-Path $t $c.Name) "$($c.FullName)" | Out-Null }
         elseif ($c.Name -ne "materials_glsl.json") { Copy-Item $c.FullName $t }
     }
+    if ($MapFxFrom) { $mf = Join-Path (Join-Path $MapFxFrom $d.Name) "map_fx_runtime.json"; if (Test-Path $mf) { Copy-Item $mf $t -Force } }
     $cg = Join-Path (Join-Path $Cand $d.Name) "materials_glsl.json"
     if ((Test-Path $cg) -and -not $NoCandidate) { $n = & $py -I $mergePy $glsl $cg (Join-Path $t "materials_glsl.json") $namesFile; "$($d.Name): $n (B) entries taken from the candidate" }
     else { Copy-Item $glsl $t; "$($d.Name): no candidate file - integration's copied" }
