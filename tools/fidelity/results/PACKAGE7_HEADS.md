@@ -30,3 +30,5 @@ Checkpoint: af4d0731 (package 6). Per head: identity + eye sheet; one combined t
 | 5cb9886f | campaign objectives loader | behind the campaign flag | versus unchanged by construction | not needed | no run |
 | 186c1a84, 56d5e2dc | docs only | - | - | - | no run |
 | f2465a80 | Volumetric Lighting setter | Realistic-only gate | Off / Faithful unaffected by construction (Integration); Realistic: X3 on by default as af4d0731 | - | SETTINGSTEST count update and release() keep-list check due with the setter (memory settings-survive-map-change) |
+
+Note (Integration 2026-10-17): 24c6618c's SecondsBeforeInactive rule (a freeze) is to be replaced by SYSTEMS_FX_THROTTLE.patch (128b4846): the original throttles inactive FX (10 Hz / 1 Hz + catch-up); that merge carries its own expected-change list.
