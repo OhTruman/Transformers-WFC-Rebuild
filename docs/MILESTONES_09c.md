@@ -2482,3 +2482,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   complete; next FMV playback + checkpoint data packaging. Netcode: netshim.py self-test PASS on 7 profiles (210ab479).
   Card: Experimental load-stall boots -> Rendering cand20 (X6 round 4 + setter) -> Frontend 2-min row check -> Experimental
   presenter loop.
+2026-10-17 07:42 Rendering slot 07:33-07:45: X6 round 4 (additive sheen, cand20): still no visible sheen (work/wobble/x6d_eyesheet.png); after
+  four rounds Rendering reads these interiors as giving a damp film too little bright content to reflect; replacing darkens,
+  additive adds nothing. Decision: ONE time-boxed attempt (~3 h + a 10-min slot) on light-source-driven damp reflections
+  (lamps / emissives / transient lights placed by light position, tight highlight, dry x6refl floor), else X6 is PARKED unmerged
+  with the four sheets as evidence. X7 (cand22, 2x GI pages): sharper indirect light (Gorge grating shadows crisper) but the
+  fitted bounce gain moved 0.414 -> 0.530 at 2x (Gorge ~11 % brighter), VRAM +1.0-1.1 GB per map (GL copy arrays at 2x), GI
+  bake Gorge 1.3 -> 2.4 s, Streets 1.9 -> 6.8 s (frontend), first-frame gap at 'World: map mesh upload' 1.9 -> 3.7 s despite
+  the bake yield (02c9ceb4). Next: fixed-gain Gorge pair (WFC_RT_GIBOUNCE=0.414), make 2x conserve energy rather than pin
+  a gain, find what in the mesh-upload step scales with texels; X7 merges only with the gap at or below 1x. Card -> Frontend
+  2-min volumetric row check -> Experimental (4 Streets boots with SKIPINTRO, presenter loop). Merged: 0960cd35 autoplay
+  waits for the selector (harness-only; a race landed scripted boots on map 501).
