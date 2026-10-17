@@ -43,6 +43,9 @@ Checkpoint: af4d0731 (package 6). Per head: identity + eye sheet; one combined t
 | a745320b | iconic claims across all players (no Escalation row) | Iconic Mode only (default Off) | versus default unchanged | not needed | no run |
 | 686f8314 | docs | - | - | - | no run |
 | ef34a4f2 | Rendering modulate-distortion rule (the original cooks no distortion pair for BLEND_Modulate materials: the death-explosion swirl goes) | renderer, all modes | changes only frames with a modulate + distortion material (robot deaths) (Integration) | Gameplay's death crops, next crop pass | expected-change list = death frames only |
+| 2e9ad1bf | reverts ef34a4f2 (the modulate-distortion rule was wrong per the RE cache check) | renderer | net frame change zero across ef34a4f2 + 2e9ad1bf (Integration) | - | the pair cancels |
+| 7a59316a | docs | - | - | - | no run |
+| 4502b468 | Gameplay session hooks | - | identity-neutral; SESSIONTEST 16 / 16; offline matches unchanged (Integration) | not needed | no run |
 | f2465a80 | Volumetric Lighting setter | Realistic-only gate | Off / Faithful unaffected by construction (Integration); Realistic: X3 on by default as af4d0731 | - | SETTINGSTEST count update and release() keep-list check due with the setter (memory settings-survive-map-change) |
 
 Note (Integration 2026-10-17): 24c6618c's SecondsBeforeInactive rule (a freeze) is to be replaced by SYSTEMS_FX_THROTTLE.patch (128b4846): the original throttles inactive FX (10 Hz / 1 Hz + catch-up); that merge carries its own expected-change list.
