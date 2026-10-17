@@ -9,7 +9,7 @@ playtests).
 
 ## Status (kept current; newest first)
 
-- 2026-10-17 15:3x: FINAL PACKAGE 7 HEAD = ab855fe7 (deed7f1a + the Frontend HUD glue fix; no data change). Build:
+- 2026-10-17 15:30: FINAL PACKAGE 7 HEAD = ab855fe7 (deed7f1a + the Frontend HUD glue fix; no data change). Build:
   `NOPROMOTE=1 JOBS=2 SLIMTSV="F:/Transformers Rebuild/AssetTools/out/package/slim_files.refresh.tsv" bash work/refresh.sh ab855fe7
   "F:/Transformers Rebuild/AssetTools/out/hd/push_full_snap_20261016_b0-31/pack" D`.
 - 2026-10-17 15:25: (superseded) package 7 head = deed7f1a (057aded3 + the lens flares + the lead-based auto delay + the verify_slim
