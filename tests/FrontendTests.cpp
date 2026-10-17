@@ -1,6 +1,8 @@
 // Clean-room reconstruction — headless frontend / game-flow tests (no window, renderer or audio).
 // Run: build/bin/wfc_frontend_tests.exe   (reads the AssetTools frontend manifests; WFC_FRONTEND_MANIFESTS overrides)
 // Exit code = number of failed checks. Every check prints "PASS|FAIL <name> ..." for the Experimental harness.
+#include "assets/Json.h"
+#include "frontend/OpenPath.h"
 #include "frontend/Catalog.h"
 #include "frontend/FrontendRuntime.h"
 #include "frontend/GraphicsAutoDetect.h"
@@ -1430,6 +1432,24 @@ static void testCampaignObjectivesManifest() {
                          o.current() == before;
     check(loaded && first && refused && !o.fireSetter("No.Such.Setter", rt.catalog()), "campaign.objectives_manifest_d1",
           std::to_string(loaded) + std::to_string(first) + std::to_string(refused) + " bank " + std::to_string(o.bank().size()));
+    // A1: its seven " " setters are no-ops (the objective stays up); an empty-key clearing setter would clear
+    CampaignObjectives a;
+    bool noop = a.loadManifest(CampaignObjectives::manifestFor(frontend::Catalog::defaultManifestRoot(), "A1_IAC")) &&
+                a.setCurrent(a.bank().front(), rt.catalog());
+    const std::string shown = a.activeText();
+    int noops = 0;
+    {
+        std::ifstream f(frontend::openPath(CampaignObjectives::manifestFor(frontend::Catalog::defaultManifestRoot(), "A1_IAC")), std::ios::binary);
+        std::stringstream ss; ss << f.rdbuf();
+        assets::Json j;
+        if (assets::Json::parse(ss.str(), j))
+            for (size_t i = 0; i < j["setters"].size(); ++i)
+                if (j["setters"][i]["key_raw"].asString() == " ") {
+                    ++noops;
+                    noop = noop && a.fireSetter(j["setters"][i]["action"].asString(), rt.catalog()) && a.current() == 0 && a.activeText() == shown;
+                }
+    }
+    check(noop && noops == 7 && !shown.empty(), "campaign.objectives_whitespace_noop", std::to_string(noops));
 }
 
 static void testOnlineMatchSide() {
@@ -1522,14 +1542,14 @@ static void testIconicMode() {
     const GameFlow::SelectedCharacter& sel = r.f().selectedCharacter();
     check(sel.valid && sel.type == 1 && sel.name == "Bumblebee" && sel.chassis[0] == "Car" && sel.chassis[1] == "Car" && sel.specialty == "Scout",
           "iconic.I2_select_type1", sel.name + " " + std::to_string(sel.type) + " " + sel.chassis[0]);
-    // I3: claims per team (online): a teammate's pick is listed as claimed; the same pick twice holds the gate at
-    // "waiting for character choice" (6) until the later one picks another
+    // I3: claims (online): another player's pick, any team, is listed as claimed (RE: the whole PRIArray); the same pick
+    // twice holds the gate at "waiting for character choice" (6) until the later one picks another
     SessionEvent a = memberEv("WFC-AAAA-AAAA-1", "Alpha", true);
     a.info.iconicCharacter = "Bumblebee";
     r.fake->inject(a);
     r.frames(2);
-    if (!r.f().onlineMembers().empty() && r.f().onlineMembers()[0].team != r.f().lobby().localTeam) r.f().call("Online.SwitchTeam");
-    r.frames(2);
+    if (!r.f().onlineMembers().empty() && r.f().onlineMembers()[0].team == r.f().lobby().localTeam) r.f().call("Online.SwitchTeam");
+    r.frames(2);   // Alpha on the other team: still claimed
     DataStores& ds = r.rt->dataStores();
     ds.poll();
     const bool claimed = ds.call("ReadValue", {"<CurrentGame:ClaimedIconicCharacters>"}).s == "Bumblebee" &&
@@ -1539,7 +1559,7 @@ static void testIconicMode() {
     r.frames(2);
     const int ok = r.f().lobby().lobbyStatus;
     r.f().profile().bots.iconic = false;
-    check(claimed && dup == 6 && ok != 6 && cz("Customize.GetPlayableCharacters") == "Scout,Scientist,Soldier,Leader", "iconic.I3_team_claims",
+    check(claimed && dup == 6 && ok != 6 && cz("Customize.GetPlayableCharacters") == "Scout,Scientist,Soldier,Leader", "iconic.I3_claims_any_team",
           std::to_string(claimed) + " " + std::to_string(dup) + " " + std::to_string(ok));
 }
 

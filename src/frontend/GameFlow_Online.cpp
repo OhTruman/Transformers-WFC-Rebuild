@@ -81,9 +81,7 @@ void GameFlow::setPushToTalkHeld(bool held) {
 std::vector<std::string> GameFlow::claimedIconicCharacters() const {
     std::vector<std::string> out;
     if (!iconicMode()) return out;
-    const int team = role_ == SessionRole::Member ? selfTeam() : lobby_.localTeam;
-    for (const OnlineMember& m : onlineMembers_)
-        if (!m.info.iconicCharacter.empty() && (m.team == team || m.team == 255 || team == 255 || team < 0)) out.push_back(m.info.iconicCharacter);
+    for (const OnlineMember& m : onlineMembers_) if (!m.info.iconicCharacter.empty()) out.push_back(m.info.iconicCharacter);
     return out;
 }
 
@@ -212,14 +210,13 @@ int GameFlow::onlineGateStatus() const {
     // WaitingForCharacterChoice / 4 WaitingForBalancedTeams / 3 WaitingForHostToStart. Teams must be balanced only with Team
     // Balancing "Manual": "Autobalanced" (the default) balances them itself at the final countdown (AssignTeams).
     for (const OnlineMember& m : onlineMembers_) if (!m.info.hasCharacter || m.connecting) return 6;
-    if (iconicMode()) {   // every human holds an iconic character, one per team (the host's own pick first, then join order)
+    if (iconicMode()) {   // every human holds an iconic character, each one at most once (the host's pick first, then join order)
         if (role_ == SessionRole::Host && !(selected_.valid && selected_.type == 1)) return 6;
         std::vector<std::pair<int, std::string>> held;
         if (role_ == SessionRole::Host) held.push_back({lobby_.localTeam, selected_.name});
-        auto sameTeam = [](int a, int b) { return a == b || a == 255 || b == 255 || a < 0 || b < 0; };   // unassigned: any
         for (const OnlineMember& m : onlineMembers_) {
             for (const auto& h : held)
-                if (h.second == m.info.iconicCharacter && sameTeam(h.first, m.team)) return 6;   // a teammate already holds it
+                if (h.second == m.info.iconicCharacter) return 6;   // another player already holds it (any team)
             held.push_back({m.team, m.info.iconicCharacter});
         }
     }
