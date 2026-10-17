@@ -188,3 +188,18 @@ one turn in 1.7–2.9 h), so for those, compare the **pan direction** over a ~60
   - bCastCompositeShadow adds it to the characters' composite (DLE) shadow direction.
   - **Whether WFC's LVV culls it per world primitive** (and so stops it leaking through Remnant's walls), or only feeds the DLE
     sample points, was **not traced**. It is the remaining UNKNOWN; the next step is the native callers of the LVV query.
+
+**LVV and the world: answered (2026-10-18, C).**
+- The LVV query `LightEnv::QueryLightsVisibility` (**0x82CCAC30**) has **exactly one caller**, **0x82CE4E78**, the light-environment
+  full update (headless-Ghidra refs; MILESTONE04_STREETS_RUNTIME_SEMANTICS.md).
+- The LVV is a baked visibility lookup **for (Dynamic)LightEnvironments only**: pawns, vehicles, pickups, totems. It has **no effect on
+  BSP, static meshes, particles or visibility culling**.
+- **So the original does not cull PointLightToggleable_1918 on world primitives with its LVV entry.** Its LVV entry only scales the
+  light for characters / DLE owners (direct-light selection, SH overflow, composite-shadow fade).
+- **World side:** as a forced-dynamic, unbuilt light it lights BSP / static meshes per pixel within its radius, with **no
+  precomputed shadowing** (none exists).
+- Dynamic shadowing of the world by static geometry is not part of WFC's MP shadow path: projected shadows come from characters
+  (MILESTONE03 light-visibility / shadow notes) (H).
+- **So in the original it reaches through Remnant's walls within 41 m**, limited only by its distance falloff (FalloffExponent 2),
+  brightness 1 and the surfaces' lighting channels.
+- **For Rendering:** draw it on the world unculled (radius / falloff only); apply the LVV only to the character / DLE path.
