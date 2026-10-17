@@ -53,3 +53,23 @@ projectiles pass through:
   - a walk-into test against a closed door / retracted bridge gap: blocked, and passing when open;
   - projectiles stopped;
   - NAVQ: Rust is a user map, so before / after on Rust, plus the identity note on the maps touched.
+
+## Batched with it: dying-vehicle collision (Integration 2026-10-17: one identity change, one re-baseline)
+
+The source is the RE lane's `VEHICLE_DEATH_PRESENTATION_RE.md` (2babd61).
+
+- **VehicleDying keeps the live vehicle's rigid body and full collision until the gib:** it blocks pawns, projectiles and traces for
+  TotalTime (car / tank moving U(0.3, 0.75) s, stationary U(0.2, 0.5) s; jets U(4, 5) s).
+  - Today the dying pawn despawns at death, so nothing blocks.
+  - **Plan:** a sim-side collision body at the vehicle's death pose (its hull collision), alive until the gib, in the pawn and weapon
+    worlds, through the same dynamic-set path as the transforming actors.
+- **The hull gib collides with the world and hitscan, not pawns (H) or vehicles.**
+  - **Plan:** a hitscan-only body following the hull wreck for its lifetime (3-5 s, jets 7 s).
+- **After the gib:** the actor is touch-only (non-blocking), so nothing blocks.
+
+## Expected changes for the gate (both parts)
+
+- **SIMHASH changes on every map** where a vehicle dies (the dying-vehicle bodies) and on BrokenHope / Remnant / Rust (the transforming
+  actors).
+- **Visual:** the doors and bridges drawn and animated (Rendering's half); death frames otherwise unchanged.
+- **NAVQ before / after:** on the 4 user maps (vehicle deaths) and Rust (doors).
