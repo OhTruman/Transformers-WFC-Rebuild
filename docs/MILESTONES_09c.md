@@ -2963,3 +2963,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Rendering's slots. (B) SWITCHED 11:29: all 118 entries on 10 maps (live == candidate 10 / 10); matB/render unfrozen. RE's
   interpolated-lightmap decode merged (two captures per door, lerp by the anim position every tick). Card -> Gameplay 4 min
   (11:29) -> Frontend 5 -> Rendering slot_all (x13 + x14 + x15, ~45 min).
+2026-10-17 11:30 Systems' diagnosis: the 0 body-notify matches were the TEST SETUP (WFC_TESTABILITIES replaced Dodge, so the local pawn never
+  dashed; bots play no ability anims); re-run with Dodge,Drain. map_fx_runtime DATA GAP listed exactly: the MP ability / buff set
+  (Drain_Blast, WarCry_AOE, DrainRay_Beam, DecoyTrap) + ~15 body / weapon templates missing on 8-10 maps -> Rendering adds an
+  always-include selector to build_map_fx.py, I regen the 10 maps with the identity gate. Doors: RE's decode complete -> stage (b)
+  (two captures lerped, no DLE) BEFORE the door head merges (deadline: end of today, else (a) PARTIAL merges with the collision).
