@@ -2650,3 +2650,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   rows; beam / trail formulas exist in pass 5 (Rendering); gravity scalar sourced: DefaultGravityZ -2940 (Xe-TransGame.ini).
   Card: Frontend 10-min gap running -> Gameplay 4 -> Rendering 20 -> Systems 10 -> (B) eye pass. RE lane next: time-driven
   materials + dynamic light behaviour audit.
+2026-10-17 09:15 Switched data sanity check: all 10 MP materials_glsl.json parse, carry DeathDecal_MAT + both gib materials, the old x20 formula is
+  gone. Systems built SYSTEMS_FX_THROTTLE.patch (128b4846: WFC_FXINACTIVE = the decoded PSC tick throttle, 0.1 s ticks after
+  0.3 s unrendered, 1.0 s past SBI, catch-up per executed tick, fresh / re-activated components count as rendered); its card
+  slot becomes 35 min (notifyfx check + the three throttle rows) before the (B) eye pass; both patches dry-run clean on
+  integration and merge on their rows. Frontend capture gap running since ~09:13. RE lane: time-driven materials + dynamic
+  lights audit started (~3.5-4 h).
