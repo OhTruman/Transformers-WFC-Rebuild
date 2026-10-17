@@ -2565,3 +2565,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the 52 "unextracted" waves exist as _LOC twins (no gap); D2 Guardian Chamber = a MISSING FLOOR in our export (hunt in the cooked
   packages next); then the campaign movies conversion (54 .bik -> WebM VP9 + Opus per track + subtitle JSON, 4 threads, low
   priority, hold-aware, ~1.5 h; the earlier H.264 set in ExtractedAssets/movies untouched). Presenter loop ~30 / 64, clean.
+2026-10-17 08:35 MERGED cfca1717 hover + squad + DELIBERATE Classic / Smart SIMHASH re-baseline (Gameplay; 6 files; tables docs/handoff/hover/):
+  faithful four-probe springs, Classic on the original's AI righting, Smart steadier righting, squad slot fallback + hysteresis;
+  gate consequence: renderer identity for later heads must run on the new sim (rule to PACKAGE7-GATE.md). RE lane audit 2
+  COMPLETE (f89cfe43; parts: vehicle weapons, abilities, transformation, melee): actionable list = HUD jam / disrupted display
+  (Frontend), one shared body-trail set driving melee / Shockwave / TransformDisruptor / jet transforms + melee hit / block, jump,
+  hover FX + five ability FX (Systems' wiring item), projectile flight loops (Systems audio), jet to-vehicle camera blend 1.0 s
+  (Gameplay camera item). RE lane next: versus HUD / front-end / end-of-match presentation audit. Gameplay next: camera recoil /
+  FOV kick / fire shake, then per-weapon recoil (own re-baseline).
