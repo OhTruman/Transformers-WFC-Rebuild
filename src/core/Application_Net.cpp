@@ -94,7 +94,7 @@ void Application::runNetMatch() {
     const char* build = __DATE__ " " __TIME__;   // the same exe on every peer (a different build = a different sim)
     lh = fnv(lh, build, std::strlen(build));
     world_.launchMatch(L);
-    world_.match().selectCharacter(world_.localMatchPlayer(), cs);   // [until Gameplay applies humans[localSeat].selection itself]
+    // humans[localSeat].selection is applied by launchMatch (GAMEPLAY_NET_IDENTITY): no local selectCharacter here
     std::vector<int> seatMp((size_t)seats, -1);   // wire seat -> match player (== the seat with the seat order; checked here)
     for (int s = 0; s < seats; ++s) seatMp[(size_t)s] = s;
     if (world_.localMatchPlayer() != self) {
