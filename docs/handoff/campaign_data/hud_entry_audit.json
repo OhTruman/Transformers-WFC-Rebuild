@@ -1,0 +1,1649 @@
+{
+ "Hud_GFX.gfx": {
+  "NotifyTargetNameChanged": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "271"
+   ],
+   "ours": "C"
+  },
+  "NotifyTargetHealthChanged": {
+   "sounds": [],
+   "interps": [
+    "thisClip 0.1s linear {color: healthColor}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "271"
+   ],
+   "ours": "C"
+  },
+  "NotifyScoringMultiplierChanged": {
+   "sounds": [
+    "PICKUP_DMG_MULTIPLIER",
+    "PICKUP_DMG_MULTIPLIER_DECREASE"
+   ],
+   "interps": [
+    "thisElement 0.4s easeout {color: _global.GetPointMultiplierColor(), _yscale: 100, _xsc}",
+    "thisElement 0.8s easeout {color: _global.GetPointMultiplierColor(), _yscale: 100, _xsc}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [
+    "GetPointMultiplierColor"
+   ],
+   "sprites": [
+    "399",
+    "633"
+   ],
+   "ours": "C"
+  },
+  "UpdateAbilityCooldown": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "None"
+   ],
+   "ours": "-"
+  },
+  "ApplyBuff": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "None"
+   ],
+   "ours": "C"
+  },
+  "ReapplyBuff": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [
+    "ApplyBuff"
+   ],
+   "sprites": [
+    "None"
+   ],
+   "ours": "-"
+  },
+  "UnapplyBuff": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "None"
+   ],
+   "ours": "C"
+  },
+  "NotifyCurrentFormChanged": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "None"
+   ],
+   "ours": "C"
+  },
+  "StartMarkerUpdate": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "558"
+   ],
+   "ours": "C"
+  },
+  "UpdateMarker": {
+   "sounds": [],
+   "interps": [
+    "addMarker: r1 1s easeout {_alpha: 100}",
+    "trackOffScreen: r1 1s easeout {_alpha: 100}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [
+    "addMarker",
+    "getMarkerClip",
+    "removeMarker",
+    "trackOffScreen"
+   ],
+   "sprites": [
+    "558"
+   ],
+   "ours": "C"
+  },
+  "FinishMarkerUpdate": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [
+    "removeMarker"
+   ],
+   "sprites": [
+    "558"
+   ],
+   "ours": "C"
+  },
+  "NotifyDownedWarningFade": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_hurt"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_hurt": {
+     "sounds": [],
+     "interps": [
+      "tunnelVision_mc 3s easeout {_alpha: 0}",
+      "sideEffect_mc 3s easeout {_alpha: 0}",
+      "tunnelVision_mc 3s easeout {_alpha: 30}",
+      "sideEffect_mc 3s easeout {_alpha: 30}",
+      "tunnelVision_mc 3s easeout {_alpha: 100}",
+      "sideEffect_mc 3s easeout {_alpha: 80}",
+      "tunnelVision_mc 3s easeout {_alpha: 100}",
+      "sideEffect_mc 3s easeout {_alpha: 100}",
+      "tunnelVision_mc 3s easeout {_alpha: 100}",
+      "sideEffect_mc 3s easeout {_alpha: 80}",
+      "thisElement 0.1s easeout {_alpha: prcnt}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "559"
+   ],
+   "ours": "-"
+  },
+  "NotifyNormalizedDownedHealthChanged": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_incapacitatedScreen"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_incapacitatedScreen": {
+     "sounds": [],
+     "interps": [
+      "thisElement 0.1s easeout {_alpha: prcnt}",
+      "thisElement 0.1s easeout {_alpha: 100}",
+      "incapWidgets_mc 0.5s easeout {_alpha: 100}",
+      "incapFraming_mc 0.5s easeout {_alpha: 100}",
+      "redFilter_mc 0.5s easeout {_alpha: 100}",
+      "incapWidgets_mc.selfDestruct_mc 0.5s easeout {_alpha: 100}",
+      "thisElement 4s easeout {callback: RemoveMe, _alpha: 0}",
+      "redFilter_mc 0.5s easeout {_alpha: 0}",
+      "incapWidgets_mc.selfDestruct_mc 0.5s easeout {_alpha: 0}",
+      "incapFraming_mc.downedHealth_mc 1s easeout {_width: emergencyHR._width}"
+     ],
+     "gotos": [
+      "gotoAndPlay(1)"
+     ],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "559"
+   ],
+   "ours": "C"
+  },
+  "showScope": {
+   "sounds": [],
+   "interps": [
+    "thisElement.zoomScope_mc 0.2s linear {_alpha: 100}",
+    "_root.hud_mc.topLeft_mc 0.2s linear {_alpha: 0}",
+    "_root.hud_mc.topCenter_mc 0.2s linear {_alpha: 0}",
+    "_root.hud_mc.topRight_mc 0.2s linear {_alpha: 0}",
+    "_root.hud_mc.midLeft_mc 0.2s linear {_alpha: 0}",
+    "_root.hud_mc.midRight_mc 0.2s linear {_alpha: 0}",
+    "_root.hud_mc.bottomLeft_mc 0.2s linear {_alpha: 0}",
+    "_root.hud_mc.bottomCenter_mc 0.2s linear {_alpha: 0}",
+    "_root.hud_mc.bottomRight_mc 0.2s linear {_alpha: 0}"
+   ],
+   "gotos": [],
+   "attach": [
+    "mc_zoomScope"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_zoomScope": {
+     "sounds": [],
+     "interps": [],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "560"
+   ],
+   "ours": "-"
+  },
+  "hideScope": {
+   "sounds": [],
+   "interps": [
+    "thisElement.zoomScope_mc 0.5s easeout {callback: thisElement.removeScope, _alpha: 0}",
+    "_root.hud_mc.topLeft_mc 0.5s linear {_alpha: 100}",
+    "_root.hud_mc.topCenter_mc 0.5s linear {_alpha: 100}",
+    "_root.hud_mc.topRight_mc 0.5s linear {_alpha: 100}",
+    "_root.hud_mc.midLeft_mc 0.5s linear {_alpha: 100}",
+    "_root.hud_mc.midRight_mc 0.5s linear {_alpha: 100}",
+    "_root.hud_mc.bottomLeft_mc 0.5s linear {_alpha: 100}",
+    "_root.hud_mc.bottomCenter_mc 0.5s linear {_alpha: 100}",
+    "_root.hud_mc.bottomRight_mc 0.5s linear {_alpha: 100}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "560"
+   ],
+   "ours": "-"
+  },
+  "NotifySegmentedHealthChanged": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [
+    "gotoAndPlay(loop)",
+    "gotoAndStop(1)"
+   ],
+   "attach": [
+    "mc_vitalBarActiveBarDrained",
+    "mc_vitalBarHealthSegment"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_vitalBarActiveBarDrained": {
+     "sounds": [],
+     "interps": [
+      "thisElement 0.2s easeout {_width: drainedBarEndWidth, _x: drainedBarEndX}",
+      "thisElement 0.5s easeout {callback: thisElement.removeMe, _width: 0}"
+     ],
+     "gotos": [],
+     "timers": []
+    },
+    "mc_vitalBarHealthSegment": {
+     "sounds": [],
+     "interps": [
+      "thisElement 0.5s easeout {color: SegmentColor, _yscale: 100}",
+      "highlight_mc 0.2s easeout {_alpha: (100 / segmentIndex)}",
+      "bar_mc 0.2s easeout {_alpha: 90}",
+      "highlight_mc 0.2s easeout {_alpha: 0}",
+      "bar_mc 0.2s easeout {_alpha: 0}",
+      "thisElement 1s easeout {color: newVal}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [
+    "updateHealthText"
+   ],
+   "sprites": [
+    "572"
+   ],
+   "ours": "C"
+  },
+  "NotifyOverShieldChanged": {
+   "sounds": [],
+   "interps": [
+    "healthNumber_txt 0.5s easeout {color: 16777215}",
+    "healthNumber_txt 0.5s easeout {color: 9105663}"
+   ],
+   "gotos": [
+    "gotoAndPlay(loop)",
+    "gotoAndStop(1)"
+   ],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [
+    "updateHealthText"
+   ],
+   "sprites": [
+    "572"
+   ],
+   "ours": "C"
+  },
+  "ShowAbilityType1": {
+   "sounds": [],
+   "interps": [
+    "thisClip 0.5s easeout {_alpha: 100}",
+    "thisClip 0.5s easeout {_alpha: 0}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "588"
+   ],
+   "ours": "-"
+  },
+  "AbilityType1Jammed": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "588"
+   ],
+   "ours": "-"
+  },
+  "NotifyAbilityType1Changed": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "588"
+   ],
+   "ours": "C"
+  },
+  "NotifyAbilityType1UpdateCooldown": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "588"
+   ],
+   "ours": "C"
+  },
+  "GameMessageSpectatorMode": {
+   "sounds": [],
+   "interps": [
+    "thisElement 0.5s easeout {_y: (initialPosY - 160)}",
+    "thisElement 0.5s easeout {_y: initialPosY}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "591"
+   ],
+   "ours": "C"
+  },
+  "GameMessage": {
+   "sounds": [],
+   "interps": [
+    "messageQueue[i] 0.2s easeout {_y: (i * -22)}"
+   ],
+   "gotos": [],
+   "attach": [
+    "mc_gameMessage_default"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_gameMessage_default": {
+     "sounds": [],
+     "interps": [
+      "this 1s easeout {callback: removeMe, _alpha: 0}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "591"
+   ],
+   "ours": "C"
+  },
+  "NotifyAmmoAdded": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_ammoPickupNotification"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_ammoPickupNotification": {
+     "sounds": [],
+     "interps": [
+      "_parent.AmmoPickupArray[i] 0.2s easeout {_y: (i * _parent.NotifySpacing)}",
+      "thisElement 0.8s easeout {callback: removeMe, _alpha: 0, _y: -50}",
+      "this 0.4s easeout {_alpha: 100, _x: 0}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "593"
+   ],
+   "ours": "C"
+  },
+  "NotifyCurrentWeaponChanged": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_currentWeaponIcon",
+    "mc_currentWeaponText"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_currentWeaponIcon": {
+     "sounds": [],
+     "interps": [
+      "this 0.5s easeout {_alpha: 100, _x: 0}",
+      "thisElement 0.3s easeout {callback: removeMe, _alpha: 0, _x: 10}"
+     ],
+     "gotos": [],
+     "timers": []
+    },
+    "mc_currentWeaponText": {
+     "sounds": [],
+     "interps": [
+      "this 0.5s easeout {_alpha: 100, _x: 0}",
+      "thisElement 0.5s easeout {callback: removeMe, _alpha: 0, _y: 10}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "599"
+   ],
+   "ours": "C"
+  },
+  "NotifyWeaponClipAmmoChanged": {
+   "sounds": [],
+   "interps": [
+    "AmmoBarClip 0.2s easeout {_yscale: 100, color: BarColor}",
+    "updateStatus: AmmoBarClip 0.5s easeout {color: BarColor}",
+    "updateStatus: ammoNumber_txt 0.5s easeout {color: 16724787}",
+    "updateStatus: ammoNumber_txt 0.5s easeout {color: 16777215}",
+    "updateStatus: currentWeapon_mc.iconAnchor_mc 0.5s easeout {color: 16724787}",
+    "updateStatus: currentWeapon_mc.iconAnchor_mc 0.5s easeout {color: 16769331}",
+    "updateStatus: icon_mc 0.2s easeout {color: 16724787}",
+    "updateStatus: icon_mc 0.2s easeout {color: 16777215}"
+   ],
+   "gotos": [
+    "gotoAndPlay(loop)",
+    "gotoAndStop(1)"
+   ],
+   "attach": [
+    "mc_ammoBar",
+    "mc_vitalBarAmmoSegment"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_ammoBar": {
+     "sounds": [],
+     "interps": [
+      "bar_mc 0.2s easeout {_width: r2}",
+      "highlight_mc 0.2s easeout {_alpha: r1, _width: r3}"
+     ],
+     "gotos": [],
+     "timers": []
+    },
+    "mc_vitalBarAmmoSegment": {
+     "sounds": [],
+     "interps": [],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [
+    "updateAmmoNumber",
+    "updateStatus"
+   ],
+   "sprites": [
+    "600"
+   ],
+   "ours": "C"
+  },
+  "NotifyWeaponReserveAmmoChanged": {
+   "sounds": [],
+   "interps": [
+    "thisElement 0.5s easeout {_alpha: 0}",
+    "thisElement 0.5s easeout {_alpha: 100}",
+    "updateStatus: AmmoBarClip 0.5s easeout {color: BarColor}",
+    "updateStatus: ammoNumber_txt 0.5s easeout {color: 16724787}",
+    "updateStatus: ammoNumber_txt 0.5s easeout {color: 16777215}",
+    "updateStatus: currentWeapon_mc.iconAnchor_mc 0.5s easeout {color: 16724787}",
+    "updateStatus: currentWeapon_mc.iconAnchor_mc 0.5s easeout {color: 16769331}",
+    "updateStatus: icon_mc 0.2s easeout {color: 16724787}",
+    "updateStatus: icon_mc 0.2s easeout {color: 16777215}"
+   ],
+   "gotos": [
+    "gotoAndPlay(loop)",
+    "gotoAndStop(1)"
+   ],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [
+    "updateAmmoNumber",
+    "updateStatus"
+   ],
+   "sprites": [
+    "600"
+   ],
+   "ours": "C"
+  },
+  "NotifyGrenadeAmmoChanged": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_grenadeIcon"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_grenadeIcon": {
+     "sounds": [],
+     "interps": [
+      "thisElement 0.4s easeout {callback: removeMe, _yscale: 150, _xscale: 150, _alpha: 0}",
+      "this 0.4s easeout {_rotation: 0, _yscale: 100, _xscale: 100, _alpha: 100}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "601"
+   ],
+   "ours": "C"
+  },
+  "ShowGrenades": {
+   "sounds": [],
+   "interps": [
+    "thisElement 0.2s easeout {_alpha: 100}",
+    "thisElement 0.2s easeout {_alpha: 0}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "601"
+   ],
+   "ours": "-"
+  },
+  "ShowAbilityType0": {
+   "sounds": [],
+   "interps": [
+    "thisClip 0.5s easeout {_alpha: 100}",
+    "thisClip 0.5s easeout {_alpha: 0}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "603"
+   ],
+   "ours": "-"
+  },
+  "AbilityType0Jammed": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "603"
+   ],
+   "ours": "-"
+  },
+  "NotifyAbilityType0Changed": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "603"
+   ],
+   "ours": "C"
+  },
+  "NotifyAbilityType0UpdateCooldown": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "603"
+   ],
+   "ours": "C"
+  },
+  "ShowAbilityType2": {
+   "sounds": [],
+   "interps": [
+    "thisClip 0.5s easeout {_alpha: 100}",
+    "thisClip 0.5s easeout {_alpha: 0}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "605"
+   ],
+   "ours": "-"
+  },
+  "AbilityType2Jammed": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "605"
+   ],
+   "ours": "-"
+  },
+  "NotifyAbilityType2Changed": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "605"
+   ],
+   "ours": "C"
+  },
+  "NotifyAbilityType2UpdateCooldown": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "605"
+   ],
+   "ours": "C"
+  },
+  "AddObjective": {
+   "sounds": [
+    "HUD_OBJECTIVE_ADDED"
+   ],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_objectiveNew"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_objectiveNew": {
+     "sounds": [],
+     "interps": [
+      "GlyphLine 0.5s easeout {_yscale: 0, _alpha: 0}",
+      "ObjectiveLine 0.5s easeout {_yscale: 100, _alpha: 100}",
+      "GlyphLine 0.5s easeout {_alpha: 100, _x: 0}",
+      "this 1s easein {callback: removeMe, _alpha: 0, _y: 20}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "607"
+   ],
+   "ours": "C"
+  },
+  "NotifyKillstreakChanged": {
+   "sounds": [],
+   "interps": [
+    "thisElement 0.2s easeout {_alpha: 100}",
+    "thisElement 0.2s easeout {_alpha: 0}"
+   ],
+   "gotos": [],
+   "attach": [
+    "mc_killstreakIcon"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_killstreakIcon": {
+     "sounds": [],
+     "interps": [
+      "iconContainer 0.5s easeout {_x: 20}",
+      "thisElement 0.5s easeout {callback: removeMe, _alpha: 0}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "608"
+   ],
+   "ours": "C"
+  },
+  "ApplyKillstreakBuff": {
+   "sounds": [],
+   "interps": [
+    "KillstreakBuffs[i] 0.3s easeout {_y: (i * IconSpacing)}"
+   ],
+   "gotos": [],
+   "attach": [
+    "mc_killstreakBuffIcon"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_killstreakBuffIcon": {
+     "sounds": [],
+     "interps": [
+      "thisElement 0.4s easeout {callback: removeMe, _yscale: 150, _xscale: 150, _alpha: 0}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [
+    "getKillstreakBuffIconId"
+   ],
+   "sprites": [
+    "609"
+   ],
+   "ours": "-"
+  },
+  "UnapplyKillstreakBuff": {
+   "sounds": [],
+   "interps": [
+    "KillstreakBuffs[i] 0.3s easeout {_y: (i * IconSpacing)}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "609"
+   ],
+   "ours": "-"
+  },
+  "NotifyCantTransform": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_cantTransform"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_cantTransform": {
+     "sounds": [],
+     "interps": [
+      "this 1s easeout {callback: removeMe, _alpha: 0}",
+      "this 0.2s easeout {color: 16724787, _alpha: 100, _yscale: 100}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "613"
+   ],
+   "ours": "C"
+  },
+  "TransformDisrupted": {
+   "sounds": [],
+   "interps": [
+    "DisruptedClip 0.2s easeout {_alpha: 100}"
+   ],
+   "gotos": [],
+   "attach": [
+    "mc_transformDisrupt"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "614"
+   ],
+   "ours": "C"
+  },
+  "NotifyTutorialMessage": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_tutorialMessage"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_tutorialMessage": {
+     "sounds": [],
+     "interps": [
+      "_parent.MinimizedTutorialQueue[i] 0.5s easeout {_y: (midRightCoord.y + (i * 25))}",
+      "thisElement 0.5s easeout {callback: removeMe, _y: (thisElement._y - 40), _alpha: 0}",
+      "thisElement 0.5s easeout {_y: (midRightCoord.y + (_parent.MinimizedTutorialQueue.lengt}",
+      "icon_mc 1s easeout {_yscale: 40, _xscale: 40}",
+      "text_mc 0.5s easeout {_yscale: 80, _xscale: 80}",
+      "text_mc.title_mc 0.5s easeout {_y: 0, _x: ((text_mc.title_mc._width / -2) - 20)}",
+      "text_mc.tutorialAvailable_mc 0.2s easeout {_alpha: 0}"
+     ],
+     "gotos": [
+      "gotoAndPlay(minimize)"
+     ],
+     "timers": []
+    }
+   },
+   "helpers": [
+    "UpdateTutorials"
+   ],
+   "sprites": [
+    "615"
+   ],
+   "ours": "C"
+  },
+  "NotifyWeaponMessageChanged": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [
+    "gotoAndPlay(charging)",
+    "gotoAndPlay(ready)"
+   ],
+   "attach": [
+    "mc_chargingIndicator"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_chargingIndicator": {
+     "sounds": [],
+     "interps": [],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "616"
+   ],
+   "ours": "C"
+  },
+  "updateAmmoWarning": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "617"
+   ],
+   "ours": "-"
+  },
+  "displayReloadPrompt": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "617"
+   ],
+   "ours": "-"
+  },
+  "NotifyActiveGrenadeCount": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_activeGrenadePromptText"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_activeGrenadePromptText": {
+     "sounds": [],
+     "interps": [
+      "this 0.2s easeout {_alpha: 100, _x: -10}",
+      "thisElement 0.5s easeout {callback: removeMe, _alpha: 0}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "618"
+   ],
+   "ours": "C"
+  },
+  "NotifyLockOnStateChanged": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [
+    "gotoAndPlay(r1)"
+   ],
+   "attach": [
+    "mc_missileWarningVictimBrackets"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "620"
+   ],
+   "ours": "C"
+  },
+  "ShowCrosshair": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "621"
+   ],
+   "ours": "C"
+  },
+  "SetWeaponCrosshair": {
+   "sounds": [],
+   "interps": [
+    "CrosshairClip 0.3s easeout {_rotation: 0}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "621"
+   ],
+   "ours": "-"
+  },
+  "NotifyTargetTypeChanged": {
+   "sounds": [],
+   "interps": [
+    "crosshairAnchor_mc 0.2s easeout {color: r1}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "621"
+   ],
+   "ours": "C"
+  },
+  "NotifyWeaponSpreadChanged": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "621"
+   ],
+   "ours": "C"
+  },
+  "NotifyFineAimChanged": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "621"
+   ],
+   "ours": "C"
+  },
+  "DisplayTurretReticule": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_turretReticule"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_turretReticule": {
+     "sounds": [],
+     "interps": [
+      "this 1s easeout {_rotation: 0}",
+      "petal1_mc.base_mc 0.2s easeout {_y: -20}",
+      "petal2_mc.base_mc 0.2s easeout {_y: -60}",
+      "petal3_mc.base_mc 0.2s easeout {_y: -20}",
+      "petal4_mc.base_mc 0.2s easeout {_y: -20}",
+      "petal5_mc.base_mc 0.2s easeout {_y: -60}",
+      "petal6_mc.base_mc 0.2s easeout {_y: -20}",
+      "petal1_mc.tip_mc 0.2s easeout {_y: -120}",
+      "petal2_mc.tip_mc 0.2s easeout {_y: -180}",
+      "petal3_mc.tip_mc 0.2s easeout {_y: -120}",
+      "petal4_mc.tip_mc 0.2s easeout {_y: -120}",
+      "petal5_mc.tip_mc 0.2s easeout {_y: -180}",
+      "petal6_mc.tip_mc 0.2s easeout {_y: -120}",
+      "petal1_mc.base_mc 0.5s easeout {_y: -40}",
+      "petal2_mc.base_mc 0.5s easeout {_y: -40}",
+      "petal3_mc.base_mc 0.5s easeout {_y: -40}",
+      "petal4_mc.base_mc 0.5s easeout {_y: -40}",
+      "petal5_mc.base_mc 0.5s easeout {_y: -40}",
+      "petal6_mc.base_mc 0.5s easeout {_y: -40}",
+      "petal1_mc.tip_mc 0.5s easeout {_y: -100}",
+      "petal2_mc.tip_mc 0.5s easeout {_y: -100}",
+      "petal3_mc.tip_mc 0.5s easeout {_y: -100}",
+      "petal4_mc.tip_mc 0.5s easeout {_y: -100}",
+      "petal5_mc.tip_mc 0.5s easeout {_y: -100}",
+      "petal6_mc.tip_mc 0.5s easeout {_y: -100}",
+      "thisElement 0.5s easeout {callback: removeMe, _yscale: 80, _xscale: 80, _alpha: 0}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "621"
+   ],
+   "ours": "-"
+  },
+  "NotifyDamageIncrease": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_crosshairIncreaseDamage"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_crosshairIncreaseDamage": {
+     "sounds": [],
+     "interps": [],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "621"
+   ],
+   "ours": "C"
+  },
+  "CausedDamage": {
+   "sounds": [
+    "HUD_POSITIVE_HIT_INDICATOR"
+   ],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_causeDamage"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_causeDamage": {
+     "sounds": [],
+     "interps": [],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "621"
+   ],
+   "ours": "C"
+  },
+  "NotifyWeaponJammedChanged": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "621"
+   ],
+   "ours": "C"
+  },
+  "DisplayRangeFinder": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_rangeFinderCrosshair"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_rangeFinderCrosshair": {
+     "sounds": [],
+     "interps": [
+      "thisElement 0.5s easeout {callback: removeMe, _alpha: 0}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "621"
+   ],
+   "ours": "-"
+  },
+  "NotifyPlayerRotationChanged": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [
+    "radiansToDegrees"
+   ],
+   "sprites": [
+    "622"
+   ],
+   "ours": "C"
+  },
+  "NotifyDamageIndicatorAdded": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_damageArrow"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_damageArrow": {
+     "sounds": [],
+     "interps": [
+      "this 1s easein {callback: this.deleteMe, _alpha: 0}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [
+    "radiansToDegrees"
+   ],
+   "sprites": [
+    "622"
+   ],
+   "ours": "C"
+  },
+  "GameAnnouncement": {
+   "sounds": [],
+   "interps": [
+    "announcement_mc 0.4s easeout {_yscale: 100, _xscale: 100, _alpha: 100}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "638"
+   ],
+   "ours": "C"
+  },
+  "RewardAnnouncement": {
+   "sounds": [],
+   "interps": [
+    "reward_mc 0.4s easeout {_y: 18, _alpha: 100}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "638"
+   ],
+   "ours": "C"
+  },
+  "NotifyOnAttackingTeamChanged": {
+   "sounds": [],
+   "interps": [
+    "RewardAnnouncement: reward_mc 0.4s easeout {_y: 18, _alpha: 100}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [
+    "RewardAnnouncement"
+   ],
+   "sprites": [
+    "638"
+   ],
+   "ours": "C"
+  },
+  "PointEvent": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_pointTransaction"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_pointTransaction": {
+     "sounds": [
+      "MP_REWARD_DIALOG_BOX"
+     ],
+     "interps": [
+      "points_mc 0.5s easeout {_yscale: 100, _xscale: 100}",
+      "points_mc 1s easeout {_y: (this._y - 100)}",
+      "this 1s easeout {callback: removeMe, _alpha: 0}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [
+    "UpdateTransactions"
+   ],
+   "sprites": [
+    "640"
+   ],
+   "ours": "C"
+  },
+  "NotifyLevelUp": {
+   "sounds": [
+    "MP_LEVEL_UP_MX_STNG"
+   ],
+   "interps": [],
+   "gotos": [
+    "gotoAndPlay(fadeOut)"
+   ],
+   "attach": [
+    "mc_levelUpNotify"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_levelUpNotify": {
+     "sounds": [],
+     "interps": [],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "643"
+   ],
+   "ours": "C"
+  },
+  "NotifyBadConnection": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_networkConnectivityAlert"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "644"
+   ],
+   "ours": "-"
+  },
+  "NotifyContextualCommand": {
+   "sounds": [],
+   "interps": [
+    "NotifyArray[i] 0.2s easeout {_y: ((i * NotifySpacing) + NotifySpacing)}"
+   ],
+   "gotos": [],
+   "attach": [
+    "mc_notify"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_notify": {
+     "sounds": [],
+     "interps": [
+      "this 0.2s easeout {_alpha: 100}",
+      "this 0.5s easeout {callback: removeMe, _alpha: 0}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [],
+   "sprites": [
+    "646"
+   ],
+   "ours": "C"
+  },
+  "NotifyProgressBarChanged": {
+   "sounds": [],
+   "interps": [
+    "thisElement 0.5s easeout {_y: -140, _alpha: 100}",
+    "thisElement 0.5s easeout {_y: -120, _alpha: 0}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "652"
+   ],
+   "ours": "C"
+  },
+  "NotifyHudScrambledChanged": {
+   "sounds": [],
+   "interps": [
+    "midCenter_mc 0.5s easeout {_alpha: 0}",
+    "midCenter_mc 0.5s easeout {_alpha: 100}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [
+    "ActivatePostProcessChain",
+    "DeactivatePostProcessChain"
+   ],
+   "sprites": [
+    "654"
+   ],
+   "ours": "C"
+  },
+  "ToggleSpectatorHudMode": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "654"
+   ],
+   "ours": "-"
+  },
+  "NotifySpectating": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [
+    "DeactivatePostProcessChain",
+    "ToggleSpectatorHudMode"
+   ],
+   "sprites": [
+    "654"
+   ],
+   "ours": "C"
+  }
+ },
+ "PlayerList_GFX.gfx": {
+  "GivePlayerListInput": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [
+    "UpdateCurrentFocus",
+    "clearButtonHints",
+    "giveInput",
+    "removeInput",
+    "setButtonHint",
+    "updateButtonHints"
+   ],
+   "sprites": [
+    "None"
+   ],
+   "ours": "-"
+  },
+  "UpdatePlayerListData": {
+   "sounds": [],
+   "interps": [
+    "BuildPlayerList: r2 0.4s easeout {_y: ListElementPosition}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [
+    "AssignDataStoreRead",
+    "BuildPlayerList",
+    "CycleSpecialtyLevels",
+    "GetCollectionRowCount"
+   ],
+   "sprites": [
+    "None"
+   ],
+   "ours": "C"
+  }
+ },
+ "MultiplayerRespawn_GFX.gfx": {
+  "SetSpectateTarget": {
+   "sounds": [],
+   "interps": [
+    "currentlySpectating_mc 0.5s easeout {_alpha: 100}",
+    "currentlySpectating_mc 0.5s easeout {_alpha: 0}"
+   ],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "13"
+   ],
+   "ours": "-"
+  }
+ },
+ "ChallengeNotify_GFX.gfx": {
+  "ChallengeUnlocked": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [
+    "mc_notifyChallenge"
+   ],
+   "timers": [],
+   "external": [],
+   "symbols": {
+    "mc_notifyChallenge": {
+     "sounds": [],
+     "interps": [
+      "thisElement 0.5s easeout {callback: closeMovie, _y: 20, _alpha: 0}",
+      "content_mc 0.2s easeout {_alpha: 100}",
+      "ChallengeIconClip 0.5s easeout {_yscale: 60, _xscale: 60, _alpha: 100}",
+      "background_mc 0.2s easeout {_height: ChallengeHeight}",
+      "frameTop_mc 0.2s easeout {_y: (background_mc._y - (ChallengeHeight / -2))}",
+      "frameBottom_mc 0.2s easeout {_y: (background_mc._y - (ChallengeHeight / 2))}"
+     ],
+     "gotos": [],
+     "timers": []
+    }
+   },
+   "helpers": [
+    "UpdateChallenges"
+   ],
+   "sprites": [
+    "None"
+   ],
+   "ours": "C"
+  }
+ },
+ "PauseMenu_GFX.gfx": {
+  "DisplayCharacterSelect": {
+   "sounds": [],
+   "interps": [],
+   "gotos": [],
+   "attach": [],
+   "timers": [],
+   "external": [],
+   "symbols": {},
+   "helpers": [],
+   "sprites": [
+    "516"
+   ],
+   "ours": "-"
+  }
+ }
+}
