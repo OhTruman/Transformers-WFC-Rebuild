@@ -3104,3 +3104,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   resend windows, launch-hash gate, per-tick hash exchange + desync detection, exit codes; first two-process run connected and ran
   600 identical ticks, then the known seat-numbering desync at tick 601 (Gameplay's humans + localSeat fix pending). Offline
   identical (frontend tests; headless SIMHASH stream equal to the pre-transport head).
+2026-10-17 12:51 Package 7 regress base = af4d0731 + hover + the headless runner (sim-neutral, proven on CPU: headless == windowed on 10,200
+  steps); gate-base.sh HEADLESS=1 same-match rows need no card. Experimental's 1e11edc2 pair stays at ~13:30.
