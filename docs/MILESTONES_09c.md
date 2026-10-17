@@ -2573,3 +2573,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   hover FX + five ability FX (Systems' wiring item), projectile flight loops (Systems audio), jet to-vehicle camera blend 1.0 s
   (Gameplay camera item). RE lane next: versus HUD / front-end / end-of-match presentation audit. Gameplay next: camera recoil /
   FOV kick / fire shake, then per-weapon recoil (own re-baseline).
+2026-10-17 08:38 Merged: 382ca6ab Session.h proximity voice interface (audience TeamRadio / AllRadio / Proximity / RadioPlusProximity default,
+  MemberVoice.voiceVia) + strings; b6a310e0 online group C (host member table, the original start gate, humans take bot slots,
+  browser cap, platform tags; Team Balancing Manual vs Autobalanced corrected); 81e06288 Guardian Chamber "missing floor"
+  RETRACTED (elevated spawns 11-13 m above a present floor; new triage class elevated_above_floor, exempted PROVISIONAL like
+  airborne; D2 PASS PROVISIONAL); 2a495677 gate-base.sh BASE_REF + the hover patch (package 7 regress base = af4d0731 +
+  cfca1717 src/game). Card after PRESENTER DONE (~09:07): Experimental's 6-min base check (same-match True; negative control
+  diverges ~601) -> (A) data switch + Gameplay follow-up merge + Set A merge -> Frontend 10 min -> Rendering 20 min -> (B) eye
+  pass ~100 min. Presenter loop 36 / 64 at 08:38, clean. AssetTools: movies conversion running (4 threads, low priority).
