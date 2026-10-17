@@ -216,3 +216,29 @@ and the empty-object groups are corrected (23 with Event / Sound tracks are live
 
 **X1 tone re-check (Integration's side item):** Rendering confirmed the "intentionally not driven" list against
 `RENDERING_RT_PLAN_V3.md`. No change.
+
+### 5a. SeqAct_Interp InitInterp as WFC runs it — CONFIRMED (2026-10-18, Ghidra)
+
+- **Entry:** `USeqAct_Interp::InitInterp` = **0x82C30328**. Found via execSetPosition (native table 0x8370E858) → SetPosition
+  0x82C30A80, which calls InitInterp when not playing, then UpdateInterp 0x82BFFA50, then TermInterp 0x82C13390 (stock pattern).
+- **Setup:** it clears GroupInst (+0xDC), resolves the InterpData (+0xD8, 0x82C2B290), and walks `InterpData.InterpGroups`
+  (+0x38 / +0x3C).
+- **Director group** (class check against InterpGroupDirector): one InterpGroupInstDirector **per local PlayerController** (the
+  controller-list walk, next at +0x1D4). If there is none, **one with a NULL actor**.
+- **Every other group:**
+  - skipped only if the group's flag bit `+0x50 & 0x40000000` is set (H: the editor folder flag);
+  - otherwise `GetObjectVars(GroupName)` (0x82F31E50), then:
+    ```
+    for (i = 0; i < NumVars || i == 0; i++)            // runs once even with zero variables
+        actor = (i < NumVars && var is an Actor) ? var : NULL
+        GroupInst += new InterpGroupInst;  GroupInst.InitGroupInst(Group, actor)   (vfunc 0x134)
+    ```
+- **So a group whose variable is empty, missing, or holds a non-Actor still gets exactly one group instance with a NULL actor**,
+  and InitGroupInst creates its track instances. This is the stock UE3 behaviour; WFC did not change it.
+- **Consequence for the 148 empty-object groups (§5):**
+  - they are instantiated and their tracks are updated every frame;
+  - **Event tracks fire their Kismet outputs**, and **Sound tracks play non-spatially** (stock track code, which does not need
+    the actor for events and uses no location for a NULL actor; the track-update functions were not read separately, H).
+  - Move / AnimControl / Toggle / material / property tracks have nothing to drive with a NULL actor, so they are **no-ops**
+    (stock UpdateTrack returns early without an actor, H).
+- §5's split stands with the instance creation now confirmed: **125 no-op, 23 live (Event / Sound)**.

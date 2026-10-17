@@ -134,14 +134,32 @@ inferred, not traced.
   (0, 0.15, 1.0 seen), `DuckingMixerPreset`.
 - **Per target (C):** `HmDialogInterface(target).PlayDialog(SoundCue, true, DialogType, false, DialogEventCallback)`. Stop →
   `StopDialog()` if the cue is playing.
-- **DialogEventCallback (C), by event value:**
-  - 0 (started): PlayingCount++, enable the duck preset;
-  - 1: fire *Stopped*;
-  - 2 (ended): reset the post-delay timer to PostDelayTime, FinishedCount++;
-  - for 1 and 2: PlayingCount--, and when it reaches 0, disable the duck;
-  - 3 / 4: fire *Stopped* (H: interrupted / failed).
-- **Native (H):** the Update ticks PostDelayTimer and fires *Finished* when every started line has finished and the post-delay has
-  elapsed. EnableDuckingMixerPreset / Disable are native → `AudioDevice.Enable / DisableMixerPreset(DuckingMixerPreset)`.
+- **DialogEventCallback (C, script + its native twin 0x830E7030), by event value:**
+  - 0 (started): PlayingCount++, **enable** the duck preset;
+  - 1 (stopped): fire *Stopped*, then PlayingCount--;
+  - 2 (ended): PostDelayTimer = PostDelayTime, FinishedCount++, then PlayingCount--;
+  - after 1 / 2: if PlayingCount is still ≥ 0 → **disable** the duck once (one disable per ended / stopped line, pairing each
+    enable); if it went negative → clamp to 0 (no disable);
+  - 3 / 4 (interrupted / failed): fire *Stopped* **only**. No PlayingCount decrement and no duck disable.
+
+**Native op — CONFIRMED (2026-10-18, Ghidra):**
+- **Inputs (0x8276F538, called each tick through vfunc 0x170):**
+  - **Play impulse** → gather the Target objects; if there are none, PlayingCount = 0. For each target call script
+    `PlayDialog(target, SoundCue)`. The impulse is cleared.
+  - **Stop impulse** → for each target call script `StopDialog(target, SoundCue)`, then PostDelayTimer = 0, FinishedCount = 0. The
+    impulse is cleared.
+- **Update (0x827644D8):**
+  - while **PlayingCount > 0** → keep running;
+  - else `PostDelayTimer −= dt`; while it is still > 0 → keep running;
+  - otherwise the op **completes**, firing **Finished only if FinishedCount ≠ 0** (at least one line ended naturally), then
+    FinishedCount = 0.
+  - So **Finished = the last playing line ended + PostDelayTime**. A Play with no valid target completes on the next tick with
+    no output. A Stop completes the op with Stopped (from the callback) and no Finished.
+- **Ducking:** EnableDuckingMixerPreset 0x8274E120 / Disable 0x8274E198 → AudioDevice vfunc 0x130 / 0x134 with
+  DuckingMixerPreset (+0xA8).
+- **Edge case (C):** a line that ends with event 3 / 4 leaves PlayingCount > 0, so the op does not complete and its duck stays
+  enabled until a later Stop (count → 0) or another line's end. A rebuild should treat 3 / 4 like 1 if it wants the op to finish.
+  The original does not.
 
 ## 11. SeqAct_DialogGroup (94, HM_Engine)
 
