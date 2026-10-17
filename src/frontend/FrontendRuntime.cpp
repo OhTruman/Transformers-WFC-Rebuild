@@ -1392,6 +1392,11 @@ void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt)
     {   // the respawn movie's "currently spectating" label (RE audit 3): on change, and again when the movie (re)opens
         const bool respawnUp = inMatch && st == UIState::Spectating;
         const std::string target = hud_.frame().spectateTarget.value_or(std::string());
+        if (target != spectateSeen_) {   // trace every change of Gameplay's killer-cam target (diagnosis of the label)
+            FlowTrace::emit("hud.spectateTarget", {{"target", target}, {"respawnMovie", FlowTrace::boolean(respawnUp)},
+                                                   {"field", FlowTrace::boolean(hud_.frame().spectateTarget.has_value())}});
+            spectateSeen_ = target;
+        }
         if (respawnUp && presenter_ && hud_.frame().spectateTarget && (!respawnMovieUp_ || target != spectateSent_)) {
             presenter_->movieCall("UI_GFxRespawn_p.MultiplayerRespawn_GFX_1", "_global.SetSpectateTarget", {BridgeValue(target)});
             spectateSent_ = target;
