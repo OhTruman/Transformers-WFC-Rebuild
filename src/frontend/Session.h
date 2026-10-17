@@ -172,6 +172,9 @@ public:
     virtual void setMuted(const SessionMemberId& member, bool muted) = 0;      // local only: nobody is told
     // The capture device's input level now, 0..1 (Settings > Audio "Mic Test" meter; Systems' capture). Default: none.
     virtual float micLevel() const { return 0.0f; }
+    // True from this peer's map load (reportLoaded) until the start tick (AllLoaded): the World must not step (the
+    // Application skips World::tick; camera / HUD / audio keep running). ONLINE_MP_ARCHITECTURE 10.4. Default: never held.
+    virtual bool simHeld() const { return false; }
     // Events since the last poll, in order. `now` = the frontend's update time (seconds).
     virtual std::vector<SessionEvent> poll(double now) = 0;
 };
