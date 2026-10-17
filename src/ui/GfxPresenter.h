@@ -138,6 +138,11 @@ private:
     float feedMinGapSeen_ = 1e9f;   // smallest visible-line gap measured (reported with each extended feed line)
     void scrollPlayerList(gfx::Player& p, float& scroll, const platform::InputFrame& in, float dt);
     void syncModeOptionBots(gfx::Player& p, frontend::GameFlow& flow);
+    // Settings > Graphics: the movie whose Graphics page got the PC rows (null when none is open); the Volumetric
+    // Lighting row follows the Ray Tracing row's current choice live (Realistic: Off / On; otherwise "Realistic only").
+    gfx::Player* graphicsPagePlayer_ = nullptr;
+    int volumetricGateShown_ = -1;   // 1 = Off / On offered, 0 = "Realistic only", -1 unknown
+    void syncVolumetricRow(gfx::Player& p);
     bool prevMouseLeft_ = false;
     gfx::Player* mouseTarget_ = nullptr;      // movie that last received the pointer
     std::vector<gfx::Player::RenderItem> items_;

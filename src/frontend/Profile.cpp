@@ -99,6 +99,7 @@ bool LocalProfile::loadFrom(std::istream& f) {
             else if (k == "Anisotropy") display.anisotropy = Display::clampAnisotropy(std::atoi(v.c_str()));
             else if (k == "FrameGeneration") display.frameGeneration = std::atoi(v.c_str()) != 0 ? 1 : 0;
             else if (k == "ShowFps") display.showFps = v == "1";
+            else if (k == "VolumetricLighting") display.volumetricLighting = v != "0";
             else if (k == "RayTracing") display.rayTracing = std::clamp(std::atoi(v.c_str()), 0, Display::kRayTracingMax);
             else if (k == "HDTexturesUserSet") { display.hdTexturesUserSet = v == "1"; hdUserSetKey = true; }
             else if (k == "HDPackHintShown") display.hdPackHintShown = v == "1";
@@ -157,7 +158,8 @@ void LocalProfile::save() const {
       << "\nHDTexturesUserSet=" << (display.hdTexturesUserSet ? 1 : 0) << "\nHDPackHintShown=" << (display.hdPackHintShown ? 1 : 0)
       << "\nAnisotropy=" << display.anisotropy
       << "\nFrameGeneration=" << display.frameGeneration << "\nRayTracing=" << display.rayTracing
-      << "\nShowFps=" << (display.showFps ? 1 : 0) << "\nBotsFriendly=" << bots.friendly << "\nBotsEnemy=" << bots.enemy
+      << "\nShowFps=" << (display.showFps ? 1 : 0) << "\nVolumetricLighting=" << (display.volumetricLighting ? 1 : 0)
+      << "\nBotsFriendly=" << bots.friendly << "\nBotsEnemy=" << bots.enemy
       << "\nBotDifficulty=" << bots.difficulty << "\nBotsAutobot=" << bots.autobot << "\nBotsDecepticon=" << bots.decepticon
       << "\nAutoDetectGpu=" << autoDetectGpu
       << "\nBotsExtended=" << (bots.extended ? 1 : 0) << "\nBotsEdited=" << (bots.editedSinceMap ? 1 : 0) << "\nOriginalChassisLocks=" << (originalChassisLocks ? 1 : 0) << "\n";

@@ -190,6 +190,26 @@ template <class R> const char* applyRayTracing(R* r, int mode, bool available) {
     (void)r; (void)mode; (void)available;
     return "stored (no renderer API yet)";
 }
+// Rendering (rt2 4e0256d4): void setVolumetricLighting(bool), bool volumetricLighting() const,
+// bool volumetricLightingAvailable() const - the X3 froxel volumetric lighting of Realistic; restart-free (from the next
+// frame), kept by release() across map changes; WFC_X3=0 stays a dev override that forces it off. Detected.
+template <class R, class = void> struct HasRendererVolumetric : std::false_type {};
+template <class R> struct HasRendererVolumetric<R, std::void_t<decltype(std::declval<R&>().setVolumetricLighting(true)),
+                                                               decltype(std::declval<R&>().volumetricLightingAvailable())>> : std::true_type {};
+template <class R> const char* applyVolumetric(R* r, bool on) {
+    if constexpr (HasRendererVolumetric<R>::value) {
+        if (!r) return "no renderer";
+        r->setVolumetricLighting(on);
+        if (const char* e = std::getenv("WFC_X3")) if (std::string(e) == "0") return "renderer (WFC_X3=0 forces off)";
+        return r->volumetricLightingAvailable() ? "renderer" : "renderer (Realistic unavailable)";
+    }
+    (void)r; (void)on;
+    return "stored (no renderer API yet)";
+}
+template <class R, class = void> struct DeclaresVolumetricNames : std::false_type {};
+template <class R> struct DeclaresVolumetricNames<R, std::void_t<decltype(&R::setVolumetricLighting)>> : std::true_type {};
+static_assert(!DeclaresVolumetricNames<render::IRenderer>::value || HasRendererVolumetric<render::IRenderer>::value,
+              "IRenderer declares setVolumetricLighting but HasRendererVolumetric does not match its signatures");
 // A renderer that declares the members must satisfy the traits (a signature mismatch would hide the rows silently).
 template <class R, class = void> struct DeclaresRtNames : std::false_type {};
 template <class R> struct DeclaresRtNames<R, std::void_t<decltype(&R::rayTracingAvailable)>> : std::true_type {};
@@ -258,6 +278,7 @@ template <class R> frontend::HardwareFacts gatherHardwareFacts(R* r, platform::I
         if (r) { f.frameGen = r->frameGenerationAvailable(); f.frameGenActive = r->frameGenerationActive(); }
     }
     if constexpr (HasRendererRayTracing<R>::value) { if (r) f.rtAvailable = r->rayTracingAvailable(); }
+    if constexpr (HasRendererVolumetric<R>::value) { if (r) f.volumetricAvailable = r->volumetricLightingAvailable(); }
     f.cpuCores = (int)std::thread::hardware_concurrency();
     if (w) w->desktopMode(f.nativeW, f.nativeH, f.nativeHz);
     (void)r;
@@ -465,6 +486,10 @@ void Application::attachPresenter() {
         appliedRayTracing_ = d.rayTracing;
         frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(d.rayTracing)}, {"by", applyRayTracing(renderer_, d.rayTracing, frontend_->rayTracingAvailable())},
                                                          {"when", "boot"}, {"provenance", "PC EXTENSION"}});
+        appliedVolumetric_ = d.volumetricLighting ? 1 : 0;
+        frontend::FlowTrace::emit("display.volumetricLighting", {{"on", frontend::FlowTrace::boolean(d.volumetricLighting)},
+                                                                 {"by", applyVolumetric(renderer_, d.volumetricLighting)}, {"when", "boot"},
+                                                                 {"provenance", "PC ADAPTATION"}});
     }
     // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
@@ -503,6 +528,12 @@ void Application::attachPresenter() {
             appliedRayTracing_ = p.display.rayTracing;
             frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(appliedRayTracing_)}, {"by", applyRayTracing(renderer_, appliedRayTracing_, frontend_->rayTracingAvailable())},
                                                              {"when", "apply"}, {"provenance", "PC EXTENSION"}});
+        }
+        if ((p.display.volumetricLighting ? 1 : 0) != appliedVolumetric_) {   // restart-free (Rendering): next frame
+            appliedVolumetric_ = p.display.volumetricLighting ? 1 : 0;
+            frontend::FlowTrace::emit("display.volumetricLighting", {{"on", frontend::FlowTrace::boolean(p.display.volumetricLighting)},
+                                                                     {"by", applyVolumetric(renderer_, p.display.volumetricLighting)},
+                                                                     {"when", "apply"}, {"provenance", "PC ADAPTATION"}});
         }
         if (applyLookSettings(world_.player().controller(), p))
             frontend::FlowTrace::emit("profile.lookSettings", {{"CameraSensitivity", p.get("CameraSensitivity")}, {"owner", "gameplay"}});

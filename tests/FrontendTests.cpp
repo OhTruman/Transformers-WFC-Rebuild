@@ -148,6 +148,35 @@ static void testHdTexturesBoot() {
     std::remove("wfc_profile.ini");
 }
 
+static void testVolumetricSetting() {
+    {   // default On; persisted; the data store reads / writes it; its texts come from the rebuild's own table
+        frontend::LocalProfile d;
+        std::istringstream off("[PCSettings]\nVolumetricLighting=0\n");
+        frontend::LocalProfile a;
+        a.loadFrom(off);
+        a.save();
+        std::ifstream in("wfc_profile.ini");
+        frontend::LocalProfile b;
+        b.loadFrom(in);
+        check(d.display.volumetricLighting && !a.display.volumetricLighting && !b.display.volumetricLighting,
+              "profile.volumetric_default_on_persisted");
+        in.close();   // (Windows cannot delete a file that is still open)
+        std::remove("wfc_profile.ini");
+    }
+    FrontendRuntime rt;
+    check(rt.init(), "volumetric.init");
+    DataStores& ds = rt.dataStores();
+    const bool readOn = ds.call("ReadValue", {"<PCSettings:VolumetricLighting>"}).s == "1";
+    ds.call("WriteValue", {"<PCSettings:VolumetricLighting>", "0"});
+    const bool wroteOff = !rt.flow().profile().display.volumetricLighting && ds.call("ReadValue", {"<PCSettings:VolumetricLighting>"}).s == "0";
+    ds.call("WriteValue", {"<PCSettings:VolumetricLighting>", "1"});
+    check(readOn && wroteOff && rt.flow().profile().display.volumetricLighting, "datastores.volumetric_read_write");
+    check(rt.catalog().localizeKey("$WfcPC.Settings.VolumetricLighting") == "Volumetric Lighting" &&
+          rt.catalog().localizeKey("$WfcPC.Settings.VolumetricRealisticOnly") == "Realistic only" &&
+          rt.catalog().localizeKey("$WfcPC.Online.Rejoin") == "Rejoin", "catalog.wfcpc_strings_loaded");
+    std::remove("wfc_profile.ini");
+}
+
 static void testFakeSession() {
     // The session boundary's test double (S0): script entries fire by time or after a recorded call; calls are recorded.
     using E = SessionEvent::Type;
@@ -183,6 +212,7 @@ static void testFpsCounter() {
         frontend::LocalProfile b;
         b.loadFrom(in);
         check(!d.display.showFps && a.display.showFps && b.display.showFps, "profile.show_fps_default_off_persisted");
+        in.close();
         std::remove("wfc_profile.ini");
     }
     // 4 Hz readout over a 0.5 s window: a steady 120 Hz reads 120; a drop to 60 Hz is half-way after one window, 60 after two.
@@ -722,6 +752,7 @@ int main() {
     testPackageCredits();
     testFpsCounter();
     testFakeSession();
+    testVolumetricSetting();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);
     if (ok) testInputPrompts(c);

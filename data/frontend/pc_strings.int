@@ -21,3 +21,7 @@ WaitingForPlayers=Waiting for `n players
 WaitingForOnePlayer=Waiting for `n player
 HostMigrated=The host left. `k is now the host.
 Resync=Resynchronising...
+[Settings]
+VolumetricLighting=Volumetric Lighting
+VolumetricLightingDesc=Light shafts and haze. Needs Ray Tracing: Realistic.
+VolumetricRealisticOnly=Realistic only
