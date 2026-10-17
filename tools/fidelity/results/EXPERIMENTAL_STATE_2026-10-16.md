@@ -1,3 +1,7 @@
+# 2026-10-17 07:09 state
+- DONE (CPU): HANG_DUMPS.md (577a9ae4), NETCODE_HARNESS.md (109fa919; Systems questions in section 7), package 7 head ledger results/PACKAGE7_HEADS.md (a2ee795b = frame-identical).
+- CARD QUEUE (4th, by Integration's relay): 1) powershell -File tools/fidelity/load-stall.ps1 -Exe work/ab/fast_af4d073/build-release/bin/wfc_rebuild.exe -OutDir work/loadstall/af4d073 (~10 min, untimed); 2) bash tools/fidelity/presenter-verify.sh cand15 'F:/Transformers Rebuild/Rebuild-Rendering/work/int_cand15/build/bin/wfc_rebuild.exe' 64 (~70 min; FG run re-checks the 10-12 FSR 3 crashes).
+
 # 2026-10-17 06:16 state (after the 05:41 reboot)
 - Package 7 gate design DONE: tools/fidelity/PACKAGE7-GATE.md + package-respin.sh header / whole-map contamination reruns / 1b in-hold X3=0 + NOCORPSE arms (5b665578).
 - WAITING for the card (4th in queue: Rendering, Gameplay, Systems, me): presenter-fix verification on Rendering's fixed exe - bash tools/fidelity/presenter-verify.sh <name> <exe> 64 (307e8b58); ~70 min.
