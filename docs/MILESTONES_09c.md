@@ -2364,3 +2364,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Also: 2b TIMED DONE 03:26:55; 1b Realistic + HD 2 + X3 at 1440p p50 9.7-11.9 ms (84-103 fps; 4078e47b read 105-137,
   explanation requested for the doc); 5v5 +0.06 ms; rerun hold (regress 501 + bodies 501) running; AssetTools chain stopped
   03:27, hold watchdog written untested (1b70368), resume after the gate.
+2026-10-17 04:25 USER RULE: "I just want the game to look beautiful. After it looks like a brand new game only then while we
+  optimize for more FPS at no extra cost to the Fidelity." Package 7 re-ordered: visual items first on every lane (Rendering X6,
+  X7, Streets haze; Gameplay death-body patch 2 + Defrag latch, ride height, squad follow; Systems mine saturation), perf items
+  after and only when a side-by-side eye check shows zero visible difference (e.g. X3 sun-ray mask corpses-only, live
+  characters keep their fog shadows). Leak work continues as stability, not fps. Estimates: Gameplay 30-40 h + 6-8 slots,
+  Rendering 24-34 h; package 7 ~2026-10-20. Rendering patches (code only): 9015c4e9 persistent presenter event (leak suspect
+  1), 8bd95490 WIP X3 sun-ray mask. Experimental's ledgers: tonight's GL-present gate exes grew the pool ~27 MB/h, the big
+  growth came with D3D12-present / multi-exe runs; arm B (WFC_D3D12PRESENT=1, RT off, 30 min) runs alone in Systems' build
+  window after the attribution hold; arms C / D later or after the reboot.
