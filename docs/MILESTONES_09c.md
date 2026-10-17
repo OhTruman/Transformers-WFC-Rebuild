@@ -2373,3 +2373,18 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   1), 8bd95490 WIP X3 sun-ray mask. Experimental's ledgers: tonight's GL-present gate exes grew the pool ~27 MB/h, the big
   growth came with D3D12-present / multi-exe runs; arm B (WFC_D3D12PRESENT=1, RT off, 30 min) runs alone in Systems' build
   window after the attribution hold; arms C / D later or after the reboot.
+2026-10-17 04:14 PACKAGE 6 GATE VERDICT (Experimental, hold removed 04:12:24; report tools/fidelity/results/PACKAGE-GATE_af4d0731.md on
+  agents/experimental 7da22d7b): no blocking row. Regress REPORT (bodies, +0.67..+1.94 ms p90, lights <= +0.12), Realistic perf
+  REPORT (all > 60 fps), FAST PASS / PASS (59 pass, 0 product, 1 known ribbon / beam), leak PASS, eye pass cand13. 1b true
+  numbers (in-hold head, 1440p Realistic + HD Enhanced, 31 v 32, X3 on) p50 ms: Streets 9.91, Gorge 10.08, Debris 8.05,
+  Rust 8.83, Molten 9.91 = +0.60..+0.73 vs 4078e47b, all X3 (+0.40..+0.60) + bodies at RT on (+0.17..+0.49, TLAS: Streets
+  36.3 -> 38.1 instances, BLAS rebuilds 161 -> 192). The 2b-hold 1b run (+1.7 ms on 4 maps) = outlier, not reproduced; 8db29dab
+  build dropped. GO BUILD sent to Systems with placeholders (a)-(e); COMPILES OPEN for Rendering / Gameplay (card closed until
+  ARM B DONE); RE lane and AssetTools resumed. Scripts synced by path: package-respin.sh (pool guard), pooltags.ps1 (new).
+2026-10-17 04:14 LEAK FINDING (Experimental, pool tags via NtQuerySystemInformation, no admin): at 04:13 the counter read 7.16 GB, tagged
+  nonpaged 5.50 GB, and the top 5 tags (CORP 1,287 MB / LTUF 1,211 / SFRF 1,113 / RFRF 327 / DVEF 132, about 4.07 GB) all
+  belong to C:\Windows\System32\drivers\FlightRecorder.sys = "Malwarebytes EDR Driver" 2.0.7.0 (2025-09-24, boot-start; the
+  tag strings exist only in that binary). AMD-looking tags are far smaller (DAL3 165 MB, GVM_ 129 MB). Fits the ledgers: growth
+  tracks process / file activity (multi-exe runs, builds, verify), not GPU frames; tonight's single-exe gate grew ~27 MB/h.
+  USER DECISION (security software): a Malwarebytes update or exclusions for F:\Transformers Rebuild and the lanes' tools.
+  No lane acts on it. Idle baseline then arm B (D3D12 present) still run, with per-tag diffs, to settle the presenter question.

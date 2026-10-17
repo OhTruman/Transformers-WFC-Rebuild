@@ -14,7 +14,11 @@ P=$(sed -n 's/.*penultimate \([0-9a-f]*\),.*/\1/p' $GD/../../package-gate-$g.out
 [ -n "$P" ] || P=$(sed -n '1s/.*(penultimate \([0-9a-f]*\),.*/\1/p' $GD/PACKAGE-GATE.md 2>/dev/null)   # (a gated head that was itself a respin)
 p=${P:0:7}
 export PYTHONDONTWRITEBYTECODE=1 WFC_GATE_IGNORE_HOLD=1 WFC_GATE_GPU_GRACE_MIN=0 WFC_MUTE=1 WFC_NOINTERACT=1
-st() { echo "$(date +%T) $*" | tee -a $L; }
+st() { echo "$(date +%T) $*" | tee -a $L; pool_guard; }
+# pool guard (Integration 2026-10-17, driver nonpaged-pool leak): at every step boundary, above GATE_POOL_MAX_GB (9.5) nonpaged
+# pool the respin stops cleanly (hold removed; per-step results stay on disk) - rerun with SKIP_BUILD=1 after the reboot
+pool_guard() { [ $WHATIF = 1 ] && return; local gb; gb=$(powershell -NoProfile -Command "[math]::Round((Get-Counter '\Memory\Pool Nonpaged Bytes').CounterSamples[0].CookedValue/1GB,2)" | tr -d '\r')
+  echo "  (pool $gb GB)" >> $L; if awk "BEGIN{exit !($gb > ${GATE_POOL_MAX_GB:-9.5})}"; then rm -f work/PERF_HOLD; echo "$(date +%T) POOL GUARD: nonpaged pool $gb GB > ${GATE_POOL_MAX_GB:-9.5} - stopped at the step boundary (hold removed)" | tee -a $L; exit 3; fi; }
 run() { if [ $WHATIF = 1 ]; then echo "WHATIF: $*" | tee -a $L; else eval "$@"; fi; }
 busy() { powershell -NoProfile -Command "@(Get-CimInstance Win32_Process | ? { (\$_.Name -eq 'python.exe' -and \"\$(\$_.ExecutablePath) \$(\$_.CommandLine)\" -like '*Transformers Rebuild*' -and \"\$(\$_.CommandLine)\" -notlike '*Rebuild-Experimental*') -or (\$_.Name -like 'wfc_rebuild*' -and \"\$(\$_.ExecutablePath)\" -notlike '*Rebuild-Experimental*') }).Count" | tr -d '\r'; }
 st "PACKAGE RESPIN $R (gated $G, penultimate $P), base $GATE_BASE_NAME$( [ $WHATIF = 1 ] && echo ' (WHATIF)')"
@@ -29,7 +33,7 @@ fi
 # ---- 1 regress (timed)
 st "1 regress: hold set; waiting for a clear card"; run "touch work/PERF_HOLD; sleep 60; until [ \"\$(busy)\" = 0 ]; do sleep 15; done"
 st "1 regress START"
-for m in 501 502 503 504 507 508 509 510; do
+for m in 501 502 503 504 507 508 509 510; do st "1 regress map $m"
   run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/regress/map-$m -Map $m -Arms 'base|$BASE|;;head|work/ab/fast_$r|;;nolights|work/ab/fast_$r|WFC_NOTRANSIENTLIGHTS=1' -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/regress/map-$m.out 2>&1"
 done
 run "rm -f work/PERF_HOLD"; st "1 regress TIMED DONE (hold removed)"
