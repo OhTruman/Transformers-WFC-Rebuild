@@ -3067,3 +3067,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   health within noise); applies clean on 1c5de2d8; merges in the door head with Rendering's draw after x15 / x16.
 2026-10-17 12:20 RE: the Conversation sequencer and the special-spawn caller CONFIRMED from native / TransContent; the remaining campaign H items
   ranked; RE takes SeqAct_Interp InitInterp (125 empty matinee groups) next, then PlayDialog timing, setpiece flags, buddy bars.
+2026-10-17 12:21 Campaign render-data dry run merged: the MP pipeline runs on A1 with six campaign gaps (per-sublevel inputs, umodel per-package
+  lists, props_authored / VS roots parameterised, PostProcessVolumeHeightFog, runtime-assigned materials, DecalMaterial roots);
+  sized for the campaign phase (Rendering + AssetTools items then). AssetTools next: BrokenHope versus nav, then the
+  SoundMixerPresetName fix (MP-facing: before / after proof first).
