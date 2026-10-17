@@ -370,7 +370,8 @@ private:
     // kind 2: a material-less particle batch (queueFallbackSprites)
     struct FallbackBatch { unsigned tex = 0; bool additive = false; float scale = 1.0f; std::vector<Sprite> sprites; };
     std::vector<FallbackBatch> fallbackPool_;
-    struct TransientLight { core::Vec3 pos, color; float radius = 0.0f, falloff = 1.0f; core::Vec3 dir{0, 0, 0}; float cosI = 1.0f, cosO = -2.0f; };
+    struct TransientLight { core::Vec3 pos, color; float radius = 0.0f, falloff = 1.0f; core::Vec3 dir{0, 0, 0}; float cosI = 1.0f, cosO = -2.0f; bool worldOnly = false; };
+    int tlWorldOnly_ = 0;   // bits of the applied 8: world-only lights (forced-dynamic map lights; characters get them via the DLE)
     std::vector<TransientLight> tlights_, tlightsDraw_;   // (item 4) collected / applied this frame
     float tlPos_[8][4] = {}, tlCol_[8][4] = {}; int tlN_ = 0;
     float tlCut_[8] = {};

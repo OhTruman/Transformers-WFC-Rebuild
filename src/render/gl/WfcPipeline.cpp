@@ -2978,6 +2978,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         if (at != std::string::npos && ma != std::string::npos && at > ma) {
             fs.insert(at, "    if (uLit != 0 && (uTLN > 0 || uTLAllN > 0)) c += wfcTransientLights(normalize(tbn * normalize(o.Normal)), o);\n");
             fs.insert(ma, "uniform int uTLN; uniform vec4 uTLPos[8]; uniform vec4 uTLCol[8];   // xyz, 1 / radius; rgb, falloff exponent\n"
+                          "uniform int uTLSkip;   // (world-only lights skipped on characters: they light them through the DLE)\n"
                           "uniform int uTLMask;   // the lights that reach this draw's bounds (bit k)\n"
                           "uniform vec4 uTLCut[2];   // per light: (d / radius)^2 past which its falloff < 1/512\n"
                           "uniform vec4 uTLDir[8]; uniform vec4 uTLCosI[2];   // spot axis, cos(outer) (-2 = point); cos(inner)\n"
@@ -3010,7 +3011,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
                           "    }\n"
                           "    for (int k = 0; k < 8; ++k) {\n"
                           "        if (k >= uTLN) break;\n"
-                          "        if (((uTLMask >> k) & 1) == 0) continue;\n"
+                          "        if (((uTLMask >> k) & 1) == 0 || ((uTLSkip >> k) & 1) != 0) continue;\n"
                           "        vec3 d = uTLPos[k].xyz - vPos, dn = d * uTLPos[k].w;\n"
                           "        float x2 = dot(dn, dn);\n"
                           "        if (x2 > uTLCut[k >> 2][k & 3]) continue;\n"
@@ -4031,6 +4032,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform1i(ULOC(P, "uVertexLM"), 0);
     Uniform4f(ULOC(P, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
     Uniform1i(ULOC(P, "uSkin"), skinMode_);
+    Uniform1i(ULOC(P, "uTLSkip"), skinMode_ != 0 || inDynamicDraw_ ? tlWorldOnly_ : 0);   // (forced-dynamic world lights: not on characters)
     if (skinMode_) {
         Uniform1i(ULOC(P, "uSkinRow"), skinRow_);
         Uniform1i(ULOC(P, "uSkinBones"), skinBones_);
@@ -8298,12 +8300,14 @@ void Pipeline::selectTransientLights() {
         for (const Light& l : lights_)
             if (l.worldDynamic && l.enabled && (l.type == 0 || l.type == 1)) {
                 const core::Vec3 d = l.dir;
+                const size_t n0 = tlights_.size();
                 addTransientLight(l.pos, l.color, l.radius, l.falloff, l.type == 1 ? &d : nullptr, l.spotCosI, l.spotCosO);
+                if (tlights_.size() > n0) tlights_.back().worldOnly = true;   // (characters: the DLE / LVV, not this path)
             }
     tlightsDraw_.swap(tlights_);
     tlights_.clear();
     static const bool off = std::getenv("WFC_NOTRANSIENTLIGHTS") != nullptr;   // A/B
-    tlN_ = 0; tlAllN_ = 0;
+    tlN_ = 0; tlAllN_ = 0; tlWorldOnly_ = 0;
     if (off || tlightsDraw_.empty()) return;
     std::vector<std::pair<float, size_t>> rank;
     for (size_t i = 0; i < tlightsDraw_.size(); ++i) {
@@ -8347,6 +8351,7 @@ void Pipeline::selectTransientLights() {
         tlCut_[tlN_] = L.falloff > 1e-3f ? 1.0f - std::pow(1.0f / 512.0f, 1.0f / L.falloff) : 1.0f;
         tlDir_[tlN_][0] = L.dir.x; tlDir_[tlN_][1] = L.dir.y; tlDir_[tlN_][2] = L.dir.z; tlDir_[tlN_][3] = L.cosO;
         tlCosI_[tlN_] = L.cosI;
+        if (L.worldOnly) tlWorldOnly_ |= 1 << tlN_;
         ++tlN_;
     }
     if (tlTiledOn()) tlBuildTiles();
