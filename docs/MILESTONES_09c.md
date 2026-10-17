@@ -3292,3 +3292,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (sim for that bot), so base + transact cannot equal 814e7cf5 at the gate's settings. DECISION: no port; every gate arm runs
   WFC_NORECOIL=1 (the commit's own diagnostic switch; the base ignores it); Gameplay re-verifies both base diffs with it at the
   gate's exact settings + delivers the weapon-batch diff (its 4 v 5 check was a stale build).
+2026-10-17 14:54 RETRACTED the WFC_NORECOIL decision: that switch skips the skeletal recoil only (what the weapon batch changes), not the camera
+  pitch step (arms still differ from 5215 with it). Instead Gameplay ports onLocalShot's pitch step into the sim-only base diffs
+  (B); re-cut TRANSACT + weapon-batch diffs with same-match results ~15:45; Experimental rebuilds the base before the hold.
