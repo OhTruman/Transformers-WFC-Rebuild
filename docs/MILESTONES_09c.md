@@ -2920,3 +2920,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   head incl. two same-seed launches = equal simStateHash at step 1000. Gameplay's transforming actors + dying-vehicle collision
   are code complete (WIP fb62bd13; TRANSACTTEST: BrokenHope 26 / 26, Remnant 72 / 72 boxes block, Rust doors open at start,
   dying vehicles block until the gib); NAVQ re-baseline next, then the gate; World::transformingActors() is Rendering's draw hook.
+2026-10-17 11:15 Transforming actors: NONE of the 32 authored doors / bridges is drawn on any map today (BrokenHope 13 doors + 5 bridges, Remnant 12
+  doors, Rust 2 doors). Rendering's plan: skinned glb clip sampled at Gameplay's t (AssetTools exports all 4 meshes, 34 clip
+  channels), 6 door materials added to materials_glsl (regen gate), DLE-lit PARTIAL until the original's two interpolated baked
+  light maps (closed / open) are decoded (RE / AssetTools asked), RT BLAS refit. Rules: collision and draw merge in ONE head (no
+  invisible walls); the item outranks Trail2 once Gameplay's gate is posted.
