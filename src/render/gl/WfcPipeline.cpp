@@ -6800,11 +6800,12 @@ void Pipeline::releaseMeshCaches(const MeshData* m) {
         for (GLuint* b : {&sm->second.vbo, &sm->second.jwVbo, &sm->second.ibo}) if (*b) DeleteBuffers(1, b);
         skinModels_.erase(sm);
     }
-    auto ds = dynSubs_.find(m);
-    if (ds != dynSubs_.end()) {
+    for (auto* lists : {&dynSubs_, &dynSubsDefrag_}) {
+        auto ds = lists->find(m);
+        if (ds == lists->end()) continue;
         for (auto it = weaponShadow_.begin(); it != weaponShadow_.end();)   // records point into this draw list
             it = it->second.g == &ds->second.g ? weaponShadow_.erase(it) : std::next(it);
-        dynSubs_.erase(ds);
+        lists->erase(ds);
     }
     auto pb = posed_.find(m);
     if (pb != posed_.end()) {
@@ -7140,7 +7141,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
     auto od = ownerDefrag_.find(drawOwner_);
     static const bool diagDefrag = std::getenv("WFC_DEFRAG") != nullptr;   // diagnostics: every owner
     const bool defrag = od != ownerDefrag_.end() || diagDefrag;
-    DynSubs& ds = dynSubs_[&m];
+    DynSubs& ds = defrag ? dynSubsDefrag_[&m] : dynSubs_[&m];
     ds.lastFrame = frameNo_;
     {
         static thread_local std::vector<uint64_t> sig;
@@ -8541,8 +8542,9 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
         statSkinBoundsReused_ = 0;
     }
     if ((frameNo_ & 255) == 64) {
-        for (auto it = dynSubs_.begin(); it != dynSubs_.end();)
-            it = frameNo_ - it->second.lastFrame > 600 ? dynSubs_.erase(it) : std::next(it);
+        for (auto* lists : {&dynSubs_, &dynSubsDefrag_})
+            for (auto it = lists->begin(); it != lists->end();)
+                it = frameNo_ - it->second.lastFrame > 600 ? lists->erase(it) : std::next(it);
         for (auto it = weaponShadow_.begin(); it != weaponShadow_.end();)   // (its GpuMesh lives in dynSubs_)
             it = frameNo_ - it->second.frame > 2 ? weaponShadow_.erase(it) : std::next(it);
     }

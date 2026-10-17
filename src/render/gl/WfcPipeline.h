@@ -841,6 +841,10 @@ private:
         int lastFrame = 0;
     };
     std::unordered_map<const MeshData*, DynSubs> dynSubs_;
+    // the same lists for draws in the energy-death state: a GPU-skinned body shares its bind mesh with the live robots of
+    // its model - with one list per mesh, a live robot drawn after a queued dissolving body rebuilt the list the body's
+    // queued draw points at, and the body drew undissolved (Gameplay's GPU corpse path)
+    std::unordered_map<const MeshData*, DynSubs> dynSubsDefrag_;
     void evictPosed(bool all);
     double statFxTickMs_ = 0.0;                          // map FX simulation share of statFxMs_
     double statFxMsCum_ = 0.0, statFxTickMsCum_ = 0.0;   // never reset (WFC_SLOWFRAME deltas)
