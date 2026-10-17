@@ -2442,3 +2442,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   RE lane: MP_TRANSFORMING_ACTORS_RE.md (f60eccb0), CAMPAIGN_STREAMING_RE.md (24a0d4d3); Gameplay design
   GAMEPLAY_TRANSFORMING_ACTORS.md (af3fc036): Gameplay state + collision, Rendering draws at the pose. AssetTools: verdict
   exemption + streaming runtime revision merged (86dd5de6); matinee export started (~3-3.5 h).
+2026-10-17 06:49 Gameplay patch 2 crop slot 06:58-07:12 (8 runs, shots Rebuild-Gameplay work/pass29/p2/crop_*/shots, sheets sheet_corpse_10.png,
+  sheet_deathcam_*.png, seq_deathcam_robot.png, gib_zoom.png, transform_check.png): PASS as designed: melee kill without
+  explosion / chunks / gib (base wrongly exploded), per-entry effects at the authored sockets, vehicle death FX, KillZ insta-gib,
+  killer cam cut after 3 s, respawn cut, vehicle death camera. NO MERGE YET, three defects: (1) the death scorch renders opaque
+  white / solid black (runtime decal blend for DeathDecal_MAT) -> Rendering; (2) gibs untextured (DeathSkelGib_Mat_INST /
+  DeathGib_Mat_INST absent from every materials_glsl.json; chunks grey in base too) -> Systems compiles both into the 10 MP
+  material sets; (3) robot death camera starts inside the corpse (trace from the lumbar bone, not the anchor) -> Gameplay fix +
+  2-min re-crop. Integration viewed sheet_corpse_10.png and seq_deathcam_robot.png: agrees. SIMHASH zero-diff holds
+  (a208d3b0). Transforming actors: not drawn (working assumption from the Rust / BrokenHope shots). Card -> Systems 07:12.
+  Rendering X6 round 3 (0b6b0fd2, cand17: whole film in damp patches, roughness 0.05, sheen share >= 0.35, lobe hack removed)
+  queued after Systems: Gorge + Streets first, full batch only if it reads as a sheen.
