@@ -48,6 +48,7 @@ struct Light {
     bool chStatic = true, chDynamic = true, castShadows = true, enabled = true;
     std::string name;             // source light component (frame report)
     bool castDynamicShadows = true, castCompositeShadow = false, hasLightFunction = false;
+    bool worldDynamic = false;   // bForceDynamicLight + never built into a lightmap: a per-pixel light on the lightmapped world
     float brightness = 1.0f;
     core::Vec3 colorByte{1, 1, 1};   // LightColor / 255 (DirectLightEnv ranking colour)
     uint32_t chMask = 0;             // LightingChannels (MSB-first bits)

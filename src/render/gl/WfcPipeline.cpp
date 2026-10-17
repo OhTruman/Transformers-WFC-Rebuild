@@ -1550,6 +1550,7 @@ bool Pipeline::load(const std::string& mapName) {
         l.name = e["name"].asString();
         l.castDynamicShadows = e["cast_dynamic_shadows"].asBool(true);
         l.castCompositeShadow = e["cast_composite_shadow"].asBool(false);
+        l.worldDynamic = e["force_dynamic"].asBool(false) && !e["built_into_lightmap"].asBool(true);
         l.castStaticShadows = e["cast_static_shadows"].asBool(true);
         l.radiusOfInfluence = e["radius_of_influence_m"].asFloat(-0.01f);
         {   // LightingChannels -> bits (MSB-first); an absent struct keeps the LightComponent default
@@ -8290,6 +8291,15 @@ void Pipeline::selectTransientLights() {
             }
         }
     }
+    // the map's forced-dynamic lights never built into a lightmap (Remnant's PointLightToggleable_1918, RE: on at load, never
+    // toggled; bForceDynamicLight lights the lightmapped world per pixel, no static shadowing): through the same per-pixel
+    // path in Off / Faithful, unshadowed; Realistic's RT lightmap traces it with the authored lights (WfcRtGi)
+    if (rtMode_ != 2)
+        for (const Light& l : lights_)
+            if (l.worldDynamic && l.enabled && (l.type == 0 || l.type == 1)) {
+                const core::Vec3 d = l.dir;
+                addTransientLight(l.pos, l.color, l.radius, l.falloff, l.type == 1 ? &d : nullptr, l.spotCosI, l.spotCosO);
+            }
     tlightsDraw_.swap(tlights_);
     tlights_.clear();
     static const bool off = std::getenv("WFC_NOTRANSIENTLIGHTS") != nullptr;   // A/B
