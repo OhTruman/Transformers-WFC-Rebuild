@@ -291,6 +291,8 @@ private:
     void updateCinematicHud();
     void updateOnlineVoice();
     bool voiceUiOverride_ = false;
+    std::string spectateSent_;            // SetSpectateTarget: the name last sent to the respawn movie
+    bool respawnMovieUp_ = false;
     bool hdPackHintPending_ = false;   // the one-time "HD texture pack found" message waits for the main menu
     void updateHdPackHint();
     GraphicsPresetTable presets_;

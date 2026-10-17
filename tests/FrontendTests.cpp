@@ -1188,6 +1188,11 @@ static void testHudJamBuffs() {
     f.jamBuffs = std::vector<HudFrame::Buff>{{"TnBuffTransformDisruptor", 2}};
     hud.setFrame(f); hud.update(&p, cat, true, true);
     const bool unapplied = p.has("_global.UnapplyBuff(TnBuffAbilityJammedKillstreak)") && p.calls.size() == 1;
+    p.calls.clear();
+    f.jamBuffs = std::vector<HudFrame::Buff>{{"TnBuffTransformDisruptor", 3}};   // refreshed (time left jumps up): ReapplyBuff
+    hud.setFrame(f); hud.update(&p, cat, true, true);
+    check(p.has("_global.ReapplyBuff(TnBuffTransformDisruptor,3)") && p.calls.size() == 1, "hud.jam_buffs_reapply");
+    f.jamBuffs = std::vector<HudFrame::Buff>{{"TnBuffTransformDisruptor", 2}};
     hud.update(&p, cat, false, false);   // the movie closes and reopens: the active one again
     p.calls.clear();
     hud.setFrame(f); hud.update(&p, cat, true, true);

@@ -201,6 +201,10 @@ void HudController::update(IMoviePresenter* p, const Catalog& cat, bool open, bo
             };
             for (const auto& b : was) if (isJamBuff(b.id) && !has(*f.jamBuffs, b.id)) call("UnapplyBuff", {b.id});
             for (const auto& b : *f.jamBuffs) if (isJamBuff(b.id) && !has(was, b.id)) call("ApplyBuff", {b.id, 0, b.remain});
+            // TnHUD.ReapplyBuff(BuffId, BuffTime): a running buff refreshed (its time left jumps up) redraws the jam display
+            for (const auto& b : *f.jamBuffs)
+                for (const auto& o : was)
+                    if (o.id == b.id && isJamBuff(b.id) && b.remain > o.remain + 0.5) call("ReapplyBuff", {b.id, b.remain});
         }
         if (f.cantTransformCount && sentValid_ && sent_.cantTransformCount)
             for (int i = *sent_.cantTransformCount; i < *f.cantTransformCount; ++i) call("NotifyCantTransform", {});

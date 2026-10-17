@@ -1359,6 +1359,15 @@ void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt)
     for (const std::string& line : flow_.takeGameMessages())   // online: "`k has left the game" (the original kill-feed line)
         if (presenter_) presenter_->hudCall("_global.GameMessage", {BridgeValue(line)});
     hud_.update(presenter_.get(), catalog_, inMatch, hudShown);
+    {   // the respawn movie's "currently spectating" label (RE audit 3): on change, and again when the movie (re)opens
+        const bool respawnUp = inMatch && st == UIState::Spectating;
+        const std::string target = hud_.frame().spectateTarget.value_or(std::string());
+        if (respawnUp && presenter_ && hud_.frame().spectateTarget && (!respawnMovieUp_ || target != spectateSent_)) {
+            presenter_->movieCall("UI_GFxRespawn_p.MultiplayerRespawn_GFX_1", "_global.SetSpectateTarget", {BridgeValue(target)});
+            spectateSent_ = target;
+        }
+        respawnMovieUp_ = respawnUp;
+    }
     // ShowScores (Back / Tab): TnHUD.SetShowScores(!bShowScores) toggles InGameStats_GFX with input focus; it is
     // force-closed when the HUD is hidden [RE OVERNIGHT A7 / playtest section 9, CONFIRMED].
     uint32_t pressed = in.uiDown & ~prevMatchUi_;

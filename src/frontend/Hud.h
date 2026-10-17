@@ -78,6 +78,10 @@ struct HudFrame {
     // [CONFIRMED Hud_GFX AS; RE GAMEPLAY_PRESENTATION_AUDIT_2 part 1]. Other buffs are not sent here.
     struct Buff { std::string id; double remain = 0; };
     std::optional<std::vector<Buff>> jamBuffs;
+    // The player the death / killer camera follows (display name, "" none): MultiplayerRespawn_GFX _global.SetSpectateTarget
+    // fades its "currently spectating" label in / out (0.5 s) [CONFIRMED AS; RE PRESENTATION_AUDIT_3 part 1]. Sent by the
+    // runtime to the respawn movie, not to the HUD.
+    std::optional<std::string> spectateTarget;
     std::optional<int> cantTransformCount;
 };
 
@@ -94,6 +98,7 @@ public:
     static constexpr const char* kMovie = "UI_GFxHud_p.Hud_GFX_1";
     void reset();                              // match start / end: nothing pending, everything re-sent
     void setFrame(const HudFrame& f) { frame_ = f; }
+    const HudFrame& frame() const { return frame_; }
     // ^COMMAND tokens in prompt texts (TranslateCommandsInString); a device switch re-sends the prompts on screen.
     void setPromptTranslator(std::function<std::string(const std::string&)> t) { translate_ = std::move(t); }
     void promptsChanged() { promptsDirty_ = true; }
