@@ -2739,3 +2739,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   locked characters through our unlock rule), SelectCharacter type 1, ClaimedIconicCharacters per team, the online gate holds
   on a same-team duplicate; tests 215 / 0; versus byte-identical. Asked: Systems SessionMemberInfo.iconicCharacter, Gameplay
   type-1 spawn + host claim check (queued). Capture (~4 min incl. the rename pair) in the gap after Rendering's pair, before (B).
+2026-10-17 10:03 Rendering x10slot verdicts: particle pair (base12 + integration data vs cand28 + the corrected regen): 15 / 26 shots differ, all in
+  smoke / impact-spark particles (cloud texture and spread), nothing missing or broken -> the particle set is ACCEPTED for merge
+  (the RE lane's native rules with the real per-instance values; expected-change = particle-only; no 360 frame exists); Rendering
+  sends one patch against 3363f1d0 + the map_fx_runtime.json regen command (gate: only fields keys differ). Flash pair
+  INCONCLUSIVE (the post-recoil match has no explosion inside the captured steps; ordinary frames untouched, F = 0): extended
+  SHOTMATCH re-run in a later gap. Height-fog layers built (rt2 5b72c076 + 315c9843: all enabled layers sorted by height, slab
+  min heights; Gorge 4 / Rust 2): 15-min A/B + identity after the Frontend's 4-min capture gap (10:04), then the (B) eye pass.
