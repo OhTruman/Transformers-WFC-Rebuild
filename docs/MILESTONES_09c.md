@@ -2911,3 +2911,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   verbatim; FakeSession without a record = the old local build); tests 229 / 0; offline byte-identical. Gameplay asked for one
   patch: kickIdle gate, 'active' = any input, FineAim / Hover bits, and the host seed hook into World's match RNG (+ a
   two-peer equal-SIMHASH SESSIONTEST check). Systems froze matB/render for the (B) switch.
+2026-10-17 11:09 Campaign data gaps CLOSED (AssetTools): cube maps as faces, shadowed anim sets converted, PowerCell FX complete via a pstream
+  base-index fix (regression 7,348 / 7,348 identical) -> I regen the 10 MP map_fx files against the named pstream commit with an
+  identity gate. Campaign data is complete; only the sized translator work (38 materials) remains -> RE documents the 5 missing
+  expression nodes + the DecalMaterial root as the original compiles them.
