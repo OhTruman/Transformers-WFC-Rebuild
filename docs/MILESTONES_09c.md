@@ -2901,3 +2901,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   versus boot, no views) so the Streets lava frames stand for both maps. The switch dry run now matches the after root on 10 / 10
   maps. D5 CHANGED: idle kick = host option "Kick Idle Players", default Off (original never kicked in private matches); one-launch
   requirement: members start from the host's published MatchLaunch (Systems' transport).
+2026-10-17 11:00 (B) pre-switch: AssetTools' independent review PASS 10 / 10 (118 / 118 manifest entries, 0 unexpected, ~1,000 other files per map
+  identical; DeathDecal + 2 MetalDecal entries are (A) no-ops). Energon_Lava_Mat (the one entry the BOM bug skipped) compiles only on
+  Streets (placements 736 m below the streets) and BrokenHope (Escalation-only, no versus boot): unreachable in this build, so (B)
+  switches whole and the lava pair is deferred to the first Escalation boot (package 7 eye list). Switch = whole-file copy of
+  Systems' matB/render files (parsed-equal to live + manifest on 10 / 10; dry run OK), live backed up; applied on the verdict.
