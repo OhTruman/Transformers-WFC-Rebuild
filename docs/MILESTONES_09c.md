@@ -3071,3 +3071,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   lists, props_authored / VS roots parameterised, PostProcessVolumeHeightFog, runtime-assigned materials, DecalMaterial roots);
   sized for the campaign phase (Rendering + AssetTools items then). AssetTools next: BrokenHope versus nav, then the
   SoundMixerPresetName fix (MP-facing: before / after proof first).
+2026-10-17 12:24 RE: InitInterp (all 148 empty matinee groups instantiated; 125 no-ops, 23 live) and PlayDialog timing CONFIRMED; next setpiece
+  vulnerable flags, buddy health-bar markers.
