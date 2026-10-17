@@ -3046,3 +3046,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   which fires Touched AND UnTouched; reverb_vs_re.py: 229 / 229 (action, preset) pairs identical to RE's json on all 10 maps, the
   UnTouched links match (Rust 5, Remnant 1, Debris 11). No code or data change; only the windowed check (Streets + Rust + Debris)
   stays in Systems' next slot.
+2026-10-17 12:02 DECISION: Remnant / BrokenHope are Escalation-only in the original (RE section 4), so in our VERSUS extension their doors / bridges
+  start OPEN (transformed, t = 1, no animation; the late-Escalation connected layout; the Smart nav regression goes away);
+  Escalation keeps closed -> open at the generator power level; Rust's doors animate open at level start as authored. Gameplay
+  encodes the per-game-type initial state, re-runs the door-map NAVQ, posts the transact patch.
