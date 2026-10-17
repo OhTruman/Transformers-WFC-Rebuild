@@ -3274,3 +3274,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   local player on each peer (p1 healed 200 -> 530 where local). Fix: online every human seat is tested in match player order with
   its own touch state; offline unchanged; bots still never take placed pickups (PARTIAL). One patch: simMatrix (1299) + pickups
   (1723) + WFC_NET_STATEDUMP + CTF Rounds, on 9864b4cd, ETA ~15:20.
+2026-10-17 14:37 PACKAGE_7_HEAD.md updated to today's merges (Systems d9e87a14, copied); the data switches recorded by time + manifest (no commits
+  of their own). Pending before the head candidate: Rendering's x17 / x18 verdicts (particles set, lens flares), Gameplay's
+  combined online patch (offline identical; may join the head without touching the base).
