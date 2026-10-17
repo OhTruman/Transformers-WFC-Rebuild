@@ -75,3 +75,29 @@ Hover / tank / jet are unchanged (their hover simulation already places the hull
 
 - **Added gate:** truck-chassis NAVQ / MAPTRAVERSE routes must not regress.
 - **If truck bots stick at 0.35-0.45 m lips:** the fix is a bot path rule (route trucks around what they cannot climb), never a physics exception.
+
+## RE update 2026-10-17 (RE lane, HOVER_RIDE_HEIGHT_RE.md aba7af9 → docs/handoff/GAMEPLAY_HOVER_RE.md)
+
+**Hover height:** there is no target-ride-height controller.
+- The height is the equilibrium of 4 diagonal spring probes, L = L0 − 1940.4·(M/4)/K from the COM plane.
+- Car 109 UU (origin ≈ 125); truck / Optimus 128.7 (origin ≈ 109).
+- Probe length = RestingLength: car 200, truck 250, tank 250. Springs: car 8000 / 4000, truck 10000 / 4000, tank 20000 / 6000.
+- The rays point body-down, so they tilt with the hull.
+- A hit counts if it BlockRigidBody with RBChannel != EffectPhysics, or is the world.
+- Force: car / truck max(0, (−dir·N)·F) at the probe; tank max(0, F). No lift clamp, no tilt limit.
+- No ramp / ledge code: an edge probe just loses force; a lip launch is ballistic with vZ ≥ −3500.
+- This is independent of the Driving wheel-contact ride height above, which stays as designed.
+
+**Bot self-righting is attitude-gated:** RotateToTargetOrientation toward a yaw-only target, with mask = (|pitch| or |roll| > 30°) ?
+all axes : yaw.
+- The gate ignores contacts. AiMaxAngularSpeed / Accel: car 12 / 12, truck 20 / 20, tank 6 / 6. Angular damping 0.1. AI translation
+  is horizontal only.
+- The contact gate (NumContacts == 0 || flipped, 5 % per 1/30 s) is the PLAYER rule only.
+
+**Checked against af4d0731, to fix in this item:**
+1. `CharacterMovement.cpp` ~529: the player's UpdateTurn ShouldUpright pull (contacts == 0 || flipped) runs for bots too. The AI path
+   must skip it (an AI hover vehicle does not run the player's UpdateTurn).
+2. `CharacterMovement.cpp` ~437: one tip mode measures the tilt against the contact normal (`dot(B.z, cn)`). The original's gate is
+   world pitch / roll > 30°, ignoring contacts.
+   - The `aiTipped` rate-limited correction itself (~543) already matches (the authored AiMaxAngular* values).
+- Both are Classic-visible: they go in the shared Classic SIMHASH re-baseline with the squad item.
