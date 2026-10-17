@@ -71,6 +71,9 @@ inline float x6Damp() { static const float v = std::min(1.0f, std::max(0.0f, env
 inline bool x7() { static const bool v = envOn("WFC_X7"); return v; }
 // package 7 item 1, the flash term (Realistic tone): exposure x mix(1, flashMin, smoothstep(F0, F1, F)), F = the tracked
 // share of samples brighter than flashThresh after exposure (fast attack, slow release); WFC_TONE_FLASH=0 off
+// (Realistic) haze exposure: the additive haze terms (height fog in-scattering, X3) x min(1, 1 / auto-exposure) - a dark room's
+// authored haze is not lifted into a grey veil (Rust dark room, the X3 corridors); WFC_TONE_HAZEEXP=0 off
+inline bool hazeExposure() { static const bool v = envOn("WFC_TONE_HAZEEXP"); return v; }
 inline bool flash() { static const bool v = envOn("WFC_TONE_FLASH"); return v; }
 inline float flashMin() { static const float v = std::min(1.0f, std::max(0.1f, envNum("WFC_TONE_FLASHMIN", 0.55f))); return v; }
 inline float flashF0() { static const float v = std::max(0.0f, envNum("WFC_TONE_FLASHF0", 0.15f)); return v; }

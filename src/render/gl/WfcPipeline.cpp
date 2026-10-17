@@ -120,6 +120,7 @@ uniform int uFogOn;
 uniform float uFogMaxH, uFogScale, uFogStart, uFogExt;
 uniform vec3 uFogIn;
 uniform int uFogN;                           // authored height fog layers (1 = the first only)
+uniform float uHazeK;                        // (Realistic) the fog in-scattering's share of auto-exposure: min(1, 1 / e); 1 elsewhere
 uniform vec4 uFogL[3]; uniform vec3 uFogC[3];   // layers 2-4: (max height UU, scale, start, extinction); in-scattering
 uniform vec4 uFogMinH;                       // the 4 layers' min heights (the next layer's height; the last -HALF_WORLD_MAX)
 uniform int uVertexLM;      // LMT_1D vertex lightmap: coefficients per vertex from uVLM (rows 0..2)
@@ -202,6 +203,7 @@ void main() {
         vVLM0 = vVLM1 = vVLM2 = vec3(0.0);
     }
     vFog = heightFog(wp.xyz);
+    vFog.rgb *= uHazeK > 0.0 ? uHazeK : 1.0;   // (Realistic: haze not lifted by auto-exposure; unset / Off / Faithful: x 1.0)
     gl_Position = uViewProj * wp;
     if (uShadowDepth.x > 0.5) {   // shadow depth VS: z = saturate(shadowZ * InvMaxSubjectDepth + DepthBias) * w
         float d = clamp(dot(uShadowZ, vec4(wp.xyz, 1.0)) * uShadowDepth.y + uShadowDepth.z, 0.0, 1.0);
@@ -865,6 +867,7 @@ void main() {
 const char* kVolApplyFS = R"(#version 330 compatibility
 in vec2 vUV;
 uniform sampler2D uVol, uDepth;
+uniform float uHazeK;    // (haze exposure) min(1, 1 / e); 0 = unset (x 1)
 uniform vec2 uNearFar, uRender;
 uniform vec4 uGrid;      // tiles x, tiles y, tile size (px), max distance (m)
 layout(location=0) out vec4 oColor;
@@ -886,7 +889,7 @@ void main() {
     vec4 v;
     if (u < 0.0) v = mix(vec4(0.0, 0.0, 0.0, 1.0), sliceAt(tp, 0), clamp(u + 1.0, 0.0, 1.0));
     else { int k = int(floor(u)); v = mix(sliceAt(tp, k), sliceAt(tp, k + 1), u - float(k)); }
-    oColor = vec4(max(v.rgb, 0.0), clamp(v.a, 0.0, 1.0));
+    oColor = vec4(max(v.rgb, 0.0) * (uHazeK > 0.0 ? uHazeK : 1.0), clamp(v.a, 0.0, 1.0));   // (haze exposure: the in-scatter keeps its authored brightness)
 }
 )";
 // (X1) the scene's log luminance at 128 x 128 (mipmapped to its mean), and its temporal adaptation into a 1 x 1 target
@@ -1234,7 +1237,7 @@ void Pipeline::release() {
     refMask_ = MaskSet{};
     for (GLuint* v : {&dynVao_, &postVao_, &spriteVao_, &volVao_, &screenFxVao_}) vao(*v);
     for (GLuint* b : {&screenFxVbo_, &screenFxIbo_}) buf(*b);
-    for (GLuint* b : {&dynVbo_, &dynIbo_, &spriteVbo_, &spriteCbo_, &spriteIbo_, &volVbo_, &spriteSubBo_}) buf(*b);
+    for (GLuint* b : {&dynVbo_, &dynIbo_, &spriteVbo_, &spriteCbo_, &spriteIbo_, &volVbo_, &spriteSubBo_, &hazePbo_[0], &hazePbo_[1], &hazePbo_[2]}) buf(*b);
     for (GLuint* p : {&postProg_, &bloomGatherProg_, &blurProg_, &toneLumProg_, &toneAdaptProg_, &volApplyProg_, &distApplyProg_, &shadowProjProg_, &maskDepthProg_,
                       &constProg_, &maskBlurProg_, &distApplyCutProg_, &distRectProg_, &distCopyProg_})
         prog(*p);
@@ -3993,7 +3996,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
                            dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3], (float)poseBlend_, poseAlpha_, dsls,
                            maskTexelOffset_[0], maskTexelOffset_[1], znear_, zfar_, (float)std::max(vpW_, 1), (float)std::max(vpH_, 1),
                            P.sceneDepth ? 1.0f : 0.0f, canvasInvGamma_, (float)legacyTrans, (float)dbg, fogOn_ ? 1.0f : 0.0f,
-                           fogMaxH_, fogScale_, fogStart_, fogExt_, fogIn_.x, fogIn_.y, fogIn_.z, (float)fogN_, 0, 0};   // (fogN_: the layer uniforms ride in the same block)
+                           fogMaxH_, fogScale_, fogStart_, fogExt_, fogIn_.x, fogIn_.y, fogIn_.z, (float)fogN_, hazeUniform(), 0};   // (fogN_: the layer uniforms ride in the same block; the haze factor too)
     if (P.id >= commonKeyById_.size()) commonKeyById_.resize((size_t)P.id + 256);
     CommonKey& ck = commonKeyById_[P.id];
     const bool setCommon = noSkip || !ck.valid || std::memcmp(key, ck.v, sizeof key) != 0;
@@ -4021,6 +4024,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         Uniform1f(P.uFogStart, fogStart_); Uniform1f(P.uFogExt, fogExt_);
         Uniform3f(P.uFogIn, fogIn_.x, fogIn_.y, fogIn_.z);
         Uniform1i(ULOC(P, "uFogN"), fogOn_ ? fogN_ : 0);   // (height fog layers 2-4 after the first, RE lighting reference)
+        Uniform1f(ULOC(P, "uHazeK"), hazeUniform());       // (Realistic haze exposure; exactly 1 in Off / Faithful)
         if (fogN_ > 1) {
             Uniform4fv(ULOC(P, "uFogL"), 3, &fogL_[0][0]); Uniform3fv(ULOC(P, "uFogC"), 3, &fogC_[0][0]);
             Uniform4f(ULOC(P, "uFogMinH"), fogMinH_[0], fogMinH_[1], fogMinH_[2], fogMinH_[3]);
@@ -9090,6 +9094,7 @@ void Pipeline::volApply() {
     Uniform2f(cachedUniformLocation(volApplyProg_, "uNearFar"), znear_, zfar_);
     Uniform2f(cachedUniformLocation(volApplyProg_, "uRender"), (float)vpW_, (float)vpH_);
     Uniform4f(cachedUniformLocation(volApplyProg_, "uGrid"), (float)((vpW_ + 15) / 16), (float)((vpH_ + 15) / 16), 16.0f, rtdef::x3Dist());
+    Uniform1f(cachedUniformLocation(volApplyProg_, "uHazeK"), hazeUniform());
     glDrawArrays(GL_TRIANGLES, 0, 3);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, 0);
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, 0);
@@ -9097,6 +9102,8 @@ void Pipeline::volApply() {
     glDisable(GL_BLEND);
     glx::textureCacheInvalidate();
 }
+
+float Pipeline::hazeUniform() const { return rtMode_ == 2 && rtdef::hazeExposure() ? hazeK_ : 1.0f; }
 
 float Pipeline::toneMapKey() const {   // (per-map exposure target, Molten plan b; WFC_TONE_KEY overrides every map)
     float k = rtdef::toneKey();
@@ -9169,6 +9176,28 @@ void Pipeline::toneAdapt() {
     glDrawArrays(GL_TRIANGLES, 0, 3);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, 0);
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, 0);
+    // (haze exposure) the adapted mean + flash share read back without a stall: a ring of 3 pack buffers, the one written two
+    // frames ago read now -> this frame's exposure e (as the tone pass) -> hazeK_ = min(1, 1 / e): the additive haze terms
+    // (height fog in-scattering, X3) keep their authored brightness while auto-exposure lifts a dark room's surfaces
+    if (rtdef::hazeExposure()) {
+        if (!hazePbo_[0]) { GenBuffers(3, hazePbo_); for (GLuint b : hazePbo_) { BindBuffer(0x88EB, b); BufferData(0x88EB, 16, nullptr, 0x88E1 /*GL_STREAM_READ*/); } }
+        BindBuffer(0x88EB /*GL_PIXEL_PACK_BUFFER*/, hazePbo_[hazeIdx_ % 3]);
+        glReadPixels(0, 0, 1, 1, kRG, GL_FLOAT, nullptr);   // (toneAdaptFbo_[next] is bound)
+        if (hazeIdx_ >= 2) {
+            float rg[2] = {0.0f, 0.0f};
+            BindBuffer(0x88EB, hazePbo_[(hazeIdx_ + 1) % 3]);
+            GetBufferSubData(0x88EB, 0, 8, rg);
+            const float avg = std::exp(rg[0]);
+            float e = rtdef::toneGain() * std::min(1.8f, std::max(0.7f, std::pow(toneMapKey() / std::max(avg, 1e-4f), rtdef::toneAdapt())));
+            if (rtdef::flash()) {
+                const float t = std::min(1.0f, std::max(0.0f, (rg[1] - rtdef::flashF0()) / (rtdef::flashF1() - rtdef::flashF0())));
+                e *= 1.0f + (rtdef::flashMin() - 1.0f) * t * t * (3.0f - 2.0f * t);
+            }
+            hazeK_ = std::min(1.0f, 1.0f / std::max(e, 1e-3f));
+        }
+        BindBuffer(0x88EB, 0);
+        ++hazeIdx_;
+    } else hazeK_ = 1.0f;
     toneIdx_ = next; toneReset_ = false;
     static const bool diag = std::getenv("WFC_TONEDIAG") != nullptr;
     if (diag) {                                       // (every 300 frames, and every frame with a flash F > 0.05)

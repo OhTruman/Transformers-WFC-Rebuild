@@ -1451,6 +1451,8 @@ private:
     void volApply();
     bool toneFilmicOn() const;
     float toneMapKey() const;                         // the exposure key (per map; WFC_TONE_KEY wins)
+    float hazeUniform() const;                        // (the shaders' uHazeK: hazeK_ in Realistic with haze exposure, else 1)
+    GLuint hazePbo_[3] = {0, 0, 0}; int hazeIdx_ = 0; float hazeK_ = 1.0f;   // (haze exposure: async adapt readback)
     void toneAdapt();
     int bloomW_ = 1, bloomH_ = 1;
     int fbW_ = 0, fbH_ = 0;
