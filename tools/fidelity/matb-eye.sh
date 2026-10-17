@@ -8,10 +8,16 @@
 cd "F:/Transformers Rebuild/Rebuild-Experimental" || exit 1
 N=${1:-matB}; MAPS=${MAPS:-"501 502 503 504 507 508 509 510"}; MODES=${MODES:-"off faithful real"}   # (Realistic included: Integration 2026-10-17, the user plays it)
 EXE=${EXE:-"$PWD/work/ab/fast_af4d073/build-release/bin/wfc_rebuild.exe"}
-BEFORE_ROOT=${BEFORE_ROOT:-"F:/Transformers Rebuild/Rebuild/work/render"}; AFTER_ROOT=${AFTER_ROOT:-"F:/Transformers Rebuild/Rebuild-Systems/work/matB/render"}
+BEFORE_ROOT=${BEFORE_ROOT:-"F:/Transformers Rebuild/Rebuild/work/render"}; [ -n "$AFTER_ROOT" ] && AFTER_ROOT_SET=1
 MATS="F:/Transformers Rebuild/Rebuild-Systems/docs/handoff/matscan/scan_classes.json"; PY="F:/Transformers Rebuild/AssetTools/bin/py/python.exe"
 O=work/matb/$N; mkdir -p $O; L=$O/matb.log
 st() { echo "$(date +%T) $*" | tee -a $L; }
+# the after arm = integration's CURRENT render data + only the (B) entries (matb_root.ps1), built at the start so both arms share every
+# other change of the day ((A), the particle / map_fx regen); AFTER_ROOT=<dir> overrides
+# the before arm is the same snapshot without (B) (frozen together: integration data changing mid-pass cannot split the arms)
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/matb_root.ps1 -Name ${N}_base -NoCandidate -Src "$(cygpath -w "$BEFORE_ROOT")" >> $L 2>&1 || { st "matb_root (before) failed"; exit 1; }
+BEFORE_SRC=$BEFORE_ROOT; BEFORE_ROOT="$PWD/work/matb/${N}_base_root"
+if [ -z "$AFTER_ROOT_SET" ]; then powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/matb_root.ps1 -Name $N -Src "$(cygpath -w "$BEFORE_SRC")" >> $L 2>&1 || { st "matb_root failed"; exit 1; }; AFTER_ROOT="$PWD/work/matb/${N}_root"; fi
 for r in "$BEFORE_ROOT" "$AFTER_ROOT"; do [ -d "$r" ] || { st "no render root $r"; exit 1; }; done
 st "MATERIAL EYE PASS $N: exe $EXE; before $BEFORE_ROOT; after $AFTER_ROOT; maps $MAPS; modes $MODES"
 # (views: eyepass.sh runs them only for maps with tools/fidelity/views/<map>.txt)
