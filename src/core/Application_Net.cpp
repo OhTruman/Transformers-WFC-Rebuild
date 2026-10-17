@@ -15,11 +15,16 @@
 #include "game/World.h"
 #include "net/Lockstep.h"
 #include "net/NetTransport.h"
+#include "net/VoiceCodec.h"
+#include "net/VoiceFrames.h"
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <thread>
+#include <vector>
 
 namespace {
 std::vector<std::pair<int, std::string>> parsePeers(const char* s, int self, int seats) {
@@ -165,6 +170,66 @@ void Application::runNetMatch() {
     if (st == 0) ls.bye();
     LOG_INFO("NET done: %ld steps in %.1f s wall, status %d %s", steps, secsSince(tRun), st, ls.statusText().c_str());
     exitCode_ = st;
+}
+
+// WFC_VOICEFRAMETEST (synthetic, no device): 2 s of a 440 Hz tone at amplitude 0.5 through net::VoiceFramer from 48 kHz stereo and 44.1 kHz
+// mono, pushed in odd-sized device chunks. Expected per case: 100 frames of 320 samples, RMS level 0.354 (0.5 / sqrt 2), 440 Hz by zero
+// crossings, and the frame count / level the Settings > Audio meter and the voice-activity gate read.
+void Application::runVoiceFrameTest() {
+    int fails = 0;
+    struct Case { int rate, channels; };
+    for (const Case cs : {Case{48000, 2}, Case{44100, 1}, Case{16000, 1}}) {
+        net::VoiceFramer f;
+        f.configure(cs.rate, cs.channels);
+        const int total = cs.rate * 2;
+        std::vector<float> buf;
+        int frames = 0, crossings = 0; int16_t prev = 0; bool first = true;
+        for (int at = 0; at < total;) {
+            const int chunk = std::min(total - at, 441 + (at % 7) * 13);   // irregular device packets
+            buf.assign((size_t)chunk * (size_t)cs.channels, 0.0f);
+            for (int i = 0; i < chunk; ++i)
+                for (int c = 0; c < cs.channels; ++c) buf[(size_t)i * (size_t)cs.channels + (size_t)c] = 0.5f * std::sin(6.2831853f * 440.0f * (float)(at + i) / (float)cs.rate);
+            f.push(buf.data(), (size_t)chunk);
+            at += chunk;
+            net::VoiceFrame fr;
+            while (f.pop(fr)) {
+                ++frames;
+                for (int16_t v : fr) { if (!first && ((prev < 0) != (v < 0))) ++crossings; prev = v; first = false; }
+            }
+        }
+        const float hz = (float)crossings / 2.0f / 2.0f;   // 2 crossings per cycle, over 2 s
+        const bool ok = frames == 100 && std::fabs(f.level() - 0.3536f) < 0.01f && std::fabs(hz - 440.0f) < 3.0f;
+        if (!ok) ++fails;
+        LOG_INFO("VOICEFRAMETEST %s %d Hz x %d ch: %d frames (want 100), level %.4f (want 0.354), tone %.1f Hz (want 440)", ok ? "PASS" : "FAIL",
+                 cs.rate, cs.channels, frames, f.level(), hz);
+    }
+    // The codec round trip (WFC_OPUS builds): 1 s of the 440 Hz tone, frame sizes, decoded level, one concealed (lost) frame.
+    if (net::voiceCodecAvailable()) {
+        net::VoiceEncoder enc; net::VoiceDecoder dec;
+        size_t bytes = 0; int frames = 0, decoded = 0; double sq = 0.0; long n = 0;
+        for (int k = 0; k < 50; ++k) {
+            net::VoiceFrame pcm;
+            for (int i = 0; i < net::kVoiceFrameSamples; ++i)
+                pcm[(size_t)i] = (int16_t)std::lround(0.5f * 32767.0f * std::sin(6.2831853f * 440.0f * (float)(k * net::kVoiceFrameSamples + i) / 16000.0f));
+            std::vector<uint8_t> pkt;
+            if (!enc.encode(pcm, pkt)) continue;
+            ++frames; bytes += pkt.size();
+            net::VoiceFrame out;
+            const bool ok = k == 30 ? dec.decode(nullptr, 0, out) : dec.decode(pkt.data(), pkt.size(), out);   // frame 30: "lost"
+            if (!ok) continue;
+            ++decoded;
+            if (k >= 10) for (int16_t v : out) { sq += ((double)v / 32768.0) * ((double)v / 32768.0); ++n; }
+        }
+        const double rms = n ? std::sqrt(sq / (double)n) : 0.0;
+        const bool ok = frames == 50 && decoded == 50 && bytes / 50 <= 48 && rms > 0.25 && rms < 0.45;
+        if (!ok) ++fails;
+        LOG_INFO("VOICEFRAMETEST %s opus: %d frames, %.1f bytes / frame (16 kbit/s = 40), %d decoded incl. 1 concealed, decoded level %.3f (want ~0.354)",
+                 ok ? "PASS" : "FAIL", frames, frames ? (double)bytes / frames : 0.0, decoded, rms);
+    } else {
+        LOG_INFO("VOICEFRAMETEST opus: not in this build (voice unavailable)");
+    }
+    LOG_INFO("VOICEFRAMETEST SUMMARY: %s", fails ? "FAIL" : "PASS");
+    exitCode_ = fails ? 1 : 0;
 }
 
 }  // namespace core

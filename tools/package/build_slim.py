@@ -155,6 +155,15 @@ def main():
             problems.append('--bin lacks %s (the previous package shipped it)' % rel)
         else:
             bin_rows.append((src, BIN_DEST + '/' + rel))
+    # Third-party licence texts the build copies next to the exe (bin/licenses/<lib>/...: vgmstream, opus, ...) always ship, even when
+    # the previous package had none for that library (BSD / LGPL notices must accompany the binary). [Systems]
+    shipped = {d for _, d in bin_rows}
+    lic_root = os.path.join(bin_dir, 'licenses')
+    for dp, _, fns in os.walk(lic_root):
+        for fn in fns:
+            rel = os.path.relpath(os.path.join(dp, fn), bin_dir).replace(os.sep, '/')
+            if BIN_DEST + '/' + rel not in shipped:
+                bin_rows.append((os.path.join(dp, fn), BIN_DEST + '/' + rel))
     # ---- the exe's build: RT shaders compiled in (Experimental 2026-10-13: a tree without third_party/dxc and
     # third_party/ffx_denoiser builds with no RT shaders - CMake defines WFC_RT_SHADERS / WFC_RT_DENOISER only when they
     # exist - and the Ray Tracing row then silently does nothing). DXC is build-time only (the DXIL is embedded as headers in

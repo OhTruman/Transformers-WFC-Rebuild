@@ -227,6 +227,7 @@ bool Application::init() {
     if (std::getenv("WFC_CLASSCHANGETEST")) { runClassChangeTest(); return false; } // mid-match class change -> suicide -> respawn
     if (std::getenv("WFC_DECOYTEST")) { runDecoyTest(); return false; }            // Decoy Trap ability (deploy, team rule, stun, cooldown)
     if (std::getenv("WFC_SESSIONTEST")) { runSessionTest(); return false; }          // online session match side (Remote / swaps)
+    if (std::getenv("WFC_VOICEFRAMETEST")) { runVoiceFrameTest(); return false; }   // [Systems] voice framer + codec, synthetic, no device
     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
     if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
     if (std::getenv("WFC_BOTTEST")) { runBotTest(); return false; }                 // offline bots: TDM human + bots, then 7 v 8

@@ -170,6 +170,25 @@ if(WFC_MIMALLOC)
     target_link_libraries(wfc_rebuild PRIVATE wfc_mimalloc)
     target_compile_definitions(wfc_rebuild PRIVATE WFC_MIMALLOC=1)
 endif()
+# [Systems] Opus (voice chat, ONLINE_MP_ARCHITECTURE.md section 7; BSD-3-Clause, third_party/opus/COPYING in the credits):
+# tools/net/fetch_opus.py puts the official 1.5.2 source in third_party/opus (gitignored). Present: built static, WFC_OPUS=1;
+# absent: the build continues and voice send / receive reports "voice unavailable".
+if(EXISTS "${CMAKE_SOURCE_DIR}/third_party/opus/CMakeLists.txt")
+    set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+    set(OPUS_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    set(OPUS_BUILD_SHARED_LIBRARY OFF CACHE BOOL "" FORCE)
+    set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+    set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+    add_subdirectory("${CMAKE_SOURCE_DIR}/third_party/opus" "${CMAKE_BINARY_DIR}/opus" EXCLUDE_FROM_ALL)
+    target_link_libraries(wfc_rebuild PRIVATE opus)
+    target_compile_definitions(wfc_rebuild PRIVATE WFC_OPUS=1)
+    # BSD-3-Clause: the copyright notice + licence ship with the binary, next to the exe (as vgmstream's licences).
+    add_custom_command(TARGET wfc_rebuild POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:wfc_rebuild>/licenses/opus"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/third_party/opus/COPYING" "$<TARGET_FILE_DIR:wfc_rebuild>/licenses/opus")
+else()
+    message(STATUS "Opus not fetched (tools/net/fetch_opus.py): voice chat unavailable in this build")
+endif()
 
 # [Systems] The original FMOD sound banks (content/**/X.fsb, XMA2) decoded in-process by libvgmstream r2117 with its FFmpeg DLLs
 # (third_party/vgmstream/README.WFC.txt: source, versions, licences). The WAV beside a bank stays the fallback; at run time
