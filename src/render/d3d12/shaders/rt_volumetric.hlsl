@@ -17,7 +17,7 @@ cbuffer Frame : register(b0) {
     float4x4 InvViewProj;
     float4 ToSun;          // xyz towards the sun, w 1 = a sun
     float4 Size;           // render width, height, frame index, the lamp core radius (m)
-    float4 Params;         // 0, 0, instance mask, 0
+    float4 Params;         // 0, 0, instance mask, the cap on the integrated in-scatter (per channel; 0 = none)
     float4 VSun;           // the sun's linear colour x brightness (rgb), the sun phase anisotropy g (w)
     float4 VFog;           // density (1 / m) below the fog height, height falloff (1 / m above it), fog height (m), haze (1 / m)
     float4 VMisc;          // max distance (m), slices, tiles x, tiles y
@@ -52,8 +52,10 @@ bool blocked(float3 o, float3 dir, float tMax, uint mask) {
     return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
 }
 float density(float3 x) {
+    // (round 3: the haze follows the authored fog's height falloff too - a constant haze over 120 m of corridor was the
+    // grey veil on Streets' match frames)
     const float above = max(x.y - VFog.z, 0.0);
-    return VFog.x * exp(-above * VFog.y) + VFog.w;
+    return (VFog.x + VFog.w) * exp(-above * VFog.y);
 }
 float hg(float c, float g) { return (1.0 - g * g) / (12.566371 * pow(max(1.0 + g * g - 2.0 * g * c, 1e-4), 1.5)); }
 
@@ -89,7 +91,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                 S += T * (h.rgb / sig) * (1.0 - tr);             // (energy-conserving: sigma dl -> 1 - e^-sigma dl)
                 T *= tr;
             }
-            Vol[a] = float4(S, T);
+            Vol[a] = float4(Params.w > 0.0 ? min(S, Params.w) : S, T);   // (round 3: no path length greys the frame)
         }
         return;
     }
@@ -148,7 +150,10 @@ void main(uint3 id : SV_DispatchThreadID) {
             const float3 dl = Tp.xyz - x;
             const float x2 = dot(dl, dl) / max(Tp.w * Tp.w, 1e-6);
             if (x2 >= 1.0) continue;
-            L += Tc.rgb * pow(saturate(1.0 - x2), max(Tc.w, 0.5)) * (1.0 / 12.566371) * Extra2.w;
+            // (round 3: unshadowed over a whole effect light's radius, a firefight's flashes filled the air - the same
+            // inverse-square core as the lamps keeps the glow at the flash)
+            const float r0 = max(Size.w, 0.05), core = r0 * r0 / (r0 * r0 + dot(dl, dl));
+            L += Tc.rgb * pow(saturate(1.0 - x2), max(Tc.w, 0.5)) * core * (1.0 / 12.566371) * Extra2.w;
         }
     }
     float4 cur = float4(sig * L, sig);
