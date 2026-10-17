@@ -28,3 +28,5 @@ aimed at a flare source (lens_flares.json positions) - to add.
 For Rendering: is Rust's near-ground haze (the 2 height-fog layers x 1.443 in-scatter, all modes) the original's look? On the
 eye it hides the floor texture under a flat sheet in 'dark' / 'reflective'. If authored, the views floor should be re-based on
 ab855fe7; if not, it is the fog density / height of Rust's low layer.
+
+Resolution (2026-10-17 16:2x): Rust's near-floor fill is the authored top FogLayer (Rendering: height 18878 UU, density 2e-6, LightBrightness 1, light blue, containing the camera; x 1 / ln 2 native in-scatter = about +20 sRGB levels on a near-black floor, matching 18 -> 41; package 6 drew only the brightness-0 first layer). Integration retracted its bug call; it is a look decision for the user (before / after pair sent). The views floor stays on package 6; the Rust rows read 'authored fog, pending a look decision'. Flare views added to every eye pass (tools/fidelity/views_flare/, 26c63fdb).
