@@ -797,3 +797,101 @@ listed inherit the SequenceAction defaults (In → Out).
 
 **Remaining (97+), by instances:** SeqAct_IsInObjectList 5, SeqEvent_Destroyed 5, … (17 classes left in (c), all ≤ 5 instances;
 plus the (a) / (b) classes already referenced or decoded elsewhere).
+
+
+---
+
+# Batch 4: the last 17 (c) classes (RE, 2026-10-18)
+
+**Progress: 113 / 113 (c) classes decoded. With (a) 26 and (b) 36 covered elsewhere and 2 editor-only, that's 176 / 176 accounted
+for.** Each class here has ≤ 5 campaign instances.
+
+## 97. SeqAct_IsInObjectList (5)
+- Activated **0x82F3B4E0** (H, stock): outputs In List / Not In List for the ObjectToTest vs the linked ObjectList (bCheckForAllObjects:
+  all must be in it).
+
+## 98. SeqEvent_Destroyed (5, event)
+- Vtable 0x82310BC8. Fired natively when its originator actor is destroyed (stock). Instigator = the originator.
+
+## 99. SeqEvent_LOS (4, event)
+- Fired by `Trigger_LOS` (C, script): each tick it finds its SeqEvent_LOS events and fires them when a player has line of sight to
+  the trigger within the event's ScreenCenterDistance / TriggerDistance (+ bCheckForObstructions).
+
+## 100. SeqAct_SubtractFloat (4) · 103. SeqAct_DivideFloat (3) · 106. SeqAct_AddFloat (2)
+- **VAR** A, B, FloatResult, IntResult. Activated **0x82F5C598 / 0x82F5C818 / 0x82F5C458** (H, stock; the same pattern as
+  AddInt): FloatResult = A op B; IntResult = round(FloatResult).
+
+## 101. SeqAct_ForceMaterialMipsResident (4)
+- Activated 0x82FDACB8, Update 0x82FCC908. The same streaming hint as §77 / §78, for the listed materials, for ForceDuration.
+
+## 102. SeqAct_ConsoleCommand (4; no native class)
+- Handler `PlayerController.OnConsoleCommand` (C): ConsoleCommand(Command) on each target player.
+- **Ours:** allow-list the commands actually used (log the rest). Don't run arbitrary console strings.
+
+## 104. SeqEvent_Mover (3, event; script)
+- RegisterEvent copies StayOpenTime to the InterpActor. Outputs (C):
+  - 0 Pawn Attached: a pawn bases on it while it's stationary;
+  - 1 Pawn Detached: the last based pawn left;
+  - 2 Open Finished;
+  - 3 Hit Actor: encroach, with "Actor Hit" set.
+
+## 105. SeqAct_ActorDistance (3, HM, script, latent)
+- InputA / InputB (a PlayerController resolves to its pawn); DistanceToFire, CheckDelay, bCheckInitialDistance,
+  bStopCheckingAfterOutputFires.
+- Every CheckDelay (C):
+  - Dist = |A − B|, written to "Distance";
+  - fire output 0 on entering (< DistanceToFire), output 1 on leaving (>);
+  - if bCheckInitialDistance is set, it fires on the first check regardless of the previous state;
+  - stops when an actor is missing, on the Stop input, or after one fire when flagged.
+
+## 107. SeqCond_IncrementFloat (2)
+- Activated **0x82F58560** (H, stock): A += IncrementAmount, then the five relation outputs, as for SeqCond_Increment.
+
+## 108. SeqAct_MuteActorWhenHidden (2, HM, script)
+- **IN** 0 / 1. For each target (a Controller → its Pawn): bNoSoundWhenHidden = true (input 0) / false (input 1) (C).
+
+## 109. SeqAct_SetBlockRigidBody (1)
+- Handler `Actor.OnSetBlockRigidBody` (C): CollisionComponent.SetBlockRigidBody(true for input 0, false for input 1).
+
+## 110. SeqAct_GiveInventory (1; no native class)
+- Handler `Pawn.OnGiveInventory` (C):
+  - bClearExisting → DiscardInventory;
+  - for each InventoryList class not already held → CreateInventory(class, bDoNotActivate = !(first entry && ActivateInventory)).
+
+## 111. SeqAct_SetWeaponAmmo (1, HM, script)
+- TargetPlayers (a Controller → its Pawn), WeaponToFill, bForAllWeapons, bAddAmmo, bIfWeaponholstered, CurrentAmmoInClip,
+  ReserveAmmo (C):
+  - the weapon = the held weapon if it matches WeaponToFill (or can take its ammo, or WeaponToFill is none); else, with
+    bIfWeaponholstered, the inventory one;
+  - **add:** clip = min(clip + CurrentAmmoInClip, max clip); AddAmmo(ReserveAmmo);
+  - **set:** ReserveAmmoCount = ReserveAmmo (…);
+  - negative values = leave alone;
+  - bForAllWeapons applies it to every HmWeapon.
+
+## 112. SeqCond_GameType (1, HM, script)
+- Outputs Match / No Match: Game class == GameType, or a child of it when AllowChildTypes (C). No game → No Match.
+
+## 113. SeqEvent_Death (3, event)
+- Fired by script (C):
+  - `Pawn.Died`, after PreventDeath fails: TriggerEventClass(SeqEvent_Death, self);
+  - `Controller.PawnDied`: TriggerEventClass(SeqEvent_Death, self).
+- So an event attached to the pawn or to its controller fires on death.
+
+## End state of the campaign Kismet decode
+
+| Group | Classes | Where | Remaining work |
+|---|---|---|---|
+| (a) referenced by the Rebuild runtime | 26 | CAMPAIGN_KISMET_CLASSES_RE §2 | implementation scope per file |
+| (b) decoded in other RE docs | 36 | CAMPAIGN_KISMET_CLASSES_RE §3 / HANDLERS_RE | none |
+| (c) batch 1–4 (this doc) | 113 | §1–113 + 1a / 25a | see below |
+| editor-only frames | 2 | – | none |
+
+**Still H inside (c), all stock-engine semantics with the native address given.** Implement from UE3 behaviour; no RE needed:
+- the arithmetic / compare bodies: SetInt / SetFloat (§56 / 58), Increment / IncrementFloat (§57 / 107), CompareFloat (§66),
+  Subtract / Divide / AddFloat (§100 / 103 / 106);
+- IsInObjectList (§97), SetMatInstVectorParam (§92), SeqVar_ObjectVolume (§94), SeqEvent_Destroyed firing (§98).
+
+**WFC / HM native details still unread (asm needed if exact parity matters):**
+- **SeqAct_ScalarValueRamp's ease shape** (0x8276F900, CurveExponent): the only HM native left. Everything else HM / WFC is C.
+
+Everything else in (c) is C: script bytecode, or native asm / decomp at the listed addresses.
