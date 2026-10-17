@@ -1600,6 +1600,7 @@ void Application::routeMatchToFrontend(float dt) {
     v.dead = !h.alive;
     v.timeToRespawn = h.timeToRespawn;
     v.gameOverMessage = h.result;
+    v.endReason = h.endReason; v.winnerTeam = h.winnerTeam;   // a forfeit's result line (TnVersusGameOverMessage.ForfeitMessage)
     fillGriObjective(h, v);
     for (size_t i = 0; i < pf.players.size(); ++i) {
         const auto& mp = pf.players[i];
