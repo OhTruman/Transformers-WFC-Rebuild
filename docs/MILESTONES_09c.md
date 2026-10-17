@@ -2493,3 +2493,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   a gain, find what in the mesh-upload step scales with texels; X7 merges only with the gap at or below 1x. Card -> Frontend
   2-min volumetric row check -> Experimental (4 Streets boots with SKIPINTRO, presenter loop). Merged: 0960cd35 autoplay
   waits for the selector (harness-only; a race landed scripted boots on map 501).
+2026-10-17 07:55 Merged this hour: 0960cd35 autoplay selector wait (harness); cc44f880 online flows voice chat (D7 = yes, user) + "simplified
+  vs the original" notes + pc_strings [Voice]; cccff627 CAMPAIGN_HUD_PLAN.md (Frontend; E1 objective path, E5 tutorials, the
+  <Strings:> store coded next behind a campaign flag); 2fbeaa31 CAMPAIGN_FMV_PLAYBACK_RE + CAMPAIGN_CHECKPOINT_DATA_RE (the
+  campaign runtime RE series is closed; index updated); 637df8a6 campaign dialog manifest (AssetTools; 892 conversations, 1,603
+  waves with INT + FRA subtitles, dialog-manager rules) + schema corrections; objectives export next. Gameplay squad: A + B
+  taken (fidget -30..-45 % on all four maps; follow mixed within noise), near-slot dithering parked at the end of the queue; ONE
+  Classic re-baseline for hover follows. Frontend volumetric row check PASS (shots Rebuild-Frontend work/bins/volcheck/png).
+  User: voice chat in scope; online bar = "make it work with what we have now" (original rules as the starting point).
+  Card: Experimental 4 Streets boots -> Rendering 20-min slot (X6 r5 light-driven, X7 gutter fix) -> Experimental presenter loop.
