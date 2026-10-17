@@ -3157,3 +3157,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Finding: replay-as-seat-0 vs live seat 0 splits at tick 602 too -> the local controller path (playerBotInput / handleInput)
   reaches the pawn directly online (Gameplay's fix). Ladder: live == replay per seat -> s0 == s1 (NET.identity) -> burst with hash
   -> two-PC test.
+2026-10-17 13:27 Molten blue arc IDENTIFIED (RE): Trail_FusionCannon_FX, the Bazooka PROJECTILE trail drawn on the firer = a Trail2 source-binding bug
+  in cand31, not authored -> Trail2 HELD until projectile trails follow the projectile and the Molten pair is re-shot; the Remnant
+  light and the exposure item are unaffected.
