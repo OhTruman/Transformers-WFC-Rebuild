@@ -3042,3 +3042,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Smart not) -> Gameplay investigates before posting. Reverb: our AmbientAudio applies the rooms per Touch today; two gaps
   (UnTouched links on Rust / Remnant / Debris restore the outer room; empty preset names on 3 maps) -> Systems' package 7 audio
   item from RE's per-map json + a ~6-min windowed check later; voice reverb keys off the same current room (c81c9040).
+2026-10-17 12:01 Reverb gaps RETRACTED by Systems: the MP maps' zones come from the generated Kismet graph (LevelAudio.inc from the cooked props),
+  which fires Touched AND UnTouched; reverb_vs_re.py: 229 / 229 (action, preset) pairs identical to RE's json on all 10 maps, the
+  UnTouched links match (Rust 5, Remnant 1, Debris 11). No code or data change; only the windowed check (Streets + Rust + Debris)
+  stays in Systems' next slot.
