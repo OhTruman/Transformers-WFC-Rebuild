@@ -236,6 +236,16 @@ public:
     // 3): bots per faction, the human's faction one fewer at the original limit; free-for-all (1): opponents; other: none.
     enum class BotRows { None, FreeForAll, Teams };
     BotRows botRows() const;
+    // GRI._bIconicMode: GameTeamStatus 2 (Escalation) / 4 (co-op campaign) - TnGameReplicationInfo.UpdateIconicModeFromTeamStatus
+    // [CONFIRMED, RE]; OnlyAllowIconicCharacters (true only on the CCP / CP / SV settings, never versus [CONFIRMED, RE]) feeds the
+    // URL's ?IconicMode. PC EXTENSION: the versus row "Iconic Characters" (default Off) turns both on. Lobby: the current settings (a member: the host's published row); match:
+    // the launched URL's ?IconicMode. Versus default: false, every URL keeps ?IconicMode=0.
+    bool iconicMode() const;
+    // <CurrentGame:ClaimedIconicCharacters>: the iconic characters this player's teammates hold (online members; offline
+    // none - bots play the class presets). A claim by an earlier teammate wins (the host's gate counts the later one as
+    // "no character" until it picks another one).
+    std::vector<std::string> claimedIconicCharacters() const;
+    std::string lobbyUrlForTest() const { return lobby_.settings ? buildLobbyUrl(*lobby_.settings) : std::string(); }
     int humanFaction() const { return lobby_.localTeam == 1 ? 1 : 0; }   // 0 Autobots, 1 Decepticons
     // Gameplay's MatchSettings maxPerTeam / maxPlayers (players incl. the human): the extended limits never exceed them.
     void setBotCapacity(int perTeam, int maxPlayers, int botsPerTeam = 0) {

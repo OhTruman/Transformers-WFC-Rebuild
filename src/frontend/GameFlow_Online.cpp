@@ -34,8 +34,10 @@ void GameFlow::sendMemberInfo(int teamRequest) {
     info.id = selfId_;
     info.displayName = profile_.playerName();   // D1: the account name
     info.platform = SessionPlatform::PC;
-    info.hasCharacter = true;                   // the profile's custom characters (Create a Character) are always there
     info.characterSlot = selected_.valid ? selected_.specialty : std::string();
+    info.iconicCharacter = selected_.valid && selected_.type == 1 ? selected_.name : std::string();
+    // the profile's custom characters (Create a Character) are always there; iconic mode: a claimed iconic character
+    info.hasCharacter = !iconicMode() || !info.iconicCharacter.empty();
     info.level = progression::playerLevel(profile_.progression);
     info.teamRequest = teamRequest;
     session_->setMemberInfo(info);
@@ -74,6 +76,15 @@ void GameFlow::setPushToTalkHeld(bool held) {
     if (!session_ || role_ == SessionRole::Offline || profile_.voice.mode != 1 || held == pttHeld_) return;
     pttHeld_ = held;
     session_->setPushToTalk(held);
+}
+
+std::vector<std::string> GameFlow::claimedIconicCharacters() const {
+    std::vector<std::string> out;
+    if (!iconicMode()) return out;
+    const int team = role_ == SessionRole::Member ? selfTeam() : lobby_.localTeam;
+    for (const OnlineMember& m : onlineMembers_)
+        if (!m.info.iconicCharacter.empty() && (m.team == team || m.team == 255 || team == 255 || team < 0)) out.push_back(m.info.iconicCharacter);
+    return out;
 }
 
 const GameFlow::OnlineMember* GameFlow::memberForPlayer(const MatchValues::Player& p) const {
@@ -143,7 +154,7 @@ void GameFlow::onlineTick() {
         for (const auto& [k, v] : l.settings) key += "|" + k + "=" + v;
         for (size_t i = 0; i < l.slots.size(); ++i)
             key += "|" + l.slots[i].member.fingerprint + ":" + std::to_string(l.slots[i].team) + (l.slots[i].connecting ? "c" : "") +
-                   (i < l.members.size() && l.members[i].hasCharacter ? "h" : "");
+                   (i < l.members.size() && l.members[i].hasCharacter ? "h" : "") + (i < l.members.size() ? l.members[i].iconicCharacter : "");
         if (key != publishedLobbyKey_) { publishedLobbyKey_ = key; session_->publishLobby(l); }
     }
     if (role_ == SessionRole::Member && level_ == LevelKind::GameLobby) applyMemberLobby();
@@ -166,7 +177,8 @@ SessionLobby GameFlow::hostLobbySnapshot() const {
     // the members (the host first) and the human slots; bots fill the rest per team (onlineBotsFor)
     SessionMemberInfo self;
     self.displayName = profile_.playerName();   // D1: the account name
-    self.hasCharacter = true;
+    self.iconicCharacter = selected_.valid && selected_.type == 1 ? selected_.name : std::string();
+    self.hasCharacter = !iconicMode() || !self.iconicCharacter.empty();
     l.members.push_back(self);
     SessionSlot hs; hs.kind = SessionSlot::Kind::Human; hs.team = lobby_.localTeam >= 0 ? lobby_.localTeam : 0;
     l.slots.push_back(hs);
@@ -200,6 +212,17 @@ int GameFlow::onlineGateStatus() const {
     // WaitingForCharacterChoice / 4 WaitingForBalancedTeams / 3 WaitingForHostToStart. Teams must be balanced only with Team
     // Balancing "Manual": "Autobalanced" (the default) balances them itself at the final countdown (AssignTeams).
     for (const OnlineMember& m : onlineMembers_) if (!m.info.hasCharacter || m.connecting) return 6;
+    if (iconicMode()) {   // every human holds an iconic character, one per team (the host's own pick first, then join order)
+        if (role_ == SessionRole::Host && !(selected_.valid && selected_.type == 1)) return 6;
+        std::vector<std::pair<int, std::string>> held;
+        if (role_ == SessionRole::Host) held.push_back({lobby_.localTeam, selected_.name});
+        auto sameTeam = [](int a, int b) { return a == b || a == 255 || b == 255 || a < 0 || b < 0; };   // unassigned: any
+        for (const OnlineMember& m : onlineMembers_) {
+            for (const auto& h : held)
+                if (h.second == m.info.iconicCharacter && sameTeam(h.first, m.team)) return 6;   // a teammate already holds it
+            held.push_back({m.team, m.info.iconicCharacter});
+        }
+    }
     bool manual = false;     // AutobalanceTeams: 0 Manual, 1 Autobalanced (the default)
     if (const GameSettings* gs = lobby_.settings) manual = settingIndex(gs, "AutobalanceTeams") == 0;
     if (manual && botRows() == BotRows::Teams && !onlineMembers_.empty()) {

@@ -64,11 +64,18 @@ public:
     const ChassisInfo* chassis(const std::string& id) const;
     int numberOfColorPalettes = 5;            // TnCharacterCustomizationData.NumberOfColorPalettes (authored)
     const std::map<std::string, ChassisInfo>& allChassis() const { return chassis_; }
+    // Iconic mode (CharacterSelect_GFX's wheel): TnProfileSettings.PresetIconicCharacters in authored order
+    // (data/frontend/iconic_presets.json), each preset from AssetTools mp_characters.json iconic_preset; the car soldiers
+    // (no MP map) left out. name = CharacterName ("Optimus Prime" = the portrait key), chassis[] = ChassisTypes.
+    void loadIconic(const std::string& mpCharactersPath, const std::string& orderPath);
+    const std::vector<CharacterPreset>& iconicCharacters() const { return iconic_; }
+    const CharacterPreset* findIconic(const std::string& name) const;
 
 private:
     std::vector<CharacterPreset> presets_;     // class defaults
     std::vector<CharacterPreset> characters_;  // the player's characters
     std::map<std::string, ChassisInfo> chassis_;
+    std::vector<CharacterPreset> iconic_;
 };
 
 } // namespace frontend

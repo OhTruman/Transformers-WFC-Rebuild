@@ -69,6 +69,7 @@ public:
     // (DEV / TEST, identity harness) still selects Classic. An older profile's BotAI line is ignored and dropped on save.
     struct Bots {
         int friendly = 0, enemy = 0, difficulty = 1, autobot = 0, decepticon = 0; bool extended = false, editedSinceMap = false;
+        bool iconic = false;   // PC EXTENSION: versus "Iconic Characters" (OnlyAllowIconicCharacters); written only when on
     };
     Bots bots;
     // Multiplayer progression ([Progression]): the original keeps it in the online stats archive (XP per specialty,
