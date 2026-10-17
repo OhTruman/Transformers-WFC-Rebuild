@@ -73,7 +73,9 @@ The user's package 7 scope (2026-10-17), in the order given; visual items first.
   leave the view; the original throttles instead (RE PARTICLE_MODULE_AUDIT_RE (d), UParticleSystemComponent::Tick decoded):
   every component unrendered > 0.3 s ticks every 0.1 s, past its SecondsBeforeInactive every 1.0 s, each tick applying the
   skipped time in one step - nothing freezes. SYSTEMS_FX_THROTTLE.patch (128b4846) replaces the rule; its three card rows
-  (counters, Off / Faithful identity, eye crops) re-run before it merges. [PLACEHOLDER: the throttle rows' result]
+  (counters, Off / Faithful identity, eye crops) PASS 2026-10-17: Streets 29.0 % / Molten 26.4 % of instance-ticks throttled (784 /
+  1127 one-second ticks), particle build cost unchanged; switch 0 equals base within the same-exe run noise; switch-on crops =
+  emitters at another phase, density unchanged, nothing frozen (work fxinactive_check4).
 
 - **Hover + squad polish** (Gameplay, integration cfca1717): faithful four-probe springs for every vehicle; Classic bots
   right themselves with the original's AI righting (Streets' longest tipped time 214 -> 9 s); Smart keeps its steadier

@@ -1,5 +1,5 @@
 # SecondsBeforeInactive card rows (Systems, SYSTEMS_FX_INACTIVE): per map three windowed lockstep TDM 4 v 5 + playerbot runs, RT off,
-# muted, NOINTERACT, captures every 150 steps: base (af4d0731), new with WFC_FXINACTIVE=0, new with WFC_FXINACTIVE=1 + the resume log.
+# muted, NOINTERACT, captures every 150 steps: base with WFC_FXINACTIVE=0 (the base carries the merged freeze rule, default on), new with WFC_FXINACTIVE=0, new with WFC_FXINACTIVE=1 + the log.
 # (i) counters: throttled share of instance-ticks (UE3 PSC tick throttle: 10 Hz unrendered > 0.3 s, 1 Hz past SBI), slow ticks, MAPFXPROF particle build ms (off vs on);
 # (ii) identity: base vs off byte-identical (required); off vs on: differing frames with crops (work/.../crops_<map>) for the eye
 #      review, and none before the first logged resume; (iii) the crops are the eye check (turning away and back happens in play).
@@ -23,7 +23,7 @@ function Run([string]$bin, [string]$dir, [hashtable]$envs) {
     if (-not $p.WaitForExit(600000)) { & taskkill.exe /T /F /PID $p.Id | Out-Null; Write-Host "  TIMEOUT (killed PID $($p.Id))" }
 }
 foreach ($map in ($MapList -split ',')) {
-    $arms = [ordered]@{ base = @($BaseBin, ''); off = @($NewBin, '0'); on = @($NewBin, '1') }
+    $arms = [ordered]@{ base = @($BaseBin, '0'); off = @($NewBin, '0'); on = @($NewBin, '1') }
     foreach ($arm in $arms.Keys) {
         $dir = Join-Path $Out "$map`_$arm"
         Run $arms[$arm][0] $dir @{ WFC_SKIPINTRO = '1'; WFC_LOCKSTEP = '1'; WFC_PLAYERBOT = '1'; WFC_RT_MODE = '0'; WFC_LOGTIME = '1'; WFC_MAPFXPROF = '1';
