@@ -3298,3 +3298,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 14:54 tools/fidelity synced by path: package-respin.sh fixed (broken cd since 5b665578), p7-gate.sh (pre / gate phases), gate doc.
   Experimental confirmed NORECOIL's scope headless. Ready for Gameplay's re-cut diffs ~15:45 -> base rebuild -> pre on the named
   head.
+2026-10-17 14:58 F: at 17 GB free; tonight's package needs >= 40 GB. APPROVED deleting Systems' playtest_slim_30b2fa74 (package 4, played 10-14,
+  superseded) + playtest_slim_398b27ef (package 5, internal) (~55 GB; regenerable from sha + HD snapshot); 9350f19b kept as the
+  playable fallback. Systems' build plan accepted: build_slim --plan PASS 0 PROBLEM (overlay 85 / 85, HD D 3506 + M6 498, bin 20
+  incl. opus + vgmstream licences); SLIM_TSV patch (--tsv) merges with the head; AssetTools re-measures after 14:13 at the head;
+  5 new static checks in verify_slim. NET.identity four profiles running headless.
