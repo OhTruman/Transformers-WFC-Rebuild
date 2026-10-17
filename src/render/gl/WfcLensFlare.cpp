@@ -98,9 +98,19 @@ void Pipeline::loadLensFlares() {
     if (!lensFlares_.empty()) LOG_INFO("wfc: lens flares: %zu source(s)", lensFlares_.size());
 }
 
+// the Lens Flares row; WFC_LENSFLARE=0|1|2 overrides it (harness runs), WFC_NOLENSFLARES=1 = 0
+int Pipeline::lensFlareMode() const {
+    static const int env = std::getenv("WFC_NOLENSFLARES") ? 0
+                         : std::getenv("WFC_LENSFLARE") ? std::min(std::max(std::atoi(std::getenv("WFC_LENSFLARE")), 0), 2) : -1;
+    return env >= 0 ? env : lensFlareMode_;
+}
+
 void Pipeline::drawLensFlares() {
-    static const bool off = std::getenv("WFC_NOLENSFLARES") != nullptr;   // A/B
-    if (off || lensFlares_.empty()) return;
+    const int mode = lensFlareMode();
+    if (mode == 0 || lensFlares_.empty()) return;
+    // Original: the DistMap_* inputs are the raw camera distance in UU (the shipped evaluation: always their last point);
+    // Subtle: their first point (the artists' 0..1 ramps)
+    const bool subtle = mode == 1;
     const float* V = camView_.m;
     const core::Vec3 right{V[0], V[4], V[8]}, up{V[1], V[5], V[9]}, back{V[2], V[6], V[10]};
     const float p00 = camProj_.m[0], p11 = camProj_.m[5];
@@ -174,7 +184,7 @@ void Pipeline::drawLensFlares() {
         const float vis = occ[0];
         static const bool lfLog = std::getenv("WFC_LFLOG") != nullptr;   // (diagnostics) per frame: coverage, visibility, box area
         if (lfLog) LOG_INFO("LFLOG src NDC (%.3f %.3f) coverage %.4f vis %.3f box area %.0f px", sx, sy, f.coverage, vis, f.area);
-        const float D = core::length(f.pos - camPos_) * 100.0f;   // (UU: the DistMap_* input)
+        const float D = subtle ? -1e30f : core::length(f.pos - camPos_) * 100.0f;   // (UU: the DistMap_* input; Subtle: point 0)
         const float kDepth = 1.0f;                       // the element plane's view depth (cancels in the NDC size)
         flushingTrans_ = true;                           // (drawn now, not queued)
         glDisable(GL_DEPTH_TEST);

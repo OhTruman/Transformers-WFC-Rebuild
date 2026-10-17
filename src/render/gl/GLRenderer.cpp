@@ -1603,6 +1603,8 @@ public:
     bool setRayTracingMode(int mode) override { return wfc_.rtSetMode(mode); }
     void setVolumetricLighting(bool on) override { wfc_.setVolumetricLighting(on); }
     bool volumetricLighting() const override { return wfc_.volumetricLighting(); }
+    void setLensFlareMode(int mode) override { wfc_.setLensFlareMode(mode); }
+    int lensFlareMode() const override { return wfc_.lensFlareMode(); }
     bool volumetricLightingAvailable() const override { return wfc_.rtAvailable(); }
     bool rayTracingLoadedThisMap() const override { return wfc_.rtLoadedThisMap(); }
     bool hdTexturesAvailable() override { return wfc::Pipeline::hdTexturesAvailable(); }

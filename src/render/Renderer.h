@@ -197,6 +197,9 @@ public:
     // map changes; WFC_X3=0 forces it off over the setting. Available = Realistic is possible on this GPU.
     virtual void setVolumetricLighting(bool on) { (void)on; }
     virtual bool volumetricLighting() const { return false; }
+    // the Lens Flares row: 0 Off, 1 Subtle, 2 Original (the shipped look, default)
+    virtual void setLensFlareMode(int mode) { (void)mode; }
+    virtual int lensFlareMode() const { return 2; }
     virtual bool volumetricLightingAvailable() const { return false; }
     // True when the current map loaded with the ray-tracing scene (switches are live); false = Faithful / Realistic take
     // effect from the next map load (the row shows "(next map)").
