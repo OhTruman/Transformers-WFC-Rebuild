@@ -2630,6 +2630,7 @@ bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
     if (out.settings.rounds > 0 && opt.count("PointsToWin")) { out.settings.rounds = std::max(2, std::atoi(opt["PointsToWin"].c_str())); out.settings.goalScore = 1000000; }
     if (opt.count("TimeLimit")) out.settings.timeLimit = std::max(0, (int)std::atof(opt["TimeLimit"].c_str()));
     // Private Match Bot Settings (Frontend contract; PC ADAPTATION). Clamped again against the slots when the bots are added.
+    if (opt.count("WfcIdleKick")) out.settings.kickIdle = std::atoi(opt["WfcIdleKick"].c_str()) != 0;   // host option "Kick Idle Players"
     if (opt.count("IconicMode")) out.settings.iconicMode = std::atoi(opt["IconicMode"].c_str()) != 0;   // GRI _bIconicMode (Frontend URL)
     if (opt.count("BotsFriendly")) out.bots.friendly = std::max(0, std::atoi(opt["BotsFriendly"].c_str()));
     if (opt.count("BotsEnemy")) out.bots.enemy = std::max(0, std::atoi(opt["BotsEnemy"].c_str()));
@@ -3031,7 +3032,8 @@ bool World::launchMatch(const MatchLaunch& l) {
     awards_.setXpScale(1.0f);
     {   // simulation RNG per match: WFC_SEED (DEV / TEST) or a fixed value, so the same inputs replay the same match
         const char* sd = std::getenv("WFC_SEED");
-        core::simRandSeed(sd ? (uint32_t)std::strtoul(sd, nullptr, 10) * 2654435761u + 1u : 0x5eed2026u);
+        hostSeed_ = l.seed;   // online: the host's seed replaces the local source on every peer
+        core::simRandSeed(l.seed ? l.seed * 2654435761u + 1u : sd ? (uint32_t)std::strtoul(sd, nullptr, 10) * 2654435761u + 1u : 0x5eed2026u);
     }
     startLocalMatch(l.settings, l.localTeam);   // [integration M08b] the lobby team
     // Real voices: the original's 96 (FmodAudioDevice MaxChannels) for its <= 10-player matches; the ExtendedPlayers extension
@@ -3231,7 +3233,8 @@ int World::addBots(const BotLaunch& launch) {
     static unsigned matchSeed = 0x5eed;
     // WFC_SEED (DEV / TEST only): offsets every bot / spawn random source so two runs can be compared or varied; unset = unchanged.
     // with WFC_SEED every launch uses the same identity seed (no chaining from earlier matches), so a launch replays exactly
-    if (const char* sd = std::getenv("WFC_SEED")) { const unsigned v = (unsigned)std::strtoul(sd, nullptr, 10); matchSeed = v * 2654435761u ^ 0x5eedu; std::srand(v); }
+    if (hostSeed_) { matchSeed = hostSeed_ * 2654435761u ^ 0x5eedu; std::srand(hostSeed_); }   // online: the host's seed
+    else if (const char* sd = std::getenv("WFC_SEED")) { const unsigned v = (unsigned)std::strtoul(sd, nullptr, 10); matchSeed = v * 2654435761u ^ 0x5eedu; std::srand(v); }
     matchSeed = matchSeed * 1664525U + 1013904223U;
     const std::vector<BotIdentity> ids = makeBotIdentities(b, s.teamGame, humanTeam, s.maxPerTeam, s.maxBotsPerTeam, s.maxPlayers, humans, taken, matchSeed);
     for (const BotIdentity& id : ids) {
@@ -3305,6 +3308,40 @@ bool World::applySlotSwap(const SlotSwap& s) {
     return true;
 }
 
+bool World::applyRemoteCommand(int p, const RemoteCommand& c) {
+    static_assert((int)platform::Button::Count <= 29, "Button bits must stay below kRemoteBitHover");
+    if (p < 0 || (size_t)p >= match_.players().size() || match_.players()[(size_t)p].kind != ParticipantKind::Remote) return false;
+    if ((int64_t)c.tick != simTick_ + 1) return false;   // the step about to run
+    // The original's "active": any held / pressed button (the sender's active bit = look axis / team chat) or a non-zero move axis.
+    if (c.buttons || c.pressed || c.moveForward || c.moveRight) noteRemoteCommand(p);
+    auto held = [&](platform::Button b) { return ((c.buttons >> (int)b) & 1u) != 0; };
+    auto down = [&](platform::Button b) { return ((c.pressed >> (int)b) & 1u) != 0; };
+    for (MatchOpponent* o : opponents_) {
+        if (o->matchPlayer() != p) continue;
+        MoveIntent in;
+        in.moveForward = c.moveForward / 127.0f; in.moveRight = c.moveRight / 127.0f;
+        in.faceYaw = c.aimYaw; in.viewPitch = c.aimPitch;
+        in.wantJump = held(platform::Button::Jump);
+        in.wantBoost = held(platform::Button::FineAim);          // RightMouseButton = "ToggleFineAim | Boost" (the original's move flag 512)
+        in.wantDash = down(platform::Button::Dash);
+        in.ascend = held(platform::Button::Ascend); in.descend = held(platform::Button::Descend);
+        in.hoverRequest = (c.buttons & kRemoteBitHover) != 0;     // the original's move flag 1024
+        o->setIntent(in);
+        if (down(platform::Button::Transform) && o->spawned() && !o->pawn().isTransforming()) o->pawn().beginTransform();
+    }
+    return true;
+}
+
+uint64_t World::simStateHash() const {
+    uint64_t h = 1469598103934665603ULL;
+    auto mix = [&](const void* q, size_t n) { const unsigned char* b = (const unsigned char*)q; for (size_t i = 0; i < n; ++i) { h ^= b[i]; h *= 1099511628211ULL; } };
+    auto pawn = [&](const Character& c) { const core::Vec3 p = c.position(), v = c.velocity(); const float hp = c.health().current, y = c.yaw(); mix(&p, sizeof p); mix(&v, sizeof v); mix(&hp, sizeof hp); mix(&y, sizeof y); };
+    if (!localDead_) pawn(player_.pawn());
+    for (const MatchOpponent* o : opponents_) if (o->spawned()) pawn(o->pawn());
+    const uint32_t r = core::simRandState(); mix(&r, sizeof r);
+    return h;
+}
+
 void World::noteRemoteCommand(int matchPlayer) {
     if (matchPlayer >= 0 && (size_t)matchPlayer < remoteIdle_.size()) remoteIdle_[(size_t)matchPlayer] = 0.0f;
 }
@@ -3312,8 +3349,8 @@ void World::noteRemoteCommand(int matchPlayer) {
 void World::tickSlotSwaps(float dt) {
     if (!matchActive_) return;
     ++simTick_;
-    // Host idle rule: a Remote participant without commands for kRemoteIdleKickSeconds of play is handed to a bot.
-    if (match_.state() == Match::State::InProgress)
+    // Host idle rule (only with "Kick Idle Players"): a Remote participant without input for kRemoteIdleKickSeconds of play goes to a bot.
+    if (match_.settings().kickIdle && match_.state() == Match::State::InProgress)
         for (size_t i = 0; i < match_.players().size(); ++i) {
             const MatchPlayer& mp = match_.players()[i];
             if (mp.kind != ParticipantKind::Remote || mp.sessionMember.empty()) continue;

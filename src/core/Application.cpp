@@ -5342,7 +5342,7 @@ void Application::runSessionTest() {
         for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { for (int p : fed) world_.noteRemoteCommand(p); world_.handleInput(idle, dt); world_.tick(dt); }
     };
     using T = game::GameplayEventType;
-    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?WfcIdleKick=1", L);   // the idle check needs the option
     L.localTeam = 0;
     auto seat = [](const char* name, int team, const char* member) {
         game::RemoteSeat r; r.name = name; r.team = team; r.member = member; r.selected = true;
@@ -5421,6 +5421,30 @@ void Application::runSessionTest() {
         const bool second = q >= 0 && world_.match().selectCharacter(q, bee);
         check(I.settings.iconicMode && first && !second && q >= 0 && world_.match().players()[(size_t)q].selection.type == 0,
               "Iconic Mode: one holder per match (a second claim is refused, the previous selection stays)");
+    }
+    // Two peers given the same host seed (two launches here) reach an equal sim state at step 1000; offline (no seed) is unchanged.
+    {
+        uint64_t hs[2] = {0, 0};
+        for (int peer = 0; peer < 2; ++peer) {
+            game::MatchLaunch S; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsFriendly=2?BotsEnemy=3", S);
+            S.localTeam = 0; S.seed = 0x5eed1234u;
+            world_.launchMatch(S);
+            world_.match().selectCharacter(world_.localMatchPlayer(), cs);
+            for (int i = 0; i < 1000; ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
+            hs[peer] = world_.simStateHash();
+        }
+        LOG_INFO("SESSIONTEST seed hashes %016llx %016llx", (unsigned long long)hs[0], (unsigned long long)hs[1]);
+        check(hs[0] == hs[1] && hs[0] != 0, "two peers with the same host seed: equal sim state at step 1000");
+    }
+    // A Remote command for the step about to run is applied; an empty one does not count as input (idle clock keeps running).
+    {
+        game::MatchLaunch R; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?WfcIdleKick=1", R);
+        R.localTeam = 0; R.remotes = {seat("Remote1", 1, "WFC-TEST-0001")};
+        world_.launchMatch(R);
+        const int q = byMember("WFC-TEST-0001");
+        game::RemoteCommand c; c.tick = (uint32_t)(world_.simTick() + 1); c.moveForward = 127;
+        game::RemoteCommand late; late.tick = (uint32_t)(world_.simTick() + 5);
+        check(q >= 0 && world_.applyRemoteCommand(q, c) && !world_.applyRemoteCommand(q, late), "applyRemoteCommand: the step about to run only");
     }
     LOG_INFO("SESSIONTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }

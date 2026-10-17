@@ -62,6 +62,11 @@ struct RemoteSeat { std::string name; int team = 255; std::string member; Charac
 // A slot handover the session agreed (frontend::SessionSlotSwap in game terms). matchPlayer < 0: found by member (sessionMember).
 // toBot: Remote -> Bot; else Bot -> Remote (late join, member = who takes it). atTick: World::simTick() to apply at (<= 0: next tick).
 struct SlotSwap { int matchPlayer = -1; bool toBot = true; std::string member; int64_t atTick = 0; };
+// One participant's decoded lockstep command for sim tick `tick` (REMOTE_COMMAND_CONTRACT.md, agreed with Systems): absolute aim on the
+// rotator grid (decoded to radians), int8 move axes, held / pressed bits = platform::Button bits + kRemoteBitHover + kRemoteBitActive.
+struct RemoteCommand { uint32_t tick = 0; int8_t moveForward = 0, moveRight = 0; uint32_t buttons = 0, pressed = 0; float aimYaw = 0.0f, aimPitch = 0.0f; };
+constexpr uint32_t kRemoteBitHover = 1u << 29;    // the original's move flag 1024 (Hover), held
+constexpr uint32_t kRemoteBitActive = 1u << 30;   // the sender's look axis was non-zero this tick or it sent team chat (idle rule)
 
 struct MatchLaunch {
     std::string map = "MP_IAC_Streets";
@@ -72,6 +77,7 @@ struct MatchLaunch {
     int localTeam = -1;
     BotLaunch bots;                // ?BotsFriendly ?BotsEnemy ?BotDifficulty (PC ADAPTATION; absent = no bots)
     std::vector<RemoteSeat> remotes;   // online: the other peers' humans in the host's slot order (empty offline)
+    uint32_t seed = 0;                 // online: the host's match seed (every peer alike); 0 = the local source (offline)
     static bool fromURL(const std::string& url, MatchLaunch& out);
 };
 
@@ -847,6 +853,9 @@ public:
     bool applySlotSwap(const SlotSwap& s);
     void noteRemoteCommand(int matchPlayer);   // a command from that Remote participant arrived (resets the idle clock)
     int64_t simTick() const { return simTick_; }
+    // Inside the lockstep step for tick N = simTick() + 1, after all of N's commands arrived, before tick(); ascending match player.
+    bool applyRemoteCommand(int matchPlayer, const RemoteCommand& c);
+    uint64_t simStateHash() const;   // every pawn's position / velocity / health / yaw + the sim RNG (peer comparisons, tests)
     int remoteIdleKicks() const { return remoteIdleKicks_; }   // idle-rule kicks this match (tests)
     static constexpr float kRemoteIdleKickSeconds = 180.0f;   // host rule: no commands for this long -> the slot becomes a Bot
     // Offline bot participants (PC ADAPTATION): generated identities (BotRoster) added as ParticipantKind::Bot Match players with
@@ -1169,6 +1178,7 @@ private:
     std::vector<SlotSwap> pendingSwaps_;   // agreed handovers waiting for their tick
     std::vector<float> remoteIdle_;        // per match player: InProgress seconds since the last remote command
     int64_t simTick_ = 0;
+    uint32_t hostSeed_ = 0;   // MatchLaunch.seed of the running match (0: the local source)
     int remoteIdleKicks_ = 0;
     void tickSlotSwaps(float dt);
     void swapSlotToBot(int p);

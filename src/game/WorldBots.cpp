@@ -185,7 +185,8 @@ void World::addBotBrain(int player, int difficulty) {
     BotBrain b;
     b.player = player; b.difficulty = difficulty;
     b.rng = 0x9e3779b9U * (unsigned)(player + 1);
-    if (const char* sd = std::getenv("WFC_SEED")) b.rng ^= (unsigned)std::strtoul(sd, nullptr, 10) * 0x85ebca6bU;   // DEV / TEST only
+    if (hostSeed_) b.rng ^= hostSeed_ * 0x85ebca6bU;   // online: the host's seed
+    else if (const char* sd = std::getenv("WFC_SEED")) b.rng ^= (unsigned)std::strtoul(sd, nullptr, 10) * 0x85ebca6bU;   // DEV / TEST only
     b.thinkTimer = 0.05f * (float)(bots_.size() % 5);   // staggered decisions
     bots_.push_back(b);
 }

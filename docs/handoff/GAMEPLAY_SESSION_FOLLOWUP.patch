@@ -1,0 +1,208 @@
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index ea8d5d31..561a66d9 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -5342,7 +5342,7 @@ void Application::runSessionTest() {
+         for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { for (int p : fed) world_.noteRemoteCommand(p); world_.handleInput(idle, dt); world_.tick(dt); }
+     };
+     using T = game::GameplayEventType;
+-    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
++    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?WfcIdleKick=1", L);   // the idle check needs the option
+     L.localTeam = 0;
+     auto seat = [](const char* name, int team, const char* member) {
+         game::RemoteSeat r; r.name = name; r.team = team; r.member = member; r.selected = true;
+@@ -5422,6 +5422,30 @@ void Application::runSessionTest() {
+         check(I.settings.iconicMode && first && !second && q >= 0 && world_.match().players()[(size_t)q].selection.type == 0,
+               "Iconic Mode: one holder per match (a second claim is refused, the previous selection stays)");
+     }
++    // Two peers given the same host seed (two launches here) reach an equal sim state at step 1000; offline (no seed) is unchanged.
++    {
++        uint64_t hs[2] = {0, 0};
++        for (int peer = 0; peer < 2; ++peer) {
++            game::MatchLaunch S; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsFriendly=2?BotsEnemy=3", S);
++            S.localTeam = 0; S.seed = 0x5eed1234u;
++            world_.launchMatch(S);
++            world_.match().selectCharacter(world_.localMatchPlayer(), cs);
++            for (int i = 0; i < 1000; ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
++            hs[peer] = world_.simStateHash();
++        }
++        LOG_INFO("SESSIONTEST seed hashes %016llx %016llx", (unsigned long long)hs[0], (unsigned long long)hs[1]);
++        check(hs[0] == hs[1] && hs[0] != 0, "two peers with the same host seed: equal sim state at step 1000");
++    }
++    // A Remote command for the step about to run is applied; an empty one does not count as input (idle clock keeps running).
++    {
++        game::MatchLaunch R; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?WfcIdleKick=1", R);
++        R.localTeam = 0; R.remotes = {seat("Remote1", 1, "WFC-TEST-0001")};
++        world_.launchMatch(R);
++        const int q = byMember("WFC-TEST-0001");
++        game::RemoteCommand c; c.tick = (uint32_t)(world_.simTick() + 1); c.moveForward = 127;
++        game::RemoteCommand late; late.tick = (uint32_t)(world_.simTick() + 5);
++        check(q >= 0 && world_.applyRemoteCommand(q, c) && !world_.applyRemoteCommand(q, late), "applyRemoteCommand: the step about to run only");
++    }
+     LOG_INFO("SESSIONTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+ }
+ 
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index f5c2694c..9c7f2da7 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -118,6 +118,7 @@ void fillOnlineLaunch(game::MatchLaunch& gl, const frontend::MatchLaunch& m) {
+         if (r.name.empty()) r.name = "Player";
+         gl.remotes.push_back(r);
+     }
++    gl.seed = m.seed;   // online: the host's match seed (0 offline)
+     if (!m.onlineSlots.empty()) frontend::FlowTrace::emit("online.launchRemotes", {{"remotes", std::to_string(gl.remotes.size())}});
+ }
+ template <class W> void applySlotSwaps(W& w, frontend::GameFlow& flow) {
+diff --git a/src/game/Match.h b/src/game/Match.h
+index 5c5a15c4..f3a64832 100644
+--- a/src/game/Match.h
++++ b/src/game/Match.h
+@@ -24,6 +24,7 @@ struct MatchSettings {
+     std::string modeTag = "TDM";       // TDM (TnVersusGame, team) or DM (TnFreeForAllGame, FFA)
+     bool teamGame = true;
+     bool iconicMode = false;           // ?IconicMode=1 (GRI _bIconicMode): iconic characters are claimed, one holder per match
++    bool kickIdle = false;             // ?WfcIdleKick=1: host option "Kick Idle Players" (online only; the original: public matches only)
+     int goalScore = 40;                // ?PointsToWin (TDM default 40 of 20/30/40/50; DM 20 of 10/20/30)
+     int timeLimit = 900;               // ?TimeLimit seconds (TimeLimits[1] of 600/900/1200)
+     int teamScoreAmount = 1;           // ScoreKills.TeamScoreAmount: TDM / DM 1; ScoreKillsMP (DOM, KOTH, CTF, EXT) unset = 0
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 646cd284..2d8f5643 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -2630,6 +2630,7 @@ bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
+     if (out.settings.rounds > 0 && opt.count("PointsToWin")) { out.settings.rounds = std::max(2, std::atoi(opt["PointsToWin"].c_str())); out.settings.goalScore = 1000000; }
+     if (opt.count("TimeLimit")) out.settings.timeLimit = std::max(0, (int)std::atof(opt["TimeLimit"].c_str()));
+     // Private Match Bot Settings (Frontend contract; PC ADAPTATION). Clamped again against the slots when the bots are added.
++    if (opt.count("WfcIdleKick")) out.settings.kickIdle = std::atoi(opt["WfcIdleKick"].c_str()) != 0;   // host option "Kick Idle Players"
+     if (opt.count("IconicMode")) out.settings.iconicMode = std::atoi(opt["IconicMode"].c_str()) != 0;   // GRI _bIconicMode (Frontend URL)
+     if (opt.count("BotsFriendly")) out.bots.friendly = std::max(0, std::atoi(opt["BotsFriendly"].c_str()));
+     if (opt.count("BotsEnemy")) out.bots.enemy = std::max(0, std::atoi(opt["BotsEnemy"].c_str()));
+@@ -3031,7 +3032,8 @@ bool World::launchMatch(const MatchLaunch& l) {
+     awards_.setXpScale(1.0f);
+     {   // simulation RNG per match: WFC_SEED (DEV / TEST) or a fixed value, so the same inputs replay the same match
+         const char* sd = std::getenv("WFC_SEED");
+-        core::simRandSeed(sd ? (uint32_t)std::strtoul(sd, nullptr, 10) * 2654435761u + 1u : 0x5eed2026u);
++        hostSeed_ = l.seed;   // online: the host's seed replaces the local source on every peer
++        core::simRandSeed(l.seed ? l.seed * 2654435761u + 1u : sd ? (uint32_t)std::strtoul(sd, nullptr, 10) * 2654435761u + 1u : 0x5eed2026u);
+     }
+     startLocalMatch(l.settings, l.localTeam);   // [integration M08b] the lobby team
+     // Real voices: the original's 96 (FmodAudioDevice MaxChannels) for its <= 10-player matches; the ExtendedPlayers extension
+@@ -3231,7 +3233,8 @@ int World::addBots(const BotLaunch& launch) {
+     static unsigned matchSeed = 0x5eed;
+     // WFC_SEED (DEV / TEST only): offsets every bot / spawn random source so two runs can be compared or varied; unset = unchanged.
+     // with WFC_SEED every launch uses the same identity seed (no chaining from earlier matches), so a launch replays exactly
+-    if (const char* sd = std::getenv("WFC_SEED")) { const unsigned v = (unsigned)std::strtoul(sd, nullptr, 10); matchSeed = v * 2654435761u ^ 0x5eedu; std::srand(v); }
++    if (hostSeed_) { matchSeed = hostSeed_ * 2654435761u ^ 0x5eedu; std::srand(hostSeed_); }   // online: the host's seed
++    else if (const char* sd = std::getenv("WFC_SEED")) { const unsigned v = (unsigned)std::strtoul(sd, nullptr, 10); matchSeed = v * 2654435761u ^ 0x5eedu; std::srand(v); }
+     matchSeed = matchSeed * 1664525U + 1013904223U;
+     const std::vector<BotIdentity> ids = makeBotIdentities(b, s.teamGame, humanTeam, s.maxPerTeam, s.maxBotsPerTeam, s.maxPlayers, humans, taken, matchSeed);
+     for (const BotIdentity& id : ids) {
+@@ -3305,6 +3308,40 @@ bool World::applySlotSwap(const SlotSwap& s) {
+     return true;
+ }
+ 
++bool World::applyRemoteCommand(int p, const RemoteCommand& c) {
++    static_assert((int)platform::Button::Count <= 29, "Button bits must stay below kRemoteBitHover");
++    if (p < 0 || (size_t)p >= match_.players().size() || match_.players()[(size_t)p].kind != ParticipantKind::Remote) return false;
++    if ((int64_t)c.tick != simTick_ + 1) return false;   // the step about to run
++    // The original's "active": any held / pressed button (the sender's active bit = look axis / team chat) or a non-zero move axis.
++    if (c.buttons || c.pressed || c.moveForward || c.moveRight) noteRemoteCommand(p);
++    auto held = [&](platform::Button b) { return ((c.buttons >> (int)b) & 1u) != 0; };
++    auto down = [&](platform::Button b) { return ((c.pressed >> (int)b) & 1u) != 0; };
++    for (MatchOpponent* o : opponents_) {
++        if (o->matchPlayer() != p) continue;
++        MoveIntent in;
++        in.moveForward = c.moveForward / 127.0f; in.moveRight = c.moveRight / 127.0f;
++        in.faceYaw = c.aimYaw; in.viewPitch = c.aimPitch;
++        in.wantJump = held(platform::Button::Jump);
++        in.wantBoost = held(platform::Button::FineAim);          // RightMouseButton = "ToggleFineAim | Boost" (the original's move flag 512)
++        in.wantDash = down(platform::Button::Dash);
++        in.ascend = held(platform::Button::Ascend); in.descend = held(platform::Button::Descend);
++        in.hoverRequest = (c.buttons & kRemoteBitHover) != 0;     // the original's move flag 1024
++        o->setIntent(in);
++        if (down(platform::Button::Transform) && o->spawned() && !o->pawn().isTransforming()) o->pawn().beginTransform();
++    }
++    return true;
++}
++
++uint64_t World::simStateHash() const {
++    uint64_t h = 1469598103934665603ULL;
++    auto mix = [&](const void* q, size_t n) { const unsigned char* b = (const unsigned char*)q; for (size_t i = 0; i < n; ++i) { h ^= b[i]; h *= 1099511628211ULL; } };
++    auto pawn = [&](const Character& c) { const core::Vec3 p = c.position(), v = c.velocity(); const float hp = c.health().current, y = c.yaw(); mix(&p, sizeof p); mix(&v, sizeof v); mix(&hp, sizeof hp); mix(&y, sizeof y); };
++    if (!localDead_) pawn(player_.pawn());
++    for (const MatchOpponent* o : opponents_) if (o->spawned()) pawn(o->pawn());
++    const uint32_t r = core::simRandState(); mix(&r, sizeof r);
++    return h;
++}
++
+ void World::noteRemoteCommand(int matchPlayer) {
+     if (matchPlayer >= 0 && (size_t)matchPlayer < remoteIdle_.size()) remoteIdle_[(size_t)matchPlayer] = 0.0f;
+ }
+@@ -3312,8 +3349,8 @@ void World::noteRemoteCommand(int matchPlayer) {
+ void World::tickSlotSwaps(float dt) {
+     if (!matchActive_) return;
+     ++simTick_;
+-    // Host idle rule: a Remote participant without commands for kRemoteIdleKickSeconds of play is handed to a bot.
+-    if (match_.state() == Match::State::InProgress)
++    // Host idle rule (only with "Kick Idle Players"): a Remote participant without input for kRemoteIdleKickSeconds of play goes to a bot.
++    if (match_.settings().kickIdle && match_.state() == Match::State::InProgress)
+         for (size_t i = 0; i < match_.players().size(); ++i) {
+             const MatchPlayer& mp = match_.players()[i];
+             if (mp.kind != ParticipantKind::Remote || mp.sessionMember.empty()) continue;
+diff --git a/src/game/World.h b/src/game/World.h
+index 7fcacde4..97c2dfe4 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -62,6 +62,11 @@ struct RemoteSeat { std::string name; int team = 255; std::string member; Charac
+ // A slot handover the session agreed (frontend::SessionSlotSwap in game terms). matchPlayer < 0: found by member (sessionMember).
+ // toBot: Remote -> Bot; else Bot -> Remote (late join, member = who takes it). atTick: World::simTick() to apply at (<= 0: next tick).
+ struct SlotSwap { int matchPlayer = -1; bool toBot = true; std::string member; int64_t atTick = 0; };
++// One participant's decoded lockstep command for sim tick `tick` (REMOTE_COMMAND_CONTRACT.md, agreed with Systems): absolute aim on the
++// rotator grid (decoded to radians), int8 move axes, held / pressed bits = platform::Button bits + kRemoteBitHover + kRemoteBitActive.
++struct RemoteCommand { uint32_t tick = 0; int8_t moveForward = 0, moveRight = 0; uint32_t buttons = 0, pressed = 0; float aimYaw = 0.0f, aimPitch = 0.0f; };
++constexpr uint32_t kRemoteBitHover = 1u << 29;    // the original's move flag 1024 (Hover), held
++constexpr uint32_t kRemoteBitActive = 1u << 30;   // the sender's look axis was non-zero this tick or it sent team chat (idle rule)
+ 
+ struct MatchLaunch {
+     std::string map = "MP_IAC_Streets";
+@@ -72,6 +77,7 @@ struct MatchLaunch {
+     int localTeam = -1;
+     BotLaunch bots;                // ?BotsFriendly ?BotsEnemy ?BotDifficulty (PC ADAPTATION; absent = no bots)
+     std::vector<RemoteSeat> remotes;   // online: the other peers' humans in the host's slot order (empty offline)
++    uint32_t seed = 0;                 // online: the host's match seed (every peer alike); 0 = the local source (offline)
+     static bool fromURL(const std::string& url, MatchLaunch& out);
+ };
+ 
+@@ -847,6 +853,9 @@ public:
+     bool applySlotSwap(const SlotSwap& s);
+     void noteRemoteCommand(int matchPlayer);   // a command from that Remote participant arrived (resets the idle clock)
+     int64_t simTick() const { return simTick_; }
++    // Inside the lockstep step for tick N = simTick() + 1, after all of N's commands arrived, before tick(); ascending match player.
++    bool applyRemoteCommand(int matchPlayer, const RemoteCommand& c);
++    uint64_t simStateHash() const;   // every pawn's position / velocity / health / yaw + the sim RNG (peer comparisons, tests)
+     int remoteIdleKicks() const { return remoteIdleKicks_; }   // idle-rule kicks this match (tests)
+     static constexpr float kRemoteIdleKickSeconds = 180.0f;   // host rule: no commands for this long -> the slot becomes a Bot
+     // Offline bot participants (PC ADAPTATION): generated identities (BotRoster) added as ParticipantKind::Bot Match players with
+@@ -1169,6 +1178,7 @@ private:
+     std::vector<SlotSwap> pendingSwaps_;   // agreed handovers waiting for their tick
+     std::vector<float> remoteIdle_;        // per match player: InProgress seconds since the last remote command
+     int64_t simTick_ = 0;
++    uint32_t hostSeed_ = 0;   // MatchLaunch.seed of the running match (0: the local source)
+     int remoteIdleKicks_ = 0;
+     void tickSlotSwaps(float dt);
+     void swapSlotToBot(int p);
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index 16c78f2c..5fb25764 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -185,7 +185,8 @@ void World::addBotBrain(int player, int difficulty) {
+     BotBrain b;
+     b.player = player; b.difficulty = difficulty;
+     b.rng = 0x9e3779b9U * (unsigned)(player + 1);
+-    if (const char* sd = std::getenv("WFC_SEED")) b.rng ^= (unsigned)std::strtoul(sd, nullptr, 10) * 0x85ebca6bU;   // DEV / TEST only
++    if (hostSeed_) b.rng ^= hostSeed_ * 0x85ebca6bU;   // online: the host's seed
++    else if (const char* sd = std::getenv("WFC_SEED")) b.rng ^= (unsigned)std::strtoul(sd, nullptr, 10) * 0x85ebca6bU;   // DEV / TEST only
+     b.thinkTimer = 0.05f * (float)(bots_.size() % 5);   // staggered decisions
+     bots_.push_back(b);
+ }

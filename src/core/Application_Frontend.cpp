@@ -118,6 +118,7 @@ void fillOnlineLaunch(game::MatchLaunch& gl, const frontend::MatchLaunch& m) {
         if (r.name.empty()) r.name = "Player";
         gl.remotes.push_back(r);
     }
+    gl.seed = m.seed;   // online: the host's match seed (0 offline)
     if (!m.onlineSlots.empty()) frontend::FlowTrace::emit("online.launchRemotes", {{"remotes", std::to_string(gl.remotes.size())}});
 }
 template <class W> void applySlotSwaps(W& w, frontend::GameFlow& flow) {
