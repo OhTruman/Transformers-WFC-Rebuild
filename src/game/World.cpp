@@ -2131,6 +2131,7 @@ void World::tickPrefix(float dt) {
     joinStep();
     applyQueuedRemoteCommands(dt);   // the Remote seats' commands for this step (main thread, after the background part joined)
     tickSlotSwaps(dt);   // session slot handovers at their agreed tick (main thread, before any bot / pawn work)
+    tickSeatMissiles(dt);   // the seats' guided missiles (every peer, by match player index)
     static const bool secLog = std::getenv("WFC_ASYNCLOG") != nullptr;
     auto prefixMark = [&](int i) { if (!secLog) return; const double t = profNowMs(); prefixSecMs_[i] += t - prefixMark_; prefixMark_ = t; };
     prefixMark_ = secLog ? profNowMs() : 0.0;
@@ -3268,7 +3269,7 @@ void World::clearMatchActors() {
     for (auto& kv : minePres_) if (kv.second.fx >= 0) fxStepStop(kv.second.fx);
     minePres_.clear(); mineFades_.clear();
     mines_.clear();
-    missile_ = GuidedMissile{}; missileDelay_ = -1.0f;
+    missile_ = GuidedMissile{}; missileDelay_ = -1.0f; seatMissiles_.clear();
     // The local player's world-level combat state (the pawn's own buffs reset with its respawn).
     lockCandidate_ = lockTarget_ = -1; lockTimer_ = holdLockTimer_ = 0.0f; locked_ = false;
     grenadeTossDelay_ = -1.0f; grenadeCooldown_ = 0.0f;
@@ -3450,12 +3451,19 @@ void World::applySeat(SeatRef& s, const RemoteCommand& c, float dt) {
         Character& pc = *s.pc;
         pc.setAimPitch(c.aimPitch);
         if (pc.inputLocked()) { s.intent = MoveIntent{}; return; }   // TnBuffDecoyTrap: no movement / buttons
+        if (SeatMissile* gm = seatMissileMut(p); gm && gm->alive) {   // GuidingMissile: ClearInputs / StopMovement; the axes steer
+            gm->lr = core::clampf(c.moveRight / 127.0f, -1.0f, 1.0f); gm->ud = core::clampf(c.moveForward / 127.0f, -1.0f, 1.0f);
+            if (down(platform::Button::Dash) || down(platform::Button::Ability1)) gm->detonate = true;   // the ability button again
+            MoveIntent z; z.faceYaw = pc.yaw(); z.viewPitch = c.aimPitch; s.intent = z; s.pressesPickup = false;
+            return;
+        }
         const bool robot = pc.moveForm() == Form::Robot && !pc.isTransforming();
         if (pc.moveForm() == Form::Robot) in.wantDash = false;   // robot form: Dash = Ability0 (the vehicle special move only in vehicle form)
         // Abilities: Ability0 = Dash in robot form (Shift), Ability1 (Ctrl) [CONF Controls card]; Dodge / Hover go into this step's intent.
         const core::Vec3 aimPt = seatAimPoint(pc, c, 300.0f);   // abilities: the homing / buff-shot reach
         if (robot && down(platform::Button::Dash)) remoteTriggerAbility(s, 0, c.aimYaw, aimPt, in);
         if (robot && down(platform::Button::Ability1)) remoteTriggerAbility(s, 1, c.aimYaw, aimPt, in);
+        if (SeatMissile* gm = seatMissileMut(p); gm && gm->delay >= 0.0f) { gm->yaw = c.aimYaw; gm->pitch = c.aimPitch; }   // spawn rotation
         // Killstreak (TriggerKillstreak, B): the newest earned reward, robot form [the same entry the bots use].
         if (robot && down(platform::Button::Killstreak) && !match_.players()[(size_t)p].acquiredKillstreaks.empty()) triggerKillstreakFor(p);
         s.intent = in;
@@ -3560,7 +3568,8 @@ bool World::remoteTriggerAbility(SeatRef& s, int slot, float aimYaw, const core:
         const core::Vec3 dir = core::normalize(aimPt - from);
         buffShots_.push_back({from, dir * (jam ? 100.0f : 60.0f), jam ? 5.0f : 2.5f, 3.0f, jam ? 0 : 1, p});
     }
-    else return false;   // [PARTIAL] the aimed abilities (HardLock / jammer / disruptor / guided missile) for Remote seats come later
+    else if (a.id == "GuidedMissile") { if (seatGuiding(p)) return false; startSeatMissile(p, aimYaw, 0.0f); }
+    else return false;
     a.spam = 1.0f; a.pendingCooldown = true;
     if (participantAbilityHook) presentHook([this, p, id = std::string(a.id), ch = pc.chassis().id, at = pc.actorLocation()] { participantAbilityHook(p, id, ch, at); });
     return true;
@@ -3669,6 +3678,7 @@ RemoteCommand World::encodeLocalCommand() {
     const MoveIntent& mi = ctl.moveIntent();
     auto q8 = [](float v) { return (int8_t)std::lround(core::clampf(v, -1.0f, 1.0f) * 127.0f); };
     c.moveForward = q8(mi.moveForward); c.moveRight = q8(mi.moveRight);
+    if (const SeatMissile* gm = seatMissile(localPlayer_); gm && gm->alive) { c.moveForward = q8(ctl.guideUD()); c.moveRight = q8(ctl.guideLR()); }
     const bool veh = !localDead_ && player_.pawn().moveForm() == Form::Vehicle;
     const float yaw = veh ? mi.faceYaw : ctl.camYaw(), pitch = veh ? mi.viewPitch : ctl.camPitch();   // the aim the direct path uses
     const float kR = 65536.0f / 6.2831853f;   // rotator units
@@ -3744,6 +3754,89 @@ void World::tickSeatDrain(Character& pc, int p, float dt) {
         }
     if (targets > 0) pc.health().heal(Health::HealType::AddHealthToAll, 35.0f * dt * targets);
     if (p == localPlayer_) onDrainTick(targets);
+}
+
+void World::startSeatMissile(int p, float yaw, float pitch) {
+    Character* pc = participantPawnMutable(p);
+    if (!pc) return;
+    if (seatMissiles_.size() <= (size_t)p) seatMissiles_.resize((size_t)p + 1);
+    SeatMissile& m = seatMissiles_[(size_t)p];
+    m = SeatMissile{}; m.delay = 1.0f; m.yaw = yaw; m.pitch = pitch;   // Delay 1.0 s -> SpawnGuidedMissile
+    pc->playAction("Skill_GuidedMissile", false);
+    pc->missileAlive_ = true;
+}
+
+void World::detonateSeatMissile(int p, const core::Vec3& at) {
+    SeatMissile* m = seatMissileMut(p);
+    if (!m || !m->alive) return;
+    m->alive = false; m->detonate = false;
+    onAbilityActorExploded(AbilityActor::GuidedMissile, p, p == localPlayer_, at);   // [Systems] the explosion sound
+    radiusDamage(at, 10000.0f, 45.0f, p, "TransGame.TnDamageTypeGuidedMissile");   // MP 10000 / 4500 UU
+    LOG_INFO("guided missile (p%d) detonated at (%.1f %.1f %.1f)", p, at.x, at.y, at.z);
+}
+
+void World::tickSeatMissiles(float dt) {
+    for (size_t i = 0; i < seatMissiles_.size(); ++i) {
+        const int p = (int)i;
+        SeatMissile& m = seatMissiles_[i];
+        if (m.delay < 0.0f && !m.alive) continue;
+        Character* pc = participantPawnMutable(p);
+        const bool local = p == localPlayer_;
+        PlayerController& ctl = player_.controller();
+        if (m.delay >= 0.0f) {
+            if (!pc) { m = SeatMissile{}; continue; }   // the owner died before the launch
+            m.delay -= dt;
+            if (m.delay < 0.0f) {
+                const float pitch = core::clampf(m.pitch, 700.0f * 6.2831853f / 65536.0f, 1.5707963f);
+                const core::Vec3 dir = core::forwardFromYawPitch(m.yaw, pitch);
+                m.alive = true; m.life = 30.0f; m.vel = dir * 20.0f;   // FuseTime 30 s (MP); InitialSpeed 2000
+                m.pos = pc->actorLocation() + core::Vec3{0, pc->robotParams().eyeHeight, 0} + dir * 2.0f;
+                if (local) { ctl.setGuiding(true); if (renderer_) renderer_->notifyCameraCut("missile cam"); }
+                LOG_INFO("guided missile (p%d) launched (pitch %.1f deg)", p, pitch * 57.2958f);
+            }
+        }
+        if (m.alive && (!pc || m.detonate)) detonateSeatMissile(p, m.pos);   // the owner died / the button
+        else if (m.alive) {
+            const core::Vec3 f = core::normalize(m.vel);
+            core::Vec3 r = core::cross(f, core::Vec3{0, 1, 0});
+            if (core::length(r) < 1e-4f) r = core::cross(core::forwardFromYawPitch(m.yaw, 0.0f), core::Vec3{0, 1, 0});   // straight up
+            r = core::normalize(r);
+            const core::Vec3 u = core::cross(r, f);
+            m.vel = m.vel + (r * m.lr + u * m.ud) * (25.0f * dt);   // ControlStrength 2500
+            m.vel = core::normalize(m.vel) * 20.0f;                  // MaxSpeed 2000
+            const core::Vec3 next = m.pos + m.vel * dt;
+            float t; core::Vec3 n;
+            const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+            bool hit = line && line->segmentHit(m.pos, next, t, n);
+            core::Vec3 at = hit ? m.pos + (next - m.pos) * t : next;
+            const core::Vec3 d = next - m.pos; const float len = core::length(d);
+            float best = hit ? t * len : len;
+            if (len > 1e-5f)
+                for (size_t q = 0; q < match_.players().size(); ++q) {   // any pawn but the owner's, by match player index
+                    const Character* c = (int)q == p ? nullptr : participantPawn((int)q);
+                    float th;
+                    if (c && MatchOpponent::pawnRayHit(*c, m.pos, d * (1.0f / len), len, th) && th < best) { best = th; hit = true; at = m.pos + d * (th / len); }
+                }
+            m.life -= dt;
+            if (hit || m.life <= 0.0f || m.pos.y < killZ_) detonateSeatMissile(p, at);
+            else m.pos = next;
+        }
+        if (local) {   // the local seat's missile camera (presentation)
+            if (m.alive) {
+                const core::Vec3 f = core::normalize(m.vel);
+                const float yaw = std::atan2(-f.x, -f.z), pitch = std::asin(core::clampf(f.y, -1.0f, 1.0f));
+                core::Vec3 r = core::cross(f, core::Vec3{0, 1, 0});
+                r = core::length(r) < 1e-4f ? core::Vec3{1, 0, 0} : core::normalize(r);
+                const core::Vec3 u = core::cross(r, f);
+                ctl.setSpectatorView(m.pos + f * 1.35f + u * 1.25f, yaw, pitch, 120.0f);   // LocalOffset (135, 0, 125), FOV 120
+            } else if (ctl.guiding() && m.delay < 0.0f) {
+                ctl.setGuiding(false);
+                ctl.clearSpectatorView();
+                if (renderer_) renderer_->notifyCameraCut("missile cam end");
+            }
+        }
+        if (pc) pc->missileAlive_ = m.alive || m.delay >= 0.0f;   // TnAbilityCooldownConditionGuidedMissile
+    }
 }
 
 void World::clearAllParticipants() {
@@ -3923,6 +4016,7 @@ HudGameState World::hudState() const {
       h.roller = lr.alive; h.rollerArmed = lr.alive && lr.t >= 3.0f; h.rollerPos = lr.pos;
       h.rollerFuse = lr.alive ? std::max(0.0f, 10.0f - lr.t) : 0.0f; h.rollerHealth = lr.health; h.rollerSlow = pc.rollerSlowRemain_; }
     h.guidedMissile = missile_.alive; h.guidedMissilePos = missile_.pos; h.guidedMissileFuse = missile_.life;
+    if (const SeatMissile* sm = seatMissile(localPlayer_); sm && sm->alive) { h.guidedMissile = true; h.guidedMissilePos = sm->pos; h.guidedMissileFuse = sm->life; }
     { const Sentry& ls = sentry(); h.sentry = ls.alive; h.sentryHealth = ls.health; h.sentryPos = ls.pos; h.sentryTarget = ls.target; }
     h.seeEnemies = pc.seeEnemiesRemain_; h.refillOnKill = pc.refillOnKillRemain_; h.abilitiesJammed = pc.jammedRemain_; h.hardLocked = pc.hardLockedRemain_;
     h.buffs.clear();
@@ -5402,6 +5496,13 @@ std::string World::triggerKillstreakFor(int player) {
     if (!pcp || mp.acquiredKillstreaks.empty()) return "";
     Character& pc = *pcp;
     const std::string id = mp.acquiredKillstreaks.back();
+    if (id == "GuidedMissileStreak" && seatHuman(player) && (player != localPlayer_ || onlineSeats_)) {   // the seat's guided missile
+        if (seatGuiding(player)) return "";
+        mp.acquiredKillstreaks.pop_back();
+        startSeatMissile(player, pc.yaw(), 0.0f);
+        LOG_INFO("killstreak %s triggered (p%d)", id.c_str(), player);
+        return id;
+    }
     if (player != localPlayer_ && (id == "GuidedMissileStreak" || id == "MinePooperStreak")) return "";
     mp.acquiredKillstreaks.pop_back();
     const int team = mp.team;
@@ -5574,7 +5675,7 @@ void World::tickAbilityEffects(float dt) {
     }
     // (every participant's ability actors - barriers, beacons, sentries, rollers, buff shots, killstreak items - tick in the background
     // part: tickAbilityActors at its start)
-    tickGuidedMissile(dt);   // the local player's missile (its controls are the local input)
+    if (!onlineSeats_) tickGuidedMissile(dt);   // the local player's missile (offline; online the local seat's is a seat missile)
     repairBeam_.time = std::max(0.0f, repairBeam_.time - dt);
     if (repairSquibPending_) { repairSquibDraw_ = true; repairSquibPending_ = false; }
     if (repairBeam_.time <= 0.0f) repairBeam_.active = false;
@@ -7437,8 +7538,11 @@ void World::tickAbilityAudio() {
         for (const RollerMine& rm : rollers_)   // Gameplay 26l: per owner
             if (rm.owner >= 0) { AbilityActorState st; st.alive = rm.alive && rm.delay < 0.0f; st.age = rm.t; st.pos = rm.pos;
                                  setAbilityActorAudio(AbilityActor::RollerMine, rm.owner, rm.owner == localPlayer_, st); }
-        { AbilityActorState st; st.alive = missile_.alive; st.pos = missile_.pos;
+        if (!onlineSeats_) { AbilityActorState st; st.alive = missile_.alive; st.pos = missile_.pos;
           setAbilityActorAudio(AbilityActor::GuidedMissile, localPlayer_, true, st); }
+        for (size_t q = 0; q < seatMissiles_.size(); ++q)   // the seats' missiles (the flight loop per owner)
+            if (seatMissiles_[q].alive) { AbilityActorState st; st.alive = true; st.pos = seatMissiles_[q].pos;
+                                          setAbilityActorAudio(AbilityActor::GuidedMissile, (int)q, (int)q == localPlayer_, st); }
         endAbilityActorAudio();
     }
     {   // [Systems M08l] the one-shot action layer's sound notifies (melee, Skill_*, whirlwind, grenade throw)

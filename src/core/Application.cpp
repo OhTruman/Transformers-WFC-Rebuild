@@ -5640,6 +5640,34 @@ void Application::runSessionTest() {
             const game::Character* tp = world_.participantPawn(T->matchPlayer());
             return tp && tp->jammedRemain_ > 0.0f;
         });
+    partialCase("remote guided missile: launch, owner frozen, steer, detonate", game::Specialty::Leader, {"AssaultRifle", "HomingRocket", "FlakGrenades"}, {"Hover", "GuidedMissile"},
+        [&](int q, game::MatchOpponent* T, game::RemoteCommand& cmd, const std::function<void()>& stepCmd, const std::function<void()>& aimAt) {
+            const game::Character* me = world_.participantPawn(q);
+            if (!me || me->abilities_[1].id != "GuidedMissile") { LOG_INFO("SESSIONTEST guided missile: slot 1 is %s", me ? me->abilities_[1].id.c_str() : "-"); return false; }
+            aimAt(); cmd.pressed = 1u << (int)platform::Button::Ability1; stepCmd();
+            for (int i = 0; i < 70; ++i) { aimAt(); stepCmd(); }   // Delay 1.0 s
+            const auto* gm = world_.seatMissile(q);
+            const bool launched = gm && gm->alive;
+            const core::Vec3 p0 = world_.participantPawn(q) ? world_.participantPawn(q)->position() : core::Vec3{0, 0, 0};
+            const core::Vec3 m0 = launched ? gm->pos : core::Vec3{0, 0, 0}, v0 = launched ? gm->vel : core::Vec3{0, 0, 0};
+            cmd.moveRight = 127; cmd.moveForward = 0;   // guiding: the axes steer (full right)
+            for (int i = 0; i < 20; ++i) stepCmd();
+            gm = world_.seatMissile(q);
+            const game::Character* me2 = world_.participantPawn(q);
+            const bool frozen = me2 && core::length(me2->position() - p0) < 0.05f;
+            const bool steered = gm && gm->alive && core::dot(core::normalize(gm->vel), core::normalize(v0)) < 0.99f && std::fabs(core::length(gm->vel) - 20.0f) < 0.01f;
+            const bool cooling = me2 && me2->abilities_[1].cooldown <= 0.0f && me2->missileAlive_;   // the cooldown waits for the missile
+            const game::Character* tp = world_.participantPawn(T->matchPlayer());
+            const float h0 = tp ? tp->health().current : 0.0f;
+            cmd.moveRight = 0; cmd.pressed = 1u << (int)platform::Button::Ability1; stepCmd();   // the ability button again: detonate
+            for (int i = 0; i < 3; ++i) stepCmd();
+            gm = world_.seatMissile(q);
+            tp = world_.participantPawn(T->matchPlayer());
+            const bool boom = gm && !gm->alive && (!tp || tp->health().current < h0);
+            LOG_INFO("SESSIONTEST guided missile: launched %d (at %.1f %.1f %.1f) frozen %d steered %d cooldown held %d detonated + target hit %d",
+                     (int)launched, m0.x, m0.y, m0.z, (int)frozen, (int)steered, (int)cooling, (int)boom);
+            return launched && frozen && steered && cooling && boom;
+        });
     // The online local seat through the wire path: two peers with the same seed and the same local command stream reach an equal state.
     {
         uint64_t hs[2] = {0, 0};

@@ -796,6 +796,15 @@ public:
     // TnGuidedMissile (ability / GuidedMissileStreak) [CONF RE §J3 + authored GuidedMissile_PROJDATA / GuidedMissile_STRATEGY].
     struct GuidedMissile { bool alive = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f; };
     GuidedMissile missile_;
+    // Per-seat guided missiles (Remote seats + the online local seat), index = match player.
+    struct SeatMissile { float delay = -1.0f; bool alive = false, detonate = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0};
+                         float life = 0.0f, lr = 0.0f, ud = 0.0f, yaw = 0.0f, pitch = 0.0f; };
+    std::vector<SeatMissile> seatMissiles_;
+    SeatMissile* seatMissileMut(int p) { return p >= 0 && (size_t)p < seatMissiles_.size() ? &seatMissiles_[(size_t)p] : nullptr; }
+    bool seatGuiding(int p) const { const SeatMissile* m = seatMissile(p); return m && (m->alive || m->delay >= 0.0f); }
+    void startSeatMissile(int p, float yaw, float pitch);
+    void tickSeatMissiles(float dt);
+    void detonateSeatMissile(int p, const core::Vec3& at);
     // TnRollerMineAbility for any participant (one per owner) [CONF authored CDOs + RE §J4; PhysX ball HIGH].
     struct RollerMine { bool alive = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float t = 0.0f, health = 0.0f; bool onGround = false;
                         int owner = -1; float delay = -1.0f; int deadTicks = 0; };
@@ -1517,6 +1526,7 @@ public:
         }
     }
     bool guidedMissileAlive() const { return missile_.alive; }
+    const SeatMissile* seatMissile(int p) const { return p >= 0 && (size_t)p < seatMissiles_.size() ? &seatMissiles_[(size_t)p] : nullptr; }
     const RollerMine& rollerMine() const;   // the local player's (HUD / tests)
     const std::vector<KamikazeMine>& kamikazeMines() const { return mines_; }
     size_t corpseCount() const { return corpses_.size(); }   // presentation diagnostics
