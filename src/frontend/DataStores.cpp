@@ -50,7 +50,7 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     // pause menu's objective text (empty -> no objective clip): none in versus [HIGH].
     if (markup == "<CurrentGame:AttackingTeamIndex>" || markup == "<CurrentGame:CurrentObjectiveCountdown>") return "-1";
     if (markup == "<CurrentGame:CompetitiveScoreEnabled>") return "0";
-    if (markup == "<CurrentGame:ActiveObjectives>") return "";
+    if (markup == "<CurrentGame:ActiveObjectives>") return flow_.campaign() ? flow_.objectives().activeText() : "";   // E1
     // Escalation (mode SV) GRI only: a versus GRI has no wave properties, so the read is empty and Hud_GFX keeps its wave
     // clip hidden (it shows "NEW WAVE IN n" for any value; "0" did so in TDM - Integration M08c).
     if (markup == "<CurrentGame:_CurrentWave>" || markup == "<CurrentGame:_NextWaveTime>") return tag == "SV" ? "0" : "";
