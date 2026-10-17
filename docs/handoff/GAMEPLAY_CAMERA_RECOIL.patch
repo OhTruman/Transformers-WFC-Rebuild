@@ -1,0 +1,267 @@
+diff --git a/src/game/Character.h b/src/game/Character.h
+index 8d07a1a2..5f31c48d 100644
+--- a/src/game/Character.h
++++ b/src/game/Character.h
+@@ -251,7 +251,9 @@ public:
+     float seeEnemiesRemain_ = 0.0f, hardLockedRemain_ = 0.0f, refillOnKillRemain_ = 0.0f, jammedRemain_ = 0.0f;
+     int hardLockedByTeam_ = 255;
+     // TnBuffAbilityJammed.Apply: CooldownMultiplier 0; remove Cloak / Disguise / Warcry buffs; StopShield; Fall; abort Whirlwind.
+-    void applyJammed(float t) {
++    bool jammedByKillstreak_ = false;     // the active jam timer came from TnBuffAbilityJammedKillstreak (HUD buff id)
++    void applyJammed(float t, bool killstreak = false) {
++        if (t >= jammedRemain_) jammedByKillstreak_ = killstreak;
+         jammedRemain_ = std::max(jammedRemain_, t);
+         cloakRemain_ = 0.0f; drainRemain_ = 0.0f;   // TnBuffDrainSource is in BuffsToRemoveWhenJammed
+         warcryRemain_ = 0.0f; warcryDamageMul_ = 1.0f; warcryTakenMul_ = 1.0f;
+diff --git a/src/game/PlayerController.cpp b/src/game/PlayerController.cpp
+index b350f1ea..9e417a3a 100644
+--- a/src/game/PlayerController.cpp
++++ b/src/game/PlayerController.cpp
+@@ -1,4 +1,5 @@
+ #include "game/PlayerController.h"
++#include <cstring>
+ 
+ #include <set>
+ #include "core/Log.h"
+@@ -220,7 +221,7 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
+ // TransformToRobo), HoverTruck_Optimus for Hovering (and TransformToVehicle), Truck_Optimus for Driving.
+ void PlayerController::updateCameraStrategy(const platform::InputFrame& in, float dt) {
+     namespace cfg = core::config;
+-    shakeGenT_ += dt; shakeRemain_ = std::max(0.0f, shakeRemain_ - dt);
++    shakeGenT_ += dt; shakeRemain_ = std::max(0.0f, shakeRemain_ - dt); rollRemain_ = std::max(0.0f, rollRemain_ - dt); sinceShot_ += dt;
+     {   // SwitchSpectatorTarget input (LB / ']' = +1, RB / '[' = -1), edges of the UiKey bits and the bound keys
+         const uint32_t lb = 1u << (int)platform::UiKey::LB, rb = 1u << (int)platform::UiKey::RB;
+         if (((in.uiDown & lb) && !(specUiPrev_ & lb)) || in.wasPressed(platform::Button::SpectateNext)) ++specCycle_;
+@@ -267,7 +268,8 @@ void PlayerController::updateCameraStrategy(const platform::InputFrame& in, floa
+         nitroDist_ = 0.0f;
+     }
+     if (want != strategy_) {
+-        stratDur_ = want == 0 ? cfg::kCamTransRobot : (want == 1 ? cfg::kCamTransHover : cfg::kCamTransDrive);
++        // The entered strategy's TransitionTime: a jet's HoverPlane_* strategy is 1.0 s (RE presentation audit 2 part 3), the other hovers 1.5.
++        stratDur_ = want == 0 ? cfg::kCamTransRobot : (want == 1 ? (jet ? 1.0f : cfg::kCamTransHover) : cfg::kCamTransDrive);
+         stratT_ = 0.0f;
+         anchorFrom_ = anchorCur_; distFrom_ = distCur_;
+         strategy_ = want;
+@@ -853,6 +855,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
+                 // the damage trace starts at the start-trace location, not the socket; only the flash / tracer alternate
+                 // [CONF RE pass 5 9g + TnPlayerPawn].
+                 core::Vec3 dir = core::normalize(aimPoint - origin);
++                onLocalShot(vw->def ? vw->def->id : nullptr);   // camera recoil + shake (vehicle weapons too)
+                 if (vw->projectile()) world.fireWeapon(*vw, origin, dir);
+                 else if (vw->simulated()) { for (int k = 0; k < std::max(1, vw->shots); ++k) { world.setPelletIndex(k); world.fireWeapon(*vw, start, camDir); } world.setPelletIndex(0); }
+             } else if (vw->ammo == 0 && vw->canReload()) vw->beginReload();
+@@ -864,6 +867,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
+             pawn_->exposeSelf();          // TnWeapon.OnPreServerFire -> ExposeSelf (decloak)
+             static const bool noRecoil = std::getenv("WFC_NORECOIL") != nullptr;   // A/B diagnostic
+             if (!noRecoil) pawn_->notifyFired();   // per-shot skeletal recoil (TnRecoiler)
++            onLocalShot(w.def ? w.def->id : nullptr);   // TnPlayerController.OnWeaponFired: camera recoil + shake
+             // TnPlayerPawn.GetWeaponStartTraceLocation: ViewLoc + ProjectOnTo(Location - ViewLoc, view dir) - the point on the
+             // camera's crosshair ray nearest the pawn. Instant-hit / beam traces run from there along the aim for the weapon range
+             // [CONF RE, script TransGame.TnPlayerPawn]. Projectiles: Weapon.ProjectileFire spawns at RealStartLoc = GetMuzzleLoc()
+@@ -961,23 +965,46 @@ void PlayerController::updateCamera(render::Camera& cam) const {
+         cam.yaw += amp * std::sin(6.2831853f * 12.0f * wiggleT_);
+         cam.pitch += amp * std::sin(6.2831853f * 12.0f * 1.37f * wiggleT_ + 1.0f);
+     }
+-    cam.fovXDeg = fovCur_;
+-    if (strategy_ == 0) applyShake(cam);   // OverTheShoulder has TnShakeCameraBehavior [vehicle strategies: PROV, not applied]
++    // TnRecoilCameraBehavior FOV: the full offset at the shot, held for RecoilDelay, eased back (smoothstep) over RecoilTime.
++    float L = 0.0f;
++    if (recoilTime_ > 0.0f) L = 1.0f - smoothstep01(core::clampf(sinceShot_ - recoilDelay_, 0.0f, recoilTime_) / recoilTime_);
++    cam.fovXDeg = fovCur_ - fovKick_ * L;
++    applyShake(cam);   // TnShakeCameraBehavior (gibbed and per-shot shakes) [H: every live strategy carries it]
+ }
+ 
+ void PlayerController::applyShake(render::Camera& cam) const {
+-    if (shakeRemain_ <= 0.0f) return;
+-    const float f = shakeRemain_ / 0.89f, k = 0.55f * 0.0174533f;   // linear fades; Intensity 0.55; degrees
+-    cam.yaw += k * 3.0f * std::sin(6.2831853f * 5.0f * shakeGenT_) * f;
+-    cam.pitch += k * 5.0f * std::sin(6.2831853f * 4.0f * shakeGenT_) * f;
+-    cam.roll += k * 0.75f * f * f;   // RollFalloff: one-sided, quadratic
++    if (shakeRemain_ <= 0.0f && rollRemain_ <= 0.0f) return;
++    const float k = shakeInt_ * 0.0174533f;   // degrees x Intensity
++    const float f = shakeDur_ > 0.0f ? shakeRemain_ / shakeDur_ : 0.0f, r = rollDur_ > 0.0f ? rollRemain_ / rollDur_ : 0.0f;   // linear fades
++    cam.yaw += k * 3.0f * std::sin(6.2831853f * 5.0f * shakeGenT_) * f;    // the strategy's YawSpectrum 5 Hz x 3
++    cam.pitch += k * 5.0f * std::sin(6.2831853f * 4.0f * shakeGenT_) * f;  // PitchSpectrum 4 Hz x 5
++    cam.roll += k * shakeRoll_ * r * r;   // RollFalloff: one-sided, quadratic
++}
++
++namespace {
++struct WeaponCameraDef { const char* id; float pitchDeg, fovAdj, recoilTime, recoilDelay, shakeInt, shakeRoll, rollFalloff, shakeFalloff; };
++const WeaponCameraDef kWeaponCamera[] = {
++#include "game/WeaponCameraTable.inc"
++};
++} // namespace
++
++void PlayerController::onLocalShot(const char* weaponId) {
++    if (!weaponId) return;
++    for (const WeaponCameraDef& d : kWeaponCamera) {
++        if (std::strcmp(d.id, weaponId)) continue;
++        // OrbitRotation.Pitch += PitchAdjustmentDeg: a permanent step (the orbit, and with it the aim, keeps it).
++        if (d.pitchDeg != 0.0f) camPitch_ = core::clampf(camPitch_ + d.pitchDeg * 0.0174533f, -75.0f * 0.0174533f, 75.0f * 0.0174533f);
++        fovKick_ = d.fovAdj; recoilTime_ = d.recoilTime; recoilDelay_ = d.recoilDelay; sinceShot_ = 0.0f;
++        startShake(d.shakeInt, d.shakeRoll, d.rollFalloff, d.shakeFalloff);
++        return;
++    }
+ }
+ 
+ void PlayerController::beginSpectateTarget(float targetYaw) {
+     // StartSpectating / SwitchSpectatorTarget -> Camera.Reset(): the strategy's state starts over (a hard cut).
+     deathCam_ = false;
+     specTarget_ = true;
+-    shakeRemain_ = 0.0f;   // Activate -> Shaker.Reset
++    shakeRemain_ = 0.0f; rollRemain_ = 0.0f;   // Activate -> Shaker.Reset
+     camYaw_ = targetYaw; camPitch_ = 0.0f;   // TnOrbitRotation.Reset: (0, target yaw, 0)
+     specOff_ = core::Vec3{1.5f, 0.0f, -0.35f}; specOffXS_.reset(); specOffZS_.reset();
+     fovCur_ = 80.0f; fovS_.reset();
+@@ -1001,7 +1028,7 @@ void PlayerController::beginDeathCamera(bool vehicle, float wreckYaw) {
+     if (deathCam_ || spectating_) return;
+     render::Camera from; updateCamera(from);   // the live POV: the strategy blend starts from it
+     deathFromPos_ = from.pos; deathFromYaw_ = from.yaw; deathFromPitch_ = from.pitch;
+-    shakeRemain_ = 0.0f;   // Activate -> Shaker.Reset
++    shakeRemain_ = 0.0f; rollRemain_ = 0.0f;   // Activate -> Shaker.Reset
+     deathVehicle_ = vehicle;
+     // The inherited CameraState: orbit rotation and orbit location offset as the live strategy left them.
+     deathYaw_ = vehicle ? wreckYaw : viewYaw_;
+diff --git a/src/game/PlayerController.h b/src/game/PlayerController.h
+index 15b8a7c9..a4223bbb 100644
+--- a/src/game/PlayerController.h
++++ b/src/game/PlayerController.h
+@@ -115,7 +115,14 @@ public:
+     void endSpectateTarget() { specTarget_ = false; }
+     bool spectatingTarget() const { return specTarget_; }
+     // TnPawn.GibbedCameraShake (a pawn gibbed within 1000 UU of the local pawn): restarts the fades.
+-    void gibbedShake() { shakeRemain_ = 0.89f; }
++    void gibbedShake() { startShake(0.55f, 0.75f, 0.89f, 0.89f); }
++    // TnCamera.StartShake (ignored at Intensity 0): restarts the yaw / pitch fade and the roll fade, replacing the intensity.
++    void startShake(float intensity, float roll, float rollFalloff, float shakeFalloff) {
++        if (intensity <= 0.0f) return;
++        shakeInt_ = intensity; shakeRoll_ = roll; shakeDur_ = shakeFalloff; rollDur_ = rollFalloff; shakeRemain_ = shakeFalloff; rollRemain_ = rollFalloff;
++    }
++    // A local shot of the weapon class `weaponId` (TnWeapon<id>): the camera recoil (pitch step + FOV kick) and the per-shot shake.
++    void onLocalShot(const char* weaponId);
+     int takeSpectateCycle() { const int c = specCycle_; specCycle_ = 0; return c; }   // SwitchSpectatorTarget presses since the last call
+     // Camera strategy override with pitch / FOV (TnGuidedMissileCameraStrategyType).
+     void setSpectatorView(const core::Vec3& pos, float yaw, float pitch, float fov) { spectating_ = true; specPos_ = pos; specYaw_ = yaw; specPitch_ = pitch; specFov_ = fov; }
+@@ -221,6 +228,8 @@ private:
+     bool specTarget_ = false; core::Vec3 specAnchor_{0, 0, 0}, specOff_{1.5f, 0.0f, -0.35f}; int specCycle_ = 0; uint32_t specUiPrev_ = 0;
+     C2Smoother specOffXS_, specOffZS_;
+     void spectateView(render::Camera& cam) const;
++    float shakeInt_ = 0.55f, shakeRoll_ = 0.75f, shakeDur_ = 0.89f, rollDur_ = 0.89f, rollRemain_ = 0.0f;   // the shake in progress
++    float fovKick_ = 0.0f, recoilTime_ = 0.0f, recoilDelay_ = 0.0f, sinceShot_ = 1e9f;                   // TnRecoilCameraBehavior FOV
+     float shakeRemain_ = 0.0f, shakeGenT_ = 0.0f;   // TnShakeCameraBehavior: the fade left (s); the wave generator's time
+     void applyShake(render::Camera& cam) const;
+     int cantTransformCount_ = 0, forcedVehicleCount_ = 0;
+diff --git a/src/game/WeaponCameraTable.inc b/src/game/WeaponCameraTable.inc
+new file mode 100644
+index 00000000..e7c3c0a4
+--- /dev/null
++++ b/src/game/WeaponCameraTable.inc
+@@ -0,0 +1,30 @@
++// GENERATED by tools/gameplay/gen_weapon_camera.py from data/gameplay/weapons_mp.json - do not edit. Per weapon class suffix
++// (TransContent.TnWeapon<id>): RecoilCameraParams {PitchAdjustmentDeg, FovAdjustment, RecoilTime, RecoilDelay} and CameraShakeParams
++// {Intensity, Roll, RollFalloffDuration, ShakeFalloffDuration} of MultiplayerData, else PlayerData (whole object); missing fields 0.
++    {"AssaultRifle", 0.0500f, 0.0000f, 0.0500f, 0.2500f, 0.1700f, 0.1500f, 0.1000f, 0.0600f},   // PlayerData
++    {"AssaultRiflePlane", 0.0000f, 0.0000f, 0.0500f, 0.2500f, 0.1000f, 0.1000f, 0.1000f, 0.1000f},   // MultiplayerData
++    {"AssaultRifleVehicle", 0.0000f, 0.0000f, 0.0500f, 0.2500f, 0.1000f, 0.1000f, 0.1000f, 0.1000f},   // MultiplayerData
++    {"Bazooka", 1.5000f, -2.0000f, 0.6000f, 0.2500f, 0.4500f, 0.4500f, 0.4000f, 0.4000f},   // MultiplayerData
++    {"BurstRifle", 0.0000f, 0.0000f, 0.0500f, 0.2500f, 0.1500f, 0.1500f, 0.1500f, 0.1500f},   // PlayerData
++    {"EmpShotgun", 4.0000f, -1.0000f, 0.4000f, 0.2500f, 0.2000f, 0.5000f, 0.4000f, 0.5000f},   // PlayerData
++    {"GatlingGun", 0.1500f, 0.0850f, 0.0500f, 0.2500f, 0.2300f, 0.1500f, 0.1000f, 0.0600f},   // MultiplayerData
++    {"GrenadeLauncher", 0.5000f, -1.0000f, 0.6000f, 0.2500f, 0.5000f, 0.3000f, 0.3000f, 0.3000f},   // MultiplayerData
++    {"HeavyMG", 0.2000f, 0.0000f, 0.0500f, 0.2500f, 0.1500f, 0.1000f, 0.1000f, 0.1000f},   // PlayerData
++    {"HeavyPistol", 1.5000f, -1.0000f, 0.7000f, 0.0500f, 0.6000f, 0.3000f, 0.2000f, 0.2000f},   // MultiplayerData
++    {"HeavyRepairRay", 0.0000f, 0.4000f, 1.0000f, 0.0500f, 0.0250f, 0.5000f, 0.0500f, 0.1000f},   // PlayerData
++    {"HeavyRocketTurret", 0.2500f, 0.0850f, 0.0500f, 0.2500f, 1.1000f, 0.5000f, 0.5000f, 0.5000f},   // MultiplayerData
++    {"HomingRocketVehicle", 0.0000f, 1.0000f, 0.6000f, 0.2500f, 0.3000f, 0.2000f, 0.1500f, 0.2000f},   // MultiplayerData
++    {"IonBlaster", 0.1000f, 0.0850f, 0.0500f, 0.2500f, 0.1700f, 0.1500f, 0.1000f, 0.0600f},   // MultiplayerData
++    {"MountedHeavyIonBlaster", 0.1000f, 0.0850f, 0.0500f, 0.2500f, 0.2300f, 0.1500f, 0.1000f, 0.0600f},   // MultiplayerData
++    {"MountedRepairRay", 0.0000f, 0.4000f, 1.0000f, 0.0500f, 0.0250f, 0.5000f, 0.0500f, 0.1000f},   // PlayerData
++    {"MountedRocketTurret", 0.2500f, 0.0850f, 0.0500f, 0.2500f, 1.1000f, 0.5000f, 0.5000f, 0.6000f},   // MultiplayerData
++    {"PlaneMachineGun", 0.0000f, 0.0000f, 0.0500f, 0.2500f, 0.1000f, 0.1000f, 0.1000f, 0.1000f},   // MultiplayerData
++    {"PlasmaCannon", 0.0000f, -1.0000f, 0.6500f, 0.1500f, 0.8000f, 0.8000f, 0.4000f, 0.4000f},   // MultiplayerData
++    {"RepairRay", 0.0000f, 0.4000f, 1.0000f, 0.0500f, 0.0250f, 0.5000f, 0.0500f, 0.1000f},   // PlayerData
++    {"RocketLauncher", 0.2500f, 1.0000f, 0.6000f, 0.2500f, 0.6000f, 0.4000f, 0.4000f, 0.5000f},   // MultiplayerData
++    {"RocketPlane", 0.0000f, 0.0000f, 0.3500f, 0.0500f, 0.1500f, 0.2000f, 0.1500f, 0.2500f},   // MultiplayerData
++    {"RocketTemp", 2.5000f, 0.0000f, 0.3100f, 0.1500f, 0.4800f, 0.4600f, 0.4400f, 0.4200f},   // PlayerData
++    {"RocketVehicle", 0.0000f, 0.0000f, 0.3500f, 0.0500f, 0.2000f, 0.2000f, 0.2000f, 0.3000f},   // MultiplayerData
++    {"Shotgun", 2.0000f, -1.0000f, 0.4000f, 0.2500f, 0.2000f, 0.5000f, 0.4000f, 0.5000f},   // PlayerData
++    {"SniperRifle", 1.0000f, 0.5000f, 0.7000f, 0.0500f, 0.1000f, 0.3000f, 0.2000f, 0.2000f},   // MultiplayerData
++    {"TankCannon", 0.0000f, -4.0000f, 0.8000f, 0.2000f, 0.3800f, 0.6500f, 0.8600f, 0.7900f},   // MultiplayerData
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index ef1b263a..f2554d4d 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -3303,6 +3303,9 @@ HudGameState World::hudState() const {
+     h.guidedMissile = missile_.alive; h.guidedMissilePos = missile_.pos; h.guidedMissileFuse = missile_.life;
+     { const Sentry& ls = sentry(); h.sentry = ls.alive; h.sentryHealth = ls.health; h.sentryPos = ls.pos; h.sentryTarget = ls.target; }
+     h.seeEnemies = pc.seeEnemiesRemain_; h.refillOnKill = pc.refillOnKillRemain_; h.abilitiesJammed = pc.jammedRemain_; h.hardLocked = pc.hardLockedRemain_;
++    h.buffs.clear();
++    if (!localDead_ && pc.jammedRemain_ > 0.0f) h.buffs.push_back({pc.jammedByKillstreak_ ? "TnBuffAbilityJammedKillstreak" : "TnBuffAbilityJammed", pc.jammedRemain_});
++    if (!localDead_ && pc.transformDisruptRemain_ > 0.0f) h.buffs.push_back({"TnBuffTransformDisruptor", pc.transformDisruptRemain_});
+     h.heavyWeapon = pc.carryingHeavy_ == 1 ? "Code Of Power" : pc.carryingHeavy_ == 2 ? "Bomb" : "";   // ItemName
+     { const Weapon* gb = grenadeBag(pc); h.grenades = gb ? gb->reserve : -1; }
+     {
+@@ -4755,7 +4758,7 @@ std::string World::triggerKillstreakFor(int player) {
+     } else if (id == "FriendlyKillHealthBonusStreak") {
+         teamPawns([](Character& p) { p.refillOnKillRemain_ = 60.0f; });   // ABT_Team TnBuffRefillHealthOnKill
+     } else if (id == "TeamAbilityJammerStreak") {
+-        otherTeam([](int, Character& c) { c.applyJammed(30.0f); });   // ABT_OtherTeam TnBuffAbilityJammedKillstreak 30 s
++        otherTeam([](int, Character& c) { c.applyJammed(30.0f, true); });   // ABT_OtherTeam TnBuffAbilityJammedKillstreak 30 s
+     } else {
+         LOG_WARN("killstreak %s triggered: effect not implemented in the rebuild [PARTIAL]", id.c_str());
+     }
+diff --git a/src/game/World.h b/src/game/World.h
+index f2ac2bd6..17cbeeea 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -94,6 +94,9 @@ struct HudGameState {
+     // (PickupRotationRate yaw 10000); objective marker "Ammo Beacon" for the owner's team.
+     float drain = 0.0f;                          // Drain ability active (s left)
+     float seeEnemies = 0.0f, refillOnKill = 0.0f, abilitiesJammed = 0.0f, hardLocked = 0.0f;   // killstreak buffs on the local pawn (s left)
++    // Active HUD-relevant buffs on the local pawn (Hud_GFX ApplyBuff / UnapplyBuff): the buff class name and its seconds left.
++    struct HudBuff { std::string id; float remain = 0.0f; };
++    std::vector<HudBuff> buffs;
+     // Roller sphere: Rendering draws FX_RollerMine_p.Mesh.RollerMineAbility_STAT (scale 0.5) at rollerPos.
+     int kamikazeMines = 0;                       // live MinePooper mines (positions: World::kamikazeMines())
+     float tempWeaponLeft = 0.0f;                 // P.O.K.E. 2.0 seconds left (0 otherwise)
+diff --git a/tools/gameplay/gen_weapon_camera.py b/tools/gameplay/gen_weapon_camera.py
+new file mode 100644
+index 00000000..1a518d43
+--- /dev/null
++++ b/tools/gameplay/gen_weapon_camera.py
+@@ -0,0 +1,35 @@
++# Generates src/game/WeaponCameraTable.inc from data/gameplay/weapons_mp.json: per weapon class, the camera recoil and per-shot shake the
++# local player's camera applies (TnRecoilCameraBehavior / TnShakeCameraBehavior; RE PRESENTATION_AUDIT_2_RE.md + the camera recoil answer).
++# Data selection (TnWeapon.GivenTo, CONFIRMED): TnMultiplayerGame wants MultiplayerData; a class without a MultiplayerData object uses
++# PlayerData WHOLE (no per-field merge); fields missing in the chosen object are 0 (the struct defaults).
++# Usage: python -I tools/gameplay/gen_weapon_camera.py <weapons_mp.json> <out.inc>
++import json, sys
++
++def main(src, out):
++    d = json.load(open(src))
++    ws = d['weapons']
++    items = ws.items() if isinstance(ws, dict) else [(w.get('class'), w) for w in ws]
++    rows = []
++    for cls, w in items:
++        if not cls or '.TnWeapon' not in cls: continue
++        wid = cls.split('.TnWeapon', 1)[1]
++        mp = w.get('MultiplayerData')
++        data = mp if mp else w.get('PlayerData')
++        vals = (data or {}).get('values', {}) if isinstance(data, dict) else {}
++        r = vals.get('RecoilCameraParams') or {}
++        s = vals.get('CameraShakeParams') or {}
++        row = (wid, r.get('PitchAdjustmentDeg', 0.0), r.get('FovAdjustment', 0.0), r.get('RecoilTime', 0.0), r.get('RecoilDelay', 0.0),
++               s.get('Intensity', 0.0), s.get('Roll', 0.0), s.get('RollFalloffDuration', 0.0), s.get('ShakeFalloffDuration', 0.0),
++               'MultiplayerData' if mp else 'PlayerData')
++        if any(abs(x) > 0 for x in row[1:9]): rows.append(row)
++    rows.sort()
++    L = ['// GENERATED by tools/gameplay/gen_weapon_camera.py from data/gameplay/weapons_mp.json - do not edit. Per weapon class suffix',
++         '// (TransContent.TnWeapon<id>): RecoilCameraParams {PitchAdjustmentDeg, FovAdjustment, RecoilTime, RecoilDelay} and CameraShakeParams',
++         '// {Intensity, Roll, RollFalloffDuration, ShakeFalloffDuration} of MultiplayerData, else PlayerData (whole object); missing fields 0.']
++    for r in rows:
++        L.append('    {"%s", %.4ff, %.4ff, %.4ff, %.4ff, %.4ff, %.4ff, %.4ff, %.4ff},   // %s' % r)
++    open(out, 'w', newline='\n').write('\n'.join(L) + '\n')
++    print(len(rows), 'weapons ->', out)
++
++if __name__ == '__main__':
++    main(sys.argv[1], sys.argv[2])
