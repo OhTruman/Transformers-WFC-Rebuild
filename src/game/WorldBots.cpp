@@ -80,10 +80,11 @@ void World::fireHitscanAs(int instigator, const Character& shooter, const Weapon
     { float th; if (barrierRayHit(origin, dir, range, th)) nearest = std::min(nearest, th); }
     const float traceLen = std::min(range, nearest + 0.06f);
     float bestDist = range;
+    uint16_t hitPhys = 0; const CollisionWorld* hitPhysWorld = nullptr;   // the world hit's physical material
     if (collision_.valid()) {
         float t; core::Vec3 n;
         const CollisionWorld& lineWorld = weaponCollision_.valid() ? weaponCollision_ : collision_;
-        if (lineWorld.segmentHit(origin, origin + dir * traceLen, t, n)) bestDist = traceLen * t;
+        if (lineWorld.segmentHit(origin, origin + dir * traceLen, t, n, &hitPhys)) { bestDist = traceLen * t; hitPhysWorld = &lineWorld; }
         else if (traceLen < range) bestDist = traceLen;   // nothing in the world before the nearest target: it is hit
     }
     float targetDist = bestDist;
@@ -131,7 +132,11 @@ void World::fireHitscanAs(int instigator, const Character& shooter, const Weapon
     }
     if (hitDes) hitDes->applyDamage(*this, w.damageAt(dist));
     const core::Vec3 hitPoint = origin + dir * dist;
-    participantShots_.push_back({instigator, w.def ? w.def->id : "", origin, hitPoint, dist < range - 0.01f, hitPlayer, pellet_});
+    participantShots_.push_back({instigator, w.def ? w.def->id : "", origin, hitPoint, dist < range - 0.01f, hitPlayer, pellet_, std::string()});
+    if (hitPhysWorld && !(hitDes || hitPlayer >= 0 || hitBarrier || hitSentry)) participantShots_.back().physmat = hitPhysWorld->physmatName(hitPhys);   // [Systems] impact rule
+    static const bool physLog = std::getenv("WFC_PHYSMATLOG") != nullptr;   // diagnostic: every participant shot's hit surface
+    if (physLog && participantShots_.back().impact)
+        LOG_INFO("PHYSMAT p%d %s -> %s", instigator, w.def ? w.def->id : "?", participantShots_.back().physmat.empty() ? "(pawn / target)" : participantShots_.back().physmat.c_str());
 }
 
 BotBody::BotBody(MatchOpponent& o) : pc(&o.pawn()), player(o.matchPlayer()) {}

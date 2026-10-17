@@ -9,6 +9,7 @@ namespace game {
 
 bool CollisionWorld::build(const render::MeshData& mesh) {
     tris_.clear();
+    triPhys_.clear();
     grid_.clear();
     triYMin_.clear(); triYMax_.clear();
     if (mesh.indices.size() < 3 || mesh.positions.size() < 9) return false;
@@ -240,7 +241,8 @@ namespace game {
 // Hit triangle normal for a segment query (hover suspension contact normals). Uses segmentHit() for
 // the nearest t, then picks the triangle intersected at that t among the triangles binned in the hit
 // point's cell (a triangle is binned into every cell its XZ bounds overlap, so it is there).
-bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT, core::Vec3& outN) const {
+bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT, core::Vec3& outN, uint16_t* outPhys) const {
+    if (outPhys) *outPhys = 0;
     core::Vec3 d = b - a;
     // Moving sets first (brute force over posed triangles, AABB-rejected).
     float dynT = 1e30f; core::Vec3 dynN{0, 1, 0};
@@ -288,7 +290,10 @@ bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float&
         float v = core::dot(d, q) * inv;
         if (v < 0 || u + v > 1) continue;
         float tt = core::dot(e2, q) * inv;
-        if (std::fabs(tt - outT) < best) { best = std::fabs(tt - outT); outN = t.n; }
+        if (std::fabs(tt - outT) < best) {
+            best = std::fabs(tt - outT); outN = t.n;
+            if (outPhys) *outPhys = (size_t)ti < triPhys_.size() ? triPhys_[(size_t)ti] : 0;
+        }
     }
     return true;
 }

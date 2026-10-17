@@ -30,7 +30,34 @@ public:
     bool segmentHitReference(const core::Vec3& a, const core::Vec3& b, float& outT) const;
     // Same query, also returning the hit triangle's unit normal (orientation as authored). Also tests the
     // moving collision sets below (the 3-argument query is static geometry only).
-    bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT, core::Vec3& outN) const;
+    // outPhys (optional): the hit triangle's physical material index (0 = none / a moving set); physmatName() resolves it.
+    bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT, core::Vec3& outN, uint16_t* outPhys = nullptr) const;
+    // Per static triangle physical material indices (same order as the built triangles) and their names; index 0 / unknown =
+    // engineDefault. Returns false (nothing set) when the count does not match the built triangles.
+    bool setPhysmats(std::vector<uint16_t> perTri, std::vector<std::string> names, std::string engineDefault) {
+        if (perTri.size() != tris_.size()) return false;
+        triPhys_ = std::move(perTri); physNames_ = std::move(names); physDefault_ = std::move(engineDefault);
+        return true;
+    }
+    const std::string& physmatName(uint16_t i) const {
+        return i > 0 && i < physNames_.size() && !physNames_[i].empty() ? physNames_[i] : physDefault_;
+    }
+    // Diagnostic: a short ray into the centroid of `samples` static triangles with a material; returns how many hits report it
+    // (outTested = rays that hit anything).
+    int physmatSelfTest(int samples, int& outTested) const {
+        outTested = 0; int ok = 0;
+        if (triPhys_.size() != tris_.size() || tris_.empty()) return 0;
+        const size_t stride = std::max<size_t>(1, tris_.size() / (size_t)std::max(1, samples));
+        for (size_t i = 0; i < tris_.size() && outTested < samples; i += stride) {
+            if (!triPhys_[i]) continue;
+            const Tri& t = tris_[i];
+            const core::Vec3 c = (t.a + t.b + t.c) * (1.0f / 3.0f);
+            float ht; core::Vec3 hn; uint16_t hp = 0;
+            if (!segmentHit(c + t.n * 0.02f, c - t.n * 0.02f, ht, hn, &hp)) continue;
+            ++outTested; if (hp == triPhys_[i]) ++ok;
+        }
+        return ok;
+    }
 
     // Moving collision (map movers, destructible pieces): triangle sets posed every tick by the World.
     // Triangles are given relative to a pivot; pose = world transform of that pivot frame.
@@ -67,6 +94,9 @@ private:
     void cellRange(float x, float z, int& cx, int& cz) const;
 
     std::vector<Tri> tris_;
+    std::vector<uint16_t> triPhys_;          // per static triangle physmat index (empty: none loaded)
+    std::vector<std::string> physNames_;
+    std::string physDefault_;
     std::vector<float> triYMin_, triYMax_;   // per triangle (static): the walk skips triangles above / below the segment in a cell
     template <bool Any> bool walk(const core::Vec3& a, const core::Vec3& b, float& outT) const;
     core::Vec3 bmin_{0, 0, 0}, bmax_{0, 0, 0};

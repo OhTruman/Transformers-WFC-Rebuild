@@ -184,6 +184,8 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
     if (node.has("mesh")) {
         const Json& mesh = meshes[(size_t)node["mesh"].asInt(0)];
         const Json& prims = mesh["primitives"];
+        const int meshIdx = node["mesh"].asInt(0);
+        uint32_t meshTri = 0;   // triangles of the earlier primitives of this mesh
         for (size_t pi = 0; pi < prims.size(); ++pi) {
             const Json& prim = prims[pi];
             if (prim.has("mode") && prim["mode"].asInt(4) != 4) continue; // triangles only
@@ -289,6 +291,7 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
                     sm.lmScaleVec[2] = ex["lm_scalevec"][2].asFloat(1.0f);
                 }
             }
+            sm.gltfMesh = meshIdx; sm.meshTriOffset = meshTri; meshTri += (uint32_t)(idx.size() / 3);
             out.subs.push_back(sm);
         }
     }

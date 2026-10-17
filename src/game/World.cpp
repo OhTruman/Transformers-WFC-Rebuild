@@ -28,6 +28,7 @@
 #include <chrono>
 #include <cstring>
 #include <fstream>
+#include "core/Sha256.h"
 #include <array>
 #include <map>
 #include <set>
@@ -442,6 +443,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
         if (assets::loadGlb(mapDir + "collision_weapon.glb", weaponColMesh)) {
             splitMovers(weaponColMesh, weaponStatic, weaponMovers);
             weaponCollision_.build(weaponStatic);
+            loadWeaponPhysmats(mapDir, weaponColMesh);
         }
         mapState_.registerCollision(collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr, pawnMovers, weaponMovers);
         LOG_INFO("collision: movement %s, weapon %s", authored ? "collision_pawn.glb" : "collision.glb (fallback)",
@@ -773,11 +775,12 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
     core::Vec3 end = origin + dir * range;
 
     float bestDist = range;
+    uint16_t hitPhys = 0; const CollisionWorld* hitPhysWorld = nullptr;   // the world hit's physical material
     // World geometry.
     if (collision_.valid()) {
         float t; core::Vec3 n;
         const CollisionWorld& lineWorld = weaponCollision_.valid() ? weaponCollision_ : collision_;
-        if (lineWorld.segmentHit(origin, end, t, n)) bestDist = range * t;
+        if (lineWorld.segmentHit(origin, end, t, n, &hitPhys)) { bestDist = range * t; hitPhysWorld = &lineWorld; }
     }
     // Damageable targets (closest wins).
     DamageTarget* hitTarget = nullptr;
@@ -811,6 +814,9 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
     if (hitBarrier) damageBarrier(w.damageAt(dist), w.damageType ? w.damageType : "");
     if (hitOpp) { noteHitDir(dir); applyMatchDamage(hitOpp->matchPlayer(), localPlayer_, w.damageAt(dist), false, w.damageType); }   // InstantHitDamage, falloff, the weapon's InstantHitDamageTypes[0]
     core::Vec3 hitPoint = origin + dir * dist;
+    // [Systems] the hit surface's PhysicalMaterial for the impact rule ("" = a target / pawn / barrier / nothing was hit).
+    const std::string hitPhysmat = (!hitTarget && !hitDes && !hitOpp && !hitBarrier && hitPhysWorld) ? hitPhysWorld->physmatName(hitPhys) : std::string();
+    (void)hitPhysmat;
     if (hitTarget) hitTarget->applyDamage(w.damageAt(dist));   // [CONF] range-based falloff
     if (hitDes) hitDes->applyDamage(*this, w.damageAt(dist));
 
@@ -5006,6 +5012,68 @@ void World::drainAnimNotifies() {
 // [Systems] fills: fire the authored notify rows of (animSet, sequence) with time in [t0, t1). Gameplay's stub.
 void World::onAnimNotifyWindow(int matchPlayer, const char* animSet, const char* sequence, float t0, float t1, bool backwards, float weight) {
     (void)matchPlayer; (void)animSet; (void)sequence; (void)t0; (void)t1; (void)backwards; (void)weight;
+}
+
+// collision_weapon_physmat.json (AssetTools) -> the static weapon collision's per-triangle physical materials (see Collision.h).
+void World::loadWeaponPhysmats(const std::string& mapDir, const render::MeshData& glbMesh) {
+    std::string path = mapDir + "collision_weapon_physmat.json", text;
+    if (!readTextFile(path, text)) {
+        const char* mr = std::getenv("WFC_FRONTEND_MANIFESTS");   // the frontend's manifest root (frontend::Catalog)
+        path = std::string(mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests") + "/maps/" + mapName_ + "/collision_weapon_physmat.json";
+        if (!readTextFile(path, text)) { LOG_INFO("physmat: no collision_weapon_physmat.json for %s (impacts use the defaults)", mapName_.c_str()); return; }
+    }
+    assets::Json root;
+    if (!assets::Json::parse(text, root)) { LOG_WARN("physmat: cannot parse %s", path.c_str()); return; }
+    const std::string want = root["glb_sha256"].asString(), have = core::sha256File(mapDir + "collision_weapon.glb");
+    if (want.empty() || want != have) { LOG_WARN("physmat: %s describes another collision_weapon.glb (sha256 %s, loaded %s): skipped", path.c_str(), want.c_str(), have.c_str()); return; }
+    std::vector<std::string> names;
+    for (size_t i = 0; i < root["physmats"].size(); ++i) names.push_back(root["physmats"][i].asString());
+    // Per glb mesh: the expanded per-triangle index (checked against the mesh triangle count we baked).
+    std::map<int, std::vector<uint16_t>> perMesh;
+    std::map<int, uint32_t> baked;
+    for (const render::SubMesh& sm : glbMesh.subs) if (sm.gltfMesh >= 0) baked[sm.gltfMesh] = std::max(baked[sm.gltfMesh], sm.meshTriOffset + sm.indexCount / 3);
+    // Alignment check: the file's source_mesh per glb mesh vs the StaticMesh path our bake recorded for that mesh index.
+    int nameChecked = 0, nameMismatch = 0;
+    for (const render::SubMesh& sm : glbMesh.subs) {
+        if (sm.gltfMesh < 0 || sm.sourceMesh.empty()) continue;
+        const std::string fileMesh = root["meshes"][std::to_string(sm.gltfMesh)]["source_mesh"].asString();
+        if (fileMesh.empty()) continue;
+        ++nameChecked; if (fileMesh != sm.sourceMesh) ++nameMismatch;
+    }
+    if (nameMismatch) { LOG_WARN("physmat: %d of %d submeshes name another source mesh than the file: skipped", nameMismatch, nameChecked); return; }
+    int mismatched = 0;
+    for (const auto& kv : baked) {
+        const assets::Json& m = root["meshes"][std::to_string(kv.first)];
+        std::vector<uint16_t> v(kv.second, 0);
+        if ((uint32_t)m["triangles"].asInt(-1) != kv.second) { ++mismatched; perMesh[kv.first] = v; continue; }
+        const assets::Json& runs = m["runs"];
+        for (size_t r = 0; r < runs.size(); ++r) {
+            const int first = runs[r][0].asInt(0), count = runs[r][1].asInt(0), idx = runs[r][2].asInt(0);
+            for (int t = first; t < first + count && t >= 0 && (size_t)t < v.size(); ++t) v[(size_t)t] = (uint16_t)idx;
+        }
+        perMesh[kv.first] = std::move(v);
+    }
+    // The static triangles in build order: splitMovers' filter (movers and TnForcedDirVolume submeshes are not static).
+    const std::vector<std::string> movers = mapState_.moverActorNames();
+    const bool keepForcedDir = std::getenv("WFC_NOFORCEDDIR") != nullptr;
+    std::vector<uint16_t> perTri;
+    for (const render::SubMesh& sm : glbMesh.subs) {
+        if (std::find(movers.begin(), movers.end(), sm.nodeName) != movers.end()) continue;
+        if (!keepForcedDir && sm.nodeName.rfind("TnForcedDirVolume", 0) == 0) continue;
+        const std::vector<uint16_t>* v = sm.gltfMesh >= 0 && perMesh.count(sm.gltfMesh) ? &perMesh[sm.gltfMesh] : nullptr;
+        for (uint32_t t = 0; t < sm.indexCount / 3; ++t) perTri.push_back(v && sm.meshTriOffset + t < v->size() ? (*v)[sm.meshTriOffset + t] : 0);
+    }
+    const size_t n = perTri.size();
+    if (!weaponCollision_.setPhysmats(std::move(perTri), std::move(names), root["engine_default_physmat"].asString()))
+        LOG_WARN("physmat: %zu triangles vs %zu built: skipped", n, weaponCollision_.triangleCount());
+    else {
+        LOG_INFO("physmat: %s: %zu weapon-collision triangles, %d mesh(es) with a triangle-count mismatch (engine default), %d submesh source names checked",
+                 mapName_.c_str(), n, mismatched, nameChecked);
+        if (std::getenv("WFC_PHYSMATLOG")) {
+            int tested = 0; const int ok = weaponCollision_.physmatSelfTest(2000, tested);
+            LOG_INFO("physmat self-test: %d of %d centroid rays report their triangle's material", ok, tested);
+        }
+    }
 }
 
 void World::startLocalMelee(bool whirlwind) {

@@ -864,7 +864,8 @@ public:
     // or launch start, the end point and whether it hit something. Robot-weapon mesh FX for bots are not drawn yet [PARTIAL].
     // hitPlayer: pawn hit (-1 world / none). pellet: index within one fire event (NumShotsToFire): stock Weapon.InstantFire plays the fire
     // effects (muzzle flash + tracer toward that hit) for pellet 0 only; every pellet plays its impact [CONF RE 9a776fb TARGETED_PASS5].
-    struct ParticipantShot { int player; std::string weapon; core::Vec3 from, to; bool impact; int hitPlayer = -1; int pellet = 0; };
+    struct ParticipantShot { int player; std::string weapon; core::Vec3 from, to; bool impact; int hitPlayer = -1; int pellet = 0;
+                             std::string physmat; };   // the hit surface's PhysicalMaterial path ("" = not a world hit)
     // The pellet index of the hitscan traces being fired (set by the NumShotsToFire loops, 0 otherwise).
     void setPelletIndex(int k) { pellet_ = k; }
     int pelletIndex() const { return pellet_; }
@@ -1334,6 +1335,7 @@ private:
     float lockTimer_ = 0.0f, holdLockTimer_ = 0.0f;
     bool locked_ = false;
     void startLocalMelee(bool whirlwind);
+    void loadWeaponPhysmats(const std::string& mapDir, const render::MeshData& glbMesh);
     void drainAnimNotifies();
     // One body animation layer's playing-time window [t0, t1) this step (Systems: the authored AnimNotifies in it).
     void onAnimNotifyWindow(int matchPlayer, const char* animSet, const char* sequence, float t0, float t1, bool backwards, float weight);
