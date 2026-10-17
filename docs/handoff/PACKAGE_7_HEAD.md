@@ -137,6 +137,8 @@ builds. Exes run only through verify_slim (one at a time, WFC_MUTE / NOINTERACT 
    - `wrote ...\work\refresh_<HEAD>\work\playtest_slim: keep ..., xpr 7161, ~27.5 GB, ... failures 0`
    - `REFRESH READY (not promoted): .../work/playtest_slim_<HEAD> (head <HEAD>, HD D)`
    - no `PROBLEM` line (build_slim.log); the script exits non-zero on any PROBLEM, a missed overlay or fewer than 498 M6 rows.
+   - the 10 weapon-collision physmat files are in the package (Gameplay's hit-surface lookup, 5fc2e552; AssetTools 83b669d rows
+     in slim_files.tsv): `ls "work/playtest_slim_<HEAD>/Transformers Rebuild/AssetTools/manifests/maps/"MP_*/collision_weapon_physmat.json | wc -l` = 10
 2. **Verify** (~15 min RT-off + ~5 min RT gate), PowerShell, with the RT gate held until Integration's GO:
 
        New-Item -ItemType File -Force 'F:\Transformers Rebuild\Rebuild-Systems\work\RT_SLOT_HOLD' | Out-Null
