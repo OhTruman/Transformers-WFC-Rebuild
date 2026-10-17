@@ -160,3 +160,35 @@ sprite script). Data: `notes/data/hud_entry_audit.json`.
 4. Observers with no AS definition in Hud_GFX (`NotifyFirstSpawn`, heat and normalized heat, `NotifyPrimary / Secondary /
    MeleeWeaponChanged`, `NotifyWeaponReticuleTypeChanged`, `SetAbility`, `WaveformData`, `CompleteObjective`) are **no-ops in
    the original**. Don't implement visuals for them.
+
+## Part (3): end-of-match flow (versus)
+
+**Sources:**
+- script: TnGame / TnMultiplayerGame (TransContent), TnVersusGameOverMessage, TnUIController;
+- AS: EndGameStats_GFX (dumped with `tools/as2dis.py`; the movie has **no `_global` entry points**, it drives itself from its
+  timeline and ExternalInterface reads).
+
+**C = invoked / present in our src, not visually faithful.**
+
+| # | Step (original) | Timing / payload | Sound | Ours |
+|---|---|---|---|---|
+| 1 | Score reaches `GoalScore` (`CheckScore` → `ReachedGoalScore`: GoalScore > 0 and score ≥ GoalScore), or the time limit / rules end → **`EndGame(Winner, Reason)`** | TnGame.EndGame: voice mute reset; `HandleGameCompletionStats` (per PC: `PRI.AddGameCompletion(elapsed − start, type)`, class-form tracking off, **`PRI.SendGameStatsToClient`**); winner = the given one or `GetWinningPRI()`. TnMultiplayerGame: `RecordSessionComplete`, `GameRulesModifiers.HandleEndGame`, → state **MatchOver** | — | `Match.h` (C) |
+| 2 | **Game-over message** (`TnVersusGameOverMessage.ClientReceive`, per client) | Switch 2 → "Enemy team forfeits"; 1 → "Tie game"; else, with a winner, "Your team won" / "Your team lost" by the client's team → `GRI.SetGameOverMessage` (`<CurrentGame:GameOverMessage>`) | Announcer **`MP_GameAutobotWin`** (winner team 0) or **`MP_GameDecepticonWin`**, the same for every client; plays whenever there is a winner, forfeit included | C (MatchAudio.h; ours marks it PARTIAL "not decompiled": **it is now**, rules here) |
+| 3 | **MatchOver.BeginState** | `AwardMVPAchievement` (if > 1 PRI and XP can be gained: every PRI with the top score gets achievement 37); GRI status 5; **UI event 9 to all controllers**; voice mute reset; stats write; **timer `MatchOverCountdown` = 15 s → `OnCountdownComplete`** | — | `matchOverCountdown 15` (C) |
+| 4 | **UI event 9** → TnUIController InGame / Spectating / Paused `.OnEndGame` → state **GameEnded** | `SetHudVisible(false)`; `OpenUI(EndGameUI)` = `EndGameStats_GFX` | — | `UIController::endGameUI` (C) |
+| 5 | **EndGameStats movie opens** | Fades in (1 s easeout); game-mode icon `mc_gameModeIcon<TAG>` (CCP / CP / CTF / DM / DOM / EXT / KOTH / RO / SV / TDM) spins in from −60°, ×2.8 scale, 0.5 s. **Non-iconic mode starts on the "earnings" (XP) view; iconic mode starts on the scoreboard** (xpOnly / IconicMode). Title slides in (0.5 s, x 380 → 412) | — | movie hosted (C) |
+| 6 | **XP tally** (per specialty card Scout / Soldier / Scientist / Leader, sprite 58) | Reads `GetXpEarnedForSpecialtyLastMatch`, `GetXpEarnedForSpecialty` (final), `GetLevelForSpecialty`, `GetXpNeededForLevel`. Rewinds the start level until start XP ≥ the level cap. **After 800 ms** the glow fades in and **CurrentXp counts linearly to FinalXp over 2.5 s**. Each level crossed: level + 1, caps re-read, the bar / title / strip flash to 0xFF9333 (0.6 s), the level number pops from 500 % → 100 % (0.6 s), and `levelUpStrip.levelUp()` slides the "LEVEL UP" strip in (0.5 s, y 115). The bar width is `(xp − lastCap) / (nextCap − lastCap)`, with "+N" earned. At 2.5 s → `finishedUpdatingXp` snaps to final; then **every 800 ms / 1.5 s it toggles "EARNED +N" ↔ "N TO NEXT LEVEL"** (0.4 s scale flips). Max level shows `LevelMax` | none in the movie (only BUTTON_BACK on close) | XP reads implemented in FrontendRuntime (C) |
+| 7 | **View toggle** (X button) | earnings ↔ scoreboard: 0.5 s fades and header / footer moves. Scoreboard title = GameOverMessage (non-campaign), else "FINAL SCORES". The scoreboard is the PlayerList movie loaded inside (`ViewMode 'InGame'`, cycling specialty levels) | — | AS-internal |
+| 8 | **Unlock reveal** | **None in the original:** `unlockedItem(Item)` exists in the movie and is **empty**. Unlocks show via the in-match challenge popup (`ChallengeUnlocked`, ChallengeNotify_GFX) and level-up (`NotifyLevelUp` + `MP_LEVEL_UP_MX_STNG`) | — | ChallengeUnlocked (C) |
+| 9 | **B / back** | `closeEndGameStats`: `BUTTON_BACK`, restores the parent menu | BUTTON_BACK | AS |
+| 10 | **15 s after MatchOver** → `ReturnToGameLobby` | travel back to the game lobby. Lobby, next-map vote and countdown are **online-lobby flow: out of scope**. **There is no "next map" countdown in the end-of-match movie itself**; the 15 s timer is server-side and not displayed | — | `ReturnToGameLobby` (C) |
+
+**Findings (part 3):**
+1. **The end screen has no countdown display.** The 15 s `MatchOverCountdown` is invisible. If ours shows a countdown, that's an
+   addition.
+2. **The XP tally rule** above (800 ms delay, 2.5 s linear count, per-level flash / pop, the 1.5 s / 800 ms alternating label) is
+   all movie-side. It's faithful as long as our host runs the AS and answers the four `Customize.*` XP calls (ours implements
+   them).
+3. `TnVersusGameOverMessage` is now decoded (step 2). Ours can drop its PARTIAL tag: forfeit / tie precedence and the winner
+   announcer for everyone.
+4. The MVP achievement goes to every player tied for the top score, only with more than one PRI and XP enabled.
