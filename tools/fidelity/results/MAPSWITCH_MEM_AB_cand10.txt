@@ -1,0 +1,4 @@
+21:47:55 int_base8 r1: 6,116 MB peak, first 1,076, 247 samples; MAP-LOSS GATE: NO GROSS MAP LOSS 
+21:52:45 int_cand10 r1: 6,248 MB peak, first 1,100, 243 samples; MAP-LOSS GATE: NO GROSS MAP LOSS 
+21:57:42 int_base8 r2: 5,713 MB peak, first 1,285, 200 samples; MAP-LOSS GATE: NO GROSS MAP LOSS 
+22:01:48 int_cand10 r2: 5,695 MB peak, first 1,317, 200 samples; MAP-LOSS GATE: NO GROSS MAP LOSS 

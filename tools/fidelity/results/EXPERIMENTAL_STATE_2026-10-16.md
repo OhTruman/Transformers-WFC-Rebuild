@@ -20,3 +20,10 @@
 ## Trees in work/ab
 fast_398b27e_rise (gate base), fast_7cd2202, fast_4078e47, fast_9350f19, _third_party; int_* / m9c_int_* = read-only junctions to
 other lanes' builds (remove with rmdir only).
+
+## Evening (X3 volumetrics)
+- cand10 (e224ebf2): FAIL on a grey veil (match 1.08 / 1.09); X3 cost +0.4-0.6 ms p50; FAST NO OBVIOUS BREAKAGE after the
+  resources rule change (846eb860, FAIL > 6,500 MB; the mapswitch peak spread is ~400 MB: results/MAPSWITCH_MEM_AB_cand10.txt).
+- cand12 (round 3): match 1.26 OK / 1.27 below by 0.01 (Streets), views 1.47 / 1.50 = checkpoint; results/X3_EYEPASS_cand12.md.
+- GPU-skinned corpses (merged): -0.41 ms p90 on Berth, still +0.9 ms vs no bodies (package 7: fewer draws per settled body).
+- Final head tomorrow: RERUN_1B=1 EYE_FROM=x3_<final cand> GATE_REGRESS_NOTE="..." bash tools/fidelity/package-respin.sh <final> 9350f19b
