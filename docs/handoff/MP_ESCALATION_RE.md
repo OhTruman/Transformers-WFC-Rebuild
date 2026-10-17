@@ -324,3 +324,83 @@ Doors 797 / 3920 are chained from another door's TransformWorldProp "Finished" (
 - The co-op revive timings (stock co-op path).
 - Easter egg (C, not needed): `TnPlayerReplicationInfoSurvival.CheckForUpdate` grants XP / unlocks to specific developer player
   names using Barricade at generator TnSurvivalGenerator_2812. Don't port it.
+
+## 7. Horde AI templates, downed / revive values, loot table (C, authored.db + script; added 2026-10-18 for Gameplay)
+
+### 7.1 AI templates (`TnAiCharacterDefinition` in TR_AiEscalation_p / TR_SpiderDec_AI_p)
+All share GOAP: SearchSpace + ActionSet + GoalSet + SensorSet. The chassis (TnTransformer ROBODEF) gives health and speed. Weapons come
+from the ActionOverride lists (a random pick when several are listed; H).
+
+| AICD (Decepticon; the Autobot twin is analogous) | Chassis (health / ground speed) | Action / Goal / Sensor set | Weapons (robot; vehicle) | Pawn class | Notes |
+|---|---|---|---|---|---|
+| Spider_AICD | Spider_ROBODEF: **20 HP**, 2000 UU/s, SelfDamageMultiplier 0.75 | Spider_AiActionSet / Spider_AiGoalSet / Spider_AiSensorSet | (melee / explode from the action set) | default | loot class SpiderDec (absent from the loot table, so no drop) |
+| Soldier_MachineGun_Decepticon | SoldierCarMGDec: **150 HP**, 1200 | Soldier_AiActionSet / TR_AiGoalSet_Agent / AggressiveSoldier | AssaultRifle / BurstRifle / HeavyPistol; AssaultRifleVehicle | default | 3 colour variations |
+| Soldier_Rocket_Decepticon | SoldierCarRocketDec (150 shared SoldierCar health H) | same | RocketLauncher; RocketVehicle | default | |
+| Soldier_Shotgun_Decepticon | SoldierCarShotgunDec | same | **EmpShotgun**; AssaultRifleVehicle | default | |
+| CQCSpecialist_Decepticon | CQCDec: **90 HP**, 2200 | CQCSpecialist_AiActionSet / CQC_AiGoalSet / CQC_AiSensorSet | (from the set; override empty) | default | |
+| Soldier_Jet_Decepticon | SoldierJetDec: **250 HP** | Soldier_Jet_AiActionSet / JetSoldier_AiGoalSet / SoldierJet_AiSensorSet | (set) | **TnAiJetSoldierPawnContent** | Air spawn type |
+| Brute_Decepticon | BruteDec: **Health 100,000**, 1100, Mass 300 | Brute_AiActionSet / TR_AiGoalSet_Brute / Brute_AiSensorSet | **HalberdAxe** (melee) | default | **HeavyDamageThreshold 300** (enabled). The huge health means it's killed through its destructible weak point (backpack), not health (H; cf. the Brute backpack destruction FX). |
+| Titan_Decepticon | TitanDec: **1,250 HP**, 450, Mass 300 | Titan_AiActionSet / Titan_AiGoalSet / Titan_AiSensorSet | **GatlingGun** | default | |
+| **Soldier_Tank_Decepticon (boss)** | SoldierTankDec: **6,000 HP**, 720, Mass 10,000 | **Tank_AiActionSet** / TR_AiGoalSet_Agent / SoldierTank_AiSensorSet | (set) | **TransGame.TnTankAiPawn** | Boss spawn zones (§5a) |
+| HoloBrute_Autobot (Remnant) | HoloBruteAut (default health) 1800 | HoloBrute_AiActionSet / TR_AiGoalSet_Agent / HoloBrute_AiSensorSet | **CeremonialStaffHolo** | default | **Opacity 0.9** (holographic) |
+| Brute_Autobot | BruteAut | as Brute | **WarHammer** | | |
+
+The Escalation buffs (§2) are layered on top at spawn: damage taken × 0.9 → 0.5, damage dealt × 1.25 → 2.25.
+
+### 7.2 Downed / revive (`TnPawn`, `TnPlayerPawnSurvival`)
+- **Going down:**
+  - `TakeDamageHealthBelowZero`: when health would drop below 0 and the pawn can be downed (not KillZ / not
+    TnDamageTypeEnvironmentNoDowned) → downed at Health 0.
+  - `TnSeqEvent_Downed` fires; PRI.AddDowned.
+  - **DownedInvulnerableLength 3 s** (TnPlayerPawn).
+- **Bleeding out:** each tick while downed and draining, `TakeDamage(dt × DownedHealthDrainRate, TnDamageTypeDownedDrain)`. **Death
+  when Health ≤ −DownedHealth.**
+  - **Escalation (TnPlayerPawnSurvival): DownedHealth 540, drain 18 /s → 30 s** with no extra damage.
+  - Other values for comparison: versus TnPlayerPawnMultiplayer 300 / 30 → 10 s; base TnPawn 400 / 40.
+  - Enemy fire while down shortens it.
+- **Reviving:**
+  - a teammate's GiveRevive plays **Revive_Heal** (robot) / **Revive_Heal_VEH** (vehicle form). The revive takes the length of that
+    animation (ClientStartReviveCountdown = the animation length);
+  - while being revived the target doesn't drain;
+  - success → `GetRevive`: health set to **RevivalHealth 115** (or HealthMax with a full revive);
+  - **OnReviveBuffs:** TnBuffDifficultyPlayerDamageTakenRevived + TnBuffDifficultyJamAbilitiesRevived (difficulty buffs after being
+    revived);
+  - interrupting the animation fails the revive and draining resumes.
+- **Wave end:** every downed player is revived (§1, GetRevive) and the dead respawn (TnRespawnHelperRoundEnd).
+- The Revive_Heal length is in the anim sets (not in authored.db). Read it from your anim data.
+
+### 7.3 Loot / drop table (`TR_Escalation_m.Loot_Table`, TnLootTable)
+- On a kill, `SpawnPickupRewards` rolls the enemy's LootClassification, plus 'AbilityResource', plus Headshot / Melee / Explosion
+  AbilityResource by kill type (§2).
+- Each entry rolls ChanceToDrop, then a weighted pick.
+
+| Classification | Drops |
+|---|---|
+| GENERIC (Spider, Jet, …) | nothing |
+| SoldierDec / SoldierAut | 4 × AbilityResourcePickup (100 %) |
+| BruteDec / Aut, TitanDec / Aut | 7 × AbilityResource |
+| SoldierTankDec / Aut | 12 × AbilityResource, + **50 % one rare weapon: GatlingGun or HeavyRocketTurret** (1 : 1) |
+| HoloBrute, SpiderDec | not in the table, so nothing |
+| AbilityResource (every kill) | 1 × |
+| HeadShotAbilityResource | 5 × |
+| MeleeAbilityResource | 1 × (weighted pick of 2 identical entries) |
+| ExplosionAbilityResource | 1 × |
+| Health / Ammo / Overshield / ResourceCache | 100 % / 100 % / 10 % / 16 × (classifications used by other drop sources) |
+
+- **TnAbilityResourcePickup:** AddedResource **3.0** to the player's ability resource. Player pawns only. It scores a "shard" event.
+- These are not energon (power): power comes only from PowerReward (§3).
+
+### 7.4 Weapon data in Escalation (C, TnWeapon)
+- `GetWeaponDataByType(t)`: 1 → PlayerData, 2 → AiData, 3 → MultiplayerData, **4 → SurvivalData**, else none. There's no fallback
+  inside it.
+- **The fallback is in `TnWeapon.GivenTo`:**
+  - for a player pawn: WDT = Game.DesiredWeaponDataType() (Escalation 4); **if that weapon's data for WDT is none → WDT = 1
+    (PlayerData, the campaign tuning)**;
+  - AI pawns always use 2 (AiData);
+  - then SetWeaponDataType(WDT) → SetData.
+- So in Escalation the 6 weapons with *_SV_WEPDATA use it, and **every other weapon, including the starting AssaultRifle, uses its
+  PlayerData (campaign values), not MultiplayerData.**
+- The same rule applies in versus (WDT 3): a weapon without MultiplayerData would fall back to PlayerData (MP_VS_SP note: MP
+  weapons have MultiplayerData).
+- Note: an "unset" SurvivalData on a cooked class default means it's inherited from the parent class. It's none unless a parent
+  sets it.
