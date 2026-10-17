@@ -482,8 +482,10 @@ void Pipeline::setMapEffectState(const std::string& key, bool active, bool hidde
     for (FxInstance& in : fxInstances_) {
         if (in.owner != w && in.owner != shortName && in.component != w) continue;
         if (!role.empty() && in.role != role) continue;
-        if (active && !in.active)
+        if (active && !in.active) {
             for (FxEmitterRT& e : in.emitters) { e.time = 0; e.spawnFrac = 0; e.loop = 0; e.burstFired.clear(); e.done = false; }
+            in.lastRenderTime = time_; in.skipped = 0.0f;   // [Systems] ActivateSystem: counts as rendered, no skipped time carried
+        }
         in.active = active;
         in.hidden = hidden;
         if (hidden) for (FxEmitterRT& e : in.emitters) e.parts.clear();   // SetHidden: nothing drawn
@@ -517,7 +519,8 @@ int Pipeline::fxMeshFor(const FxLod& L) {
 }
 
 // ---- simulation (UE3 FParticleEmitterInstance order: kill/update, then spawn) ----
-void Pipeline::tickMapFx(float dt) {
+void Pipeline::tickMapFx(float frameDt) {
+    float dt = frameDt;   // [Systems] per instance: the UE3 tick throttle's dt (frameDt + skipped time) inside the instance loop
     {   // EmitterPool accounting (active pooled effects per frame; logged every 600 frames)
         int active = 0;
         for (const FxInstance& fi : fxInstances_) active += fi.poolSeq > 0 ? 1 : 0;
@@ -530,7 +533,7 @@ void Pipeline::tickMapFx(float dt) {
                          (std::getenv("WFC_EMITTERPOOLCAP") ? std::getenv("WFC_EMITTERPOOLCAP")[0] == '1' : poolCapOn_) ? "on" : "off");
             statPoolPeak_ = statPoolOver_ = statPoolReclaimed_ = statPoolFrames_ = 0;
             if (fxInactiveOn() && (statFxFrozen_ || statFxTicked_))
-                LOG_INFO("wfc fx inactive: %ld of %ld SecondsBeforeInactive instance-ticks frozen (600 frames)", statFxFrozen_, statFxFrozen_ + statFxTicked_);
+                LOG_INFO("wfc fx inactive: %ld of %ld map-FX instance-ticks throttled (600 frames)", statFxFrozen_, statFxFrozen_ + statFxTicked_);
             statFxFrozen_ = statFxTicked_ = 0;
         }
     }
@@ -585,6 +588,7 @@ void Pipeline::tickMapFx(float dt) {
         if (pm.yawRate != 0.0f && !pickupMeshHidden_.count(pm.owner))
             pickupSpin_[pm.owner] = std::fmod(pickupSpin_[pm.owner] + pm.yawRate * dt, 65536.0f);
     for (FxInstance& in : fxInstances_) {
+        dt = frameDt;
         const FxSystem& sys = fxSystems_[in.system];
         if (!in.requiredRule.empty() && !ruleActive(in.requiredRule)) continue;   // factory not in this mode
         if (!actorPoses_.empty()) {                     // frontend matinee: the Emitter actor's pose / DrawScale
@@ -601,17 +605,24 @@ void Pipeline::tickMapFx(float dt) {
                 for (int c = 0; c < 3; ++c) in.T[c] = L1[c] + o[c];
             }
         }
-        if (in.sbi > 0.0f) {   // [Systems] UE3 PSC Tick: AccumTickTime > SecondsBeforeInactive and unrendered as long -> no tick
-            in.sbiAccum += dt;
-            if (in.sbiAccum > in.sbi && time_ - in.lastRenderTime > in.sbi) {
-                if (in.sbiFrozenAt < 0.0f) in.sbiFrozenAt = time_;
-                ++statFxFrozen_; continue;
-            }
-            if (in.sbiFrozenAt >= 0.0f) {   // rendered again: resumes where it froze (no catch-up)
+        if (fxInactiveOn()) {
+            // [Systems] UE3 UParticleSystemComponent::Tick (RE PARTICLE_MODULE_AUDIT_RE (d), CONFIRMED native 0x83055528): an unrendered
+            // component is throttled, never stopped. Unrendered > 0.3 s: the tick is skipped until the skipped time reaches the
+            // interval - 1.0 s when SecondsBeforeInactive > 0, AccumTickTime > it and unrendered longer than it, else 0.1 s - and the
+            // tick that runs applies all of it in one step (CustomTimeDilation 1). Every component; SBI = the authored value.
+            if (time_ - in.lastRenderTime > 0.3f) {
+                const bool slow = in.sbi > 0.0f && in.sbiAccum > in.sbi && time_ - in.lastRenderTime > in.sbi;
+                in.skipped += frameDt;
+                if (in.skipped < (slow ? 1.0f : 0.1f)) { ++statFxFrozen_; continue; }
+                dt = in.skipped;
+                in.skipped = 0.0f;
                 static const bool log = std::getenv("WFC_FXINACTIVELOG") != nullptr;
-                if (log) LOG_INFO("FXINACTIVE resume %s (%s) after %.2f s frozen, t=%.2f", in.component.c_str(), in.system.c_str(), time_ - in.sbiFrozenAt, time_);
-                in.sbiFrozenAt = -1.0f;
+                if (log && slow) LOG_INFO("FXINACTIVE slow tick %s (%s) dt %.2f s, t=%.2f", in.component.c_str(), in.system.c_str(), dt, time_);
+            } else if (in.skipped > 0.0f) {   // rendered again between throttled ticks: the remainder catches up now
+                dt = frameDt + in.skipped;
+                in.skipped = 0.0f;
             }
+            in.sbiAccum += dt;
             ++statFxTicked_;
         }
         // LOD: Automatic = by distance to the camera; DirectSet = level 0 (no code sets it)
@@ -1011,6 +1022,7 @@ void Pipeline::tickMapFx(float dt) {
             }
         }
     }
+    dt = frameDt;
     // runtime effects: released once nothing will spawn again and every particle has died - or, guard, 30 s after
     // they stopped spawning even with immortal particles left (Lifetime 0 particles must not pin instances forever)
     for (FxInstance& in : fxInstances_)
@@ -1081,6 +1093,7 @@ int Pipeline::spawnFx(const std::string& tpl, const float R[3][3], const float T
     in.system = tpl;
     in.role = "runtime";
     in.transient = true;
+    in.lastRenderTime = time_;   // [Systems] a freshly activated component counts as rendered (no throttle before its first draw)
     in.id = nextFxId_++;
     std::copy(&R[0][0], &R[0][0] + 9, &in.R[0][0]);
     std::copy(T, T + 3, in.T);
@@ -2137,7 +2150,7 @@ void Pipeline::drawMapPresentation() {
         for (size_t i = 0; i < fxInstances_.size(); ++i) {
             FxInstance& in = fxInstances_[i];
             if (in.hidden) continue;
-            if (in.sbi > 0.0f) {   // [Systems] an instance with no particles counts as rendered while its origin is in view
+            if (fxInactiveOn()) {   // [Systems] an instance with no particles counts as rendered while its origin (or fixed box) is in view
                 bool any = false;
                 for (const FxEmitterRT& er : in.emitters) any = any || !er.parts.empty();
                 if (!any) {   // the template's fixed relative box (component space) where authored, else the origin within 1 m
