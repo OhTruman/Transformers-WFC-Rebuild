@@ -205,6 +205,9 @@ public:
         list_->Close();
         if (FAILED(dev_->CreateFence(0, D3D12_FENCE_FLAG_SHARED, __uuidof(ID3D12Fence), (void**)&fence_))) return false;
         if (FAILED(dev_->CreateSharedHandle(fence_, nullptr, GENERIC_ALL, nullptr, &fenceHandle_))) return false;
+        // one wait event for the presenter's life (package 7 leak suspect 1: an event created + closed per throttled frame,
+        // closed while a timed-out SetEventOnCompletion still held it)
+        if (!(event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr))) return false;
         gl_.genSem(1, &sem_);
         gl_.importSem(sem_, kHandleD3D12Fence, fenceHandle_);
         RECT rc; GetClientRect(hwnd_, &rc);
@@ -569,6 +572,7 @@ public:
         for (auto& a : alloc_) rel(a);
         rel(queue_); rel(fence_);
         if (fenceHandle_) { CloseHandle(fenceHandle_); fenceHandle_ = nullptr; }
+        if (event_) { CloseHandle(event_); event_ = nullptr; }
         rel(dev_); rel(factory_);
         LOG_INFO("D3D12 present: shut down%s", lost_ ? " (device lost)" : "");
     }
@@ -857,22 +861,20 @@ private:
         return true;
     }
     void throttle(UINT bi) {                           // at most buffers_ frames in flight on the D3D12 side
-        if (frameValue_[bi] && fence_->GetCompletedValue() < frameValue_[bi]) {
-            HANDLE e = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-            fence_->SetEventOnCompletion(frameValue_[bi], e);
-            WaitForSingleObject(e, 1000);
-            CloseHandle(e);
-        }
+        if (frameValue_[bi]) waitFence(frameValue_[bi], 1000);
     }
     void waitIdle() {
         if (!queue_) return;
         ++value_;
         queue_->Signal(fence_, value_);
-        if (fence_->GetCompletedValue() < value_) {
-            HANDLE e = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-            fence_->SetEventOnCompletion(value_, e);
-            WaitForSingleObject(e, 2000);
-            CloseHandle(e);
+        waitFence(value_, 2000);
+    }
+    // (the shared event is auto-reset: a wait that timed out leaves a late signal behind, so an early wake re-checks the
+    // fence and re-arms once)
+    void waitFence(UINT64 v, DWORD ms) {
+        for (int k = 0; k < 2 && fence_->GetCompletedValue() < v; ++k) {
+            fence_->SetEventOnCompletion(v, event_);
+            WaitForSingleObject(event_, ms);
         }
     }
 
@@ -896,6 +898,7 @@ private:
     double qwSum_ = 0, qwMax_ = 0; int qwN_ = 0;
     Interop2Probe probe2_; bool probe2Tried_ = false;
     ID3D12Fence* fence_ = nullptr;
+    HANDLE event_ = nullptr;
     UINT64 value_ = 0, frameValue_[kMaxBuffers] = {};
     UINT buffers_ = 2, latency_ = 2;
     GLuint glMem_[kRing] = {}, glTex_[kRing] = {}, glFbo_[kRing] = {}, sem_ = 0;
