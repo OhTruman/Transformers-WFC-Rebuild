@@ -8,6 +8,10 @@ taken from existing material only (no new decompilation). Companions:
 - CROSSPLAY_PLATFORM_FEASIBILITY.md: platform order PC-PC first, then PC-browser.
 - Systems' ONLINE_MP_ARCHITECTURE.md (in progress).
 
+**The bar** (Integration, 2026-10-17): make it work with what we have now. The original's rules are the starting point
+and are modified wherever they do not fit lockstep and this frontend. Each flow in section 3 ends with
+**Simplified vs the original**, saying what changed and why.
+
 This document decides nothing about the wire. It says what the player sees and does, which original screen each step
 uses, and what the frontend state machine needs.
 
@@ -44,6 +48,8 @@ Sources:
 | Party beacon defaults (stock socket transport) | HeartbeatTimeout 60 s, ReservationRequestTimeoutRange 4-10 s, ConnectionBacklog 9, port 8675 | CONFIRMED [NET 4] |
 | LAN / system link | LiveSystemLinkPort 14000, LanAnnouncePort 14001, LanQueryTimeout 2 s, UdpBeacon 8777 / 9777 | CONFIRMED config, HIGH behaviour [NET 6] |
 | Connection timeouts | ConnectionTimeout 8 s, InitialConnectTimeout 50 s, KeepAliveTime 0.1 s; server tick 30 Hz (LAN 35) | CONFIRMED [NET 5], [INI Xe-TransEngine] |
+| Voice | Xbox Live voice carried inside the game packets (VDP: appended to a packet when >= 113 bytes remain under MaxPacket 510); MaxRemoteTalkers 30, MaxLocalTalkers 4 | CONFIRMED [NET 5], [INI Xe-TransEngine] |
+| Voice in the movies | PlayerList_GFX column HeadsetState: 0 no headset (icon hidden), 1 headset (icon), 2 speaking (speaking_mc shown); Hud_GFX sprite 573 lists the names of players whose HeadsetState is 2, 24 px apart; "Mute" / "Unmute" ($UIText.PlayerList.Mute / UnMute) | CONFIRMED [AS PlayerList_GFX, Hud_GFX], [INT] |
 | Hit registration | instant-hit weapons are client-authoritative ("favour the shooter"); vehicles are owner-simulated | CONFIRMED [NET 8] (not needed by lockstep; listed for the console fallback) |
 
 ### 1.2 Capacity, teams, starting a match
@@ -101,6 +107,8 @@ Sources:
 - How idle was measured (input only, or input + movement), and whether private matches kicked idlers. R3.
 - What a client saw after "connection lost": the front end, or the party lobby with the party kept. HIGH is the front
   end (UE3 default travel), with the party gone. R4.
+- Voice routing in versus: team only, or everyone (the Live default was the session's voice channel; the per-team rule is
+  not in the notes). R7.
 - Return-to-session (beacon packet 9, ReturnToSessionResponse): when the client sent it (after a match? after a
   disconnect?). R5.
 - Whether the public lobby countdown restarted when a player left below NumRequiredPlayers. R6.
@@ -153,6 +161,12 @@ Party lobby menu:
   (fingerprints from earlier sessions) once a friend's session can be found without a directory, i.e. a stored last
   address / code. Phase 2.
 
+**Simplified vs the original:**
+- No sign-in, and no Live or Demonware services: a local identity instead. Why: those services are gone and the project
+  runs no servers.
+- Find Game stays a local game with bots until a session list exists. Why: matchmaking needs a directory nobody runs
+  yet.
+
 ### 3.2 Host
 
 1. Host Game -> mode list -> Game Mode Options (the mode's rows + Player Limit, bot counts, Bot Difficulty) -> Create Game.
@@ -167,6 +181,11 @@ Party lobby menu:
    - player rows of remote humans next to the bots. Bots fill the slots humans leave free (3.4).
 4. Game Mode Options stay host-only. The host can reopen them from the lobby menu (new row "Host Options", the original
    text $UIText.Lobby.HostOptions), as long as no countdown runs. Changes are broadcast to every lobby member.
+
+**Simplified vs the original:**
+- The host opens one session directly, with no party reservation beacon and no Live session advertising.
+- A join code / address replaces the session search and the secure host address (XNADDR / XNKID).
+- Why: the lockstep session layer (Systems) carries the lobby itself; codes work with no directory.
 
 ### 3.3 Join
 
@@ -188,13 +207,18 @@ Party lobby menu:
 5. A member can leave at any time: Back -> "Quit Game" / "Are you sure you want to leave the game?" (original) ->
    party lobby.
 
+**Simplified vs the original:**
+- Joining is by code or address only: no presence join and no matchmaking search.
+- The original's reservation, which kept a whole party together, is not in phase 1.
+- Why: there is no directory or friends service; parties come in phase 2 (3.10).
+
 ### 3.4 Lobby
 
 - **Player list:** PlayerList_GFX rows for every human and bot (bots shown, as today: PC ADAPTATION, since the original
   hid bBot rows [MP 13]).
   - **IsConnecting** (an original column): true while a joiner's connection or data check runs; the original's own
     connecting icon and sort order (connecting rows last).
-  - **HeadsetState** (an original column): stays 0 until voice chat (open question D7).
+  - **HeadsetState** (an original column): 0 voice off or no device, 1 voice on, 2 speaking (3.12).
 - **Teams:** the original rule, PickTeam = the smaller team, random on a tie [MP add. 3]. Online.SwitchTeam (Change Team,
   already wired offline) moves a human if the target team has room. Humans take bot slots: a joining human replaces the
   last bot of the team they join (PC ADAPTATION; bot counts in Game Mode Options are a maximum).
@@ -212,6 +236,11 @@ Party lobby menu:
   - Host's Choice: the host's Select Map, as today.
   - Vote: the original veto (Veto Map, RequiredVetos = NumRequiredPlayers / 2 + 1), counted over humans only.
 
+**Simplified vs the original:**
+- Bots are listed and fill free slots; humans take bot slots (the original had no MP bots).
+- Phase 1 has no public autostart, because there are no public lobbies yet.
+- Why: offline bot play is how the rebuild fills matches today, and the user's offline settings carry over unchanged.
+
 ### 3.5 Start and loading
 
 1. The host presses Start Game -> the original lobby exit countdown (BeginLobbyExitCountdown) on every member's screen.
@@ -223,6 +252,11 @@ Party lobby menu:
      see "`k has left the game".
 3. The original MatchAutoStartCountdown (10 s), run in sim ticks so it ends on the same tick everywhere. Then InGame,
    as today.
+
+**Simplified vs the original:**
+- A load gate is added: the match starts when every peer has loaded. The original listen server started and let
+  clients arrive as they loaded.
+- Why: lockstep needs every peer on the same tick from the first command.
 
 ### 3.6 In the match
 
@@ -248,6 +282,13 @@ Party lobby menu:
     continue." (new text) and everyone returns to the game lobby;
   - phase 1b: state-transfer recovery behind a short "Resynchronising..." banner instead.
 
+**Simplified vs the original:**
+- Join in progress (allowed by the original) waits for phase 1b; phase 1 joiners wait in the lobby (D6).
+- A leaving player's slot becomes a bot and keeps its row; the original removed the player.
+- Desync handling is new.
+- Why: late join and recovery need state transfer, which phase 1 does not have. A bot keeps the teams even, which a
+  lockstep match cannot rebalance mid-tick.
+
 ### 3.7 Host loss
 
 - **The original:** no migration; the session ends with "The game has ended because the host has quit." [NET 1], [INT].
@@ -259,6 +300,8 @@ Party lobby menu:
 
   Recommendation: (a) for phase 1 (simpler, faithful), (b) in phase 1b, once state transfer exists.
 
+**Simplified vs the original:** none in phase 1. It is the original's end of session, with its text.
+
 ### 3.8 Reconnect (phase 1b)
 
 - A client that lost the connection gets "Connection Error" / "Your connection to the host has been lost." (original),
@@ -267,6 +310,10 @@ Party lobby menu:
   from its bot (late join + takeover, netcode section 7).
 - The window lasts until the match ends. After the match the player rejoins the lobby like any joiner.
 - The original's return-to-session request (beacon packet 9) is the nearest counterpart; its timing is R5.
+
+**Simplified vs the original:**
+- New: the original had no rejoin into a running match (the return-to-session timing is R5).
+- Why: lockstep keeps every peer's full state, so a rejoin is a late join with the player's old slot.
 
 ### 3.9 After the match
 
@@ -277,6 +324,8 @@ Party lobby menu:
 - A member who leaves the end screen early ("Quit Match") returns to the party lobby. The host leaving at this point is
   host loss (3.7).
 
+**Simplified vs the original:** none. It is the original's seamless return to the game lobby.
+
 ### 3.10 Parties and invites (phase 2)
 
 - The original's party: members follow the leader into the leader's game (beacon "tell clients to join"). Non-leaders
@@ -286,6 +335,11 @@ Party lobby menu:
 - Invites (Friends List -> "Invite Friends" / "Sent you a game invite!") become a code the inviter sends out of band
   (copy / paste, chat) until a directory exists. The original's GameInviteAccepted (event 16) and JoinInviteFailed (17)
   then get raised.
+
+**Simplified vs the original:**
+- Deferred to phase 2.
+- Invites become codes until a directory exists.
+- Why: no friends or presence service.
 
 ### 3.11 Phase 2: PC to browser
 
@@ -301,6 +355,53 @@ Party lobby menu:
   ("PC" / "Web") after the name (D11).
 
 ---
+
+**Simplified vs the original:** not applicable (there was no browser version).
+
+### 3.12 Voice chat (decision D7: in scope)
+
+The user's decision: push-to-talk by default, an open-mic option, per-player mute, team or all channel, and the
+original's talker icons and HeadsetState column where the movies have them.
+
+**Settings** (Settings > Audio, rows added after the original volumes, the technique of the Graphics rows):
+
+| row | values | default |
+|---|---|---|
+| Voice Chat | Off / Push to Talk / Open Mic | Push to Talk |
+| Voice Channel | Team / All | Team (FFA modes: All) |
+| Input Device | System Default, then the capture devices by name | System Default |
+| Push-to-Talk Key | a short list: V, T, B, Caps Lock, Mouse 4, Mouse 5 (pad: hold the left d-pad) | V |
+| Voice Volume | 0-100 in tens (the original volume rows' scale) | 70 |
+
+- These are saved under [PCSettings] (VoiceMode, VoiceChannel, VoiceDevice, VoicePttKey, VoiceVolume).
+- Open Mic gets a fixed voice-activity threshold in phase 1. A sensitivity row follows only if playtests ask for it.
+- A Push-to-Talk binding conflicts with a game binding when it shares a key; the row then shows the hint "Also bound
+  to `a" (NEW text). Nothing is unbound automatically.
+
+**Lobby and scoreboard:**
+- **Talking indicator:** PlayerList_GFX's HeadsetState per row (1 voice on, 2 speaking), the original icon and
+  speaking_mc. Muted players show 1 even while they talk.
+- **Mute:** selecting a player row (game lobby list, in-match scoreboard) offers the original "Mute" / "Unmute"
+  ($UIText.PlayerList.Mute / UnMute). Mutes are local only (nobody is told) and are remembered per fingerprint in the
+  profile, so a muted player stays muted in the next session.
+- Bots have no voice. Their HeadsetState is 0.
+
+**In the match:**
+- The HUD's own talker list (Hud_GFX sprite 573) shows the names of the players speaking, including the local player
+  while the key is held or the open mic is live.
+- The channel follows Voice Channel: Team sends to the own team only; All to everyone.
+- **Spectators and the dead:** they hear and talk on their team channel as normal. The original's dead-chat rule is
+  unknown (R7).
+
+**Browser (phase 2):** the browser asks for microphone permission the first time voice is used; with no permission,
+Voice Chat behaves as Off and the row's hint says so (NEW text).
+
+**Simplified vs the original:**
+- Push-to-talk by default (the user's decision); the original was open mic on a headset.
+- Team / All is a player setting, not a rule of the session.
+- Mutes persist per fingerprint, not per gamertag.
+- Voice travels on the session layer's own channel (Systems' transport, e.g. WebRTC audio), not inside game packets.
+- Why: lockstep packets carry only commands, and PC players have no headset convention.
 
 ## 4. Screens: exist vs must be made
 
@@ -319,6 +420,10 @@ Party lobby menu:
 | Kill feed "has left the game" | Hud_GFX | exists (original string) |
 | Rejoin choice on connection loss | MessagePrompt_GFX two-button form | exists (original two-button prompts, e.g. Join / cancel) |
 | Platform tag ("PC" / "Web") | PlayerList_GFX name cell | **add** (appended text, D11) |
+| Voice rows (Voice Chat, Voice Channel, Input Device, Push-to-Talk Key, Voice Volume) | SettingsMenu_GFX Audio page | **add** (rows inserted before the page's last row, as on the Graphics page) |
+| Mute / Unmute on a player row | PlayerList_GFX (lobby, scoreboard) | exists (original texts); the row action is **added** |
+| Talking indicator | PlayerList_GFX HeadsetState + speaking_mc | exists (values new) |
+| Talker list | Hud_GFX sprite 573 | exists (reads HeadsetState 2) |
 | Desync / migration banner | Hud_GFX game message (mc_gameMessage_default) | exists (HUD message line) |
 | Session browser (phase 2+) | PartyLobby_GFX playlist list form | **add** later, built from the playlist list form |
 | Data-folder step (browser) | none | **add** in phase 2 (outside GFx: a DOM page before the canvas) |
@@ -379,6 +484,18 @@ Profile / data stores:
 14. <CurrentGame:Players> rows for remote humans: name, team, level (self-reported), IsConnecting, platform tag.
 15. A stored "last joined" code / address per friend (phase 2 Friends List).
 
+Voice (3.12):
+
+17. Profile: the [PCSettings] voice fields and a muted-fingerprint list. The Audio page rows read and write them through
+    <PCSettings:Voice*> data-store keys, as the Graphics rows do.
+18. Session boundary additions (Session.h, when voice code starts):
+    - calls: setVoice(mode, channel, device, pttDown) and setMuted(member, bool);
+    - an event: TalkerState(member, talking).
+    The frontend turns them into HeadsetState per <CurrentGame:Players> row; the audio capture and playback belong to
+    Systems.
+19. Push-to-talk: the key is read from raw input as a held key, never through the sim command stream (UI-only input,
+    netcode section 4).
+
 Tests (frontend, all headless, before any network exists):
 
 16. A fake session layer driving the flow through host, join (success / full / timeout / version / map), member
@@ -389,7 +506,7 @@ Tests (frontend, all headless, before any network exists):
 
 ## 6. Decisions (D) and open RE questions (R)
 
-Decided 2026-10-17 by Integration (rebuild-07), faithful where the original defines a rule. D7 waits for the user.
+Decided 2026-10-17 by Integration (rebuild-07), faithful where the original defines a rule; D7 by the user.
 
 - **D1 decided:** the Accounts screen's account name is the online display name (no separate field).
 - **D2 decided:** "Unable to Host" keeps the original title; the message is a PC text ("No connection could be opened
@@ -401,7 +518,8 @@ Decided 2026-10-17 by Integration (rebuild-07), faithful where the original defi
 - **D5 decided:** the idle kick is on at the original 180 s in every session (public and private).
 - **D6 decided:** in phase 1, a player joining during a match waits in the host's game lobby ("Match in progress") and
   enters with everyone for the next match; faithful join in progress (state transfer, bot slot) comes in phase 1b.
-- **D7 pending (user decision):** voice chat (the original had it: MaxRemoteTalkers 30, the HeadsetState column).
+- **D7 decided (user):** voice chat is in scope - push-to-talk by default, an open-mic option, per-player mute, Team /
+  All channel, the original's talker icons and HeadsetState column where the movies have them (3.12).
 - **D8 decided:** faithful - no XP in private online games (the original's bUsesStats false / CanGainXp rule).
 - **D9 decided:** host loss ends the session in phase 1 (the original's "The game has ended because the host has
   quit."); host migration comes in phase 1b.
@@ -414,3 +532,4 @@ Decided 2026-10-17 by Integration (rebuild-07), faithful where the original defi
 - **R4** The client's return point after "connection lost" / "host has quit": front end or party lobby.
 - **R5** When the original sent the return-to-session request (beacon packet 9).
 - **R6** Whether the public lobby countdown restarted below NumRequiredPlayers.
+- **R7** The original's voice routing in versus (team only or everyone; whether dead players talked to the living).
