@@ -4,7 +4,7 @@
 # stalls, bytes/s. Own port range (default peers 5301 / 5302, shim 6300+) so it can run beside Systems' rows. PIDs killed on timeout.
 #   powershell -File tools/fidelity/net-identity.ps1 -Bin <dir with wfc_rebuild.exe> -Out <dir> [-Profiles lan,typical,bad] [-Seconds 30]
 param([Parameter(Mandatory)][string]$Bin, [Parameter(Mandatory)][string]$Out, [string]$Profiles = 'lan,typical,bad', [int]$Seconds = 30,
-      [int]$HashEvery = 1, [int]$PortBase = 5300, [string]$Map = 'MP_IAC_Streets', [string]$RenderData = 'F:\Transformers Rebuild\Rebuild\work\render', [switch]$Replay)
+      [int]$HashEvery = 1, [int]$PortBase = 5300, [string]$Map = 'MP_IAC_Streets', [string]$RenderData = 'F:\Transformers Rebuild\Rebuild\work\render', [switch]$Replay, [int]$StateDumpAt = 0)   # (-StateDumpAt <tick>: WFC_NET_STATEDUMP on both peers and the replay, Gameplay's per-pawn dump)
 $py = 'F:\Transformers Rebuild\AssetTools\bin\py\python.exe'; $here = $PSScriptRoot
 $hold = Join-Path (Split-Path (Split-Path $here -Parent) -Parent) 'work\PERF_HOLD'
 $exe = Join-Path $Bin 'wfc_rebuild.exe'; if (-not (Test-Path $exe)) { "no exe $exe"; exit 1 }
@@ -29,7 +29,8 @@ foreach ($prof in ($Profiles -split ',')) {
                 WFC_MATCH_URL = "$($Map)?GameModeTag=TDM?BotsFriendly=2?BotsEnemy=2?PointsToWin=1000"; WFC_NET_SLOT = "$slot"; WFC_NET_SEATS = '2';
                 WFC_NET_BIND = "127.0.0.1:$($PortBase + 1 + $slot)"; WFC_NET_PEERS = "$(1 - $slot)=127.0.0.1:$to"; WFC_NET_HASH_EVERY = "$HashEvery";
                 WFC_NET_PACE = '1'; WFC_NET_LOG = (Join-Path $dir 'net.csv'); WFC_NET_TIMEOUT_S = '10' }
-        if ($slot -eq 0 -and $Replay) { $e.WFC_NET_RECORD = (Join-Path $root 'rec.bin') }   # (c702c93b+: the host records every applied tick)
+        if ($slot -eq 0 -and $Replay) { $e.WFC_NET_RECORD = (Join-Path $root 'rec.bin') }
+        if ($StateDumpAt) { $e.WFC_NET_STATEDUMP = "$StateDumpAt" }   # (c702c93b+: the host records every applied tick)
         foreach ($k in $e.Keys) { Set-Item "env:$k" $e[$k] }
         $p = Start-Process -FilePath $exe -WorkingDirectory $dir -WindowStyle Hidden -PassThru; $null = $p.Handle; $procs += $p
         Get-ChildItem env: | ? { $_.Name -like 'WFC_*' } | % { Remove-Item "env:$($_.Name)" }; foreach ($k in $saved.Keys) { Set-Item "env:$k" $saved[$k] }
@@ -49,6 +50,7 @@ foreach ($prof in ($Profiles -split ',')) {
                 WFC_SKIPINTRO = '1'; WFC_PLAYERBOT = '1'; WFC_BOOT = 'match'; WFC_MATCH_SECONDS = "$Seconds"; WFC_RENDER_DATA = $RenderData;
                 WFC_MATCH_URL = "$($Map)?GameModeTag=TDM?BotsFriendly=2?BotsEnemy=2?PointsToWin=1000"; WFC_NET_SLOT = '0'; WFC_NET_SEATS = '2';
                 WFC_NET_HASH_EVERY = "$HashEvery"; WFC_NET_REPLAY = (Join-Path $root 'rec.bin'); WFC_NET_LOG = (Join-Path $dir 'net.csv') }
+        if ($StateDumpAt) { $e.WFC_NET_STATEDUMP = "$StateDumpAt" }
         foreach ($k in $e.Keys) { Set-Item "env:$k" $e[$k] }
         $p = Start-Process -FilePath $exe -WorkingDirectory $dir -WindowStyle Hidden -PassThru; $null = $p.Handle
         Get-ChildItem env: | ? { $_.Name -like 'WFC_*' } | % { Remove-Item "env:$($_.Name)" }; foreach ($k in $saved.Keys) { Set-Item "env:$k" $saved[$k] }
