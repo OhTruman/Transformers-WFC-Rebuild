@@ -3083,3 +3083,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   suicide + forfeit check). AssetTools bb8a1aa: BrokenHope bot_nav_versus (15 deck boxes; decks walkable and joined; under-deck
   paths keep 7.6-10 m headroom; one new 53-cell piece untraced) -> Gameplay decides adoption with the bridges extended; campaign
   finding: skel_collision poses PhysicsAsset boxes from the reference skeleton (3.8-5.7 m off on bridges; campaign phase fix).
+2026-10-17 12:30 AssetTools: the SoundMixerPresetName premise did not hold (empty rows are archetype-inherited; the exporter's chain / prefix logic
+  is the cause of audio.json's missing presets); no runtime effect; PARKED. AssetTools next: stage the slim_files.tsv refresh as a
+  sibling file for the package step.
