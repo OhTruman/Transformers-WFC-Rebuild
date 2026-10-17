@@ -6,7 +6,7 @@
 # per map, with the expected-change materials per map from Systems' matscan. One windowed exe at a time; untimed (card slot).
 #   bash tools/fidelity/matb-eye.sh [name matB]      (env: MAPS, MODES "off faithful", AFTER_ROOT, BEFORE_ROOT, EXE)
 cd "F:/Transformers Rebuild/Rebuild-Experimental" || exit 1
-N=${1:-matB}; MAPS=${MAPS:-"501 502 503 504 507 508 509 510"}; MODES=${MODES:-"off faithful"}
+N=${1:-matB}; MAPS=${MAPS:-"501 502 503 504 507 508 509 510"}; MODES=${MODES:-"off faithful real"}   # (Realistic included: Integration 2026-10-17, the user plays it)
 EXE=${EXE:-"$PWD/work/ab/fast_af4d073/build-release/bin/wfc_rebuild.exe"}
 BEFORE_ROOT=${BEFORE_ROOT:-"F:/Transformers Rebuild/Rebuild/work/render"}; AFTER_ROOT=${AFTER_ROOT:-"F:/Transformers Rebuild/Rebuild-Systems/work/matB/render"}
 MATS="F:/Transformers Rebuild/Rebuild-Systems/docs/handoff/matscan/scan_classes.json"; PY="F:/Transformers Rebuild/AssetTools/bin/py/python.exe"

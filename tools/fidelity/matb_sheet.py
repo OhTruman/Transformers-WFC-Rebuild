@@ -49,6 +49,11 @@ def boxes(mask, n=3, pad=24):
                 out.append((s, max(0, min(xs) * g - pad), max(0, min(ys) * g - pad), min(w, (max(xs) + 1) * g + pad), min(h, (max(ys) + 1) * g + pad)))
     return [b[1:] for b in sorted(out, reverse=True)[:n]]
 rows_md = ["# Material eye pass: before (integration render data) vs after (candidate)", "", f"before: `{BEF}`  after: `{AFT}`", "",
+           "Reference: no Xbox 360 captures exist (Systems 2026-10-17). The reference is the shipped shader's intent (Systems' "
+           "SYSTEMS_MATC_VECTOR_CHANNEL_SCAN.md section (B) step 1): each listed material's colour is tint x the vector parameter's alpha "
+           "intensity where the old translation gave tint x tint - e.g. light shafts (rgb, 2).w twice as bright instead of about half, "
+           "force fields (blue, 3).w 3x, energon plasma (rgb, 150).w an emissive glow that blooms. 'Closer to the original' = the "
+           "effect reads as authored (a visible shaft / field / glow), neither washed out nor invisible.", "",
            "| map | mode | same match (SIMHASH) | frames | frames changed | pixels changed % (mean over changed frames) | luminance shift in changed px | expected-change materials on the map | read |",
            "|---|---|---|---|---|---|---|---|---|"]
 W = 960
