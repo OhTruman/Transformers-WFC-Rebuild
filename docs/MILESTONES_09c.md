@@ -3334,3 +3334,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 15:13 Rendering CARD FREE (x19): lens flares with intensity 1 on Rust outdoor views = large disc + ring + rays + a frame-wide lavender
   veil (+45-63 levels mean); follows the decoded math but no original reference. HELD: RE compares with the original's Rust images
   + re-checks the native scale semantics by 15:45; merge only on an authored-look PASS, else next head. Card -> Frontend 15:16.
+2026-10-17 15:14 Read lf_rust_full.png: the intensity-1 flare build draws Base_SUN / ring / rays through the occluding building (lane view) and
+  mid-frame away from the visible sun (street view): not mergeable. Rendering applies per-element OcclusionScaling(coverage) x
+  ScreenPercentageMap on the CPU (intensity 1), re-cuts, one 8-min pass after the Frontend; RE's reference comparison on the
+  corrected sheet; 16:15 deadline for the candidate.
