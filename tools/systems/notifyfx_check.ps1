@@ -3,7 +3,7 @@
 # Reports: the new arm's NOTIFYFX lines (local / participant, per template), the captures that differ (crops via
 # shot_diff_crops.py) and every cue that started in the base arm (the CUELOG list for the E-class check), written to
 # <Out>\cues_started.txt. One exe at a time, killed by PID on timeout, waits for PERF_HOLD.
-param([Parameter(Mandatory)] [string]$BaseBin, [Parameter(Mandatory)] [string]$NewBin, [string]$Out = 'F:\Transformers Rebuild\Rebuild-Systems\work\notifyfx_check',
+param([switch]$MuzzlePair, [Parameter(Mandatory)] [string]$BaseBin, [Parameter(Mandatory)] [string]$NewBin, [string]$Out = 'F:\Transformers Rebuild\Rebuild-Systems\work\notifyfx_check',
       [string]$Map = 'MP_IAC_Streets', [int]$Seconds = 90)
 $hold = 'F:\Transformers Rebuild\Rebuild-Experimental\work\PERF_HOLD'
 $py = 'F:\Transformers Rebuild\AssetTools\bin\py\python.exe'
@@ -23,7 +23,10 @@ function Run([string]$bin, [string]$dir, [hashtable]$envs) {
 }
 foreach ($arm in 'base', 'new') {
     $dir = Join-Path $Out $arm
-    Run $(if ($arm -eq 'base') { $BaseBin } else { $NewBin }) $dir @{ WFC_SKIPINTRO = '1'; WFC_LOCKSTEP = '1'; WFC_FRAMELIMIT = '60'; WFC_PLAYERBOT = '1'; WFC_RT_MODE = '0';
+    # -MuzzlePair: both arms on the new exe, the muzzle light colour authored (base) vs the owner's energon (new)
+    $bin = if ($MuzzlePair -or $arm -eq 'new') { $NewBin } else { $BaseBin }
+    $mz = if ($MuzzlePair -and $arm -eq 'new') { '1' } else { '' }
+    Run $bin $dir @{ WFC_MUZZLEENERGON = $mz; WFC_SKIPINTRO = '1'; WFC_LOCKSTEP = '1'; WFC_FRAMELIMIT = '60'; WFC_PLAYERBOT = '1'; WFC_RT_MODE = '0';
         WFC_LOGTIME = '1'; WFC_CUELOG = '1'; WFC_NOTIFYLOG = '1'; WFC_BOOT = 'match'; WFC_MATCH_SECONDS = "$Seconds"; WFC_SMOKE_FRAMES = '2000000';
         WFC_MATCH_URL = "$($Map)?GameModeTag=TDM?BotsFriendly=4?BotsEnemy=5?PointsToWin=1000"; WFC_SHOTMATCH = ((Join-Path $dir 'shots') -replace '\\', '/') + ',150,5400,150' }
 }
