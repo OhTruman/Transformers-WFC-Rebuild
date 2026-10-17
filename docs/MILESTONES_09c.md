@@ -2672,3 +2672,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   pending in work/pass29/cam; the camera patch merges on it). Card -> Rendering x9slot ~22 min (body-bit zero-difference pair,
   X7 Gorge views + the Streets frontend pair vs the 2.02 s bar, particle before / after on cand27), then Systems 35 min, then
   Experimental's (B) eye pass.
+2026-10-17 09:28 MERGED 1f1d4e17 camera recoil / FOV kick / fire shake (Gameplay; crop verdict PASS: pitch climb under autofire as authored, per-shot
+  motion up; the death follow-up confirmed on the switched data: soft dark scorch, textured metal chunks); 872c1ff4 + d03e3b40
+  online match roster rows + glue; RE lane TIME_MATERIALS_LIGHTS_RE.md parts 1-2 (all 3,093 time-driven materials keep their
+  time term; MP authors no dynamic light behaviour; gaps routed: muzzle light colour = owner's EnergonColor -> Systems, Remnant
+  PointLightToggleable_1918 missing from lighting.json + optional time-phase reset at map load -> Rendering, Domination marker
+  NodeID -> Gameplay). Pre-existing: Exp_Death_FX distortion swirl far too strong at the death explosion -> Rendering to check
+  the translated distortion scale. Frontend: Join Game row overlap fixed; <Strings:> fix = correct per AS, rename prompt to be
+  verified in a 4-min re-slot, Claimed / Unclaimed unreachable (no Iconic Mode in our lobby: a later fidelity item). Card:
+  Rendering slot running -> Frontend 4 -> Systems 35 -> (B).
