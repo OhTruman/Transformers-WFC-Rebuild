@@ -20,6 +20,8 @@ ignored):
 
 C means the name is referenced, not that it is rendered faithfully.
 
+**E is not "unused" (Systems, 2026-10-18):** our audio code (AbilityAudio / CharacterAudio) plays cues looked up by class and field in the embedded JSON tables (`classSound` / buff sounds), so an E-only cue can still be played (e.g. the cloak loops via TnBuffCloak). Treat **-** (no hit) as the real gap list; E items need a runtime check (Systems' CUELOG).
+
 ## 1. How the original picks impacts per physical material (CONFIRMED script; the rule our runtime needs)
 
 `TnWeaponMesh` overrides; first hit wins:
