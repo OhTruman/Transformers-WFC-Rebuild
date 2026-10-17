@@ -612,6 +612,11 @@ static void testFlow() {
     check(runUntil(rt, [&] { return f.frontEndStarted(); }), "flow.frontend_started");
     check(f.ui().state() == UIState::FrontEnd && f.ui().openMovie() == "UI_GFxFrontEnd_p.FrontEnd_GFX_1", "flow.frontend_ui");
     check(runUntil(rt, [&] { return f.level() == LevelKind::GameLobby && !f.loading().active; }), "flow.reached_gamelobby");
+    // The Select Map selector's own first request (its list filling) arrives after the lobby opens; the autoplay
+    // script's map (508) must still win, i.e. the script waits for the selector instead of being taken as its init.
+    f.call("Online.SetSelectedMapID", {"501"});
+    check(runUntil(rt, [&] { return f.lobby().mapId == 508; }, 60 * 5), "flow.autoplay_map_survives_selector_init",
+          std::to_string(f.lobby().mapId));
     check(f.lobby().gameModeTag == "TDM" && f.lobby().mapSelectionMethod == 1, "flow.gamelobby_private_tdm");
     {   // Game Mode Options bot rows (user playtest 2026-10-13): TnGameSettings fields after the mode's own; Create Game's
         // write of an unchanged label is not an edit; a changed one applies.
