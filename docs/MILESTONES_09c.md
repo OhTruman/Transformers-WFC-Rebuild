@@ -2853,3 +2853,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   EXPLODE one-shot at pickup) -> Systems' SYSTEMS_DECOY_CUES. Remnant light: starts on, no toggles, per-pixel on the world, no
   static shadowing (LVV culling UNKNOWN) -> Rendering builds it after the exposure slot. c15678e9 Frontend dev parser merged;
   Frontend gap = onlinehud.sh + iconic.sh (~4.5 min) after Gameplay. RE next: original exposure / eye adaptation; LVV culling.
+2026-10-17 10:45 Systems SYSTEMS_DECOY_TRAP_FX.patch (136cb500) built on the 8-patch stack: EXPLODE one-shot at the trap on trigger, DecoyTrap_FX on
+  the victim's TargetingSocket every client until StunEnd, Electrocution via the body notify, DEPLOY via the existing trigger-sound
+  path; CharacterAudio.inc regenerated (+1 class entry). Rides the pair after today's frozen full_bin slot; merges after 104b31cc
+  on PASS.
