@@ -2857,3 +2857,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the victim's TargetingSocket every client until StunEnd, Electrocution via the body notify, DEPLOY via the existing trigger-sound
   path; CharacterAudio.inc regenerated (+1 class entry). Rides the pair after today's frozen full_bin slot; merges after 104b31cc
   on PASS.
+2026-10-17 10:46 Campaign data prep: chapter A1 asset manifest merged (the dump lacks nothing; our gaps: 18 textures, 3 psa-only anim sets, 2
+  PARTIAL FX, 103 missing + 416 candidate materials PROVISIONAL); AssetTools runs A2..D5 + a summary table, then a translator dry
+  run over the campaign masters. RE: Remnant light flags CONFIRMED (forced dynamic, composite shadow, on at load, no toggles);
+  LVV culling callers (~1 h) granted after the tonemap / exposure item.
