@@ -2956,3 +2956,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   ShaderCache_1203: Edge_Fresnel_Color rgb x its own alpha) -> all 118 (B) entries switch at Systems' CARD FREE. Rendering: additive
   composite = pure add (ONE, ONE; no depth write): authored, no pair; door DRAW code complete (d2b54522, cand32 = cand31 +
   Gameplay's transact + draw; 6 materials as a render-data overlay); ~10-min x15slot for the door views rides after x14.
+2026-10-17 11:29 Systems CARD FREE 11:28: SIMHASH PASS both pairs (stack presentation-only, 36 / 36 frames identical) but BODY_NOTIFY_FX NOT
+  VERIFIED (zero rows matched in 120 s: units / key bug, fix offline), ABILITY_TRIGGER_FX dispatch works (Drain x4, Warcry x7) but
+  DATA GAP: the ability / body-notify templates are not in map_fx_runtime.json (build_map_fx selector + regen pending), DRAIN_BEAM
+  not exercised, PHYSMAT inconclusive (no special surface hit) -> the six-patch stack stays UNMERGED; ~10-min re-run after
+  Rendering's slots. (B) SWITCHED 11:29: all 118 entries on 10 maps (live == candidate 10 / 10); matB/render unfrozen. RE's
+  interpolated-lightmap decode merged (two captures per door, lerp by the anim position every tick). Card -> Gameplay 4 min
+  (11:29) -> Frontend 5 -> Rendering slot_all (x13 + x14 + x15, ~45 min).
