@@ -1214,7 +1214,8 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                 float dens = rtdef::x3Density(), haze = rtdef::x3Haze(), lampK = rtdef::x3Lamp();
                 static const struct { const char* map; float dens, haze, lamp; } kMapX3[] = {
                     {"MP_UND_Gorge", 0.1f, 0.0015f, 1.0f},
-                    {"MP_KON_Molten", 0.3f, 0.001f, 2.0f}};   // (Molten: its sunlit hall went grey at 0.003 - the shafts keep their dark gaps)
+                    {"MP_KON_Molten", 0.3f, 0.001f, 2.0f},
+                    {"MP_IAC_Streets", 0.3f, 0.0007f, 2.0f}};   // (Streets: its blue sun lit the open air at the frame edges - eye pass round 3)   // (Molten: its sunlit hall went grey at 0.003 - the shafts keep their dark gaps)
                 for (const auto& mx : kMapX3)
                     if (dataDir_.find(mx.map) != std::string::npos) {
                         if (!rtdef::envSet("WFC_X3_DENSITY")) dens = mx.dens;
