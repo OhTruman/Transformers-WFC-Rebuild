@@ -1,0 +1,21 @@
+--- a/tools/package/verify_slim.ps1
++++ b/tools/package/verify_slim.ps1
+@@ -106,15 +106,16 @@
+     whitemix = 0.5       # white-roll strength, keeps the warm tint (WFC_TONE_WHITEMIX)
+     x3 = 'on'            # X3 froxel volumetrics (WFC_X3=0 off; Rendering 607baafd) - global defaults, the per-map table is not on the line
+     x3density = 0.3      # medium = authored height fog x density (WFC_X3_DENSITY)
+-    x3haze = 0.003       # haze floor, 1 / m (WFC_X3_HAZE)
++    x3haze = 0.0015      # haze floor, 1 / m, following the fog's height falloff (WFC_X3_HAZE; round 3)
+     x3sun = 0.6          # sun in-scatter, peak-normalised (WFC_X3_SUN)
+     x3lamp = 2           # in-view lamps (WFC_X3_LAMP)
+-    x3trans = 1          # transient lights (WFC_X3_TRANS)
++    x3trans = 0.2        # transient lights, with the lamps' inverse-square core (WFC_X3_TRANS; round 4)
+     x3g = 0.5            # phase g (WFC_X3_G)
+     x3dist = 120         # froxel range, m (WFC_X3_DIST)
+     x3history = 0.9      # temporal history (WFC_X3_HISTORY)
+     x3lampcore = 2       # lamp core size (WFC_X3_LAMPCORE)
+     x3tonecontrast = 1.2 # X1 contrast on X3 frames (WFC_X3_TONECONTRAST)
++    x3cap = 0.2          # integrated in-scatter cap per channel (WFC_X3_CAP; 0 = none; round 4)
+ }
+ 
+ function Norm([string]$p) {
