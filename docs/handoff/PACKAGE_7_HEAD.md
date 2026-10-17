@@ -29,6 +29,7 @@ The user's package 7 scope (2026-10-17), in the order given; visual items first.
 | Mine saturation, Realistic | the point-blank explosion's exposure / flash term (RENDERING_PACKAGE7_POLISH.md item 1); Faithful unchanged by evidence (SYSTEMS_HDR_SHADER_DECODE.md 6b90296c + RE HDR_SCENE_PATH_RE.md 43d7bc1) | Rendering (Systems evidence done) | open |
 | Hover + squad polish | Smart ride height / hover (ride-height probe model, ledge guard v3) and squad follow reversals | Gameplay | open |
 | Death bodies in full | scorch decals, ragdoll / skeletal gibs, the faithful death picker, the authored death camera, killer cam | Gameplay (decals with Rendering) | open; death light ends with the pawn (Gameplay 800e552e) |
+| D3D12 presenter exit hang | 1 in 32 exits stuck in the kernel (known issue below; dump in Experimental work/leak/armB_d3d12present/run-32) | Rendering | open |
 | Death-body cost | one draw per settled body, TLAS / BLAS per body (package 6 item 1: +0.67..+1.94 ms p90 at 63 bots RT off, +0.17..+0.49 ms p50 RT on) | Gameplay + Rendering | open |
 
 ### Details (filled as items merge)
@@ -47,7 +48,12 @@ Carried from package 6 (open):
 - **Vehicle muzzle lights saturate nearby walls** (authored brightness 25 / 5 m, as the original); WFC_TLIGHTSCALE is the lever.
 - **Extended-match body cost** until the death-body cost item merges (numbers above).
 - **Squad follow reversals** (Smart) until the squad polish merges.
-- **Driver nonpaged pool** grows with GPU load (AMD); reboot before a long session.
+- **Nonpaged pool growth: a user-side setting, not the game or the driver** (leak arm B, 2026-10-17): the growth is
+  Malwarebytes EDR's FlightRecorder.sys pool tags, +63 MB/h in play and +205 MB/h under builds; no AMD or dxgkrnl tag
+  moved. Reboot before a long session, or exclude the game / build folders from the EDR's flight recorder (the user's
+  choice).
+- **D3D12 presenter exit hang (Rendering)**: 1 in 32 exits, the process stays stuck in the kernel on the GPU and cannot be
+  killed (it held the card until a reboot on 2026-10-17); dump in Rebuild-Experimental work/leak/armB_d3d12present/run-32.
 - **Faithful blend-time HDR residual** (documented, not changed): the 360 scene target saturates at 3.984 during
   blending, our FP16 target does not; visible only if a later translucent layer darkens an over-bright pixel, not seen in
   any capture (RENDERING_PACKAGE7_POLISH.md section 4).
