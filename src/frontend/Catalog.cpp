@@ -94,7 +94,8 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
     }
     // The shipped INT localization files themselves fill what the manifest does not carry (e.g. the HUD's
     // TnDamageType* DeathString templates, TnMessageTextColors-coloured kill feed, game-type messages).
-    for (const char* file : {"TransGame", "UIText", "Engine"}) {   // Engine: [Errors] connection texts (online popups)
+    // Engine: [Errors] connection texts (online popups); TransContent: TnVersusGameOverMessage (the end screen's result line)
+    for (const char* file : {"TransGame", "UIText", "Engine", "TransContent"}) {
         std::ifstream f(openPath(extractedRoot + "/config/Coalesced_int/TransGame/Localization/INT/" + file + ".int"));
         std::string line, section;
         while (std::getline(f, line)) {

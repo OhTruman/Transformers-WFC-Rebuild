@@ -1638,6 +1638,25 @@ struct FirstRunRig : OnlineRig {
     }
 };
 
+static void testForfeitEnd() {
+    // A team with no players left forfeits (Gameplay's 1.5 s check, Systems 10.5): the winners' end screen shows the
+    // original "Enemy team forfeits"; any other end keeps Gameplay's line; the flow returns to the game lobby as usual.
+    SessionEvent o = ev(SessionEvent::Type::HostOpened); o.joinCode = "WFC-7QK2-M9TD-4H"; o.address = "192.168.1.20:7777";
+    OnlineRig r({after("host", o)});
+    const bool host = r.ok && hostLobby(r);
+    DataStores& ds = r.rt->dataStores();
+    MatchValues v; v.valid = true; v.myTeam = 0; v.winnerTeam = 0; v.endReason = "Forfeit"; v.gameOverMessage = "Your team won";
+    r.f().setMatchValues(v);
+    ds.poll();
+    const std::string forfeit = ds.call("ReadValue", {"<CurrentGame:GameOverMessage>"}).s;
+    v.endReason = "Score";
+    r.f().setMatchValues(v);
+    ds.poll();
+    const std::string score = ds.call("ReadValue", {"<CurrentGame:GameOverMessage>"}).s;
+    check(host && forfeit == "Enemy team forfeits" && score == "Your team won" &&
+          !r.rt->catalog().localizeKey("$WfcPC.Online.BotsLeaverDesc").empty(), "online.F1_forfeit_result_text", forfeit + " / " + score);
+}
+
 static void testLocalizeCaseInsensitive() {
     FrontendRuntime rt;
     rt.init();
@@ -1763,6 +1782,7 @@ int main() {
     testOnlineFirstRun();
     testLaunchRecordAndIdleKick();
     testLocalizeCaseInsensitive();
+    testForfeitEnd();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);
