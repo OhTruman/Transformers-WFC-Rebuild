@@ -2602,3 +2602,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   40 m; SIMHASH identical, EVENTTEST 16 / 16; dry-runs clean on integration); its 10-min check slot (counts, crops, the CUELOG
   list that is the E-class test) goes before the (B) eye pass. Card order after PRESENTER DONE: base check 6 -> (A) switch ->
   Frontend 10 -> Gameplay 4 -> Rendering 20 -> Systems 10 -> (B) ~100.
+2026-10-17 08:53 Merged af2670bb + 40bd1181 online phase 1 groups D / E (start, load gate, peer drop -> bot swap; session end / return paths with
+  the original texts, desync -> game lobby, no XP online; tests 202 / 0; offline unchanged). Phase 1 frontend flows A-E are on
+  integration; F (voice UI state) next, then the audit-3 HUD item and the objectives loader. Systems correction: projectile flight
+  loops already play (WeaponAudio::projectileSpawned, data-driven), dropped from the gap list pending the CUELOG. Presenter loop
+  56 / 64 at 08:53, clean.
