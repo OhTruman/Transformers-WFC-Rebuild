@@ -2560,3 +2560,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   UnapplyBuff only -> Frontend; unwired ability FX / sounds -> Systems). (A) data switch staged (scratchpad matfix_switch.py,
   dry run OK on 10 maps). Presenter loop ~22 / 64 at 08:27, clean. Card order after PRESENTER DONE: (A) switch -> Frontend
   10 min -> Rendering 20 min -> (B) eye pass ~100 min.
+2026-10-17 08:33 RE lane audit 2 part (3) transformation (a1524b0f): jet to-vehicle camera blend 1.0 s authored vs our global 1.5 (Gameplay checks in
+  the camera item); jump / hover FX + jet transform trails unwired (Systems' wiring item); vehicle sounds -> CUELOG check. AssetTools:
+  the 52 "unextracted" waves exist as _LOC twins (no gap); D2 Guardian Chamber = a MISSING FLOOR in our export (hunt in the cooked
+  packages next); then the campaign movies conversion (54 .bik -> WebM VP9 + Opus per track + subtitle JSON, 4 threads, low
+  priority, hold-aware, ~1.5 h; the earlier H.264 set in ExtractedAssets/movies untouched). Presenter loop ~30 / 64, clean.
