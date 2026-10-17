@@ -3010,3 +3010,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   prompt + name path (D1) verified, iconic lobby (no Escalation row) + wheel verified, "AVAILABLE" claim text verified; the in-match
   HUD set + fr_voice_settings re-run at ~12:35 (script deadlock fixed: AllLoaded now sent on WaitingOnGameStart). Transport
   requirement to Systems: the lockstep layer holds the World until every peer's AllLoaded.
+2026-10-17 11:46 FX always-include regen GATED PASS 10 / 10 (scratchpad mapfx_fx5): exactly the 5 templates added (4 on BrokenHope / Remnant),
+  nothing removed, all other systems identical apart from H2H_Punch01's decoder labels; installs after Rendering's CARD FREE, then
+  Systems' re-run.
