@@ -58,6 +58,7 @@
   - NAVQ TIP results: `docs/handoff/hover/tip_summary_6seeds.txt`; the 24-seed run is in `work/pass29/hv` (aggregate with
     `node docs/handoff/hover/aggtip.js <dir> base,new2`).
   - The faithful gate removes Classic's long stuck tips but makes short tips more frequent: decide with Integration.
+- **Queued (proposed, after the perf levers, batched with transforming actors):** the dying vehicle keeps collision until the gib (blocks pawns / projectiles / traces; car / tank 0.2-0.75 s, jet 4-5 s), and the hull gib blocks the world + hitscan (RE VEHICLE_DEATH_PRESENTATION_RE.md 2babd61). Sim-side, so an identity change.
 - **Added to the queue (after hover):** the 32 TnTransformingWorldActor doors / bridges have no collision
   (`docs/handoff/MP_TRANSFORMING_ACTORS.md` + AssetTools `manifests/maps/mp_transforming_actors.json`). Plan: dynamic sets from the
   listed boxes; first check whether they change state in MP.
