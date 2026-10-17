@@ -2976,3 +2976,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 11:34 MERGED 4c392ea5 Rendering's build_map_fx.py always-include selector (tools/render/fx_always.txt = Systems' exact 5 templates);
   the 10-map regen runs into the scratchpad; gate: live + exactly the 5 added, every other system identical with decoder metadata
   (confidence / partial) stripped, nothing removed; then installed and Systems' re-run scheduled.
+2026-10-17 11:34 Gameplay CARD FREE 11:33 (recoil eye check done, 12 runs; verdict pending). Card -> Frontend 5 min (onlinehud + iconic) ->
+  Rendering slot_all.
