@@ -13,7 +13,11 @@ foreach ($m in $Modes) {
     $d = Join-Path $OutDir $m; New-Item -ItemType Directory -Force $d | Out-Null
     $rt = @{ off = 0; faithful = 1; real = 2; realhd = 2 }[$m]
     if (-not $ReportOnly) { (Get-BotProfile 31 32 -Extended -Width 2560 -Height 1440 -HdTextures ([int]($m -eq "realhd")) -RayTracing $rt) | Set-Content -Encoding ascii (Join-Path $d "wfc_profile.ini") }
-    $envs = @{ WFC_FRONTEND_AUTOPLAY = "TDM,508"; WFC_SKIPINTRO = "1"; WFC_RENDER_DATA = $RenderData; WFC_MUTE = "1"; WFC_NOINTERACT = "1" }   # (SKIPINTRO: a fresh profile plays the logo movies, and the script waits forever)
+    # the autoplay script with 'wait:t=2' before SetSelectedMapID: af4d0731's autoplay sets the map before the GameLobby GFx map
+    # selector initialises, and the selector's own init call (SetSelectedMapID 501) then replaces Streets with Seed Of Corruption
+    # (2026-10-17 boot; Rendering's 10-16 boots won the race). Application_Frontend's own scripts wait 1 s there.
+    $script = "wait:frontend;wait:ui=FrontEnd;snapshot:mainmenu;call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby;wait:ui=InLobby;snapshot:partylobby;call:Online.EditGameMode,TDM;call:Online.PlayPrivateGame,TDM;wait:level=GameLobby;wait:ui=InLobby;wait:t=2;call:Online.SetSelectedMapID,508;snapshot:gamelobby;call:Online.BeginLobbyExitCountdown;wait:level=Match;wait:ui=InGame;snapshot:ingame"
+    $envs = @{ WFC_FRONTEND_SCRIPT = $script; WFC_SKIPINTRO = "1"; WFC_RENDER_DATA = $RenderData; WFC_MUTE = "1"; WFC_NOINTERACT = "1" }   # (SKIPINTRO: a fresh profile plays the logo movies, and the script waits forever)
     if ($m -eq "realhd") { $envs.WFC_HDTEXTURES = "2"; $envs.WFC_HD_ROOT = $HdRoot }
     $t0 = Get-Date
     if (-not $ReportOnly) { $r = Invoke-WfcExe -Exe $Exe -Dir $d -Env $envs -TimeoutSec $Secs }
