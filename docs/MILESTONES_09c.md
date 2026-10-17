@@ -3062,3 +3062,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   there yet). Gameplay posts the transact patch at base parity.
 2026-10-17 12:17 All 32 WFC campaign Kismet classes decoded (RE d677248): the campaign scripting step is fully specified (general VM + 36 doc'd +
   51 stock natives + these 32; native H parts: Conversation sequencing, the special-spawn caller).
+2026-10-17 12:18 Gameplay's transforming-actors patch POSTED (1b894dc7: option c; BrokenHope byte-identical, Remnant Smart at base, Rust as
+  authored; TRANSACTTEST 4 maps; BotNav.setBlocked + piece recompute; VehicleDying bodies diverge SIMHASH where a vehicle dies; nav
+  health within noise); applies clean on 1c5de2d8; merges in the door head with Rendering's draw after x15 / x16.
