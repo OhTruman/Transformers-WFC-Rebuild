@@ -3219,3 +3219,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 14:02 MP_TRANSFORMING_ACTOR_CUES_RE.md merged (doors: anim sound notifies only; Rust's start open = DOOR_INTERIOR + DOOR_TUBE) -> Systems
   wires the door sounds through the anim-notify path (the doors' AnimSets join the body-notify table). RE note: spawn distributions
   use emitter time in seconds (Rendering fixing).
+2026-10-17 14:08 MP_ESCALATION_RE.md merged: the mode is specified (waves, budget fill, economy, door generators, respawn at wave end); a future
+  item after online phase 1 (it needs the bridges' versus-nav decks on BrokenHope and the door generators' purchase flow).
