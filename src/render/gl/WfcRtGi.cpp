@@ -496,14 +496,25 @@ void Pipeline::giSetup() {
             if (log) LOG_INFO("RT GI check: page %d (%zu texels): mean decoded RT %.4f vs bake %.4f (ratio %.2f)", k0, pn,
                               pg / std::max<size_t>(pn, 1), pb / std::max<size_t>(pn, 1), pb > 0 ? pg / pb : 0.0);
             sumGi += pg; sumBake += pb; n += pn; ++shown;
+            yieldLoad();                                  // (per page read back: the loading screen presents - X7 4x the bytes)
         }
         glx::textureCacheInvalidate();
         return sumBake > 0 ? sumGi / sumBake : 0.0;
     };
-    float gain = fixedGain >= 0.0f ? fixedGain : 1.0f;
+    // X7 (2x): the map's 1x-fitted gain (today's look; each value is deterministic per map at 1x). The fit is poorly
+    // conditioned - the measured pages barely respond to the bounce gain (Gorge: 0.97 -> 1.03, 0.41 -> 1.00) - so a 2x
+    // fit lands elsewhere in the noise (Gorge 0.527, ~11 % brighter frames). A map without an entry still fits at 2x.
+    float fixed = fixedGain;
+    if (fixed < 0.0f && rtdef::x7()) {
+        static const struct { const char* map; float gain; } kGain1x[] = {
+            {"MP_UND_Gorge", 0.414f}, {"MP_IAC_Streets", 7.668f}, {"MP_KON_Molten", 8.336f}, {"MP_IAC_Rust", 2.765f},
+            {"MP_ORB_Debris", 11.683f}};
+        for (const auto& g : kGain1x) if (dataDir_.find(g.map) != std::string::npos) fixed = g.gain;
+    }
+    float gain = fixed >= 0.0f ? fixed : 1.0f;
     bool ran = runPasses(gain);
     double ratio = ran ? measure(false) : 0.0;
-    if (ran && fixedGain < 0.0f && ratio > 0.05) {
+    if (ran && fixed < 0.0f && ratio > 0.05) {
         double g0 = gain, r0 = ratio;
         double g1 = std::min(24.0, std::max(0.25, gain / ratio));
         for (int it = 0; it < 3 && ran; ++it) {
@@ -523,7 +534,8 @@ void Pipeline::giSetup() {
     if (ran) giBuildProbes();                            // (S3: from the calibrated RT lightmap)
     if (ran) {
         const double r = measure(true);
-        LOG_INFO("RT GI check: RT / bake mean ratio %.2f at bounce gain %.3f%s", r, gain, fixedGain >= 0.0f ? " (WFC_RT_GIBOUNCE)" : "");
+        LOG_INFO("RT GI check: RT / bake mean ratio %.2f at bounce gain %.3f%s", r, gain,
+                 fixedGain >= 0.0f ? " (WFC_RT_GIBOUNCE)" : fixed >= 0.0f ? " (X7: the map's 1x gain)" : "");
     }
     LOG_INFO("RT GI: Realistic lights the map by ray tracing (%zu texels, %u lights, sky %.3f %.3f %.3f, sun k %.3f, %d rays per texel;"
              " load passes %s)", giTexels_.size(), nLights, J.sky[0], J.sky[1], J.sky[2], r1Fit_[0], rays, ran ? "done" : "FAILED");
