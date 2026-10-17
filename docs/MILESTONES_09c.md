@@ -2721,3 +2721,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   extension, default Off (versus byte-identical); ~2.5-3 days Frontend, not package 7-blocking; Gameplay side = host claim
   validation per team. Rendering's 10-min x10slot (int_base12 = integration 53a12618 vs int_cand28 = + particle commits + flash
   term threshold 1.5) is ready and goes right after Systems' slot, before the (B) eye pass.
+2026-10-17 09:51 RE lane CAMPAIGN_PROVISIONALS_CLOSED_RE.md part 1 merged (a3a5ada0): reachFlags 2 = fly CONFIRMED (A4 / D2 verdicts hold); empty
+  objective Description = complete current + show none; elevated spawns harmless; hull physmat rule CORRECTED (first-slot fallback
+  only for StaticMeshActor; SMCA members fall to Metal) -> AssetTools splits the first_material triangles by owner class; matinee
+  empty-object groups: 125 no-ops, 23 stay live (Event / Sound tracks) -> AssetTools' binding state. The resolver order also goes
+  to Systems' impact rule. Part 2 (items 6-12) next. Systems' slot running (~10:23).
