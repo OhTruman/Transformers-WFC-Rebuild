@@ -1,0 +1,27 @@
+diff -ruN a/src/game/LevelAudioScript.cpp b/src/game/LevelAudioScript.cpp
+--- a/src/game/LevelAudioScript.cpp	2026-10-17 12:30:42.319528500 -0500
++++ b/src/game/LevelAudioScript.cpp	2026-10-17 12:30:42.327054100 -0500
+@@ -195,7 +195,10 @@
+         else op.playing = false;
+         break;
+     case Type::Reverb:
+-        if (idx == 0) cues.mixer().activateReverb(op.preset);
++        if (idx == 0) {
++            cues.mixer().activateReverb(op.preset);
++            if (logOn()) LOG_INFO("LEVELAUDIO reverb %s -> %s", op.id.c_str(), op.preset.c_str());   // [Systems] room-switch check
++        }
+         break;
+     case Type::PlayMusic:
+         if (idx == 0 && music) music->playMusic(op.track, op.ignoreSpaz, op.fadeOutOverride);
+@@ -291,9 +294,11 @@
+             if (in && !op.inside) {
+                 const bool allowed = (op.maxTrigger <= 0 || op.triggered < op.maxTrigger) && op.sinceTrigger >= op.retrigger;
+                 op.inside = true;
++                if (logOn()) LOG_INFO("LEVELAUDIO touch %s Touched%s", op.id.c_str(), allowed ? "" : " (refused: MaxTriggerCount / ReTriggerDelay)");
+                 if (allowed) { ++op.triggered; op.sinceTrigger = 0.0f; out(op, "Touched", cues, music, listener); }
+             } else if (!in && op.inside) {
+                 op.inside = false;
++                if (logOn()) LOG_INFO("LEVELAUDIO touch %s UnTouched", op.id.c_str());
+                 out(op, "UnTouched", cues, music, listener);
+             }
+         }
