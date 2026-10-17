@@ -218,6 +218,13 @@ peer and dropped afterwards (the peer's address is then the key).
 - **Addition (agents/frontend 1c2dbd11):** `SessionMemberInfo::iconicCharacter` (std::string) - in iconic mode the member's claimed
   iconic CharacterName, else "". It rides setMemberInfo / MemberJoined like characterSlot; the lobby message serializes it next to
   characterSlot (one length-prefixed string; an old peer without it reads "").
+- **Gameplay session hooks (agents/gameplay 178a7bef):**
+  - `World::noteRemoteCommand(matchPlayer)` resets a Remote participant's 180 s idle clock. LockstepLayer calls it inside the lockstep
+    step, for non-idle commands only, so every peer reaches the idle swap on the same tick.
+  - `World::simTick()` counts sim steps since launchMatch. It is the unit of PeerDropped's SessionEvent.value and of
+    SessionSlotSwap.atTick.
+- **Addition (Frontend, pending):** `virtual float micLevel() const` returns the capture level 0..1 for the Settings > Audio Mic Test
+  meter (default 0). VoiceCapture fills it from the pre-gate RMS of the last 20 ms frame.
 
 ## 11. Phases and exit criteria
 
