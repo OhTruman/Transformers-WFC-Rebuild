@@ -1,3 +1,9 @@
+# IN PROGRESS 2026-10-17 02:14: package 6 gate on af4d0731 (Integration GO 02:10; package 6 = af4d0731 as is, no Streets step)
+
+- Running: RERUN_1B=1 EYE_FROM=x3_cand13 GATE_REGRESS_NOTE="death bodies: ..." bash work/package-gate/respin_af4d073.sh af4d0731 9350f19b (a copy of package-respin.sh 25e03f3f); log work/package-gate/af4d073/gate.log.
+- If interrupted (reboot / pool guard exit 3): remove work/PERF_HOLD if present, then rerun with SKIP_BUILD=1 once the build log shows done (completed regress maps can be kept: the per-map outputs are in work/package-gate/af4d073/regress).
+- Messages owed to Integration (rebuild-9c): regress TIMED DONE (hold removed); the final verdict with the report path (copy PACKAGE-GATE.md to results/PACKAGE-GATE_af4d0731.md).
+
 # Experimental lane - state at 2026-10-16 19:31 (resume note before the GPU curfew / morning reboot)
 
 ## Done today
