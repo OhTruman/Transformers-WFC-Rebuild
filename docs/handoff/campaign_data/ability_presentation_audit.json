@@ -1,0 +1,763 @@
+[
+ {
+  "id": "Cloaking",
+  "class": "TnAbilityCloaking",
+  "specialty": "Scout",
+  "cooldown": [
+   15.0,
+   15.0
+  ],
+  "resource": null,
+  "anim": null,
+  "trigger_sound": null,
+  "trigger_fx": null,
+  "trigger_socket": null,
+  "buffs": [
+   "TransGame.TnBuffCloak"
+  ],
+  "spawns": [],
+  "notifies": [],
+  "assets": {
+   "sound": [
+    "BL_INTRFC_TECH_TREE.CLOAK_AUTOBOT_OFF",
+    "BL_INTRFC_TECH_TREE.CLOAK_AUTOBOT_START_LP",
+    "BL_INTRFC_TECH_TREE.CLOAK_DECEPTICON_OFF",
+    "BL_INTRFC_TECH_TREE.CLOAK_DECEPTICON_START_LP"
+   ],
+   "fx": [
+    "FX_Transformers_p.FX.Cloaking_FX"
+   ]
+  },
+  "grep": {
+   "sound": {
+    "CLOAK_AUTOBOT_OFF": "E",
+    "CLOAK_DECEPTICON_START_LP": "E",
+    "CLOAK_AUTOBOT_START_LP": "E",
+    "CLOAK_DECEPTICON_OFF": "E"
+   },
+   "fx": {
+    "Cloaking_FX": "R"
+   }
+  },
+  "grep_class": "-"
+ },
+ {
+  "id": "HardLock",
+  "class": "TnAbilityHardLock",
+  "specialty": "Scout",
+  "cooldown": [
+   60.0,
+   10.0
+  ],
+  "resource": null,
+  "anim": "Skill_MarkTarget",
+  "trigger_sound": "BL_INTRFC_TECH_TREE.HARD_LOCK_INITIATED",
+  "trigger_fx": null,
+  "trigger_socket": null,
+  "buffs": [],
+  "spawns": [
+   "TnBuffHardLocked",
+   "TnBuffImprovedHardLock"
+  ],
+  "notifies": [],
+  "assets": {
+   "sound": [
+    "BL_INTRFC_TECH_TREE.HARD_LOCK_INITIATED",
+    "BL_INTRFC_TECH_TREE.HARD_LOCK_WARNING_LP"
+   ],
+   "fx": [
+    "FX_Icons_p.FX.Hardlock_FX"
+   ]
+  },
+  "grep": {
+   "sound": {
+    "HARD_LOCK_WARNING_LP": "E",
+    "HARD_LOCK_INITIATED": "E"
+   },
+   "fx": {
+    "Hardlock_FX": "-"
+   }
+  },
+  "grep_class": "CE"
+ },
+ {
+  "id": "Hover",
+  "class": "TnAbilityHover",
+  "specialty": "Soldier",
+  "cooldown": [
+   35.0,
+   15.0
+  ],
+  "resource": null,
+  "anim": null,
+  "trigger_sound": null,
+  "trigger_fx": null,
+  "trigger_socket": null,
+  "buffs": [],
+  "spawns": [],
+  "notifies": [],
+  "assets": {},
+  "grep": {},
+  "grep_class": "C"
+ },
+ {
+  "id": "DecoyTrap",
+  "class": "TnAbilityDecoyTrap",
+  "specialty": "Scout",
+  "cooldown": [
+   60.0
+  ],
+  "resource": null,
+  "anim": "Skill_Barrier",
+  "trigger_sound": "BL_TRANS_POWER.DECOY_TRAP_DEPLOY",
+  "trigger_fx": null,
+  "trigger_socket": null,
+  "buffs": [],
+  "spawns": [
+   "TransGame.TnDecoyTrap"
+  ],
+  "notifies": [],
+  "assets": {
+   "fx": [
+    "FX_Multiplayer_p.FX.DecoyTrap_FX"
+   ],
+   "sound": [
+    "BL_TRANS_POWER.DECOY_TRAP_DEPLOY",
+    "BL_TRANS_POWER.DECOY_TRAP_EXPLODE"
+   ],
+   "light": [
+    "{}"
+   ]
+  },
+  "grep": {
+   "fx": {
+    "DecoyTrap_FX": "-"
+   },
+   "sound": {
+    "DECOY_TRAP_DEPLOY": "E",
+    "DECOY_TRAP_EXPLODE": "-"
+   }
+  },
+  "grep_class": "E"
+ },
+ {
+  "id": "Dodge",
+  "class": "TnAbilityDodge",
+  "specialty": "Scout",
+  "cooldown": [
+   2.0,
+   0.5
+  ],
+  "resource": null,
+  "anim": null,
+  "trigger_sound": null,
+  "trigger_fx": null,
+  "trigger_socket": null,
+  "buffs": [],
+  "spawns": [],
+  "notifies": [],
+  "assets": {},
+  "grep": {},
+  "grep_class": "C"
+ },
+ {
+  "id": "SpawnAmmoCrate",
+  "class": "TnAbilitySpawnAmmoCrate",
+  "specialty": "Soldier",
+  "cooldown": [
+   60.0,
+   180.0
+  ],
+  "resource": null,
+  "anim": "Skill_Barrier",
+  "trigger_sound": "BL_TRANS_POWER.AMMO_DEPLOY",
+  "trigger_fx": null,
+  "trigger_socket": null,
+  "buffs": [],
+  "spawns": [
+   "TransGame.TnAmmoBeacon"
+  ],
+  "notifies": [],
+  "assets": {
+   "sound": [
+    "BL_TRANS_POWER.AMMO_DEPLOY",
+    "SoundEvents_Dialog.WeaponPickupMountedIonBlasterObtainedDialog"
+   ],
+   "light": [
+    "{}"
+   ]
+  },
+  "grep": {
+   "sound": {
+    "WeaponPickupMountedIonBlasterObtainedDialog": "-",
+    "AMMO_DEPLOY": "CE"
+   }
+  },
+  "grep_class": "CE"
+ },
+ {
+  "id": "Shockwave",
+  "class": "TnAbilityShockwave",
+  "specialty": "Scientist",
+  "cooldown": [
+   60.0
+  ],
+  "resource": 100.0,
+  "anim": "Skill_Shockwave",
+  "trigger_sound": null,
+  "trigger_fx": null,
+  "trigger_socket": null,
+  "buffs": [],
+  "spawns": [],
+  "notifies": [
+   "HurtRadius:None@WhirlwindSocket",
+   "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+   "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+   "PlayEffect:Shield_BlastWave_A_FX@PositionSocket",
+   "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+   "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+   "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+   "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+   "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+   "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+   "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+   "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+   "Sound:SHIELD_PUSH"
+  ],
+  "assets": {
+   "fx": [
+    "DashPulse_1_FX",
+    "Shield_BlastWave_A_FX",
+    "Trails_Bumblebee_FX"
+   ],
+   "sound": [
+    "SHIELD_PUSH"
+   ]
+  },
+  "grep": {
+   "fx": {
+    "DashPulse_1_FX": "R",
+    "Shield_BlastWave_A_FX": "R",
+    "Trails_Bumblebee_FX": "R"
+   },
+   "sound": {
+    "SHIELD_PUSH": "CE"
+   }
+  },
+  "grep_class": "C"
+ },
+ {
+  "id": "Whirlwind",
+  "class": "TnAbilityWhirlwind",
+  "specialty": "Soldier",
+  "cooldown": [
+   60.0
+  ],
+  "resource": 100.0,
+  "anim": null,
+  "trigger_sound": null,
+  "trigger_fx": null,
+  "trigger_socket": null,
+  "buffs": [],
+  "spawns": [],
+  "notifies": [],
+  "assets": {},
+  "grep": {},
+  "grep_class": "C"
+ },
+ {
+  "id": "Drain",
+  "class": "TnAbilityDrain",
+  "specialty": "Scientist",
+  "cooldown": [
+   60.0
+  ],
+  "resource": 100.0,
+  "anim": null,
+  "trigger_sound": "BL_TRANS_POWER.DRAIN_INITIATE",
+  "trigger_fx": "FX_Multiplayer_p.FX.Drain_Blast_FX",
+  "trigger_socket": null,
+  "buffs": [
+   "TransGame.TnBuffDrainSource"
+  ],
+  "spawns": [],
+  "notifies": [],
+  "assets": {
+   "sound": [
+    "BL_TRANS_POWER.DRAIN_HEAL",
+    "BL_TRANS_POWER.DRAIN_INITIATE"
+   ],
+   "fx": [
+    "FX_Multiplayer_p.FX.Drain_Blast_FX"
+   ]
+  },
+  "grep": {
+   "sound": {
+    "DRAIN_HEAL": "E",
+    "DRAIN_INITIATE": "E"
+   },
+   "fx": {
+    "Drain_Blast_FX": "-"
+   }
+  },
+  "grep_class": "E"
+ },
+ {
+  "id": "SpawnSentry",
+  "class": "TnAbilitySpawnSentry",
+  "specialty": "Scientist",
+  "cooldown": [
+   60.0
+  ],
+  "resource": 100.0,
+  "anim": "ADD_Grenade_Throw",
+  "trigger_sound": null,
+  "trigger_fx": null,
+  "trigger_socket": null,
+  "buffs": [],
+  "spawns": [
+   "TransGame.Default__TnAbilitySpawnSentry.PawnFactory0",
+   "TnSentryPawnAbility"
+  ],
+  "notifies": [
+   "Sound:GRENADE_FOLEY_TOSS_LRG",
+   "Sound:GRENADE_FOLEY_TOSS_MED",
+   "Sound:GRENADE_FOLEY_TOSS_SML"
+  ],
+  "assets": {
+   "sound": [
+    "BL_HUD_INTERFACE.HUD_TARGET_LOCK",
+    "BL_TRANS_POWER.SENTRY_ACTIVATE_LP",
+    "BL_TRANS_POWER.SENTRY_ACTIVATE_POSTDEPLOY",
+    "BL_TRANS_POWER.SENTRY_BY",
+    "BL_TRANS_POWER.SENTRY_IMPT",
+    "BL_TRANS_POWER.SENTRY_SHOOT",
+    "BL_WPN_GUN_REPAIR_WPN.IMPT_WORLD",
+    "BL_WPN_GUN_REPAIR_WPN.Overheat",
+    "BL_WPN_GUN_REPAIR_WPN.SHOOT_DMG_LP",
+    "BL_WPN_GUN_REPAIR_WPN.SHOOT_HEAL_LP",
+    "BL_WPN_GUN_REPAIR_WPN.SHOOT_LAST_SHOT",
+    "BL_WPN_GUN_REPAIR_WPN.SHOOT_LP",
+    "BL_WPN_GUN_ROCKET.EXPL_IMPT_WORLD",
+    "BL_WPN_GUN_ROCKET.Overheat",
+    "BL_WPN_GUN_ROCKET.SHOOT",
+    "GRENADE_FOLEY_TOSS_LRG",
+    "GRENADE_FOLEY_TOSS_MED",
+    "GRENADE_FOLEY_TOSS_SML"
+   ],
+   "fx": [
+    "FX_AssaultRifle_p.FX.Tracer_AssaultRifle_FX",
+    "FX_HomingRocket_p.FX.MuzzleFlash_HomRocket_FX",
+    "FX_OS_Turret_p.FX.Impact_OS_Turret_A_FX",
+    "FX_OS_Turret_p.FX.MuzzleFlash_Turret_A_FX",
+    "FX_RepairBeam_p.FX.Squib_RepairEnemy_FX",
+    "FX_RepairBeam_p.FX.Tracer_RepairBeam_FX"
+   ],
+   "material": [
+    "WEP_SentryAbility_p.TPRO_DeployedTurret_Overshield_MATINST"
+   ],
+   "light": [
+    "{}"
+   ]
+  },
+  "grep": {
+   "sound": {
+    "EXPL_IMPT_WORLD": "E",
+    "IMPT_WORLD": "CE",
+    "SENTRY_ACTIVATE_LP": "E",
+    "SENTRY_IMPT": "E",
+    "GRENADE_FOLEY_TOSS_MED": "E",
+    "SHOOT": "CE",
+    "SHOOT_LP": "E",
+    "SENTRY_ACTIVATE_POSTDEPLOY": "E",
+    "SHOOT_LAST_SHOT": "E",
+    "Overheat": "CER",
+    "SENTRY_BY": "-",
+    "SENTRY_SHOOT": "E",
+    "HUD_TARGET_LOCK": "E",
+    "SHOOT_HEAL_LP": "E",
+    "GRENADE_FOLEY_TOSS_LRG": "E",
+    "GRENADE_FOLEY_TOSS_SML": "E",
+    "SHOOT_DMG_LP": "E"
+   },
+   "fx": {
+    "MuzzleFlash_HomRocket_FX": "CER",
+    "MuzzleFlash_Turret_A_FX": "R",
+    "Squib_RepairEnemy_FX": "CER",
+    "Tracer_AssaultRifle_FX": "CER",
+    "Tracer_RepairBeam_FX": "CR",
+    "Impact_OS_Turret_A_FX": "R"
+   },
+   "material": {
+    "TPRO_DeployedTurret_Overshield_MATINST": "-"
+   }
+  },
+  "grep_class": "C"
+ },
+ {
+  "id": "AbilityJammer",
+  "class": "TnAbilityAbilityJammer",
+  "specialty": "Soldier",
+  "cooldown": [
+   60.0
+  ],
+  "resource": null,
+  "anim": "Skill_AbilityJammer",
+  "trigger_sound": "BL_TRANS_POWER.ENERGON_SLING_FIRE",
+  "trigger_fx": null,
+  "trigger_socket": null,
+  "buffs": [],
+  "spawns": [
+   "TransGame.TnProjectileAbilityJammer"
+  ],
+  "notifies": [
+   "DamageSweep:None@MeleeSocket_SmallRobot",
+   "PlayEffect:SwordTrail_Red_FX@WeaponTrailSocket",
+   "Sound:H2H_GUN_BUTT_WHSH_01"
+  ],
+  "assets": {
+   "sound": [
+    "BL_TRANS_POWER.ENERGON_SLING_FIRE",
+    "BL_TRANS_POWER.ENERGON_SLING_HIT",
+    "BL_TRANS_POWER.ENERGON_SLING_TAIL",
+    "H2H_GUN_BUTT_WHSH_01"
+   ],
+   "fx": [
+    "FX_Multiplayer_p.FX.WarCry_AOE_FX",
+    "FX_PlasmaCannon_p.FX.Trail_PlasmaCannon_Lrg_FX",
+    "SwordTrail_Red_FX"
+   ]
+  },
+  "grep": {
+   "sound": {
+    "ENERGON_SLING_FIRE": "E",
+    "H2H_GUN_BUTT_WHSH_01": "E",
+    "ENERGON_SLING_TAIL": "-",
+    "ENERGON_SLING_HIT": "-"
+   },
+   "fx": {
+    "WarCry_AOE_FX": "-",
+    "Trail_PlasmaCannon_Lrg_FX": "ER",
+    "SwordTrail_Red_FX": "R"
+   }
+  },
+  "grep_class": "CE"
+ },
+ {
+  "id": "Disguise",
+  "class": "TnAbilityDisguise",
+  "specialty": "Scientist",
+  "cooldown": [
+   15.0
+  ],
+  "resource": null,
+  "anim": null,
+  "trigger_sound": "BL_TRANS_POWER.DISGUISE_INITIATE",
+  "trigger_fx": null,
+  "trigger_socket": null,
+  "buffs": [
+   "TransGame.TnBuffDisguise"
+  ],
+  "spawns": [],
+  "notifies": [],
+  "assets": {
+   "sound": [
+    "BL_TRANS_POWER.DISGUISE_INITIATE"
+   ]
+  },
+  "grep": {
+   "sound": {
+    "DISGUISE_INITIATE": "E"
+   }
+  },
+  "grep_class": "E"
+ },
+ {
+  "id": "Poke",
+  "class": "TnAbilityPoke",
+  "specialty": "SinglePlayer",
+  "cooldown": null,
+  "resource": null,
+  "anim": null,
+  "trigger_sound": null,
+  "trigger_fx": null,
+  "trigger_socket": null,
+  "buffs": [],
+  "spawns": [],
+  "notifies": [],
+  "assets": {
+   "sound": [
+    "BL_WPN_MELEE_SWORD.ANIM_EQUIP",
+    "BL_WPN_MELEE_SWORD.ANIM_HOLSTER",
+    "BL_WPN_MELEE_SWORD.HUM",
+    "BL_WPN_MELEE_SWORD.HUM_CHARGED"
+   ],
+   "fx": [
+    "FX_Sword_p.FX.SwordEquip_Red_FX"
+   ],
+   "light": [
+    "{\"LightColor\": {\"B\": 40, \"G\": 45, \"R\": 250, \"A\": 0}}"
+   ]
+  },
+  "grep": {
+   "sound": {
+    "ANIM_EQUIP": "E",
+    "HUM_CHARGED": "E",
+    "ANIM_HOLSTER": "E",
+    "HUM": "CE"
+   },
+   "fx": {
+    "SwordEquip_Red_FX": "CR"
+   }
+  },
+  "grep_class": "C"
+ },
+ {
+  "id": "GuidedMissile",
+  "class": "TnAbilityGuidedMissile",
+  "specialty": "SinglePlayer",
+  "cooldown": [
+   45.0
+  ],
+  "resource": 100.0,
+  "anim": "Skill_GuidedMissile",
+  "trigger_sound": null,
+  "trigger_fx": null,
+  "trigger_socket": null,
+  "buffs": [],
+  "spawns": [
+   "TnGuidedMissile"
+  ],
+  "notifies": [
+   "Sound:SHOOT_BUILDUP"
+  ],
+  "assets": {
+   "sound": [
+    "BL_WPN_GUN_GUIDED_MISSILE.EXPL_IMPT_WORLD",
+    "BL_WPN_GUN_GUIDED_MISSILE.SHOOT_TRAIL",
+    "SHOOT_BUILDUP"
+   ],
+   "fx": [
+    "FX_Explosives_p.FX.Exp_GenericLvl_LRG_FX",
+    "FX_FusionCannon_p.FX.Trail_FusionCannon_FX"
+   ]
+  },
+  "grep": {
+   "sound": {
+    "EXPL_IMPT_WORLD": "E",
+    "SHOOT_TRAIL": "E",
+    "SHOOT_BUILDUP": "E"
+   },
+   "fx": {
+    "Exp_GenericLvl_LRG_FX": "R",
+    "Trail_FusionCannon_FX": "ER"
+   }
+  },
+  "grep_class": "C"
+ },
+ {
+  "id": "Warcry",
+  "class": "TnAbilityWarcry",
+  "specialty": "Leader",
+  "cooldown": [
+   60.0
+  ],
+  "resource": 100.0,
+  "anim": "Skill_Warcry",
+  "trigger_sound": null,
+  "trigger_fx": "FX_Multiplayer_p.FX.WarCry_AOE_FX",
+  "trigger_socket": "Chest_FX",
+  "buffs": [
+   "TransGame.TnBuffWarcryIncreaseDamage",
+   "TransGame.TnBuffWarcryDecreaseDamageTaken",
+   "TransGame.TnBuffWarcry0",
+   "TransGame.TnBuffWarcry1",
+   "TransGame.TnBuffWarcry2"
+  ],
+  "spawns": [],
+  "notifies": [
+   "Sound:WAR_CRY_CHEST_HIT",
+   "Sound:WAR_CRY_CHEST_HIT_SERVO_01",
+   "Sound:WAR_CRY_CHEST_HIT_SERVO_02",
+   "Sound:WAR_CRY_STATE_START"
+  ],
+  "assets": {
+   "sound": [
+    "BL_INTRFC_TECH_TREE.HARD_LOCK_WARNING_LP",
+    "WAR_CRY_CHEST_HIT",
+    "WAR_CRY_CHEST_HIT_SERVO_01",
+    "WAR_CRY_CHEST_HIT_SERVO_02",
+    "WAR_CRY_STATE_START"
+   ],
+   "fx": [
+    "Chest_FX",
+    "FX_Icons_p.FX.Hardlock_FX",
+    "FX_Multiplayer_p.FX.WarCry_AOE_FX",
+    "FX_Multiplayer_p.FX.WarCry_Buff_01_FX",
+    "FX_Multiplayer_p.FX.WarCry_Buff_02_FX",
+    "FX_Multiplayer_p.FX.WarCry_Buff_03_FX"
+   ]
+  },
+  "grep": {
+   "sound": {
+    "WAR_CRY_CHEST_HIT_SERVO_02": "E",
+    "WAR_CRY_STATE_START": "CE",
+    "WAR_CRY_CHEST_HIT_SERVO_01": "E",
+    "HARD_LOCK_WARNING_LP": "E",
+    "WAR_CRY_CHEST_HIT": "E"
+   },
+   "fx": {
+    "WarCry_Buff_03_FX": "-",
+    "Chest_FX": "CE",
+    "Hardlock_FX": "-",
+    "WarCry_Buff_01_FX": "-",
+    "WarCry_AOE_FX": "-",
+    "WarCry_Buff_02_FX": "-"
+   }
+  },
+  "grep_class": "C"
+ },
+ {
+  "id": "TransformDisruptor",
+  "class": "TnAbilityTransformDisruptor",
+  "specialty": "Leader",
+  "cooldown": [
+   60.0
+  ],
+  "resource": null,
+  "anim": "Skill_TransformDisruptor",
+  "trigger_sound": "BL_TRANS_POWER.TRANSFORM_DISRUPTOR",
+  "trigger_fx": null,
+  "trigger_socket": null,
+  "buffs": [],
+  "spawns": [
+   "TransGame.TnProjectileTransformDisruptor"
+  ],
+  "notifies": [
+   "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+   "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+   "PlayEffect:Shield_BlastWave_A_FX@PositionSocket",
+   "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+   "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+   "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+   "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+   "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+   "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+   "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+   "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+   "Sound:SHIELD_PUSH"
+  ],
+  "assets": {
+   "sound": [
+    "BL_TRANS_POWER.ENERGON_SLING_HIT",
+    "BL_TRANS_POWER.ENERGON_SLING_TAIL",
+    "BL_TRANS_POWER.TRANSFORM_DISRUPTOR",
+    "SHIELD_PUSH"
+   ],
+   "fx": [
+    "DashPulse_1_FX",
+    "FX_Multiplayer_p.FX.Squib_TransformDisrupter_FX",
+    "FX_PlasmaCannon_p.FX.Trail_PlasmaCannon_Lrg_FX",
+    "Shield_BlastWave_A_FX",
+    "Trails_Bumblebee_FX"
+   ]
+  },
+  "grep": {
+   "sound": {
+    "TRANSFORM_DISRUPTOR": "E",
+    "SHIELD_PUSH": "CE",
+    "ENERGON_SLING_TAIL": "-",
+    "ENERGON_SLING_HIT": "-"
+   },
+   "fx": {
+    "Trail_PlasmaCannon_Lrg_FX": "ER",
+    "DashPulse_1_FX": "R",
+    "Shield_BlastWave_A_FX": "R",
+    "Squib_TransformDisrupter_FX": "-",
+    "Trails_Bumblebee_FX": "R"
+   }
+  },
+  "grep_class": "CE"
+ },
+ {
+  "id": "RollerSphere",
+  "class": "TnAbilityRollerSphere",
+  "specialty": "Leader",
+  "cooldown": [
+   60.0
+  ],
+  "resource": 100.0,
+  "anim": "Skill_AbilityJammer",
+  "trigger_sound": null,
+  "trigger_fx": null,
+  "trigger_socket": null,
+  "buffs": [],
+  "spawns": [
+   "TnRollerMineAbility"
+  ],
+  "notifies": [
+   "DamageSweep:None@MeleeSocket_SmallRobot",
+   "PlayEffect:SwordTrail_Red_FX@WeaponTrailSocket",
+   "Sound:H2H_GUN_BUTT_WHSH_01"
+  ],
+  "assets": {
+   "sound": [
+    "BL_WPN_GRENADE.KAMIKAZE_FUSE_START",
+    "H2H_GUN_BUTT_WHSH_01"
+   ],
+   "light": [
+    "{}"
+   ],
+   "fx": [
+    "SwordTrail_Red_FX"
+   ]
+  },
+  "grep": {
+   "sound": {
+    "KAMIKAZE_FUSE_START": "E",
+    "H2H_GUN_BUTT_WHSH_01": "E"
+   },
+   "fx": {
+    "SwordTrail_Red_FX": "R"
+   }
+  },
+  "grep_class": "C"
+ },
+ {
+  "id": "Barrier",
+  "class": "TnAbilityBarrier",
+  "specialty": "Leader",
+  "cooldown": [
+   20.0
+  ],
+  "resource": null,
+  "anim": "Skill_Barrier",
+  "trigger_sound": "BL_TRANS_POWER.BARRIER_DEPLOY",
+  "trigger_fx": null,
+  "trigger_socket": null,
+  "buffs": [],
+  "spawns": [
+   "TnBarrierSpawnable",
+   "TnBuffIncreaseBarrierHealth"
+  ],
+  "notifies": [],
+  "assets": {
+   "sound": [
+    "BL_TRANS_POWER.BARRIER_DEPLOY",
+    "BL_TRANS_POWER.BARRIER_LP",
+    "BL_TRANS_POWER.BARRIER_RETRACT"
+   ],
+   "light": [
+    "{}"
+   ]
+  },
+  "grep": {
+   "sound": {
+    "BARRIER_DEPLOY": "E",
+    "BARRIER_RETRACT": "E",
+    "BARRIER_LP": "E"
+   }
+  },
+  "grep_class": "CE"
+ }
+]
