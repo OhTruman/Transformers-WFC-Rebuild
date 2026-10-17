@@ -2690,3 +2690,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   TnWeaponMesh.Attach; WFC_MUZZLEENERGON=0 restores the authored colour); dry-runs clean. Systems' slot = 40 min back to back
   (notifyfx crops + CUELOG, the FX throttle rows, the muzzle pair), each patch isolated by its switch; merges on the rows.
   Card: Rendering (~10 min left) -> Frontend 4 -> Systems 40 -> (B) eye pass (~10:30).
+2026-10-17 09:39 RE lane MP map lighting-intent reference merged (3e2edb44; under an hour vs the 2.5 h estimate): per-map sun / sky / top lights /
+  fogs / post volumes / light environments classified D / A / X1 / -; gaps -> Rendering: only the first HeightFogComponent per
+  map loaded (six maps author 2-4 layers; Gorge loses a dense low layer), DOF kernel 32 rendered at 16, light-env transition
+  unused. RE lane next: close the PROVISIONAL readings in the campaign data index. Card: Rendering slot (cand26) still running.
