@@ -3374,3 +3374,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   passed; 2 lines + static_asserts). FINAL PACKAGE 7 HEAD = ab855fe7 (frontend-only over deed7f1a; SIMHASH identical; eye pass
   on deed7f1a stands, the gate exe rebuilds at ab855fe7). AssetTools' list at deed7f1a stands (code-only change); the 6 materials
   files shrank by formatting only (indent dropped on re-serialization; content identical by key).
+2026-10-17 15:29 USER (2026-10-17 15:29): lens flares adjustable in the graphics options: Off / Subtle (DistMap first point) / Original (shipped), default
+  Original -> next head (Rendering setting + WFC_LENSFLARE env + persistence; Frontend row + strings). A second PC is available:
+  the two-PC online test runs on tonight's package 7 build (Systems writes PACKAGE_7_TWO_PC_TEST.md for the user).
