@@ -324,10 +324,16 @@ void GfxPresenter::movieCall(const std::string& movie, const std::string& fn, co
     pendingCalls_.push_back({movie, fn, args, open});
 }
 
+namespace { gfx::MovieClip* findClipNamed(gfx::MovieClip* c, const std::string& name, int depth); }
+
 bool GfxPresenter::clipWindowCenter(const std::string& path, int& x, int& y) {
     gfx::Player* p = focusPlayer();
     if (!p) return false;
     gfx::DisplayObject* d = p->resolveTarget(path, p->root());
+    if (!d) {   // dev scripts: a full path that misses falls back to its last name, searched in the movie (first match)
+        const size_t dot = path.rfind('.');
+        d = findClipNamed(p->root(), dot == std::string::npos ? path : path.substr(dot + 1), 0);
+    }
     if (!d || d->removed) return false;
     gfx::Rect b = d->boundsIn(d->worldMatrix());   // stage twips
     gfx::Point c = GfxRendererGL::movieMatrix(*p, viewW_, viewH_)
