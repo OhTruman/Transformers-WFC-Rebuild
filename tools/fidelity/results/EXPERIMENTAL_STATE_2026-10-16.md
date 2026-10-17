@@ -1,3 +1,9 @@
+# 2026-10-17 15:44 state - package 7 gate DEFERRED (user: all multiplayer first, then one build with everything)
+- ab855fe7 = internal checkpoint; its eye pass running (work/eyepass/p7_ab855fe); no timed hold tonight.
+- Regress base work/ab/fast_af4d073_p7_057aded verified same match vs ab855fe7 (headless); keep it alive - Escalation will need a sim-only diff.
+- Per online merge: bash/powershell tools/fidelity/net-identity.ps1 -Bin <exe dir> -Out work/netid/<sha> -Profiles lan,typical,bad -Seconds 60 -Replay (PASS on e5bc5a22).
+- Final gate later: P7_BASE=<base> bash tools/fidelity/p7-gate.sh <head> pre / gate.
+
 # 2026-10-17 15:16 state - PACKAGE 7 GATE IN PREP
 - Head candidate 057aded3 (Integration 15:1x; lens flares out). Integration frozen for code until the gate ends.
 - Steps: build head (running, work/ab/fast_057aded) -> base = af4d0731 + hover + runner + Gameplay's re-cut TRANSACT + weapon-batch sim-only diffs (~15:45, into tools/fidelity/gatebase/) via P7_BASE_ITEMS -> headless same-match + negative control (p7-gate.sh pre does it) -> the head's eye pass on Integration's card relay (~15:20+) -> hold ~17:00: broadcast to all 7 sessions (text in PACKAGE7-GATE.md section 4), collect acks, then bash tools/fidelity/p7-gate.sh 057aded3 gate (~1 h 50 card; render snapshot + CONTAMINATED reruns + pool guard inside).
