@@ -3328,3 +3328,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 15:10 Lens-flare decode resolved natively (RE §4b): Reflection_01 survives occlusion (ours gated it by coverage: Rendering fixes
   TEXCOORD3.y to the constant intensity); Base_SUN is blue as ours draws it. Open-sky + Rust occluded pass next in Rendering's
   card window; flare deadline for the candidate 16:15.
+2026-10-17 15:12 MERGED b2c790d0 Frontend UI polish (bot-row help line via the lobby footer hint; lobby footer hidden under the Voice Settings
+  page) + 9d4e9138 spectateTarget trace (the 15:03 death showed no SetSpectateTarget in the ~2 s spectate window: Gameplay's
+  killer-cam target or its delivery; the trace decides). Frontend tests pass. Frontend's ~2.5-min capture after Rendering's pass.
