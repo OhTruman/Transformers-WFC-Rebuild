@@ -224,6 +224,50 @@ in vec2 vUV1B;
 in vec2 vUV1Mat;
 layout(location=0) out vec4 oColor;
 uniform vec3 uCamPos;
+// Height fog evaluated PER PIXEL (the VS form, from the fragment's world position): the per-vertex value interpolated across
+// a large polygon carried its far vertices' fog onto near pixels (Rust's floor: an opaque grey-teal sheet at 1-3 m while
+// walls at 10-20 m stayed clear - fog falling with distance); per pixel the result is the VS formula at every point
+uniform int uFogOn;
+uniform float uFogMaxH, uFogScale, uFogStart, uFogExt;
+uniform vec3 uFogIn;
+uniform int uFogN;
+uniform float uHazeK;
+uniform vec4 uFogL[3]; uniform vec3 uFogC[3];
+uniform vec4 uFogMinH;
+vec4 wfcHeightFogPx(vec3 p) {
+    if (uFogOn == 0) return vec4(0.0, 0.0, 0.0, 1.0);
+    float camZ = uCamPos.y * 100.0, z = p.y * 100.0, dz = z - camZ;
+    float minH = uFogN > 1 ? uFogMinH.x : -262144.0, maxH = uFogMaxH;   // (layers stack as slabs: min = the next layer's height)
+    float frac;
+    if (abs(dz) < 1e-3) frac = (camZ > minH && camZ < maxH) ? 1.0 : 0.0;
+    else {
+        float t0 = clamp((minH - camZ) / dz, 0.0, 1.0);
+        float t1 = clamp((maxH - camZ) / dz, 0.0, 1.0);
+        frac = abs(t1 - t0);
+    }
+    float d = length(p - uCamPos) * 100.0;
+    float ld = max(d - uFogStart, 0.0) * frac;
+    float sc = exp2(uFogScale * ld);
+    if (ld > uFogExt) sc = 0.0;
+    vec4 r = vec4(uFogIn * (1.0 - sc), sc);
+    // layers 2-4 (UE3 renders up to four height fog layers; one-layer maps never enter the loop): each scatters what is
+    // already there and adds its own in-scattering - rgb = rgb x s + in x (1 - s), a *= s
+    for (int i = 0; i < 3; ++i) {
+        if (i + 1 >= uFogN) break;
+        float mx = uFogL[i].x, mn = i == 0 ? uFogMinH.y : i == 1 ? uFogMinH.z : uFogMinH.w, fr2;
+        if (abs(dz) < 1e-3) fr2 = (camZ > mn && camZ < mx) ? 1.0 : 0.0;
+        else fr2 = abs(clamp((mx - camZ) / dz, 0.0, 1.0) - clamp((mn - camZ) / dz, 0.0, 1.0));
+        float ld2 = max(d - uFogL[i].z, 0.0) * fr2;
+        float s2 = ld2 > uFogL[i].w ? 0.0 : exp2(uFogL[i].y * ld2);
+        r = vec4(r.rgb * s2 + uFogC[i] * (1.0 - s2), r.a * s2);
+    }
+    return r;
+}
+uniform int uFogVertex;   // (A/B) WFC_FOGPERVERTEX=1: the interpolated per-vertex value, as before
+vec4 wfcFogPx() {
+    if (uFogVertex != 0) return vFog;
+    vec4 f = wfcHeightFogPx(vPos); f.rgb *= uHazeK > 0.0 ? uHazeK : 1.0; return f;
+}
 uniform float uTime;
 uniform int uTwoSided;
 uniform int uMasked;
@@ -269,9 +313,10 @@ void wfcTranslucentOut(inout vec3 c, float opacity) {
 vec3 wfcCanvasOut(vec3 c) { return uCanvasInvGamma > 0.0 ? pow(max(c, vec3(0.0)), vec3(uCanvasInvGamma)) : c; }
 // UE3 base-pass fog per blend mode: additive keeps no in-scatter, modulate fades toward 1.
 vec3 wfcFog(vec3 c) {
-    if (uBlend == 3) return c * vFog.a;
-    if (uBlend == 4) return mix(vec3(1.0), c, vFog.a);
-    return c * vFog.a + vFog.rgb;
+    vec4 F = wfcFogPx();
+    if (uBlend == 3) return c * F.a;
+    if (uBlend == 4) return mix(vec3(1.0), c, F.a);
+    return c * F.a + F.rgb;
 }
 // UE3: ReflectionVector = -CameraVector + Normal * dot(Normal, CameraVector) * 2 (tangent space)
 void wfcSetNormal(inout MatIn m, vec3 n) {
@@ -358,7 +403,8 @@ void main() {
     mat3 tbn; MatIn m = wfcBuildInput(tbn);
     MatOut o; wfcMaterial(m, o);
     vec2 I = texelFetch(uFogIntegral, ivec2(gl_FragCoord.xy), 0).rg;
-    oColor = vec4(o.EmissiveColor * vFog.a + vFog.rgb, clamp(exp2(-(I.r - I.g)), 0.0, 1.0));
+    vec4 F = wfcFogPx();
+    oColor = vec4(o.EmissiveColor * F.a + F.rgb, clamp(exp2(-(I.r - I.g)), 0.0, 1.0));
 }
 )";
 const char* kFSMainScreenEffect = R"(
@@ -447,7 +493,7 @@ static void r1ShaderText(std::string& fs, size_t mainStart, bool lm) {
                      "\n        if (wfcR1V.y > 0.5) {"
                      "\n        float wfcR1Vb = clamp(wfcR1V.x / wfcR1V.y, 0.0, 1.0); vec3 wfcR1S = vec3(0.0);"
                      "\n        {" + blk + "\n        }"
-                     "\n        oSun = vec4(max(wfcR1S, vec3(0.0)) * vFog.a, wfcR1Vb);"
+                     "\n        oSun = vec4(max(wfcR1S, vec3(0.0)) * wfcFogPx().a, wfcR1Vb);"
                      "\n        }\n    }");
     fs.insert(mainAt, "uniform int uR1On; uniform vec4 uR1Fit; uniform vec3 uR1Sun; uniform vec3 uR1SunDir;\n"
                       "uniform sampler2D uVB; uniform sampler2DArray uVBArr;\n"
@@ -4148,6 +4194,10 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform1i(ULOC(P, "uVertexLM"), 0);
     Uniform4f(ULOC(P, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
     if (P.uLensFlare >= 0) { Uniform4fv(P.uLensFlare, 1, lensFlareU_); Uniform1f(P.uLensFlareI, lensFlareI_); }   // (flare elements)
+    {   // (A/B) the per-vertex height fog of before
+        static const int fogVertex = std::getenv("WFC_FOGPERVERTEX") ? 1 : 0;
+        if (fogVertex) Uniform1i(ULOC(P, "uFogVertex"), 1);
+    }
     Uniform1i(ULOC(P, "uSkin"), skinMode_);
     Uniform1i(ULOC(P, "uTLSkip"), skinMode_ != 0 || inDynamicDraw_ ? tlWorldOnly_ : 0);   // (forced-dynamic world lights: not on characters)
     if (skinMode_) {
