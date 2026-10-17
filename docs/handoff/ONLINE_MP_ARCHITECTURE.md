@@ -280,6 +280,12 @@ peer and dropped afterwards (the peer's address is then the key).
     camera-relative movement, animation, vehicles). Fine aim and the hover smoothers stay camera-only.
   - `RemoteCommand { uint32_t tick; int8_t moveForward, moveRight; uint32_t buttons, pressed; float aimYaw, aimPitch; core::Vec3 aimPoint; }`.
     Wire size 23 bytes per human per tick. Offline keeps the direct path.
+  - **Local half implemented** (Gameplay GAMEPLAY_LOCAL_SEAT, agents/gameplay c94cffc3 against 1c5de2d8):
+    `RemoteCommand World::encodeLocalCommand()` gives tick simTick()+1's local command, already on the wire grid. LockstepLayer
+    quantises and sends it, then feeds every peer's decoded command (the local one too) to applyRemoteCommand before World::tick, in
+    ascending match-player order. SESSIONTEST runs a loopback of encode -> applyRemoteCommand.
+  - Online is currently selected by MatchLaunch.seed != 0. Systems asked for an explicit `online` flag so the seed stays only the
+    RNG seed.
 
 ### 10.3 Identical launch on every peer (REQUIREMENT, confirmed by Integration; with the Frontend, 2026-10-17)
 - **The problem:** today each member builds its own match URL from its local profile, with only the map and mode from the host. For
