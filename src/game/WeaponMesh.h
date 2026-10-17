@@ -63,6 +63,9 @@ private:
     mutable uint64_t paletteSerial_ = 0;
     mutable std::vector<core::Mat4> skinGlobals_;
     std::vector<Socket> sockets_;
+    // [Systems] generic weapons: the weapon package ("WEP_HeavyPistol_p") whose authored AnimSequence effect notifies
+    // (AnimNotifies.inc, tools/systems/gen_anim_notifies.py) fire from tick; empty = the Ion Blaster's own table above.
+    std::string notifyPkg_;
 };
 
 } // namespace game

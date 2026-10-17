@@ -5,6 +5,10 @@
 #include "game/ChassisDef.h"
 
 #include <cmath>
+#include <cstring>
+
+#include "game/AnimNotifies.inc"   // [Systems] authored HmAnimNotify_PlayEffect / _Sound rows (gen_anim_notifies.py)
+#include "game/MeshSockets.inc"    // [Systems] SkeletalMeshSocket rows of the WEP_* / TR_* meshes (gen_mesh_sockets.py)
 
 namespace game {
 namespace {
@@ -67,6 +71,23 @@ void WeaponMesh::setModelGeneric(const assets::SkinnedModel* m, const WeaponDef&
     if (clipIdle_ < 0) clipIdle_ = m->clipByName(std::string(d.id) + "_Idle");
     core::Mat4 rel = ueSocketToGltf(d.muzzleLocUE, d.muzzleRotUE);
     sockets_.push_back({"MuzzleFlash", m->nodeByName(d.muzzleBone), rel});
+    // [Systems] the weapon mesh's other authored sockets (ShellEject, MagSocket, Clip, Ammo ...) and its notify package:
+    // "content/WEP_X_p/WEP_X_SKEL.gltf" -> mesh "WEP_X_p.WEP_X_SKEL", package "WEP_X_p".
+    notifyPkg_.clear();
+    if (d.meshGltf && *d.meshGltf) {
+        std::string g = d.meshGltf;
+        const size_t a = g.find('/'), b = g.rfind('/'), e = g.rfind(".gltf");
+        if (a != std::string::npos && b != std::string::npos && b > a && e != std::string::npos && e > b) {
+            notifyPkg_ = g.substr(a + 1, b - a - 1);
+            const std::string mesh = notifyPkg_ + "." + g.substr(b + 1, e - b - 1);
+            for (const MeshSocketRow& r : kMeshSockets) {
+                if (mesh != r.mesh || !std::strcmp(r.socket, "MuzzleFlash")) continue;
+                const float loc[3] = {r.x, r.y, r.z};
+                const int rot[3] = {r.pitch, r.yaw, r.roll};
+                sockets_.push_back({r.socket, m->nodeByName(r.bone), ueSocketToGltf(loc, rot)});
+            }
+        }
+    }
     LOG_INFO("weapon mesh %s: %zu clips idle=%d fire=%d reload=%d muzzleNode=%d", d.id, m->clips.size(), clipIdle_, clipFire_,
              clipReload_, sockets_[0].node);
     clip_ = -1;
@@ -106,6 +127,17 @@ void WeaponMesh::tick(float dt, std::vector<WeaponNotify>& fired) {
             float nt = d.n.time;
             if ((nt >= a && nt < b) || (loop_ && b > c.duration && nt < b - c.duration))
                 fired.push_back(d.n);
+        }
+        // [Systems] generic weapons: the authored effect notifies of this sequence (sound notifies stay with the class's
+        // WeaponSoundTimeline, which already plays them). Rows of the weapon's own package only.
+        if (!notifyPkg_.empty()) {
+            const size_t pl = notifyPkg_.size();
+            for (const AnimNotifyRow& r : kAnimNotifies) {
+                if (!r.effect || c.name != r.sequence || std::strncmp(r.animSet, notifyPkg_.c_str(), pl) != 0 || r.animSet[pl] != '.') continue;
+                const float nt = r.time;
+                if ((nt >= a && nt < b) || (loop_ && b > c.duration && nt < b - c.duration))
+                    fired.push_back({WeaponNotify::Kind::Effect, nt, r.what, r.socket});
+            }
         }
     }
     time_ += dt;

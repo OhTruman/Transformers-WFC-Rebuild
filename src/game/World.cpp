@@ -36,7 +36,7 @@
 #include <thread>
 
 namespace {
-struct MuzzleLightDef { const char* cls; float radius; float color[3]; float falloff; float duration; };
+struct MuzzleLightDef { const char* cls; float radius; float color[3]; float falloff; float duration; float brightness; };
 #include "game/MuzzleLights.inc"
 struct DeathLightDef { float radius; float color[3]; float falloff, rampIn, lightTime, rampOut; };
 #include "game/DeathLights.inc"
@@ -1483,6 +1483,16 @@ void World::spawnMuzzleLight(const std::string& weaponClass, const core::Mat4& s
     LiveTransientLight l;
     l.pos = {socketWorld.m[12], socketWorld.m[13], socketWorld.m[14]};
     l.color = {d->color[0], d->color[1], d->color[2]};
+    // [Systems] TnWeaponMesh.Attach -> ApplyCharacterColorsToWeapon: MuzzleFlashLight.SetLightProperties(, Pawn.EnergonColor) - the
+    // owner's own energon colour (customization, else the chassis default; never the team colour), Brightness kept (RE
+    // TIME_MATERIALS_LIGHTS_RE, CONFIRMED script). The authored colour stays as the fallback.
+    {
+        const Character* p = owner == localPlayer_ ? &player_.pawn() : participantPawn(owner);
+        float e[3];
+        static const bool authored = std::getenv("WFC_MUZZLEENERGON") && std::getenv("WFC_MUZZLEENERGON")[0] == '0';   // A/B: the authored colour
+        if (!authored && p && chassisEnergonDefault(owner == localPlayer_ ? localChassis_ : p->chassis().id, e))
+            l.color = {e[0] * d->brightness, e[1] * d->brightness, e[2] * d->brightness};
+    }
     l.radius = d->radius; l.falloff = d->falloff; l.lightTime = d->duration; l.key = owner;
     static const bool log = std::getenv("WFC_MUZZLELOG") != nullptr;
     static int logged = 0;
@@ -1670,15 +1680,33 @@ void World::tickParticipantWeapons(float dt) {
             else v.anim.setModel(nullptr);
             v.seenShot = w.shotSerial; v.seenReload = w.reloadSerial;
         }
+        v.player = o->matchPlayer();
         if (w.reloadSerial != v.seenReload) { v.seenReload = w.reloadSerial; v.anim.play(WeaponMesh::Event::Reload); }
         if (w.shotSerial != v.seenShot) { v.seenShot = w.shotSerial; v.anim.play(WeaponMesh::Event::Fire); }
         ticking.push_back(&v);
     }
     // The weapon pose ticks are independent per participant: on the worker pool (map entries created above, serially).
     core::WorkerPool::get().run((int)ticking.size(), [&](int i) {
-        std::vector<WeaponNotify> notifies;   // participant weapon notifies (shells / magazines) are not presented [PARTIAL]
-        ticking[(size_t)i]->anim.tick(dt, notifies);
+        ParticipantWeaponView& v = *ticking[(size_t)i];
+        v.fired.clear();
+        v.anim.tick(dt, v.fired);
     });
+    // [Systems] participant weapon notify effects (shells, magazines, reload FX) within 40 m of the local pawn [PROV distance]:
+    // presented on the main thread from the views' fired lists (their sounds: the class sound timelines, as before).
+    {
+        const core::Vec3 eye = player_.pawn().position();
+        for (ParticipantWeaponView* v : ticking) {
+            if (v->fired.empty() || v->player < 0) continue;
+            const MatchOpponent* o = (size_t)v->player < oppByPlayer_.size() ? oppByPlayer_[(size_t)v->player] : nullptr;
+            if (!o || !o->spawned() || !o->pawn().hasWeapon() || core::length(o->pawn().position() - eye) > 40.0f) continue;
+            for (const WeaponNotify& n : v->fired) {
+                if (n.kind != WeaponNotify::Kind::Effect) continue;
+                core::Mat4 local;
+                if (!v->anim.socketLocal(n.socket, local)) continue;
+                spawnWeaponNotifyEffect(n, o->pawn().weaponWorld() * local, fxTeamOf(v->player), false);
+            }
+        }
+    }
     // This step's participant shots: the muzzle socket of the shooter's shown weapon (else its eye frame along the shot).
     for (const ParticipantShot& s : participantShots_) {
         if (s.weapon == "RepairRay") continue;   // the beam has its own looping presentation [PARTIAL for bots]
@@ -1812,8 +1840,7 @@ void World::handleWeaponNotify(const WeaponNotify& n) {
     if (n.kind == WeaponNotify::Kind::Effect) {
         // HmAnimNotify_PlayEffect: spawn the authored ParticleSystem at the notify's socket.
         core::Mat4 sw;
-        if (weaponSocketWorld(n.socket.c_str(), sw) && !fx_.spawnNotifyEffect(n.what, sw))
-            LOG_WARN("notify effect %s not reconstructed", n.what.c_str());
+        if (weaponSocketWorld(n.socket.c_str(), sw)) spawnWeaponNotifyEffect(n, sw, fxTeamOf(localPlayer_), true);
     }
     if (n.kind == WeaponNotify::Kind::Sound) {
         // HmAnimNotify_Sound: an AudioComponent on the weapon mesh, following it.
@@ -1823,6 +1850,18 @@ void World::handleWeaponNotify(const WeaponNotify& n) {
         if (n.what.rfind("BL_WPN_GUN_ION_BLASTER.", 0) == 0 && dot) name = dot + 1;
         cues_.play(name, e, core::length(e.pos - player_.pawn().position()));
     }
+}
+
+// [Systems] a weapon AnimNotify effect: the hand-reconstructed ones (Ion Blaster shell / magazine / reload, WeaponFx) keep their
+// path for the local weapon (WeaponFx holds the local muzzle state); every other authored template, and every participant's,
+// goes through the map-FX system at the socket (UE socket X = forward, Z = up).
+void World::spawnWeaponNotifyEffect(const WeaponNotify& n, const core::Mat4& sw, int team, bool local) {
+    static const bool off = std::getenv("WFC_NOTIFYFX") && std::getenv("WFC_NOTIFYFX")[0] == '0';
+    static const bool log = std::getenv("WFC_NOTIFYLOG") != nullptr;
+    if (log) LOG_INFO("NOTIFYFX %s %s @%s", local ? "local" : "participant", n.what.c_str(), n.socket.c_str());
+    if ((local && fx_.spawnNotifyEffect(n.what, sw)) || off || !renderer_) return;
+    const core::Vec3 p{sw.m[12], sw.m[13], sw.m[14]}, f{sw.m[0], sw.m[1], sw.m[2]}, u{sw.m[4], sw.m[5], sw.m[6]};
+    fxStepSpawn(n.what, p, core::normalize(f), core::normalize(u), team, false);
 }
 
 static const char* gameplayEventName(GameplayEventType t) {

@@ -606,6 +606,7 @@ public:
     std::map<int, int> fxReal_;
     std::atomic<int> fxNextVid_{0};   // virtual FX ids: fxStepSpawn* may run on the worker and (outside a remainder) the main thread
     int fxStepSpawn(const std::string& tmpl, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u, int team, bool explosion);
+    void spawnWeaponNotifyEffect(const WeaponNotify& n, const core::Mat4& socketWorld, int team, bool local);   // [Systems] reconstructed or generic
     // The VehicleFxDriver runtime (Systems, FX race fix): spawn / param through the same deferral (virtual ids, main-thread ops).
     int fxStepSpawnPlain(const std::string& tmpl, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u);
     void fxStepParam(int vid, const std::string& name, const float v[4]);
@@ -1208,7 +1209,7 @@ private:
     std::vector<ParticipantShot> participantShots_;
     // Participants' held weapons: the player's weapon models (weaponModelFor) posed per participant, with their fire / reload
     // event animations, drawn at each pawn's weapon socket.
-    struct ParticipantWeaponView { std::string id; WeaponMesh anim; unsigned seenShot = 0, seenReload = 0; };
+    struct ParticipantWeaponView { std::string id; WeaponMesh anim; unsigned seenShot = 0, seenReload = 0; int player = -1; std::vector<WeaponNotify> fired; };   // [Systems] fired: this step's notifies
     std::map<int, ParticipantWeaponView> partWeapons_;
     struct PendingShotFx { std::string weapon; core::Mat4 muzzle; core::Vec3 to; bool tracer = true; int team = -1; };
     mutable std::vector<PendingShotFx> partShotFx_;   // filled per step, spawned at draw (renderer particle API)
