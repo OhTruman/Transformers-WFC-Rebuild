@@ -193,6 +193,15 @@ void HudController::update(IMoviePresenter* p, const Catalog& cat, bool open, bo
             for (const auto& t : *f.contextualPrompts) if (!in(was, t)) call("NotifyContextualCommand", {0, 0, tr(t)});
         }
         promptsDirty_ = false;
+        if (f.jamBuffs) {   // apply on a new jam / disrupt buff (and all again on a fresh movie), unapply when it ends
+            static const std::vector<HudFrame::Buff> kNoBuffs;
+            const auto& was = sentValid_ && sent_.jamBuffs ? *sent_.jamBuffs : kNoBuffs;
+            auto has = [](const std::vector<HudFrame::Buff>& v, const std::string& id) {
+                return std::any_of(v.begin(), v.end(), [&](const HudFrame::Buff& b) { return b.id == id; });
+            };
+            for (const auto& b : was) if (isJamBuff(b.id) && !has(*f.jamBuffs, b.id)) call("UnapplyBuff", {b.id});
+            for (const auto& b : *f.jamBuffs) if (isJamBuff(b.id) && !has(was, b.id)) call("ApplyBuff", {b.id, 0, b.remain});
+        }
         if (f.cantTransformCount && sentValid_ && sent_.cantTransformCount)
             for (int i = *sent_.cantTransformCount; i < *f.cantTransformCount; ++i) call("NotifyCantTransform", {});
         if (!sentValid_ || f.spectating != sent_.spectating) {
