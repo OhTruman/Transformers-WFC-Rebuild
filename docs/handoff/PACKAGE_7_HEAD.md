@@ -7,6 +7,18 @@ playtests).
      merges it by file at each step. At build time: <HEAD>, <DATE>, sizes, the [PLACEHOLDER] rows and the gate table;
      rename to PACKAGE_7_<head>.md. Owner = the lane that ships the item; status = open / in progress / merged <sha>. -->
 
+## Status (kept current; newest first)
+
+- 2026-10-17 06:13: the user rebooted (the kernel-stuck presenter exe released the card; nonpaged pool 1.1 GB after the reboot);
+  the freeze is lifted. Card queue today, in order (one exe at a time, Integration's GO each):
+  1. Rendering: Streets match run (X3 Streets haze step).
+  2. Gameplay: death-presentation patch 2 crops (agents/gameplay a208d3b0; headless 48 / 48, SIMHASH identical; Systems'
+     FX-count row PASS, 0 mismatches over 230 lines).
+  3. Systems (one exe: af4d0731 + SYSTEMS_LOCAL_DEATH_SOUND + SYSTEMS_FX_INACTIVE, work/ldeath/tree): the local death cue
+     paced check (tools/systems/death_cue_check.ps1 -PacedOnly), then the SecondsBeforeInactive rows - counters (Streets +
+     Molten, WFC_FXINACTIVE 0 vs 1), identity (switch 0 byte-identical to af4d0731; switch 1 scored by crop against the
+     logged-freeze list), eye crops turning away > 1 s and back. Default on only if all three agree.
+
 ## How to play this build
 
 [PLACEHOLDER: carried from package 6's list (reboot first, Play.bat, Settings > Graphics: 2560x1440, Ray Tracing =
