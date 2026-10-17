@@ -3,6 +3,10 @@
 ## Current state (update at every stable point)
 
 - **2026-10-17 03:35, the user set the package 7 scope:** package 7 is now the **hand-over build**; package 6 still finishes as the checkpoint.
+  - **About 05:10: patch 2 (all six edits + GibRagdoll) BUILDS in `work/int_p2`; headless PASSES.**
+    - BOTTEST 48 / 48 on all 12 seeds; seed-7 SIMHASH identical to the base `work/int_p2b` (af4d0731) over 18,007 lines.
+    - Logs are in `work/pass29/p2`. The null renderer never spawns gibs, so the ragdoll / scorch / camera need the windowed crop slot
+      (about 06:15, after Experimental's arm B and Rendering's Streets run).
   - **HARD RULE until FREEZE LIFTED** (Integration, after my sqlite / node runs in the timed hold forced 3 map reruns): **no interpreter
     process at all** (python, node, sqlite3, py_compile). Only the editor / file tools, git and sed.
     - The ragdoll's GIB_LowBody2_PHYSSYS table (7 bodies, 6 constraints) is read from authored.db **after** the lift.

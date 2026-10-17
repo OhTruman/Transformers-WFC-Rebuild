@@ -6,7 +6,7 @@ const mode = process.argv[2];
 const P = ['F:', 'Transformers Rebuild', 'Rebuild-Gameplay', 'work'].join(bs);
 const W = [P, 'pass29', 'p2'].join(bs);
 fs.mkdirSync(W, {recursive: true});
-const exe = t => [P, 'int_' + t, 'build-rel', 'bin', 'wfc_rebuild.exe'].join(bs);
+const exe = t => ['..', '..', '..', 'int_' + t, 'build-rel', 'bin', 'wfc_rebuild.exe'].join(bs);   // relative to the step's work dir (the runner joins them)
 const env = s => 'WFC_MUTE=1;WFC_NOINTERACT=1;WFC_NOMOUSE=1;WFC_AUTODETECT=0;WFC_SEED=' + s + ';WFC_FLOWSEED=' + s +
     ';WFC_GPULOST_DIALOG_S=0;WFC_NULLRENDER=1;WFC_BOTTEST=1';
 const out = [];
