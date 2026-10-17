@@ -627,14 +627,14 @@ void Pipeline::tickMapFx(float dt) {
             if (!L.localSpace) for (const FxModule& m : L.modules) killOnHit |= m.flagA != 0 && m.killOnHit;
             // HmParticleModuleGravity (RE particle audit (c) batch 1, update): Velocity.Z and BaseVelocity.Z +=
             // GravityMultiplier x ComponentScale.Z x the instance's gravity scalar x dt. The scalar (inst +0x94) is still
-            // UNKNOWN: WorldInfo.DefaultGravityZ (-2940 UU/s^2) stands in. Only modules whose cooked GravityMultiplier is in
-            // the data act (none before AssetTools' parameter-blob regen: unchanged until then)
+            // UNKNOWN: no stand-in is shipped - gravity acts only once both the cooked GravityMultiplier and a sourced scalar
+            // (fxGravityZ_, from the RE / AssetTools world-gravity finding) are known; unchanged until then
             float gravZ = 0.0f;
-            for (const FxModule& m : L.modules)
-                if (m.name == "PMI_Gravity" && m.flagA != 0 && m.fields.count("GravityMultiplier")) gravZ += m.fields.at("GravityMultiplier");
-            if (gravZ != 0.0f) {
+            if (fxGravityZ_ != 0.0f) {
+                for (const FxModule& m : L.modules)
+                    if (m.name == "PMI_Gravity" && m.flagA != 0 && m.fields.count("GravityMultiplier")) gravZ += m.fields.at("GravityMultiplier");
                 const float sz = std::sqrt(in.R[2][0] * in.R[2][0] + in.R[2][1] * in.R[2][1] + in.R[2][2] * in.R[2][2]);   // (ComponentScale.Z)
-                gravZ *= sz * -2940.0f * dt;
+                gravZ *= sz * fxGravityZ_ * dt;
             }
             for (size_t p = 0; p < rt.parts.size();) {
                 FxParticle& q = rt.parts[p];

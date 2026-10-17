@@ -1198,6 +1198,7 @@ public:
     int anisotropy_ = 4;
     long fxPoolSeq_ = 0;
     int statPoolPeak_ = 0, statPoolOver_ = 0, statPoolReclaimed_ = 0, statPoolFrames_ = 0;
+    float fxGravityZ_ = 0.0f;   // HmParticleModuleGravity: the instance gravity scalar (UU/s^2); 0 = UNKNOWN, gravity inactive
     bool setFxParam(int id, const std::string& name, const float v[4]);
     int liveFx() const;
     void drawMapPresentation();                                   // map FX + totems + destructible
