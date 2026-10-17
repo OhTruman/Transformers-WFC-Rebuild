@@ -14,6 +14,12 @@
     | 5 | Death-body patch 2 (scorch decal, skeletal gibs, authored Death camera, full momentum picker) | 10-13 h, then re-time |
     | 6 | FaceFX hook | 5-7 h |
 
+  - **Order APPROVED by Integration.** The freeze lifts **only at Integration's "FREEZE LIFTED" message** (after Experimental's
+    extra 12-min attribution hold). Then:
+    - compiles are OK; exes run with WFC_MUTE=1 and WFC_NOINTERACT=1;
+    - crops and corpse-arm slots on request, one timed hold at a time across lanes, queued by Integration.
+    - Items 3 and 4 share **one** Classic SIMHASH re-baseline.
+    - **First run after the lift:** the PERFSTATS instancing counters (see `GAMEPLAY_CORPSE_ONEDRAW.md`, lever 1 code reading).
   - **Target:** the RT-off cost at 63 bots back toward the WFC_NOCORPSE floor, with 5v5 unchanged. WFC_NOCORPSE / WFC_NOMINEPRES stay.
 - **2026-10-17: the package 6 gate is running on af4d0731. FREEZE** (Integration): no compiles and no exes until Integration lifts
   it by message; code edits and docs only.
