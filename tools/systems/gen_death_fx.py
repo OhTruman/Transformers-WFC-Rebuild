@@ -47,29 +47,30 @@ for bpname in ['TR_Deaths_p.SharedRobotDeaths', 'TR_Deaths_p.BruteRobotDeaths', 
         skel = bool(sg) and bool(props(sg).get('Templates'))   # a spawner with no Templates spawns nothing (car / tank / jet)
         da = e.get('DecalApplicator') if e.get('UseCustomDecals') else bp.get('DecalApplicator')
         dec = bool(da) and bool(((props(da).get('Template') or {}).get('Material')))   # an applicator with no Template material spawns nothing (vehicles)
-        play = []
+        play = []; prand = False
         for m in e.get('Modifiers') or []:
             if cls(m) != 'TnDeathModifierPlayEffect': continue
             mp = props(m); dmax = ((mp.get('Delay') or {}).get('Max') or 0.0)
+            prand = prand or mp.get('PlayType') == 'PET_Random'   # ETnPlayEffectsType: one of the listed effects, picked at random
             for ef in mp.get('Effects') or []:
                 if ef.get('Template'): play.append((ef['Template'], ef.get('SocketName') or '', dmax))
-        rows.append((bpname.split('.')[-1], name, gbp or '', fx, chunks, cue, skel, dec, play))
+        rows.append((bpname.split('.')[-1], name, gbp or '', fx, chunks, cue, skel, dec, play, prand))
     # "Default": no entry's types match (e.g. a damage type without a DamageDeathType, sideways momentum) -> the blueprint's own
     # DefaultGibsBlueprint / SkeletalGibs / DecalApplicator, no modifiers.
     fx, chunks, cue = dsys(bp.get('DefaultGibsBlueprint'))
     sg, da = bp.get('SkeletalGibs'), bp.get('DecalApplicator')
     rows.append((bpname.split('.')[-1], 'Default', bp.get('DefaultGibsBlueprint') or '', fx, chunks, cue, bool(sg) and bool(props(sg).get('Templates')),
-                 bool(da) and bool((props(da).get('Template') or {}).get('Material')), []))
+                 bool(da) and bool((props(da).get('Template') or {}).get('Material')), [], False))
 out.append('struct DeathFxTemplate { const char* tmpl; float x, y, z; };')
 out.append('struct DeathPlayEffect { const char* tmpl; const char* socket; float delayMax; };')
 out.append('struct DeathFxEntry { const char* blueprint; const char* entry; const char* gibsBlueprint; int nGibFx; DeathFxTemplate gibFx[3];')
-out.append('                      bool chunks; const char* gibCue; bool skeletalGibs; bool decals; int nPlay; DeathPlayEffect play[3]; };')
+out.append('                      bool chunks; const char* gibCue; bool skeletalGibs; bool decals; int nPlay; DeathPlayEffect play[3]; bool playRandom; };   // playRandom: PET_Random - ONE of play[] (uniform), else all')
 out.append('static const DeathFxEntry kDeathFx[] = {')
-for b, n, g, fx, ch, cue, sk, dc, pl in rows:
+for b, n, g, fx, ch, cue, sk, dc, pl, pr in rows:
     fxs = ', '.join('{%s, %.1ff, %.1ff, %.1ff}' % (q(t), x, y, z) for t, x, y, z in fx[:3]) or '{}'
     pls = ', '.join('{%s, %s, %.2ff}' % (q(t), q(s), d) for t, s, d in pl[:3]) or '{}'
-    out.append('    {%s, %s, %s, %d, {%s}, %s, %s, %s, %s, %d, {%s}},' % (q(b), q(n), q(g), min(len(fx), 3), fxs, 'true' if ch else 'false', q(cue),
-               'true' if sk else 'false', 'true' if dc else 'false', min(len(pl), 3), pls))
+    out.append('    {%s, %s, %s, %d, {%s}, %s, %s, %s, %s, %d, {%s}, %s},' % (q(b), q(n), q(g), min(len(fx), 3), fxs, 'true' if ch else 'false', q(cue),
+               'true' if sk else 'false', 'true' if dc else 'false', min(len(pl), 3), pls, 'true' if pr else 'false'))
 out.append('};')
 # The death sockets per skeletal mesh (SkeletalMeshSocket: bone + RelativeLocation UU + RelativeRotation, UE axes).
 SOCK = ('Head_FX', 'BoosterSocket_C', 'Chest_FX', 'TargetingSocket', 'VaporTrailSocket_R', 'PositionSocket')
@@ -93,4 +94,4 @@ pc = props('TransGame.Default__TnPlayerController')
 out.append('// TnPlayerController.DeathSound: the local player\'s own death cue.')
 out.append('static const char* const kLocalDeathCue = %s;' % q(pc.get('DeathSound') or ''))
 open(sys.argv[2], 'w', encoding='utf-8', newline='\n').write('\n'.join(out) + '\n')
-print('entries', len(rows)); [print('  %-18s %-16s gibs=%s fx=%s chunks=%s cue=%s skel=%s decals=%s play=%s' % (b, n, g.split('.')[-1] or '-', [t.split('.')[-1] for t, *_ in fx], ch, cue or '-', sk, dc, [(t.split('.')[-1], s) for t, s, _ in pl])) for b, n, g, fx, ch, cue, sk, dc, pl in rows]
+print('entries', len(rows)); [print('  %-18s %-16s gibs=%s fx=%s chunks=%s cue=%s skel=%s decals=%s play%s=%s' % (b, n, g.split('.')[-1] or '-', [t.split('.')[-1] for t, *_ in fx], ch, cue or '-', sk, dc, '(ONE at random)' if pr else '', [(t.split('.')[-1], s) for t, s, _ in pl])) for b, n, g, fx, ch, cue, sk, dc, pl, pr in rows]
