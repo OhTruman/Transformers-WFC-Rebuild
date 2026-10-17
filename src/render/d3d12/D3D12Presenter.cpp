@@ -205,8 +205,18 @@ public:
         list_->Close();
         if (FAILED(dev_->CreateFence(0, D3D12_FENCE_FLAG_SHARED, __uuidof(ID3D12Fence), (void**)&fence_))) return false;
         if (FAILED(dev_->CreateSharedHandle(fence_, nullptr, GENERIC_ALL, nullptr, &fenceHandle_))) return false;
+        // one wait event for the presenter's life (package 7 leak suspect 1: an event created + closed per throttled frame,
+        // closed while a timed-out SetEventOnCompletion still held it)
+        if (!(event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr))) return false;
         gl_.genSem(1, &sem_);
         gl_.importSem(sem_, kHandleD3D12Fence, fenceHandle_);
+        // GL -> D3D12 on its own fence (package 7 exit hang): with one fence signalled from both APIs, a D3D12 signal of N + 1
+        // that ran after GL's N + 2 (the queue held up by Present) set the fence back, and the queue's next wait for N + 2
+        // stalled until GL's next frame - on the last frame, forever (swapchain release then waited in the kernel)
+        if (FAILED(dev_->CreateFence(0, D3D12_FENCE_FLAG_SHARED, __uuidof(ID3D12Fence), (void**)&glFence_))) return false;
+        if (FAILED(dev_->CreateSharedHandle(glFence_, nullptr, GENERIC_ALL, nullptr, &glFenceHandle_))) return false;
+        gl_.genSem(1, &glSem_);
+        gl_.importSem(glSem_, kHandleD3D12Fence, glFenceHandle_);
         RECT rc; GetClientRect(hwnd_, &rc);
         if (!createSwapchain(std::max<LONG>(1, rc.right - rc.left), std::max<LONG>(1, rc.bottom - rc.top))) return false;
         if (std::getenv("WFC_D3D12_WORKER")) startWorker();
@@ -238,7 +248,7 @@ public:
         worker_ = new std::thread([this, &ready] {
             if (!wglMakeCurrent(workerDc_, workerCtx_)) { ready = -1; return; }
             gl_.genSem(1, &workerSem_);
-            gl_.importSem(workerSem_, kHandleD3D12Fence, fenceHandle_);
+            gl_.importSem(workerSem_, kHandleD3D12Fence, glFenceHandle_);   // (the worker signals GL -> D3D12)
             ready = 1;
             workerLoop();
         });
@@ -260,8 +270,8 @@ public:
             if (gl_.clientWaitSync) gl_.clientWaitSync(j.sync, 0, 5000000000ull);
             else gl_.waitSync(j.sync, 0, ~0ull /*GL_TIMEOUT_IGNORED*/);
             gl_.deleteSync(j.sync);
-            ++value_;
-            const GLuint64_ v = value_;
+            ++glValue_;
+            const GLuint64_ v = glValue_;
             gl_.semParam(workerSem_, kFenceValue, &v);
             GLuint texs[4] = {glTex_[j.slot], 0, 0, 0}; GLenum lays[4] = {kLayoutTransferSrc, kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead};
             const GLuint nTex = fgTextures(j.slot, texs + 1) + 1;
@@ -373,17 +383,17 @@ public:
             cv_.notify_all();
             return true;
         }
-        ++value_;
+        ++glValue_;
         {
             // variant (A/B): WFC_D3D12_SIGNALNOTEX=1 signals without the texture / layout transition (D3D12 imports keep
             // their own state; the layout argument is the Vulkan-interop contract)
             static const bool noTex = std::getenv("WFC_D3D12_SIGNALNOTEX") != nullptr;
-            const GLuint64_ v = value_;
-            gl_.semParam(sem_, kFenceValue, &v);
+            const GLuint64_ v = glValue_;
+            gl_.semParam(glSem_, kFenceValue, &v);
             GLuint texs[4] = {glTex_[slot], 0, 0, 0}; GLenum lays[4] = {kLayoutTransferSrc, kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead};
             const GLuint nTex = fgTextures(slot, texs + 1) + 1;
-            if (noTex) gl_.signalSem(sem_, 0, nullptr, 0, nullptr, nullptr);
-            else gl_.signalSem(sem_, 0, nullptr, nTex, texs, lays);
+            if (noTex) gl_.signalSem(glSem_, 0, nullptr, 0, nullptr, nullptr);
+            else gl_.signalSem(glSem_, 0, nullptr, nTex, texs, lays);
         }
         glx::gpuPrePresent();                          // (WFC_GPUSTAMPS only) the GL side's present point
         const clk::time_point tC = clk::now();
@@ -442,7 +452,7 @@ public:
         std::swap(b[1].Transition.StateBefore, b[1].Transition.StateAfter);
         list_->ResourceBarrier(2, b);
         list_->Close();
-        queue_->Wait(fence_, value_);
+        queue_->Wait(glFence_, glValue_);                // (GL's signal of this frame: its own fence, only GL raises it)
         ID3D12CommandList* lists[] = {list_};
         queue_->ExecuteCommandLists(1, lists);
         const clk::time_point t4 = clk::now();
@@ -541,7 +551,18 @@ public:
         // drained unless the device is really gone (then fences complete at once; a healthy device - Present failed for
         // another reason, or WFC_D3D12_SIMLOST - must drain, or destroying the FG swapchain blocks on its present queue)
         const bool removed = dev_ && dev_->GetDeviceRemovedReason() != S_OK;
+        // (exit hang) no queue wait may outlive the exit: GL's work is finished, and the GL -> D3D12 fence is raised from the
+        // CPU to GL's last value (a no-op when GL's signal already ran), so the drain below always completes
+        glFinish();
+        if (glFence_ && glFence_->GetCompletedValue() < glValue_) {
+            LOG_WARN("D3D12 present: GL's last signal (%llu) had not reached D3D12 at shutdown (fence at %llu): raised from the CPU",
+                     (unsigned long long)glValue_, (unsigned long long)glFence_->GetCompletedValue());
+            glFence_->Signal(glValue_);
+        }
         if (!removed) waitIdle();
+        if (!removed && fence_->GetCompletedValue() < value_)
+            LOG_WARN("D3D12 present: the queue did not drain in 2 s at shutdown (fence %llu of %llu)",
+                     (unsigned long long)fence_->GetCompletedValue(), (unsigned long long)value_);
 #if defined(WFC_FFX_SDK)
         if (fgSwapCtx_ && !removed) {
             ffxDispatchDescFrameGenerationSwapChainWaitForPresentsDX12 wp{};
@@ -567,8 +588,11 @@ public:
         fg_ = false;
         rel(list_);
         for (auto& a : alloc_) rel(a);
-        rel(queue_); rel(fence_);
+        rel(queue_); rel(fence_); rel(glFence_);
         if (fenceHandle_) { CloseHandle(fenceHandle_); fenceHandle_ = nullptr; }
+        if (glFenceHandle_) { CloseHandle(glFenceHandle_); glFenceHandle_ = nullptr; }
+        if (glSem_ && gl_.deleteSem) { gl_.deleteSem(1, &glSem_); glSem_ = 0; }
+        if (event_) { CloseHandle(event_); event_ = nullptr; }
         rel(dev_); rel(factory_);
         LOG_INFO("D3D12 present: shut down%s", lost_ ? " (device lost)" : "");
     }
@@ -857,22 +881,20 @@ private:
         return true;
     }
     void throttle(UINT bi) {                           // at most buffers_ frames in flight on the D3D12 side
-        if (frameValue_[bi] && fence_->GetCompletedValue() < frameValue_[bi]) {
-            HANDLE e = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-            fence_->SetEventOnCompletion(frameValue_[bi], e);
-            WaitForSingleObject(e, 1000);
-            CloseHandle(e);
-        }
+        if (frameValue_[bi]) waitFence(frameValue_[bi], 1000);
     }
     void waitIdle() {
         if (!queue_) return;
         ++value_;
         queue_->Signal(fence_, value_);
-        if (fence_->GetCompletedValue() < value_) {
-            HANDLE e = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-            fence_->SetEventOnCompletion(value_, e);
-            WaitForSingleObject(e, 2000);
-            CloseHandle(e);
+        waitFence(value_, 2000);
+    }
+    // (the shared event is auto-reset: a wait that timed out leaves a late signal behind, so an early wake re-checks the
+    // fence and re-arms once)
+    void waitFence(UINT64 v, DWORD ms) {
+        for (int k = 0; k < 2 && fence_->GetCompletedValue() < v; ++k) {
+            fence_->SetEventOnCompletion(v, event_);
+            WaitForSingleObject(event_, ms);
         }
     }
 
@@ -895,7 +917,10 @@ private:
     std::mutex mx_; std::condition_variable cv_; std::deque<Job> jobs_; int inFlight_ = 0;
     double qwSum_ = 0, qwMax_ = 0; int qwN_ = 0;
     Interop2Probe probe2_; bool probe2Tried_ = false;
-    ID3D12Fence* fence_ = nullptr;
+    ID3D12Fence* fence_ = nullptr;                   // D3D12 -> GL / CPU: only the queue signals it (value_)
+    ID3D12Fence* glFence_ = nullptr; HANDLE glFenceHandle_ = nullptr; GLuint glSem_ = 0;   // GL -> D3D12: only GL signals it
+    UINT64 glValue_ = 0;
+    HANDLE event_ = nullptr;
     UINT64 value_ = 0, frameValue_[kMaxBuffers] = {};
     UINT buffers_ = 2, latency_ = 2;
     GLuint glMem_[kRing] = {}, glTex_[kRing] = {}, glFbo_[kRing] = {}, sem_ = 0;

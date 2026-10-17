@@ -870,7 +870,7 @@ public:
 
 
 private:
-    // the characters (Systems' D3D12RtDynamic, mask 0x4): their BLAS records, then the static instances + the characters
+    // the characters (Systems' D3D12RtDynamic, mask 0x4; death bodies 0x10): their BLAS records, then the static instances + the characters
     // into a per-ring-slot TLAS (grown by half again when short); without characters the static TLAS stays
     struct DynTlas { ID3D12Resource* tlas = nullptr; ID3D12Resource* scratch = nullptr; ID3D12Resource* inst = nullptr;
                      UINT64 tlasBytes = 0, scratchBytes = 0, instBytes = 0; };
@@ -978,6 +978,9 @@ private:
         D3D12_QUERY_HEAP_DESC qh{}; qh.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP; qh.Count = 12;
         if (FAILED(dev_->CreateQueryHeap(&qh, __uuidof(ID3D12QueryHeap), (void**)&tsHeap_))) return false;
         for (auto& r : tsReadback_) r = makeBuffer(dev_, 48, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST);
+        qh.Count = 4;                                    // (X3: its own pair per slot - the cost line of every package 7 item)
+        if (FAILED(dev_->CreateQueryHeap(&qh, __uuidof(ID3D12QueryHeap), (void**)&volTsHeap_))) volTsHeap_ = nullptr;
+        for (auto& r : volTsReadback_) r = volTsHeap_ ? makeBuffer(dev_, 16, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST) : nullptr;
 #if defined(WFC_RT_DENOISER)
         dnInit_ = dn_.init(dev_);
         if (!dnInit_) LOG_WARN("RT bridge: no shadow denoiser (raw RT shadow)");
@@ -1230,13 +1233,20 @@ private:
             D3D12_GPU_DESCRIPTOR_HANDLE lm = heap_->GetGPUDescriptorHandleForHeapStart();
             lm.ptr += 4ull * kTableN * inc;
             list_->SetComputeRootDescriptorTable(4, lm);
+            const bool volTimed = volTsHeap_ && volTsReadback_[slot];
+            if (volTimed) list_->EndQuery(volTsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 2);
             list_->Dispatch((UINT)(volTx_ + 7) / 8, (UINT)(volTy_ + 7) / 8, 64);   // inject (+ temporal)
             list_->ResourceBarrier(1, &ub);
             cv[40] = 1.0f;
             list_->SetComputeRoot32BitConstants(0, 52, cv, 0);
             list_->Dispatch((UINT)(volTx_ + 7) / 8, (UINT)(volTy_ + 7) / 8, 1);    // integrate
+            if (volTimed) {
+                list_->EndQuery(volTsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 2 + 1);
+                list_->ResolveQueryData(volTsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 2, 2, volTsReadback_[slot], 0);
+            }
+            volTimed_[slot] = volTimed;
             volParity_ ^= 1; volHistValid_ = true;
-        } else volHistValid_ = false;
+        } else { volHistValid_ = false; volTimed_[slot] = false; }
         list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 6 + 2);
         tsShade_[slot] = fr.reflectShade;
         pollMaterialPso();
@@ -1287,6 +1297,12 @@ private:
         if (SUCCEEDED(readback_[slot]->Map(0, &r, &p))) { rays = *(const uint32_t*)p; readback_[slot]->Unmap(0, &none); }
         D3D12_RANGE r2{0, 48};
         if (SUCCEEDED(tsReadback_[slot]->Map(0, &r2, &p))) { std::memcpy(ts, p, 48); tsReadback_[slot]->Unmap(0, &none); }
+        if (volTimed_[slot] && tsFreq_) {                // (X3: inject + integrate)
+            uint64_t vt[2] = {}; D3D12_RANGE r3{0, 16};
+            if (SUCCEEDED(volTsReadback_[slot]->Map(0, &r3, &p))) { std::memcpy(vt, p, 16); volTsReadback_[slot]->Unmap(0, &none); }
+            if (vt[1] > vt[0]) volMs_.push_back((double)(vt[1] - vt[0]) * 1000.0 / (double)tsFreq_);
+            volTimed_[slot] = false;
+        }
         if (giTimed_[slot] && tsFreq_ && ts[5] > ts[4]) { const double g = (double)(ts[5] - ts[4]) * 1000.0 / (double)tsFreq_; giSum_ += g; giMax_ = std::max(giMax_, g); ++giN_; }
         const double ms = tsFreq_ && ts[1] > ts[0] ? (double)(ts[1] - ts[0]) * 1000.0 / (double)tsFreq_ : 0.0;
         const double dnMs = tsFreq_ && ts[2] > ts[1] ? (double)(ts[2] - ts[1]) * 1000.0 / (double)tsFreq_ : 0.0;
@@ -1311,6 +1327,15 @@ private:
         if (rfAbN_[0] > 0 && rfAbN_[1] > 0)
             LOG_INFO("RT reflections A / B (alternating 30-frame blocks): hit shading on %.3f ms (%d frames), off %.3f ms (%d frames)",
                      rfAb_[1] / rfAbN_[1], rfAbN_[1], rfAb_[0] / rfAbN_[0], rfAbN_[0]);
+        if (!volMs_.empty()) {
+            std::vector<double> w = volMs_;
+            std::sort(w.begin(), w.end());
+            double vs = 0; for (double x : w) vs += x;
+            LOG_INFO("RT X3 volumetric light (%zu of the 300 frames, %dx%d tiles x 64 slices, inject + integrate): GPU %.3f ms avg, "
+                     "%.3f p50, %.3f p95, %.3f max", w.size(), volTx_, volTy_, vs / (double)w.size(), w[w.size() / 2],
+                     w[w.size() * 95 / 100], w.back());
+            volMs_.clear();
+        }
         if (giN_ > 0) LOG_INFO("RT GI texel tracer (R4, %d of the 300 frames traced a slice): GPU %.3f ms avg per traced frame, %.3f max", giN_, giSum_ / giN_, giMax_);
         giSum_ = giMax_ = 0; giN_ = 0;
         rfAb_[0] = rfAb_[1] = 0; rfAbN_[0] = rfAbN_[1] = 0;
@@ -1492,6 +1517,7 @@ private:
     std::vector<GLuint> sigBufs_;
     ID3D12Resource* dbgRb_ = nullptr; int dbgSlot_ = -1;
     double dnSum_ = 0, dnMax_ = 0, rfSum_ = 0, rfMax_ = 0, rfAb_[2] = {0, 0}; int rfAbN_[2] = {0, 0};
+    ID3D12QueryHeap* volTsHeap_ = nullptr; ID3D12Resource* volTsReadback_[2] = {}; bool volTimed_[2] = {}; std::vector<double> volMs_;
     bool tsShade_[4] = {true, true, true, true};
 #if defined(WFC_RT_DENOISER)
     RtShadowDenoiser dn_; bool dnInit_ = false;
