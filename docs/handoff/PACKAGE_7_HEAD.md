@@ -1,4 +1,4 @@
-# Package 7: integration <HEAD> (<DATE>)
+# Package 7: integration deed7f1a (<DATE>)
 
 **The hand-over build** (user 2026-10-17: package 6 af4d0731 is the internal checkpoint; package 7 is what the user
 playtests).
@@ -8,6 +8,10 @@ playtests).
      rename to PACKAGE_7_<head>.md. Owner = the lane that ships the item; status = open / in progress / merged <sha>. -->
 
 ## Status (kept current; newest first)
+
+- 2026-10-17 15:25: FINAL PACKAGE 7 HEAD = deed7f1a (057aded3 + the lens flares + the lead-based auto delay + the verify_slim
+  'package 7 data:' row). The package builds after Experimental's gate PASS on Integration's word: refresh.sh at deed7f1a with
+  SLIMTSV = AssetTools' slim_files.refresh.tsv (re-measured for the 6 lens_flares.json + 6 changed materials files).
 
 - 2026-10-17 14:36: today's merges recorded below (rows + details) for the head candidate Integration names ~15:30 after
   Rendering's verdicts. Systems' card rows of the six-patch FX stack all PASS (body notify 13:56, reverb switch 14:05, Streets
@@ -64,6 +68,8 @@ The user's package 7 scope (2026-10-17), in the order given; visual items first.
 | Weapon + melee authored values | per-weapon spine / hand recoil from each weapon mesh's authored values, the melee batch | Gameplay | merged 9864b4cd |
 | Camera recoil | per-shot orbit pitch step, FOV kick (RecoilDelay / RecoilTime), fire shake on the shared camera shaker (1f1d4e17); follow-up: TnBuffReduceRecoil x 0.35, no kick while driving wheeled vehicles (deeb135b) | Gameplay | merged 1f1d4e17 / deeb135b |
 | Online, phase 1 code | ISession boundary (3a19b47a); UDP lockstep transport, seat launch, record / replay (.. 68b4a3e6 voice lane .. 3daab0b5 proximity voice in the cue mix + star relay .. e1fc0c6c / df4d62aa / c1b0afb4 identity fixes .. ea4ca7cd per-seat guided missiles .. c069952c); bin/licenses/opus | Systems / Gameplay / Frontend | merged; INERT offline (offline SIMHASH unchanged at every merge); not playable online until NET.identity passes |
+| Lens flares | the authored LensFlareSource of 6 MP maps (Rust, Seed, Gorge, Remnant, BrokenHope, Debris) per RE's native decode (LENS_FLARE_RE.md), RE PASS as shipped; the authored 02 / Base_SUN elements are known-heavy (as the original); the PC first-point option is a user decision | Rendering | merged deed7f1a (+ lens_flares.json data) |
+| Online: lead-based auto delay | each peer reports the arrival lead of the other's commands; a late sender raises its input delay by the shortfall (asymmetric paths). rttjump (one direction 50 -> 250 ms mid-match): client stalled 24.1 s -> 0.68 s; lan / typical / bad / burst still 6001 ticks, every hash equal, exit 0 | Systems | merged 51d32eaf (SYSTEMS_NET_LEAD_DELAY 49f841eb + tools/net/netshim.py rttjump); inert offline |
 | Death-body cost | one draw per settled body, TLAS / BLAS per body (package 6 item 1: +0.67..+1.94 ms p90 at 63 bots RT off, +0.17..+0.49 ms p50 RT on) | Gameplay + Rendering | open |
 
 ### Details (filled as items merge)
