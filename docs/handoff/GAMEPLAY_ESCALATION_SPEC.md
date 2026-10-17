@@ -37,7 +37,7 @@ our placeholder until a source exists.
 | Horde AI | the Classic / Smart bot brains, MatchOpponent, per-bot difficulty | the campaign enemy roster (§4); "sees every player at spawn"; no objective layer |
 | Spawn finder | team starts + generated spawn points | the TnSurvivalZoneVolume set (30 per map, in the export) with scores, ZoneChanges, activation |
 | Downed / revive | none in the sim (only presentation / progression strings) | the stock co-op downed state, revive interaction and timings (RE gap, §6) |
-| Weapons | WeaponDef MP data (MultiplayerData) | SurvivalData weapon rows (DesiredWeaponDataType 4) from AssetTools / authored.db |
+| Weapons | WeaponDef MP data (MultiplayerData) | SurvivalData weapon rows (DesiredWeaponDataType 4): AssetTools survival_weapon_data.json (escalation_player_data = the SV row, else PlayerData per RE §7.4; escalation_ai_data = AiData) |
 | Destructible walls | Destructible (state, applyDamage) | the four Wall_Crashers walls + TnToggleDestructible 5491 as map actors |
 | Online | the seat order, per-seat paths, lockstep (phase 1) | power per seat, generator pools, the director: all sim, all deterministic (§7) |
 
@@ -146,5 +146,5 @@ options).
 
 - RE (delivered 2026-10-17, §7: AI templates, downed / revive, loot). Still open: the GOAP behaviour port, the SV soldier / Spider / Titan /
   boss classes and meshes, the first-round "transform an object variable" target in Setup.
-- AssetTools: per-map volume / nav-cell geometry for the generator effects; a closed-doors bot_nav; SurvivalData weapon rows.
+- AssetTools (delivered 2026-10-17, manifests/maps/MP_ESC_*/ + manifests/escalation/): escalation_navmesh.json = the ORIGINAL NavigationCell mesh (actor ids, blocked_at_start, enabled_by_generators; tactical / path nodes) = the primary Escalation nav; escalation_geometry.json (generator volumes, resolved actions, zone polygons); bot_nav_escalation_closed.json (start-state cross-check only); survival_weapon_data.json. Open: BrokenHope 30 of 32 generator-enabled cells are not cooked blocked (AssetTools / RE question).
 - User: Escalation with bots filling empty co-op seats (not in the original: 1–4 humans only) — default no, original behaviour.
