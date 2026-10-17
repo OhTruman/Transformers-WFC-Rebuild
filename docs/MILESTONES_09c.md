@@ -3252,3 +3252,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 14:27 Frontend CARD FREE 14:27: the in-match HUD set captured (lobby, talker, scoreboard with Remote rows, the kicked line + slot swap
   at tick 1031, forced jam), the first-run set incl. fr_voice_settings; spectate and the options page missed on the scripts (fixed
   next; a ~4-min gap after Rendering). Card -> Experimental's 1e11edc2 pair (14:27) -> Rendering x17 + x18.
+2026-10-17 14:29 ONLINE_PARTY_RE.md merged: the original disbands on leader loss (ours promotes: D12 stays as a deliberate extension, listed to the
+  user); the reattach popup semantics and party limits recorded for the Frontend's phase 2.
