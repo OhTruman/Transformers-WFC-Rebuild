@@ -2552,3 +2552,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   + audit 2 part (4) (projectile flight loop sounds unread -> Systems). Gameplay follow-up de736589 (scorch on, gib materials,
   DeathFx PlayType) dry-runs clean; merges with the (A) data switch after PRESENTER DONE. Decisions: per-weapon recoil = own
   re-baseline right after hover + squad ((a)); unknown objective keys refused as the original.
+2026-10-17 08:28 Merged: 202cef15 ISession aligned (11 points, ONLINE_MP_MISMATCHES.md); f1ae9baa online B2 (Join Game row, join panel,
+  WFC_FAKESESSION dev tool); 6045a7a9 architecture: proximity voice with room reverb (user addition: 3D emitter at the speaker's
+  head from the lockstep sim, the original's dialog attenuation, rooms = Kismet SeqAct_Reverb touch volumes already exported,
+  second I3DL2 instance for the speaker's room; default Radio + Proximity); a027510d / 091b2290 audit 2 part (1) abilities +
+  corrections (cooldown arrays [MP, campaign], E-class cues may already play: CUELOG check first; HUD gap = ApplyBuff /
+  UnapplyBuff only -> Frontend; unwired ability FX / sounds -> Systems). (A) data switch staged (scratchpad matfix_switch.py,
+  dry run OK on 10 maps). Presenter loop ~22 / 64 at 08:27, clean. Card order after PRESENTER DONE: (A) switch -> Frontend
+  10 min -> Rendering 20 min -> (B) eye pass ~100 min.
