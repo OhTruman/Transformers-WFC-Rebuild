@@ -217,7 +217,12 @@ static void testFakeSession() {
     fs.requestStart();
     check(quiet && notYet && hostOpened && before && b.size() == 1 && b[0].type == E::HostLost && fs.scriptDone() &&
           fs.count("host") == 1 && fs.last("host")->hostSettings.gameModeTag == "TDM" && fs.count("requestStart") == 1 &&
-          std::string(sessionEventName(E::Kicked)) == "Kicked", "session.fake_script_and_recorder");
+          std::string(sessionEventName(E::Kicked)) == "Kicked" && std::string(sessionEventName(E::MemberVoice)) == "MemberVoice",
+          "session.fake_script_and_recorder");
+    SessionVoiceSettings vs; vs.mode = SessionVoiceMode::OpenMic; vs.audience = SessionVoiceAudience::All; vs.volume = 40;
+    fs.setVoiceSettings(vs); fs.setPushToTalk(true); fs.setMuted(SessionMemberId{"WFC-AAAA-BBBB"}, true);
+    check(fs.last("setVoiceSettings")->arg == "2,1,,40" && fs.last("setPushToTalk")->arg == "1" && fs.last("setMuted")->arg == "WFC-AAAA-BBBB,1",
+          "session.fake_voice_calls");
     FrontendRuntime rt;
     check(rt.flow().session() == nullptr, "session.offline_by_default");
 }
@@ -959,12 +964,13 @@ static void testOnlineHostJoin() {
         const bool inLobby = runUntil(*r.rt, [&] { return r.f().level() == LevelKind::GameLobby && !r.f().loading().active; });
         r.frames(2);
         const int firstPublishes = r.fake->count("publishLobby");
-        r.f().call("Online.SetSelectedMapID", {"508"});   // (no map runtime data headless: the host picks one, as testFlow does)
+        const int pick = r.f().lobby().mapId == 508 ? 502 : 508;   // a different map than the lobby opened with: one republish
+        r.f().call("Online.SetSelectedMapID", {std::to_string(pick)});
         r.frames(2);
         check(r.ok && hosting && inLobby && firstPublishes == 1 && r.f().sessionRole() == GameFlow::SessionRole::Host && r.f().call("Online.IsHost").b &&
               r.f().joinCode() == "WFC-7QK2-M9TD" && r.f().joinAddress() == "192.168.1.20:7777" && !r.f().popup().open &&
               r.rt->dataStores().call("ReadBoolValue", {"<CurrentGame:CanHostRequestGameStart>"}).b && r.fake->count("publishLobby") == 2 &&
-              r.fake->last("publishLobby")->lobby.gameModeTag == "TDM" && r.fake->last("publishLobby")->lobby.mapId == 508, "online.S1_host",
+              r.fake->last("publishLobby")->lobby.gameModeTag == "TDM" && r.fake->last("publishLobby")->lobby.mapId == pick, "online.S1_host",
               std::to_string(r.ok) + std::to_string(hosting) + std::to_string(inLobby) + " role " + GameFlow::sessionRoleName(r.f().sessionRole()) +
               " code " + r.f().joinCode() + " popup " + std::to_string(r.f().popup().open) + " canStart " +
               std::to_string(r.rt->dataStores().call("ReadBoolValue", {"<CurrentGame:CanHostRequestGameStart>"}).b) + " publishes " +
@@ -1024,14 +1030,35 @@ static void testOnlineHostJoin() {
         check(r.ok && r.popupIs(x.title, x.msg) && !r.rt->catalog().localizeKey(x.msg).empty() && r.f().level() == LevelKind::PartyLobby &&
               r.f().sessionRole() == GameFlow::SessionRole::Offline, x.name);
     }
-    {   // S5 timeout: exactly the original 50 s of frontend time
-        OnlineRig r;
+    {   // S5 timeout: the session layer's JoinFailed{Timeout} at the original 50 s
+        SessionEvent e = ev(T::JoinFailed); e.joinFailure = SessionJoinFailure::Timeout;
+        OnlineRig r({after("join", e, 50.0)});
         r.f().call("Online.JoinGame", {"192.168.1.20:7777"});
         r.frames(2990);
         const bool still = r.popupIs("$UIText.MessagePrompts.JoinFriendGameTitle", "$UIText.MessagePrompts.JoiningMessage");
         r.frames(20);
         check(r.ok && still && r.popupIs("$UIText.MessagePrompts.JoinGameInviteFailedTitle", "$UIText.MessagePrompts.JoinGameInviteFailedMessage") &&
-              r.fake->count("cancelJoin") == 1, "online.S5_join_timeout");
+              r.fake->count("cancelJoin") == 0, "online.S5_join_timeout");
+    }
+    {   // the frontend backstop: a session that never answers fails the join at 55 s and cancels it
+        OnlineRig r;
+        r.f().call("Online.JoinGame", {"WFC-7QK2-M9TD-4H"});
+        r.frames(3280);
+        const bool still = r.popupIs("$UIText.MessagePrompts.JoinFriendGameTitle", "$UIText.MessagePrompts.JoiningMessage");
+        r.frames(40);
+        check(r.ok && still && r.popupIs("$UIText.MessagePrompts.JoinGameInviteFailedTitle", "$UIText.MessagePrompts.JoinGameInviteFailedMessage") &&
+              r.fake->count("cancelJoin") == 1, "online.join_backstop_55s");
+    }
+    {   // code shapes: Systems' codes and relay codes pass to the session; its decode failure shows the entry text
+        SessionEvent e = ev(T::JoinFailed); e.joinFailure = SessionJoinFailure::Invalid;
+        OnlineRig r({after("join", e)});
+        const bool shapes = r.f().call("Online.JoinGame", {"WFC-R-ABCD-EFGH"}).b;
+        r.frames(5);
+        const bool decodeFail = r.popupIs("$UIText.MessagePrompts.GenericErrorTitle", "$WfcPC.Online.JoinInvalid");
+        r.f().call("MessageBox.OnA");
+        const bool rejects = !r.f().call("Online.JoinGame", {"WFC--AB"}).b && !r.f().call("Online.JoinGame", {"WFC-"}).b &&
+                             !r.f().call("Online.JoinGame", {"host:0"}).b && !r.f().call("Online.JoinGame", {"host:70000"}).b;
+        check(r.ok && shapes && decodeFail && rejects && r.fake->count("join") == 1, "online.join_code_shapes");
     }
     {   // cancel while joining
         OnlineRig r;
