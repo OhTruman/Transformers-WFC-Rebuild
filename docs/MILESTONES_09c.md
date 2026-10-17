@@ -3100,3 +3100,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 12:38 Gate tooling: the headless runner moves the regress-base same-match checks off the card (gate-base.sh HEADLESS=1: Streets TDM seed
   1234 + PlayerBot, 160 s sim per exe, SIMHASH diff, CPU-only seconds); be54be6d's runner joins the base as a non-sim item (proved
   once windowed). Runner exit code 1 today (init-return path), not a failure.
+2026-10-17 12:44 MERGED d22fb45a ONLINE PHASE 1 TRANSPORT + LOCKSTEP (Systems): UDP + loopback transports, reliable channel, lockstep with input delay,
+  resend windows, launch-hash gate, per-tick hash exchange + desync detection, exit codes; first two-process run connected and ran
+  600 identical ticks, then the known seat-numbering desync at tick 601 (Gameplay's humans + localSeat fix pending). Offline
+  identical (frontend tests; headless SIMHASH stream equal to the pre-transport head).
