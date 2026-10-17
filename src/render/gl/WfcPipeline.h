@@ -137,6 +137,7 @@ struct Program {
     bool sceneColor = false;      // reads the resolved scene colour (SceneTexture)
     std::string material;         // original material path, lower case (material-parameter routing)
     int distProg = -1;            // distortion-accumulate variant (material Distortion connected)
+    std::string distMaster;       // its master material, lower case (the distortion allow-list names masters)
     int fogIntProg = -1, fogApplyProg = -1;   // fog-volume shape: line-integral and apply variants (drawFogVolume)
     int shadowProg = -1;          // shadow-depth variant (opaque/masked: depth, masked clip)
     int screenProg = -1;          // HUD post-process chain variant (EmissiveColor x ScreenAlpha, full screen)
@@ -940,7 +941,7 @@ private:
     // render data
     struct MatSrc { std::vector<std::string> rtParams; std::string glsl; std::vector<std::string> files; std::vector<std::vector<std::string>> faces; std::vector<bool> srgb, cube, clampU, clampV;
                     std::vector<std::vector<float>> umin, umax; int blend = 0; bool twoSided = false, lit = true;
-                    float clip = 0.3333f; bool fogVolume = false; };
+                    float clip = 0.3333f; bool fogVolume = false; std::string master; };   // (master: the parent material of an instance)
     std::map<std::string, MatSrc> mats_;
     std::map<std::string, std::string> slotMaterials_;   // "mesh|section" -> original material
     struct LMRec { std::string coeff[3]; float scale[3][3]; float cs[2], cb[2]; };
@@ -1451,6 +1452,7 @@ private:
     void volApply();
     bool toneFilmicOn() const;
     float toneMapKey() const;                         // the exposure key (per map; WFC_TONE_KEY wins)
+    std::unordered_set<std::string> distAllow_; bool distAllowOn_ = false;   // (per-map distortion allow-list)
     float hazeUniform() const;                        // (the shaders' uHazeK: hazeK_ in Realistic with haze exposure, else 1)
     GLuint hazePbo_[3] = {0, 0, 0}; int hazeIdx_ = 0; float hazeK_ = 1.0f;   // (haze exposure: async adapt readback)
     void toneAdapt();

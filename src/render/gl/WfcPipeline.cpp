@@ -1309,6 +1309,23 @@ bool Pipeline::load(const std::string& mapName) {
     std::string lj = readText([&] { const char* e = std::getenv("WFC_LIGHTING_DIR"); if (!e || !*e) return dataDir_ + "/lighting.json";
         const size_t s = dataDir_.find_last_of("/\\"); return std::string(e) + "/" + (s == std::string::npos ? dataDir_ : dataDir_.substr(s + 1)) + "/lighting.json"; }());
     yieldLoad();
+    // distortion allow-list (RE, MODULATE_DISTORTION_CACHE_RE.md: the cooked DistortMesh pairs per map): the accumulate pass
+    // draws only the listed materials (e.g. BlastSphere_Death_MAT cooks none); no file = every Distortion-connected material
+    distAllow_.clear(); distAllowOn_ = false;
+    {
+        assets::Json D;
+        const std::string dj = readText(dataDir_ + "/distortion_allowlist.json");
+        if (!dj.empty() && assets::Json::parse(dj, D)) {
+            const assets::Json& M = D.isArray() ? D : D["materials"];
+            for (size_t i = 0; i < M.size(); ++i) {
+                std::string n = M[i].isObject() ? M[i]["material"].asString() : M[i].asString();
+                std::transform(n.begin(), n.end(), n.begin(), ::tolower);
+                if (!n.empty()) distAllow_.insert(n);
+            }
+            distAllowOn_ = true;
+            LOG_INFO("wfc: distortion allow-list: %zu materials", distAllow_.size());
+        }
+    }
     if (rtInfra_) {   // R1 sun swap data (Systems' tools/systems/vbake): WFC_RT_VBAKE=<dir> (<dir>/<map>/), else <render data>/vbake/
         const char* vb = std::getenv("WFC_RT_VBAKE");
         r1Dir_ = vb ? std::string(vb) + "/" + mapName : dataDir_ + "/vbake";
@@ -1373,6 +1390,7 @@ bool Pipeline::load(const std::string& mapName) {
         for (size_t k = 0; k < e["info"]["runtime_params"].size(); ++k)
             s.rtParams.push_back(e["info"]["runtime_params"][k].asString());
         const assets::Json& info = e["info"];
+        s.master = info["master"].asString();
         const std::string bm = info["blend_mode"].asString();
         s.blend = bm == "BLEND_Masked" ? 1 : bm == "BLEND_Translucent" ? 2 : bm == "BLEND_Additive" ? 3
                 : bm == "BLEND_Modulate" ? 4 : 0;
@@ -3415,6 +3433,9 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
                 int d = buildProgram(key + "|DIST", s.glsl, slots, s.cube, 3, s.twoSided, false, s.clip, false, s.rtParams);
                 mainOverride_ = nullptr;
                 if (d >= 0) { progs_[(size_t)d].original = true; progs_[(size_t)r].distProg = d; }
+                std::string dm = s.master.empty() ? matNameIn : s.master;
+                std::transform(dm.begin(), dm.end(), dm.begin(), ::tolower);
+                progs_[(size_t)r].distMaster = dm;
             }
             if (progs_[(size_t)r].fogShape && !fogVolumes_.empty()) {   // fog-volume rendering variants
                 mainOverride_ = kFSMainFogIntegral;
@@ -4890,7 +4911,8 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 fd.fx |= frameFx_;
             }
             if (!trans) depthDirty_ = true;
-            if (P.distProg >= 0 && distFbo_ && !WFC_ENV("WFC_NODISTORTION") && !rtUvAtlas_) {
+            if (P.distProg >= 0 && distFbo_ && !WFC_ENV("WFC_NODISTORTION") && !rtUvAtlas_ &&
+                (!distAllowOn_ || distAllow_.count(P.distMaster) != 0 || distAllow_.count(P.material) != 0)) {   // (the map's cooked distortion allow-list)
                 const Program& D = progs_[(size_t)P.distProg];
                 BindFramebuffer(GL_FRAMEBUFFER, distFbo_);
                 if (!distUsed_) { glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT); distUsed_ = true; }
