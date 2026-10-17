@@ -1,0 +1,138 @@
+# Cross-play: platform feasibility (Systems, 2026-10-16; design only, no code)
+
+Written by Systems while AssetTools is blocked; AssetTools may extend it. Companion to CROSSPLAY_NETCODE_DESIGN.md and
+CROSSPLAY_PROFILE_STATS.md. User order: PC-to-PC, then PC-to-browser, then PS3 / Xbox 360 towards the end; mobile is
+listed for completeness. Figures marked (measured) come from today's builds and logs; everything else is an estimate
+with its basis, and the open questions are at the end.
+
+## 0. The constraint above every platform: game data
+
+The rebuild runs on the user's own copy of the original game (ExtractedAssets / Game Dump come from the user's disc). The
+art, audio, maps and text are Activision / Hasbro property. A non-commercial project can share its code, but it must not
+host or redistribute the original's assets. So every platform below assumes the player supplies their own game data
+(a local install, or a file the player loads into the browser), never a server-hosted copy. This drives the browser
+design (section 2) and rules out store distribution with bundled assets (sections 5-6). Open question 1.
+
+## 1. Data and memory budget (reference)
+
+| item | size | basis |
+|---|---|---|
+| Original game (Xbox 360 disc) | ~8 GB | the user's figure (package-size memory) |
+| Package 6 without the HD pack | 5.83 GB (measured) | build_slim 9350f19b: 42,719 kept files 5.16 GB + 7,161 compressed .xpr twins, + bin 0.11 GB |
+| HD pack (optional) | 21.70 GB (measured) | D b0-31 3,506 files + M6 roughness 498 maps |
+| Full PC package | 27.53 GB (measured) | 9350f19b |
+| Per-map runtime data (render / collision / nav / audio) | ~80-175 MB per map | work/render map folders (Streets 82 MB) |
+
+Memory and CPU on the dev PC (7950X3D, RX 7900 XTX):
+- GPU memory plateau ~2.2-3.0 GB, measured: lobby-to-map R4 rows 2180 / 2841 / 2980 / 2974 MB, Realistic + HD.
+- AI cost per simulation step at 31 v 32 is 0.2-0.4 ms (Gameplay's measurements).
+- The whole simulation step (movement, collision, weapons, match) at 5 v 5 and 31 v 32 is NOT measured yet. Open
+  question 2: a headless lockstep timing run gives it in minutes.
+
+## 2. PC (Windows x64) - phase 1, the reference
+
+- **Assets:** the package as built (5.83 GB, + 21.70 GB optional HD). The player installs it beside their own extracted
+  game data (Play.bat).
+- **Memory:** fits any 8 GB+ PC.
+  - The Off / Faithful path needs a GL 4.6 GPU.
+  - Realistic needs DXR 1.1 (D3D12) through the GL-Vulkan / D3D12 interop.
+  - Enhanced HD wants ~6 GB+ of VRAM (the HD default rule).
+- **CPU:** the lockstep sim is single-threaded per participant with an order-independent worker pool. Its cost at 31 v 32
+  is small next to rendering, but needs measuring (open question 2). 5 v 5 is trivial.
+- **Renderer:** as shipped. Cross-play adds nothing to rendering.
+- **Input:** as shipped (keyboard / mouse, XInput).
+- **Profile / stats:** wfc_profile.ini (CROSSPLAY_PROFILE_STATS.md).
+- **Network:** WebRTC data channels (libdatachannel-class), join codes / direct IP (netcode doc).
+- **Licences:** our code plus FSR 3.1 (MIT), the Agility SDK (Microsoft licence), DXC, the ffx denoiser, and a WebRTC
+  library (open question 5 of the netcode doc). DLSS credit as the user decided. All compatible with non-commercial use.
+- **Verdict:** feasible now. The work is the netcode itself (netcode doc section 11).
+
+## 3. Browser (WebAssembly + WebGL2, WebGPU later) - phase 2
+
+- **Assets:** the player selects their own game folder or a prepared data file (File System Access API, or a drag-and-drop
+  archive). The page keeps it in the Origin Private File System. Nothing original is served from a web server.
+  - 5.83 GB is within Chrome / Edge origin quotas on most disks. Safari's is tighter (open question 3).
+  - The HD pack is not offered in the browser.
+  - Per-map streaming keeps the working set to one map (~80-175 MB) plus shared data.
+- **Memory:** wasm32 is limited to 4 GB of linear memory (Memory64 is not yet universal), and browsers often cap a tab
+  lower. The engine must stream per map and keep decoded textures on the GPU only. Today's PC exe holds more than that
+  in places (decoded PCM for audio banks, CPU copies of meshes), so a browser build needs a memory pass (open question 4).
+- **CPU:** wasm runs ~1.3-2x slower than native on numeric code. Threads need SharedArrayBuffer, which means
+  cross-origin isolation (COOP / COEP headers on the hosting page). The single-thread path is already deterministic
+  (WFC_SIMTHREADS=0 = the same SIMHASH). 5 v 5 is comfortable; 31 v 32 depends on open question 2.
+- **Determinism:** the first cross-compiler pair: x64 clang vs wasm clang, same LLVM, a different libm. Gameplay's option A
+  (one deterministic libm, stable sorts, canonical SIMHASH) plus the cross-build CI gate is a prerequisite.
+- **Renderer:**
+  - WebGL2 = OpenGL ES 3.0: no compute shaders, no RT, limited texture formats (BC via an extension on desktop only), GLSL
+    ES 3.00.
+  - Our material GLSL (generated by matc for desktop GL 4.6) needs an ES 3.0 target or a translation step.
+  - Off / Faithful are the realistic targets. Realistic (RT) is not possible in WebGL2; a later WebGPU path could bring
+    compute-based effects, but not hardware ray tracing (open question 6).
+- **Audio:** WebAudio, which needs a user gesture before sound starts. Banks decode in a worker.
+- **Input:** Pointer Lock + the Gamepad API. Text input via DOM.
+- **Profile / stats:** IndexedDB, with Export / Import (profile doc).
+- **Network:** WebRTC data channels natively (the netcode's transport choice).
+- **Licences:** an Emscripten build, our code, no third-party runtime beyond the browser.
+- **Verdict:** feasible for Off / Faithful at 5 v 5 after option A and a memory pass; 31 v 32 and Realistic are not
+  browser targets.
+
+## 4. Xbox 360 - late phase (option C client)
+
+- **Hardware:** Xenon, 3 in-order PowerPC cores (2 threads each), big-endian; 512 MB unified memory; Xenos GPU (the
+  original's own target).
+- **Assets:** the original game already fits (8 GB disc). Our extracted / converted data is PC-shaped (PNG / DDS / glTF);
+  a console client would rather use the original cooked packages natively. That is a different engine path (open
+  question 7).
+- **CPU:** the in-order PPC is several times slower per thread than a modern x64 core. A full 31 v 32 lockstep sim is
+  unlikely to fit, and bit-exact float determinism with the PC is not assured (contraction / float-in-double, audit
+  section 3). Hence option C: the console is a snapshot client of a PC host, simulating only its own pawn's prediction.
+- **Renderer:** Xenos (D3D9-class + unified shaders); none of our GL / D3D12 renderer ports directly.
+- **Toolchain / licences:** the official XDK is under NDA and cannot be used for a public non-commercial project. The open
+  homebrew path (libxenon) needs a modified console. Both raise distribution and legal questions (open question 8).
+- **Verdict:** possible only as a homebrew option-C client on modified hardware; the effort is a separate project. Last
+  in the order, as the user set.
+
+## 5. PS3 - late phase (option C client)
+
+- **Hardware:** Cell (one PPU, in-order PowerPC, big-endian, + 6 SPUs for game code), 256 MB XDR + 256 MB GDDR3, RSX
+  (GeForce 7-class: no unified shaders, Cg).
+- **Assets:** as for the 360, the original's PS3 build has its own cooked data; ours is PC-shaped.
+- **CPU:** a weaker PPU than one Xenon core for scalar float code, with SPU work only through hand-written jobs. Same
+  conclusion as the 360: option C client only.
+- **Renderer:** RSX needs Cg / GCM. A new renderer.
+- **Toolchain / licences:** the official SDK is under NDA. The open PSL1GHT toolchain needs custom firmware. Same legal
+  questions (open question 8).
+- **Verdict:** the hardest target (memory split, RSX, PPU speed); a homebrew option-C client is a research project.
+
+## 6. Android / iOS - not in the user's order (listed for completeness)
+
+- **Hardware:** 4-12 GB of shared memory; thermal limits on sustained load; GLES 3.2 / Vulkan (Android), Metal (iOS).
+- **Assets:** 5.83 GB is large for phones; there must be no store-bundled assets (section 0), so the player would side-load
+  their own data.
+- **Renderer:** Vulkan (Android) and Metal (iOS, or MoltenVK) ports of the Off / Faithful path. RT exists on recent
+  phones, but not as our D3D12 path.
+- **Input:** touch controls would be new design work; gamepads map like XInput.
+- **Distribution:** store review plus third-party IP means side-load only. iOS side-loading is restricted outside the EU.
+- **Verdict:** possible as a side-loaded Android Off / Faithful client after the browser work; not planned.
+
+## 7. Summary
+
+| platform | sim role | renderer | data | verdict |
+|---|---|---|---|---|
+| PC | full lockstep peer / host | as shipped (GL 4.6 + D3D12 RT) | package + own game data | feasible now |
+| Browser | full lockstep peer (5 v 5), single- or multi-threaded | WebGL2 Off / Faithful | player-supplied, OPFS | feasible after option A + a memory pass |
+| Xbox 360 | option C snapshot client | new Xenos renderer | the original's cooked data | homebrew research project |
+| PS3 | option C snapshot client | new RSX renderer | the original's cooked data | hardest; research project |
+| Android / iOS | lockstep peer (5 v 5) | Vulkan / Metal | side-loaded | not planned |
+
+## 8. Open questions
+
+1. Data rule: confirm "the player supplies their own game data on every platform; nothing original is hosted or bundled".
+   This also decides whether a public browser page can exist at all (it would load the player's files locally).
+2. Whole-sim step cost at 5 v 5 and 31 v 32: one headless lockstep timing run (CPU only), for the browser / console budgets.
+3. Browser storage: Safari's quota for 5.83 GB, or a smaller "core" data subset for the browser.
+4. A memory pass for wasm32 (4 GB): decoded audio banks, CPU mesh copies, per-map streaming.
+5. A WebGL2 target for matc (GLSL ES 3.00), or a translation step (e.g. SPIR-V cross-compilation).
+6. WebGPU later: worth a compute path for some Realistic effects, given no hardware RT?
+7. Consoles: a console client on the original's cooked packages (closer to the original engine), or our converted data?
+8. Console homebrew toolchains (libxenon, PSL1GHT) need modified hardware: acceptable for this project, or drop consoles?
