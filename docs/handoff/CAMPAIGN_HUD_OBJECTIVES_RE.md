@@ -87,7 +87,7 @@ plus local markers.
 | **Own downed state** | `TnHudDataObserverNormalizedDownedHealth` | `_global.NotifyNormalizedDownedHealthChanged(h)` | `IncapacitatedScreenClip` (`.Revived()` on revive) |
 | **Tutorial messages** | `TnSeqAct_DisplayTutorialMessage(MessageType)` → every PC → `TnHUD.DisplayTutorialMessage`. **Shown once per profile** (`HasShownTutorialMessage` / `MarkTutorialMessageAsShown`). Text = `Localize("TutorialMessages", <enum>, "TransGame")` with command → button translation; sound `BL_LVL_HUD_INTERFACE.WHSH_TUTORIAL_BOX` | `_global.NotifyTutorialMessage(text)` | Queued; each `mc_tutorialMessage` shows for **3000 ms**, then **minimizes** into a mid-right stack (25 px apart, interp 0.5 s), with a 200 ms gap between items. `mc_tutorialMessageTextTutorialPause` (`$UIText.Hud.TutorialPause`), `$UIText.Hud.TutorialAvailable` |
 | **Objective** | §2 | `_global.AddObjective` | `mc_objectiveNew` |
-| Buddy status / health bars | MP marker system: `TnObjectiveMarkerTypeTransformerHealthBar` / `…Campaign` markers on squad pawns (H) | `_global.UpdateMarker` | see the objective-marker doc |
+| Buddy status / health bars | `TnObjectiveMarkerTypeTransformerCampaign` marker on every pawn (CONFIRMED, see "Buddy markers" below) | `_global.UpdateMarker` | see the objective-marker doc |
 
 **Subtitles:**
 - They come from `Engine.SubtitleManager` (High Moon script: QueueSubtitles, priority, speaker).
@@ -99,3 +99,33 @@ plus local markers.
 
 **Anchors:** the HUD lays out nine anchor clips (`topLeft_mc` … `bottomRight_mc`) from the safe margins (sprite 654
 `updateStageScaling`). Which anchor each campaign element sits under is in the movie's display list; that wasn't extracted here.
+
+## Buddy markers and health bars — CONFIRMED (2026-10-18)
+
+**Registration:**
+- `TnPawn.Tick` → `SetupMarker()`, once per pawn, when `DisplayObjectiveMarker` (default true), it has a PRI and a blueprint, and
+  the GRI exists.
+- `GRI.AddObjectiveMarker(label, pawn, GameClass.default.TransformerMarkerClass, DoNotReplicate = true)`. Every client
+  creates its own markers locally.
+- The label is the PRI PlayerName, or the localized character name (`TnDataProvider_Chassis.LocalizeUniqueIconicId`).
+- Marker class by game: **TnCampaignGame and TnSurvivalGame → `TnObjectiveMarkerTypeTransformerCampaign`**; TnMultiplayerGame →
+  `…TransformerVersus`.
+
+**`TnObjectiveMarkerTypeTransformerCampaign`:**
+- **Visibility:**
+  - never on the viewer itself;
+  - **enemies:** only while the viewer is **fine-aiming**, the enemy is not AI-cloaked, and it is in line of sight;
+  - **allies:** always, except AI pawns that are not buddies, not downed and have `_ShouldDisplayName` false.
+- **Setup:**
+  - ally → `AllyMarkerSetup` (MarkerAlly_MAT, TargetHealthBar_MAT, label drawn focused and unfocused); a downed human ally →
+    `DownedAllyMarkerSetup`;
+  - enemy → `EnemyMarkerSetup` (MarkerEnemy_MAT, label only when focused);
+  - LabelZOffset = half the collision height.
+- **Label:** a downed non-buddy shows `DownedEnemyLabel`; AI pawns without `_ShouldDisplayName` show ""; otherwise the name.
+- **Health bar:** `DrawLabel` draws the name, then **a health bar for an ally only when the viewer's weapon is a repair weapon**
+  (`W.get_IsRepairWeapon()`) and the label is non-empty.
+  - The bar is `TargetHealthBar_MAT` with scalar params `Health` (normalized) and `Neutral` (1 when FillColor is 0) via
+    DrawMaterialTile.
+  - So buddies show health bars only to a player holding the repair ray. There is no always-on buddy health bar.
+- **`TnObjectiveMarkerTypeTransformerHealthBar`** (red fill, shown while the pawn rendered within the last 0.25 s and its
+  TnHealthDisplayService allows it) is used by sentry / ability markers, not buddies.

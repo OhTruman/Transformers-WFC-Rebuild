@@ -87,7 +87,7 @@ strike).
 **Fuel cell:**
 - Piece state `HeavilyDamaged` → **0 FuelCellDamaged**.
 - Final state → **1 FuelCellDestroyed**, plus:
-  - **vulnerable** (H: invulnerable until now);
+  - **vulnerable** (CONFIRMED, see "Tank invulnerability" below);
   - Reaction 3, health status Wounded, `TnSeqEvent_HealthStatus` Wounded;
   - **vehicle movement disabled and robot movement enabled** (it fights on as a robot);
   - the fuel cell is removed.
@@ -112,3 +112,19 @@ strike).
   - power and anim names in Omega's SimulatedEventsBlueprint.
 - **Kismet:** stage changes (SetOmegaStage / SetTrypticonStage), battery corruption (scripted), volume registration, and the
   fight's start and end.
+
+### Tank invulnerability — CONFIRMED (2026-10-18)
+
+- `TnTankAiPawn.PossessedBy` → `_BoundController.set_Invulnerable(true)`; `TnTankAiPawn.FuelCellDestroyed` → `set_Invulnerable(false)`
+  (it also sets `_FuelCellDestroyed`).
+- `TnAiController.set_Invulnerable(v)` = **`bGodMode = v`**; `get_Invulnerable` returns bGodMode. (The sentry variant also mirrors it
+  to `TnSentryPawn._Invulnerable`.)
+- **Effect, all script:**
+  - `Pawn.TakeDamage` → `GameInfo.ReduceDamage`: **`InGodMode()` → Damage = 0**. TnCampaignGame does not override it, except
+    in its InProgressOver state, which calls through.
+  - `TnAiController.NotifyHit` returns before any damage reaction (heavy-damage stimulus) while invulnerable.
+  - `TnPawn.ShouldInstaGib` → false in god / pseudo-god mode.
+- **So:** until the fuel cell's final state the tank takes no damage, plays no damage reactions and cannot be gibbed. After that
+  it is a normal damageable robot.
+- The same `bGodMode` is what `TnSeqAct_SetAiGodStatus` GOD_On sets (CAMPAIGN_KISMET_WFC_CLASSES_RE §17). GOD_PseudoOn instead
+  clamps damage to leave 1 health (`ReduceDamage`: Damage ≥ Health → Health − 1).
