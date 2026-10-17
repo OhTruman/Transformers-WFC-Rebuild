@@ -11,6 +11,8 @@ WFC RE lane, 2026-10-18. This continues WEAPON_PRESENTATION_AUDIT_RE.md (same me
 
 **C means named, not faithful.** A value column is marked *absent* only when no src reader exists.
 
+**E is not "unused" (Systems, 2026-10-18):** our audio code (AbilityAudio / CharacterAudio) plays cues looked up by class and field in the embedded JSON tables (`classSound` / buff sounds), so an E-only cue can still be played (e.g. the cloak loops via TnBuffCloak). Treat **-** (no hit) as the real gap list; E items need a runtime check (Systems' CUELOG).
+
 **Data note:** MP uses `TnWeapon.MultiplayerData` (`GetWeaponDataByType(3)`), not `PlayerData` (campaign). Everything here uses the
 MP data. The gun table was corrected the same way; see its §3 note.
 
@@ -71,7 +73,7 @@ For each ability, the extractor follows every asset reachable from the ability C
 - classes the ability script spawns by literal (e.g. TnBarrierSpawnable, TnRollerMineAbility);
 - plus the trigger anim's AnimNotifies.
 
-Cooldown is `[robot, vehicle]` seconds where two values are authored. Resource = `ResourceRequired`, the energon cost.
+**Cooldown is indexed by the game's skill-data set, not the form** (CONFIRMED, corrected 2026-10-18): `TnAbility.GetCooldownTime` uses `Cooldown[TnGame.GetCurrentSkillDataIndex()]` (index 0 if the array is short). **TnMultiplayerGame returns 0; TnGame (campaign and others) returns 1.** So the arrays are **[MP, campaign]**. `GetResourceRequired` returns 0 unless the index is 1, so **`ResourceRequired` (the energon cost) applies only in campaign; MP abilities are cooldown-only.** The result is × CooldownReductionModifier while the owner has TnBuffAbilityCooldown.
 
 **Limits:**
 - Mesh / material-only visuals of spawned actors (barrier shield mesh, decoy hologram) are not separated out.
@@ -128,11 +130,12 @@ Cooldown is `[robot, vehicle]` seconds where two values are authored. Resource =
 
 **Ours:**
 - `src/frontend/Hud.cpp` sends `NotifyAbilityType{n}Changed` / `UpdateCooldown` [C].
-- **No hit for `ApplyBuff` / `AbilityType*Jammed` / `TransformDisrupted` / `ShowAbilityType*`.** The jam display (killstreak
-  jammer, revive jam, Transform Disruptor) and the form-dependent slot swap are **absent**, unless driven another way (unknown).
+- **No hit for `ApplyBuff` / `UnapplyBuff`** (which drive `AbilityType*Jammed` / `TransformDisrupted` inside the movie), so the jam display
+  (killstreak jammer, revive jam, Transform Disruptor) is **absent**. `NotifyCurrentFormChanged` **is** sent (Hud.cpp), and the movie's own AS
+  does the ShowAbilityType / ShowGrenades slot swap, so the slot swap is covered (corrected per Gameplay).
 
 **Findings (part 1):**
-1. **Ability sounds are mostly E (embedded JSON only).** Cloak start / off loops per faction, HardLock, Decoy deploy, Drain
+1. **Ability sounds are mostly E (embedded JSON; may be played data-driven, so runtime check, not gaps).** Cloak start / off loops per faction, HardLock, Decoy deploy, Drain
    initiate / heal, Disguise, Barrier deploy / loop / retract, Warcry chest hits, TransformDisruptor and others have no src
    reference. Exceptions: AMMO_DEPLOY, SHIELD_PUSH (Shockwave / TransformDisruptor) and WAR_CRY_STATE_START [C].
 2. **Ability FX with no hit at all (-):**
@@ -140,4 +143,4 @@ Cooldown is `[robot, vehicle]` seconds where two values are authored. Resource =
    - sounds DECOY_TRAP_EXPLODE, ENERGON_SLING_HIT / TAIL.
 3. **Shockwave and TransformDisruptor share the same notify set:** Shield_BlastWave_A_FX at PositionSocket, DashPulse_1_FX at
    both boosters, and Trails_Bumblebee_FX at elbows / knees / wings. Ours has these R only.
-4. **HUD:** cooldown fill and icons are C; the jam / disrupt states and the slot swap by form are absent (above).
+4. **HUD:** cooldown fill, icons and the form slot swap are C; the jam / disrupt states (ApplyBuff) are absent (above).
