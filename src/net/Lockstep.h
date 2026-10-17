@@ -103,6 +103,14 @@ private:
     float srtt_ = 0.0f, rttvar_ = 0.0f;
     double lastPingMs_ = 0.0, lastDelayDropMs_ = 0.0;
     void updateDelay();
+    // Arrival lead (asymmetric paths: srtt / 2 is not the one-way time): for each sender, the smallest lead in ticks (its command's
+    // target tick minus the next tick this peer steps) of first arrivals over the last 1-2 s, reported back to it in our PONG; and the
+    // lead each peer reports about OUR commands (kNoLead = not reported). A reported lead < 1 raises D by the shortfall at once.
+    static constexpr int kNoLead = 127;
+    std::vector<int> leadCur_, leadPrev_, leadReported_;
+    double leadRollMs_ = 0.0;
+    uint32_t nextStep_ = 1;           // the next tick this peer steps
+    int leadFrom(int seat) const;
     double lastSendMs_ = 0.0, stallMs_ = 0.0, stallTotalMs_ = 0.0;
     Status status_ = Status::Running;
     std::string statusText_;

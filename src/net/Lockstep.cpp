@@ -67,6 +67,7 @@ Lockstep::Lockstep(INetTransport& t, const Config& c) : t_(t), cfg_(c) {
     cmds_.resize((size_t)cfg_.seats);
     contiguous_.assign((size_t)cfg_.seats, 0);
     peerAck_.assign((size_t)cfg_.seats, 0);
+    leadCur_.assign((size_t)cfg_.seats, kNoLead); leadPrev_.assign((size_t)cfg_.seats, kNoLead); leadReported_.assign((size_t)cfg_.seats, kNoLead);
     hello_.assign((size_t)cfg_.seats, 0);
     hello_[(size_t)cfg_.self] = 1;
     lastFullMs_.assign((size_t)cfg_.seats, 0.0);
@@ -135,7 +136,12 @@ void Lockstep::handle(const NetPacket& p) {
         for (size_t i = 0; i < count; ++i) {
             WireCommand w;
             std::copy(d.begin() + 11 + (long)(i * kWireCommandBytes), d.begin() + 11 + (long)((i + 1) * kWireCommandBytes), w.begin());
-            m.emplace(first + (uint32_t)i, w);   // duplicates / resends: the first copy stays (they are identical)
+            const uint32_t tick = first + (uint32_t)i;
+            // a first arrival (resends keep the first copy) once stepping: lead 0 = the step was waiting for it (a stall)
+            if (m.emplace(tick, w).second && tick >= nextStep_ && nextStep_ > 1) {
+                const int lead = (int)std::min<int64_t>(kNoLead - 1, (int64_t)tick - (int64_t)nextStep_);
+                leadCur_[(size_t)seat] = std::min(leadCur_[(size_t)seat], lead);
+            }
         }
         uint32_t& c = contiguous_[(size_t)seat];
         while (m.count(c + 1)) ++c;
@@ -180,6 +186,7 @@ void Lockstep::handle(const NetPacket& p) {
         if (d.size() < 10) return;
         std::vector<uint8_t> b(d.begin(), d.begin() + 10);
         b[0] = kPong; b[1] = (uint8_t)cfg_.self;
+        b.push_back((uint8_t)(int8_t)std::max(-128, std::min(kNoLead, leadFrom(seat))));   // the lead we saw from the pinger's commands
         t_.sendUnreliable(seat, b.data(), b.size());
         break;
     }
@@ -189,6 +196,7 @@ void Lockstep::handle(const NetPacket& p) {
         if (r < 0.0f || r > 5000.0f) return;
         if (srtt_ <= 0.0f) { srtt_ = r; rttvar_ = r * 0.5f; }   // RFC 6298 smoothing
         else { rttvar_ = 0.75f * rttvar_ + 0.25f * std::fabs(srtt_ - r); srtt_ = 0.875f * srtt_ + 0.125f * r; }
+        if (d.size() >= 11) leadReported_[(size_t)seat] = (int)(int8_t)d[10];   // older peers send no lead byte
         updateDelay();
         break;
     }
@@ -206,9 +214,19 @@ void Lockstep::handle(const NetPacket& p) {
 void Lockstep::updateDelay() {
     if (cfg_.delay > 0) return;
     const float tickMs = 1000.0f / 60.0f;
-    const int want = std::max(2, std::min(15, (int)std::ceil((srtt_ * 0.5f + 4.0f * rttvar_ + 5.0f) / tickMs)));
-    if (want > delay_) { LOG_INFO("NET input delay %d -> %d (rtt %.1f ms, var %.1f)", delay_, want, srtt_, rttvar_); delay_ = want; lastDelayDropMs_ = nowMs(); }
-    else if (want < delay_ && nowMs() - lastDelayDropMs_ >= 1000.0) { --delay_; lastDelayDropMs_ = nowMs(); LOG_INFO("NET input delay -> %d (rtt %.1f ms)", delay_, srtt_); }
+    int want = std::max(2, std::min(15, (int)std::ceil((srtt_ * 0.5f + 4.0f * rttvar_ + 5.0f) / tickMs)));
+    // A peer that saw our commands arrive with lead < 1 (late / just in time: the path to it is slower than srtt / 2) needs D up by
+    // the shortfall; the 1 / s fall waits until every reporting peer sees a lead >= 2.
+    int minLead = kNoLead;
+    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) minLead = std::min(minLead, leadReported_[(size_t)s]);
+    if (minLead < 1) want = std::max(want, std::min(15, delay_ + (1 - minLead)));
+    if (want > delay_) {
+        LOG_INFO("NET input delay %d -> %d (rtt %.1f ms, var %.1f, peer lead %d)", delay_, want, srtt_, rttvar_, minLead == kNoLead ? -1 : minLead);
+        delay_ = want; lastDelayDropMs_ = nowMs();
+        for (int& l : leadReported_) l = kNoLead;   // re-measured at the new D
+    } else if (want < delay_ && minLead >= 2 && nowMs() - lastDelayDropMs_ >= 1000.0) {
+        --delay_; lastDelayDropMs_ = nowMs(); LOG_INFO("NET input delay -> %d (rtt %.1f ms, peer lead %d)", delay_, srtt_, minLead == kNoLead ? -1 : minLead);
+    }
 }
 
 void Lockstep::sendCommands(int peer, bool full) {
@@ -308,7 +326,13 @@ void Lockstep::stalled(double ms) {
     }
 }
 
+int Lockstep::leadFrom(int seat) const {
+    return std::min(leadCur_[(size_t)seat], leadPrev_[(size_t)seat]);
+}
+
 void Lockstep::stepped(uint32_t tick, uint64_t stateHash) {
+    nextStep_ = tick + 1;
+    if (nowMs() - leadRollMs_ >= 1000.0) { leadRollMs_ = nowMs(); leadPrev_ = leadCur_; std::fill(leadCur_.begin(), leadCur_.end(), kNoLead); }
     if (log_) {
         const NetStats st = t_.stats();
         std::fprintf(log_, "%u,%016llx,%016llx,%.2f,%llu,%llu,%.1f\n", tick, (unsigned long long)stateHash, (unsigned long long)bundleHash(tick),
