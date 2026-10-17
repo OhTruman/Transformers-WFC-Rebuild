@@ -14,6 +14,13 @@ applied in this order from a tree root (new files in `corpsep2/new/`: `src/game/
 | 6 | `edit_skeletal_gibs.js` | The robot skeletal gib ragdoll |
 | 7 | `edit_killer_cam.js` | The killer cam (RE KILLER_CAM_RE): PlayerSpectating after 3 s on SpectateOverTheShoulder (orbit 16 m, FOV 80, free look), hard cuts, target cycling LB / ']' and RB / '[' (new Buttons SpectateNext / Prev), the 1 s recheck, the respawn cut. [PROV: target order by match player index; bots are valid killer targets; no LevelCamera fallback] |
 
+| 8 | `edit_death_fx.js` | Systems' per-entry death effects (DeathFx.inc, agents/systems 409b7f39 → `corpsep2/new/DeathFx.inc` → src/game/) |
+| 9 | `edit_death_sockets_shake.js` | The effects at the authored sockets (kDeathSockets) + TnPawn.GibbedCameraShake (RE 51cca62) |
+
+**PROV item 2 (PokeGibs_DSYS) is CLOSED** by edit 8: TF_Death_MED_FX only, no chunks / skeletal gib / decal.
+
+Headless after all nine: BOTTEST 48 / 48 × 12, seed-7 SIMHASH identical (agents/gameplay fec7ca8a).
+
 Headless after all seven: BOTTEST 48 / 48 × 12, seed-7 SIMHASH identical to af4d0731 (agents/gameplay ebd359cf).
 Systems owns the death audio / FX hooks (call sites sent 2026-10-17).
 
