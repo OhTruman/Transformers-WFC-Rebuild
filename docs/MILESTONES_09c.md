@@ -3266,3 +3266,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 14:34 Experimental CARD FREE 14:35: 1e11edc2 Berth pair captured (26 / 26 both modes, same match); 21 / 26 frames change (~27 % of
   pixels in them), larger than death frames alone at first sight: sorting against the death-frame list (verdict ~14:45). Card ->
   Rendering x17 + x18 (14:35, ~50 min) -> Frontend gap2 4 min -> head candidate.
+2026-10-17 14:34 1e11edc2 (death patch 2) identity row PASSES (Experimental ID_1e11edc2.md): same match 6,001 steps in Off and Faithful; the 21 / 26
+  changed frames all sit on a death in view (dying robots' explosion / gib / smoke; the player's own death camera at 74-80 % of
+  the frame); no change outside death moments. Experimental next: the regress base with the TRANSACT sim-only diff + the headless
+  same-match check (CPU).
