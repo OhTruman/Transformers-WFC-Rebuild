@@ -94,6 +94,11 @@ int AbilityAudio::killedPawn(SoundCues& cues, bool headshot, bool robot, const s
     return q.empty() ? -1 : cues.play(q.c_str(), SoundCues::Emitter{{0, 0, 0}, SoundCues::kUI, {0, 0, 0}, ""}, 0.0f);
 }
 
+int AbilityAudio::localDied(SoundCues& cues) {
+    const std::string& q = CharacterAudio::classSound("TnPlayerController", "DeathSound");
+    return q.empty() ? -1 : cues.play(q.c_str(), SoundCues::Emitter{{0, 0, 0}, SoundCues::kUI, {0, 0, 0}, ""}, 0.0f);
+}
+
 int AbilityAudio::transformFailed(SoundCues& cues, const SoundCues::Emitter& pawn) {
     const std::string& q = CharacterAudio::classSound("TnPlayerController", "TransformFailedSound");
     return q.empty() ? -1 : cues.play(q.c_str(), pawn, 0.0f);

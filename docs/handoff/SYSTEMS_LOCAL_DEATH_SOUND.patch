@@ -1,0 +1,54 @@
+diff -ruN a/src/game/AbilityAudio.cpp b/src/game/AbilityAudio.cpp
+--- a/src/game/AbilityAudio.cpp	2026-10-16 23:19:24.000000000 -0500
++++ b/src/game/AbilityAudio.cpp	2026-10-17 04:57:29.851422700 -0500
+@@ -94,6 +94,11 @@
+     return q.empty() ? -1 : cues.play(q.c_str(), SoundCues::Emitter{{0, 0, 0}, SoundCues::kUI, {0, 0, 0}, ""}, 0.0f);
+ }
+ 
++int AbilityAudio::localDied(SoundCues& cues) {
++    const std::string& q = CharacterAudio::classSound("TnPlayerController", "DeathSound");
++    return q.empty() ? -1 : cues.play(q.c_str(), SoundCues::Emitter{{0, 0, 0}, SoundCues::kUI, {0, 0, 0}, ""}, 0.0f);
++}
++
+ int AbilityAudio::transformFailed(SoundCues& cues, const SoundCues::Emitter& pawn) {
+     const std::string& q = CharacterAudio::classSound("TnPlayerController", "TransformFailedSound");
+     return q.empty() ? -1 : cues.play(q.c_str(), pawn, 0.0f);
+diff -ruN a/src/game/AbilityAudio.h b/src/game/AbilityAudio.h
+--- a/src/game/AbilityAudio.h	2026-10-16 23:19:24.000000000 -0500
++++ b/src/game/AbilityAudio.h	2026-10-17 04:57:29.850420000 -0500
+@@ -55,6 +55,9 @@
+     // PressTransform refused (TnBuffTransformDisruptor, already transforming, transforming disabled, no room):
+     // TransformFailedSound, local, at the pawn [RE pass 5 s13].
+     int transformFailed(SoundCues& cues, const SoundCues::Emitter& pawn);
++    // The local player died (any cause): TnPlayerController.DeathSound (BL_LVL_HUD_INTERFACE.HUD_DEATH_POWER_DOWN), 2D UI,
++    // once per death [authored TnPlayerController default; the call point = the local death, PROV: ClientDied time].
++    int localDied(SoundCues& cues);
+ 
+     // TnRollerMine (the local owner's, TnRollerMineAbility) [RE pass 5 s12 addendum + s13, CONF]: spawn -> _IdleLoopingSound
+     // (loops with the actor); ArmTime 3.0 s -> ArmSound; fuse <= 1.5 s left (t 8.5 of the 10 s fuse) -> _BuildupSound once;
+diff -ruN a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-16 23:19:24.000000000 -0500
++++ b/src/game/World.cpp	2026-10-17 04:57:39.028894600 -0500
+@@ -3384,6 +3384,11 @@
+     const Match::KillContext kc = ctx ? *ctx : killContext(killer, localPlayer_, damageType);
+     match_.killed(killer, localPlayer_, suicide, damageType, &kc);
+     localDead_ = true;
++    // [Systems] TnPlayerController.DeathSound for the local player's own death (audio only; no sim state).
++    const int deathCue = abilityAudio_.localDied(cues_);
++    if (deathCue >= 0) ++localDeathCues_;
++    static const bool log = std::getenv("WFC_DEATHAUDIOLOG") != nullptr;
++    if (log) LOG_INFO("LOCAL DEATH cue %s (%s; %d so far)", deathCue >= 0 ? "started" : "none", damageType.c_str(), localDeathCues_);
+ }
+ 
+ void World::tickMatch(float dt) {
+diff -ruN a/src/game/World.h b/src/game/World.h
+--- a/src/game/World.h	2026-10-16 23:19:24.000000000 -0500
++++ b/src/game/World.h	2026-10-17 04:57:29.852928800 -0500
+@@ -745,6 +745,7 @@
+     void requestRoller(int owner);
+     const std::vector<RollerMine>& rollerMines() const { return rollers_; }   // every participant's (Rendering / Systems audio: t = age)
+     int participantRollerSpawns_ = 0;   // diagnostics: rollers spawned by participants
++    int localDeathCues_ = 0;   // diagnostics: local deaths that started TnPlayerController.DeathSound (Systems)
+     int deathPresentations_ = 0, deathCues_ = 0;   // diagnostics (BOTTEST): victim death presentations (onPawnDeath), those with a death sound cue
+     int participantRollersLive() const { int n = 0; for (const RollerMine& m : rollers_) n += m.alive && m.owner != localPlayer_; return n; }
+ 

@@ -55,6 +55,9 @@ public:
     // PressTransform refused (TnBuffTransformDisruptor, already transforming, transforming disabled, no room):
     // TransformFailedSound, local, at the pawn [RE pass 5 s13].
     int transformFailed(SoundCues& cues, const SoundCues::Emitter& pawn);
+    // The local player died (any cause): TnPlayerController.DeathSound (BL_LVL_HUD_INTERFACE.HUD_DEATH_POWER_DOWN), 2D UI,
+    // once per death [authored TnPlayerController default; the call point = the local death, PROV: ClientDied time].
+    int localDied(SoundCues& cues);
 
     // TnRollerMine (the local owner's, TnRollerMineAbility) [RE pass 5 s12 addendum + s13, CONF]: spawn -> _IdleLoopingSound
     // (loops with the actor); ArmTime 3.0 s -> ArmSound; fuse <= 1.5 s left (t 8.5 of the 10 s fuse) -> _BuildupSound once;

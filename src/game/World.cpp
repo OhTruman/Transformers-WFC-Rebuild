@@ -3384,6 +3384,11 @@ void World::killLocalPlayer(int killer, bool suicide, const std::string& damageT
     const Match::KillContext kc = ctx ? *ctx : killContext(killer, localPlayer_, damageType);
     match_.killed(killer, localPlayer_, suicide, damageType, &kc);
     localDead_ = true;
+    // [Systems] TnPlayerController.DeathSound for the local player's own death (audio only; no sim state).
+    const int deathCue = abilityAudio_.localDied(cues_);
+    if (deathCue >= 0) ++localDeathCues_;
+    static const bool log = std::getenv("WFC_DEATHAUDIOLOG") != nullptr;
+    if (log) LOG_INFO("LOCAL DEATH cue %s (%s; %d so far)", deathCue >= 0 ? "started" : "none", damageType.c_str(), localDeathCues_);
 }
 
 void World::tickMatch(float dt) {
