@@ -3195,3 +3195,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   door opening sequence with the light-map lerp, no pop). Rendering cuts RENDERING_P7_TRANSACT_DRAW.patch against 814e7cf5.
 2026-10-17 13:51 Slim refresh re-measured at 13:50 (+31.7 MB, 47 rows; map_fx +26.5 MB after the always-include install); one more re-measure at
   the named head (door materials + interpolated light maps + Remnant standalone light pending).
+2026-10-17 13:52 Experimental's NET.identity on e1fc0c6c confirms the 1299 split (1648 typical / 1687 bad: the tick shifts with the auto delay);
+  NEW: under 'typical' the host's replay does not match the host at 1648 (a third hash) -> Systems (record / replay correctness).
+  Regress base decision (a): Gameplay supplies minimal sim-only diffs of 814e7cf5 (and the weapon / melee batch) against
+  af4d0731 + hover + runner, verified by the headless same-match check, so the regress stays "package 7 renderer vs package 6
+  renderer at the same sim".
