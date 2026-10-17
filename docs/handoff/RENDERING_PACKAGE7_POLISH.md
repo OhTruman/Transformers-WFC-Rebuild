@@ -61,3 +61,64 @@ set aside for package 6. Plan and findings: RENDERING_X3_VOLUMETRICS.md.
 - X6.
 - X7: the RT lightmap super-sample (item 7's deferred part).
 - The FX VelocityOverLife decode (AssetTools 7b1908a queue), so effect particles move as authored.
+
+## 4. Mine / explosion saturation (user item, 2026-10-17): scope after the 360 evidence
+
+Evidence: integration docs/handoff/RENDERING_HDR_SCENE_PATH_RE.md + SYSTEMS_HDR_SHADER_DECODE.md.
+- **360 path:** 7e3 scene colour with bias 3, resolved /8, so the real ceiling is 3.984. The gather's min(c, 4) is a no-op
+  above it. The visible clip is that ceiling, then the uber post's saturate.
+- **Faithful:** stays exact, unchanged.
+
+What Realistic already has: the GL scene target is FP16. The soft-bloom gather clamps at uBloomMax 16, not 4, and the
+tone curve rolls off instead of clipping (wfcFilmShoulder + the X1 white roll to a warm white of the pixel's own hue).
+So the core already has headroom above 3.98 in Realistic.
+
+What remains is how much of the frame the flash covers (item 1's bar: Gorge step 1080 near-white 55-62 %). The treatment:
+1. **Flash term:** item 1's design (flash share F, fast attack / slow release, exposure and bloom mix scaled by
+   smoothstep(F0, F1, F)).
+2. **Core path audit:** check that no Realistic-path pass before the tone curve still clamps at 4 or saturates. Candidates:
+   - the additive particle blend into the FP16 target;
+   - any min(c, 4) left in the composite;
+   - the TAA / FSR input range.
+   A clamp found there is lifted for Realistic only.
+3. **Roll-off check:** the white roll's last stage (to pure white by 8 x whiteHi) is the remaining "saturation" lever for
+   the core. If the eye sheet still reads as a flat white disc, lower whiteMix for F > F0 only.
+
+Eye sheet: Gorge step 1080 and one Molten mine close-up, against the bar above. Off / Faithful identity unchanged.
+Estimate 4-5 h (not a two-hour item): queued after X6, X7 and the Streets haze.
+
+Known residual (low priority, Faithful): our RGBA16F scene target does not saturate at 3.984 during additive blending. A
+pixel pushed far above 4 by additive layers and then darkened by a later translucent layer can end brighter than on the
+360. The fix would be a per-draw clamp in the Faithful path. Do it only after a measured A/B on explosion frames shows a
+visible difference; no capture has shown one so far. Realistic keeps the bloom input cap at 16 (headroom), not at the
+faithful 3.984.
+
+RE's per-draw rule for that residual (RE-Workspace work/handoff/HDR_BLEND_CLAMP_RULE_RE.md, 8394f38):
+- For every draw into scene colour, out = blend(src unclamped, dst), then clamp rgb per channel to [0, 3.984375] and alpha
+  to [0, 1] on store.
+- No material PS saturates: 4,272 PS were checked.
+- A final min() before post does not reproduce "stack above 4, then darken". That needs per-draw granularity where blended
+  layers overlap (ROV / programmable blend, or a clamp pass between overlapping translucent draws).
+- Scope: the 7e3 scene target only.
+- Still low priority: first a measured A/B on explosion frames that shows a visible Faithful difference.
+
+## 5. X6 (more reflective surfaces + damp sheen): PARKED, unmerged (2026-10-17)
+
+Five rounds, each judged on side-by-side eye sheets (work/wobble/ on rt2's worktree). None read as a damp floor:
+
+| Round | Sheet | Design | What the sheet showed |
+|---|---|---|---|
+| 1 (x6v) | — | damp = amount x noise mask, roughness half-lowered | darker blotches |
+| 2 (x6bv) | — | + sharp directional-lightmap lobe | nothing: the 3 lobes only align with steep views |
+| 3 (x6c_eyesheet) | x6c | whole films, reflection share >= 0.35 (replace) | darker, flatter floors; matte wall fine |
+| 4 (x6d_eyesheet) | x6d | additive only (water Fresnel), transient lobe | no sheen; exposure dims the pickup glow |
+| 5 (x6e_eyesheet) | x6e | patches placed by the lamps in view, the lamps' highlights | visually unchanged |
+
+**Cause:**
+- These interiors' floors reflect little bright content: dark metal halls, lamps above or behind the view.
+- A replacement term pulls a lit floor towards its darker reflection.
+- An additive term adds almost nothing.
+- Lamp highlights on a floor need a lamp in the mirror direction, which the authored views and match frames rarely have.
+
+The code stays on rt2 (66689c92, 1b12d378, 0b6b0fd2, 82d44dc2, 80a0cd4b) and out of every merge set. A future attempt would need wet geometry or
+puddle decals with authored reflections, not a shading term.
