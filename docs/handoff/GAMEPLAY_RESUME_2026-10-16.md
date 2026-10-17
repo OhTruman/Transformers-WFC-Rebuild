@@ -3,6 +3,9 @@
 ## Current state (update at every stable point)
 
 - **2026-10-17 03:35, the user set the package 7 scope:** package 7 is now the **hand-over build**; package 6 still finishes as the checkpoint.
+  - **HARD RULE until FREEZE LIFTED** (Integration, after my sqlite / node runs in the timed hold forced 3 map reruns): **no interpreter
+    process at all** (python, node, sqlite3, py_compile). Only the editor / file tools, git and sed.
+    - The ragdoll's GIB_LowBody2_PHYSSYS table (7 bodies, 6 constraints) is read from authored.db **after** the lift.
   - **Patch 2 in progress (code edits only, freeze):**
     - The tree is `work/int_p2`, a git archive of af4d0731 (not built yet).
     - Edits in `docs/handoff/corpsep2/`, in order: `edit_scorch.js`, the DeathDecal_MAT scorch under gibbed robots via
