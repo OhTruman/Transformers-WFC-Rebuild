@@ -287,6 +287,20 @@ peer and dropped afterwards (the peer's address is then the key).
   - Online is currently selected by MatchLaunch.seed != 0. Systems asked for an explicit `online` flag so the seed stays only the
     RNG seed.
 
+- **Input delay D and the apply tick (implemented, SYSTEMS_NET_AUTODELAY):** every command travels with its ABSOLUTE target tick (the
+  CMDS packet's `first` + index), set by its sender when it is produced. Every peer applies seat s's tick-T command at tick T; D is
+  only how far ahead of its own sim a peer produces its seat's commands (its next local tick <= simTick + 1 + D). So the D values need
+  not agree between peers, and a change of D can never move a command's apply tick:
+  - D rises: the extra ticks are produced at once (the current input).
+  - D falls: production pauses until the sim catches up (the next local tick is already past simTick + 1 + D).
+  - Each tick therefore gets exactly one command per seat, never a gap or a duplicate. The receiver keeps the first copy of a tick;
+    resends are identical bytes.
+  - The per-tick bundle hash (FNV over all seats' wire bytes, in the NET log) checks that every peer applied the same commands.
+  - Auto D (WFC_NET_DELAY unset or 0): ceil((SRTT / 2 + 4 x RTTVAR + 5 ms) / 16.7 ms), clamped 2..15, from PING / PONG every 250 ms;
+    it rises at once and falls at most 1 tick a second.
+  - netshim (2 seats, 30 s): lan D 2 / 3 KB/s per peer; typical D 5-6 / 451 ms of total wait (was 20.8 s at D 4); bad D 14 / 30.0 s
+    wall for 30 s (was 33.3 s).
+
 ### 10.3 Identical launch on every peer (REQUIREMENT, confirmed by Integration; with the Frontend, 2026-10-17)
 - **The problem:** today each member builds its own match URL from its local profile, with only the map and mode from the host. For
   lockstep the launch must be identical on every peer.

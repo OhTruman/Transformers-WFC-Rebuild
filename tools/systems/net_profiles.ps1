@@ -3,7 +3,7 @@
 # RTT and bytes/s, plus the shim's per-direction stats. -HashEvery 0 skips the desync detector (transport behaviour only, e.g. before
 # the seat-order fix); 1 = every tick (the NET.identity row). One profile at a time; processes killed by PID on timeout.
 param([Parameter(Mandatory)] [string]$Bin, [string]$Out = 'F:\Transformers Rebuild\Rebuild-Systems\work\netprof',
-      [string]$Profiles = 'lan,good,typical,bad,burst,outage', [int]$Seconds = 30, [int]$HashEvery = 0, [int]$Delay = 4,
+      [string]$Profiles = 'lan,good,typical,bad,burst,outage', [int]$Seconds = 30, [int]$HashEvery = 0, [int]$Delay = 0,
       [string]$Map = 'MP_IAC_Streets', [string]$Shim = 'F:\Transformers Rebuild\Rebuild-Systems\work\netshim\netshim.py')
 $py = 'F:\Transformers Rebuild\AssetTools\bin\py\python.exe'
 $hold = 'F:\Transformers Rebuild\Rebuild-Experimental\work\PERF_HOLD'
@@ -30,7 +30,7 @@ foreach ($prof in ($Profiles -split ',')) {
                 WFC_NET_BIND = "127.0.0.1:$(5201 + $slot)"; WFC_NET_PEERS = "$(1 - $slot)=127.0.0.1:$to"; WFC_NET_HASH_EVERY = "$HashEvery";
                 WFC_NET_DELAY = "$Delay"; WFC_NET_PACE = '1'; WFC_NET_LOG = (Join-Path $dir 'net.csv'); WFC_NET_TIMEOUT_S = '10' }
         foreach ($k in $e.Keys) { Set-Item "env:$k" $e[$k] }
-        $p = Start-Process -FilePath (Join-Path $Bin 'wfc_rebuild.exe') -WorkingDirectory $dir -PassThru; $null = $p.Handle; $procs += $p
+        $p = Start-Process -FilePath (Join-Path $Bin "wfc_rebuild.exe") -WorkingDirectory $dir -WindowStyle Hidden -PassThru; $null = $p.Handle; $procs += $p   # null render + no console window: no hwnd at all
     }
     Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { Remove-Item -LiteralPath "env:$($_.Name)" }
     foreach ($p in $procs) { if (-not $p.WaitForExit(($Seconds + 80) * 1000)) { & taskkill.exe /T /F /PID $p.Id | Out-Null; Write-Host "  TIMEOUT pid $($p.Id)" } }
