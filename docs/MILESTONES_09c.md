@@ -3221,3 +3221,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   use emitter time in seconds (Rendering fixing).
 2026-10-17 14:08 MP_ESCALATION_RE.md merged: the mode is specified (waves, budget fill, economy, door generators, respawn at wave end); a future
   item after online phase 1 (it needs the bridges' versus-nav decks on BrokenHope and the door generators' purchase flow).
+2026-10-17 14:10 MERGED df4d62aa Gameplay's 1299 fix (online, the local seat animates only in the participants' pool: the local pawn's offline
+  per-step animation while dead / unspawned had desynced bone poses -> a TankShell's socket spawn 0.2 mm apart -> 0.003 hp);
+  replay as seat 0 vs seat 1 equal on all 1299 ticks; SESSIONTEST 35 / 35; offline identical. NET.identity re-runs on df4d62aa
+  (Systems after their slot; Experimental on CPU) = the phase 1 milestone if exit 0 on all profiles.
