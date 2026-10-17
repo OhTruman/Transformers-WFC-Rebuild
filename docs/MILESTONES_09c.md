@@ -2991,3 +2991,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 11:39 Frontend CARD FREE 11:40: fr_prompt set (5 shots) + iconic lobby / wheel captured; the in-match HUD steps timed out after the
   lobby shot (match ran with 2 Remote participants): cause from the log, re-run in the gap after Rendering with Gameplay's wobble
   run. Card -> Rendering slot_all (x13 + x14 + x15, ~45 min) 11:40.
+2026-10-17 11:41 PACKAGE 7 PLAN (Experimental's gate state synced): head candidate named by ~17:00; builds + base same-match + eye pass (~1 h),
+  then the combined timed gate (~1 h 50 card, 1 h 35 under hold; interpreter-free broadcast + acks), finish ~21:00. Before the
+  head: the door head (Gameplay collision + Rendering draw + 6 materials, stage (b) lighting if passed), Systems' stack, the
+  weapon + melee batch (axis check + wobble), the cand30 / x14 verdicts. Gap after Rendering (~12:35): Gameplay wobble 3 ->
+  Systems re-run 10 (after the FX data install) -> Frontend HUD re-run 5 -> Experimental's 1e11edc2 Off / Faithful pair 10.
