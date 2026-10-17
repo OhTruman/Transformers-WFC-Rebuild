@@ -3142,3 +3142,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 13:22 MERGED b7d3588f the net launch from the seat order (Application_Net; bundles identical every tick; the tick-602 local-pawn split
   remains until Gameplay's fix). Replay switch (WFC_NET_RECORD / WFC_NET_REPLAY) queued after NET.identity. Head for
   Experimental's independent identity row = b7d3588f (expect the known 602 split until Gameplay's fix).
+2026-10-17 13:23 MERGED 6f701256 Frontend member-view seat-order test (L3; fillOnlineLaunch reviewed: matches the launch record). Experimental's
+  independent identity row runs on b7d3588f (transport half now; full PASS after Gameplay's two local-pawn fixes).
