@@ -63,6 +63,7 @@
   2. per-weapon spine / hand recoil (Character.h uses IonBlaster for all): changes SIMHASH via the hand sockets. DECIDED (Integration (a)): its own mechanical Classic re-baseline right AFTER the hover + squad merge, recorded as a deliberate fidelity change (the authored values are the evidence). The transforming-actor + dying-vehicle collision batch stays separate, later.
   - Eye check: fire each gun class before / after. Keep the 2026-10-13 strafing-wobble fix intact.
   - **RE correction:** MP uses MultiplayerData, not PlayerData (e.g. HeavyPistol camera pitch 1.5, Bazooka 1.5, RocketVehicle RecoilTime 0.35); the regenerated audit json has the values. Check that data/gameplay/weapons_mp.json carries the MultiplayerData values before using it.
+  - **RE melee audit (part 2, 4bb3148 + RE notes/data/melee_presentation_audit.json):** our single generic melee set differs from the per-chassis sets: LightMedium impulse 20000 (not 30000); LightMedium flag / bomb lunge 3000 for 1 s; melee-weapon impulses; Stomp / Combo / Stampede. Sim-side; proposed into the per-weapon recoil re-baseline batch. No melee camera shake in the original.
   - **RE part 4, vehicle weapons** (PRESENTATION_AUDIT_2_RE.md 7b6735d):
     - muzzle sockets alternate per shot (ChangeSocket mod N), and the weapon meshes alternate too;
     - PlaneRocket bursts of 4 at 0.15 s, then a 0.75 s BurstDelay (sim-side firing: goes with the per-weapon recoil re-baseline);
