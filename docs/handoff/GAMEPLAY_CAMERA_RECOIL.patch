@@ -188,20 +188,23 @@ index 00000000..e7c3c0a4
 +    {"SniperRifle", 1.0000f, 0.5000f, 0.7000f, 0.0500f, 0.1000f, 0.3000f, 0.2000f, 0.2000f},   // MultiplayerData
 +    {"TankCannon", 0.0000f, -4.0000f, 0.8000f, 0.2000f, 0.3800f, 0.6500f, 0.8600f, 0.7900f},   // MultiplayerData
 diff --git a/src/game/World.cpp b/src/game/World.cpp
-index ef1b263a..f2554d4d 100644
+index ef1b263a..06570d12 100644
 --- a/src/game/World.cpp
 +++ b/src/game/World.cpp
-@@ -3303,6 +3303,9 @@ HudGameState World::hudState() const {
+@@ -3303,6 +3303,12 @@ HudGameState World::hudState() const {
      h.guidedMissile = missile_.alive; h.guidedMissilePos = missile_.pos; h.guidedMissileFuse = missile_.life;
      { const Sentry& ls = sentry(); h.sentry = ls.alive; h.sentryHealth = ls.health; h.sentryPos = ls.pos; h.sentryTarget = ls.target; }
      h.seeEnemies = pc.seeEnemiesRemain_; h.refillOnKill = pc.refillOnKillRemain_; h.abilitiesJammed = pc.jammedRemain_; h.hardLocked = pc.hardLockedRemain_;
 +    h.buffs.clear();
++    h.spectateTarget.clear();
++    if (localDead_ && player_.controller().spectatingTarget() && specTarget_ >= 0 && (size_t)specTarget_ < match_.players().size())
++        h.spectateTarget = match_.players()[(size_t)specTarget_].name;
 +    if (!localDead_ && pc.jammedRemain_ > 0.0f) h.buffs.push_back({pc.jammedByKillstreak_ ? "TnBuffAbilityJammedKillstreak" : "TnBuffAbilityJammed", pc.jammedRemain_});
 +    if (!localDead_ && pc.transformDisruptRemain_ > 0.0f) h.buffs.push_back({"TnBuffTransformDisruptor", pc.transformDisruptRemain_});
      h.heavyWeapon = pc.carryingHeavy_ == 1 ? "Code Of Power" : pc.carryingHeavy_ == 2 ? "Bomb" : "";   // ItemName
      { const Weapon* gb = grenadeBag(pc); h.grenades = gb ? gb->reserve : -1; }
      {
-@@ -4755,7 +4758,7 @@ std::string World::triggerKillstreakFor(int player) {
+@@ -4755,7 +4761,7 @@ std::string World::triggerKillstreakFor(int player) {
      } else if (id == "FriendlyKillHealthBonusStreak") {
          teamPawns([](Character& p) { p.refillOnKillRemain_ = 60.0f; });   // ABT_Team TnBuffRefillHealthOnKill
      } else if (id == "TeamAbilityJammerStreak") {
@@ -211,16 +214,17 @@ index ef1b263a..f2554d4d 100644
          LOG_WARN("killstreak %s triggered: effect not implemented in the rebuild [PARTIAL]", id.c_str());
      }
 diff --git a/src/game/World.h b/src/game/World.h
-index f2ac2bd6..17cbeeea 100644
+index f2ac2bd6..337821c0 100644
 --- a/src/game/World.h
 +++ b/src/game/World.h
-@@ -94,6 +94,9 @@ struct HudGameState {
+@@ -94,6 +94,10 @@ struct HudGameState {
      // (PickupRotationRate yaw 10000); objective marker "Ammo Beacon" for the owner's team.
      float drain = 0.0f;                          // Drain ability active (s left)
      float seeEnemies = 0.0f, refillOnKill = 0.0f, abilitiesJammed = 0.0f, hardLocked = 0.0f;   // killstreak buffs on the local pawn (s left)
 +    // Active HUD-relevant buffs on the local pawn (Hud_GFX ApplyBuff / UnapplyBuff): the buff class name and its seconds left.
 +    struct HudBuff { std::string id; float remain = 0.0f; };
 +    std::vector<HudBuff> buffs;
++    std::string spectateTarget;   // the killer cam's target (SetSpectateTarget); "" when following no one
      // Roller sphere: Rendering draws FX_RollerMine_p.Mesh.RollerMineAbility_STAT (scale 0.5) at rollerPos.
      int kamikazeMines = 0;                       // live MinePooper mines (positions: World::kamikazeMines())
      float tempWeaponLeft = 0.0f;                 // P.O.K.E. 2.0 seconds left (0 otherwise)
