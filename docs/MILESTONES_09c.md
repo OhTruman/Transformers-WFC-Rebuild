@@ -3451,3 +3451,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 16:13 RE: shipped 4-layer fog = uniform slabs (ray fraction inside [MinH, MaxH] x max(dist - Start, 0); T = 2^(DistanceScale x L)),
   no exponential height falloff, UU throughout; a camera in the slab looking at a 1-3 m floor gets near-zero fog, so the flat
   sheet is the per-vertex interpolation; Rendering's per-pixel A/B decides (granted after their CARD FREE).
+2026-10-17 16:14 VPS: LOBBY_VPS_SETUP.md + deploy_lobby.sh + wfc-lobby.service merged; firewall = UDP 14010 any + TCP 22; deploy only on the
+  user's go (doc sent to the user). Escalation roster (AssetTools): 16 templates, all meshes / anims / 26 FX / 243 cues present;
+  gaps = runtime packaging of 14 characters (~90 MB) + 7 weapon exports -> GO into AssetTools\out\escalation_characters.
