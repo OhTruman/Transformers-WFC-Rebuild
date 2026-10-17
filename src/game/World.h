@@ -677,6 +677,9 @@ public:
         float hullDefragDelay = 0.0f, hullDefragTime = 4.5f; bool hullRest = false;
         unsigned rng = 1u;
         bool poseStatic = false; uint64_t poseSerial = 0; // the pose stopped changing (clip ended, blend done): skinned once, drawn cached
+        std::unique_ptr<uint8_t> gpuKey = std::make_unique<uint8_t>(0);   // the GPU-skin palette key: stable for the body's life (moves in corpses_)
+        std::vector<core::Mat4> palette;                  // global(j) x invBind(j) of the current pose (GPU path)
+        mutable bool gpuOk = true;                        // false: the renderer refused the GPU draw; CPU-skinned from then on
         float frand() { rng = rng * 1664525u + 1013904223u; return (float)((rng >> 8) & 0xffffffu) / 16777216.0f; }
     };
     struct CorpseRequest {

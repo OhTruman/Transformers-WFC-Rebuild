@@ -6995,6 +6995,7 @@ void World::tickCorpses(float dt) {
     for (size_t i = 0; i < corpses_.size();) {
         Corpse& c = corpses_[i];
         c.t += dt;
+        if (c.defrag) c.gpuOk = false;   // the Defrag energy-death material is not applied on the queued GPU draw: CPU path
         if (!c.gibbed && !c.poseStatic) {
             if (c.clip >= 0) {
                 assets::LocalPose cp;
@@ -7003,10 +7004,16 @@ void World::tickCorpses(float dt) {
                 assets::blendPose(c.start, cp, a, c.pose);             // from the pawn's last pose over BlendInTime
             }
             if (c.headNode >= 0 && (size_t)c.headNode < c.pose.s.size()) c.pose.s[(size_t)c.headNode] = core::Vec3{0.1f, 0.1f, 0.1f};   // ControlBone HeadSkelControl 0.1
-            assets::skinPose(*c.model, c.pose, c.glob, c.mesh);
+            assets::poseGlobals(*c.model, c.pose, c.glob);          // joint globals (sockets, the palette); no vertex skin on the GPU path
+            buildPalette(*c.model, c.glob, c.palette);
+            if (!c.gpuOk) assets::skinPose(*c.model, c.pose, c.glob, c.mesh);
             c.poseSerial = ++corpsePoseSerial_;
             const bool clipDone = c.clip < 0 || c.t >= c.model->clips[(size_t)c.clip].duration;
             if (clipDone && c.t >= c.blendIn) c.poseStatic = true;   // the last change: skinned, cached from here on
+        }
+        if (!c.gibbed && !c.gpuOk && c.mesh.positions.empty() && !c.glob.empty()) {   // fallback latched after the pose settled: skin once
+            assets::skinPose(*c.model, c.pose, c.glob, c.mesh);
+            c.poseSerial = ++corpsePoseSerial_;
         }
         if (!c.gibbed) {
             if (c.fxAt >= 0.0f && c.t >= c.fxAt) {   // TnDeathModifierPlayEffect (robot Exp_Death_Sm_FX at Head_FX + BoosterSocket_C; vehicle A)
@@ -7064,12 +7071,21 @@ void World::tickCorpses(float dt) {
 
 void World::drawCorpses(render::IRenderer& r) const {
     for (const Corpse& c : corpses_) {
-        if (c.gibbed || c.mesh.positions.empty()) continue;
+        if (c.gibbed || (c.gpuOk ? c.palette.empty() : c.mesh.positions.empty())) continue;
         r.setDrawOwner(c.owner);
         if (c.owner) r.setCharacterColors(render::CharacterColors{});
         // Melee deaths: TnDeathModifierSetMaterial, the form's EnergyDeathMaterial with Defrag 1 -> 0 over TransitionTime 3 s.
         if (c.defrag) r.setDrawEnergyDeath(std::max(0.0f, 1.0f - c.t / 3.0f));
-        r.drawDynamicMeshPosed(c.mesh, c.world, core::Vec3{1, 1, 1}, c.poseSerial);   // cached while the pose is static
+        bool drawn = false;
+        if (c.gpuOk) {   // the character path: queued, its shadow caster batched with live robots; the palette row is cached while the serial holds
+            render::MeshData& bind = bindMeshOf(*c.model);
+            syncMats(bind.mats, c.model->mats);
+            drawn = drawSkinnedGpu(r, bind, c.model->joints, c.model->weights, c.palette, nullptr, 1.0f, c.world, core::Vec3{1, 1, 1},
+                                   c.gpuKey.get(), c.poseSerial, 0);
+            if (!drawn) { c.gpuOk = false; LOG_INFO("corpse p%d %s: GPU-skinned draw refused, CPU fallback", c.player, c.chassis.c_str()); }   // the next tick CPU-skins it
+        }
+        if (!drawn && !c.gpuOk && !c.mesh.positions.empty())
+            r.drawDynamicMeshPosed(c.mesh, c.world, core::Vec3{1, 1, 1}, c.poseSerial);   // CPU fallback, cached while the pose is static
         if (c.defrag) r.setDrawEnergyDeath(-1.0f);
         r.setDrawOwner(0);
     }
