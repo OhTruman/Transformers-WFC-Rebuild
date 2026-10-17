@@ -42,6 +42,7 @@ Checkpoint: af4d0731 (package 6). Per head: identity + eye sheet; one combined t
 | 3d12103d | Frontend objectives whitespace | no-op | identity-neutral | not needed | no run |
 | a745320b | iconic claims across all players (no Escalation row) | Iconic Mode only (default Off) | versus default unchanged | not needed | no run |
 | 686f8314 | docs | - | - | - | no run |
+| ef34a4f2 | Rendering modulate-distortion rule (the original cooks no distortion pair for BLEND_Modulate materials: the death-explosion swirl goes) | renderer, all modes | changes only frames with a modulate + distortion material (robot deaths) (Integration) | Gameplay's death crops, next crop pass | expected-change list = death frames only |
 | f2465a80 | Volumetric Lighting setter | Realistic-only gate | Off / Faithful unaffected by construction (Integration); Realistic: X3 on by default as af4d0731 | - | SETTINGSTEST count update and release() keep-list check due with the setter (memory settings-survive-map-change) |
 
 Note (Integration 2026-10-17): 24c6618c's SecondsBeforeInactive rule (a freeze) is to be replaced by SYSTEMS_FX_THROTTLE.patch (128b4846): the original throttles inactive FX (10 Hz / 1 Hz + catch-up); that merge carries its own expected-change list.
