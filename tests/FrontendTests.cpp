@@ -8,6 +8,7 @@
 #include "frontend/GameFlow.h"
 #include "frontend/Hud.h"
 #include "frontend/InputPrompts.h"
+#include "frontend/FakeSession.h"
 #include "frontend/FpsMeter.h"
 #include "frontend/PackageCredits.h"
 #include "frontend/Profile.h"
@@ -145,6 +146,30 @@ static void testHdTexturesBoot() {
         setEnv(m[0], nullptr);
     }
     std::remove("wfc_profile.ini");
+}
+
+static void testFakeSession() {
+    // The session boundary's test double (S0): script entries fire by time or after a recorded call; calls are recorded.
+    using E = SessionEvent::Type;
+    FakeSession fs;
+    FakeSession::Step opened; opened.afterCall = "host"; opened.delay = 1.0 / 60.0; opened.event.type = E::HostOpened;
+    opened.event.joinCode = "WFC-7QK2-M9TD";
+    FakeSession::Step lost; lost.at = 5.0; lost.event.type = E::HostLost;
+    fs.add(opened); fs.add(lost);
+    const bool quiet = fs.poll(0.0).empty();
+    SessionHostSettings hs; hs.gameModeTag = "TDM";
+    fs.host(hs);
+    const bool notYet = fs.poll(0.0).empty();
+    const std::vector<SessionEvent> a = fs.poll(1.0 / 60.0);
+    const bool hostOpened = a.size() == 1 && a[0].type == E::HostOpened && a[0].joinCode == "WFC-7QK2-M9TD";
+    const bool before = fs.poll(4.9).empty();
+    const std::vector<SessionEvent> b = fs.poll(5.0);
+    fs.requestStart();
+    check(quiet && notYet && hostOpened && before && b.size() == 1 && b[0].type == E::HostLost && fs.scriptDone() &&
+          fs.count("host") == 1 && fs.last("host")->hostSettings.gameModeTag == "TDM" && fs.count("requestStart") == 1 &&
+          std::string(sessionEventName(E::Kicked)) == "Kicked", "session.fake_script_and_recorder");
+    FrontendRuntime rt;
+    check(rt.flow().session() == nullptr, "session.offline_by_default");
 }
 
 static void testFpsCounter() {
@@ -711,6 +736,7 @@ int main() {
     testHdTexturesBoot();
     testPackageCredits();
     testFpsCounter();
+    testFakeSession();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);
     if (ok) testInputPrompts(c);
