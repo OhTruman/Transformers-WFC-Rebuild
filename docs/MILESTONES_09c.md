@@ -3118,3 +3118,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 12:58 MERGED dae0338f auto input delay (sender-side production horizon over absolute target ticks: no agreement step needed, my concern
   withdrawn; typical total wait 20.8 s -> 451 ms, bad on schedule at D 14); the HASH_EVERY assignment bug fixed. Next: bandwidth
   trim, voice capture; NET.identity + the burst-with-hash row after Gameplay's seat fix.
+2026-10-17 13:03 MERGED aec21e7a net bandwidth trim (~5.5 KB/s per peer, ~92 B per tick; all six profiles exit 0; stalls unchanged or lower). Systems
+  next: voice capture; seat switch + NET.identity first when Gameplay's sha lands.
