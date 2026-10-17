@@ -1209,7 +1209,7 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
         // haze floor. No ambient in-scatter (a constant term was v1 - v3's grey veil). Mode-gated: Realistic with the RT
         // pass only. WFC_X3=0 off; WFC_X3_DENSITY / _HAZE / _SUN / _LAMP / _TRANS / _G / _DIST / _HISTORY (WfcRtDefaults.h).
         {
-            fr.volumetric = rtdef::x3() && rtMode_ == 2 && rtTargets_.vol != 0;
+            fr.volumetric = rtdef::x3() && volUser_ && rtMode_ == 2 && rtTargets_.vol != 0;   // (volUser_: the Settings row; WFC_X3=0 still forces off)
             if (fr.volumetric) {
                 // per-map medium (the eye pass): Gorge's canyon air is almost all sunlit and its authored fog is twice Molten's -
                 // at the defaults it read as a veil; an env value overrides the table (density, haze, lamp)

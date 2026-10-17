@@ -213,6 +213,8 @@ public:
     }
     void setDrawOwner(int o) { drawOwner_ = o < 0 ? 0 : o; }
     void setDrawBody(bool b) { drawBody_ = b; }
+    void setVolumetricLighting(bool on) { volUser_ = on; }   // (X3: the Settings row)
+    bool volumetricLighting() const { return volUser_; }
     // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
     void flushPendingDraws() { flushWeaponQueue(); }
     void setDisplayGamma(float g) { displayGamma_ = g > 0.5f && g < 5.0f ? g : 2.2f; }
@@ -880,6 +882,7 @@ private:
     std::map<int, CharacterColors> charColorsBy_;   // per draw owner; default all-zero -> overrides skipped
     int drawOwner_ = 0;                              // character instance of the current dynamic draws
     int x6Frame_ = -1; float x6Damp_ = 0.0f;         // X6: this frame's damp amount (per-map table)
+    bool volUser_ = true;                            // X3 Settings row (kept by release())
     bool drawBody_ = false;                         // ... and they are a death body (RT: TLAS mask 0x10, not 0x4)
     // Pawn occlusion (WFC: stock UE3 hardware occlusion queries apply to pawns, RE 8ec2c46 HIGH). Per draw owner, the
     // union of its character / weapon parts' world boxes (+0.5 m) is tested against the scene depth after the opaque
