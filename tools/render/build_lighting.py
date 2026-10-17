@@ -223,6 +223,26 @@ def fog(repo, pkg_index):
     return None
 
 
+def fogs(repo):
+    """Every ENABLED HeightFogComponent of the map's level packages, in package then export order, up to 4 (stock UE3
+    renders up to four height fog layers per view; RE MAP_LIGHTING_REFERENCE: six MP maps author 2-4, Gorge loses three
+    - incl. a dense low layer - to fog()'s first-component rule)."""
+    out = []
+    for pi in range(len(repo.pkgs)):
+        p = repo.pkgs[pi]
+        for i, e in enumerate(p.exports):
+            if p.class_name(e) != 'HeightFogComponent' or 'Default__' in p.obj_name(i + 1):
+                continue
+            f = dict(FOG_DEFAULTS); f.update(repo.obj(p.object_path(i + 1)) or {})
+            if not f.get('bEnabled', True):
+                continue
+            f['height_m'] = f['Height'] * 0.01
+            f['LightColor'] = fcolor_rgb(f.get('LightColor'))
+            f['object'] = p.object_path(i + 1)
+            out.append(f)
+    return out[:4]
+
+
 PF_INVISIBLE, PF_TWOSIDED, PF_PORTAL = 0x1, 0x100, 0x04000000
 
 
@@ -773,6 +793,17 @@ def main():
         # (indexed under the _LM outer; umodel exports the ones whose data the ART file carries, skips the rest)
         print(' '.join(sorted({p.split('.')[-1] for p in r.index if (r.cls(p) or '') == 'LightMapTexture2D'})))
         return
+    if len(sys.argv) > 3 and sys.argv[1] == '--fogs-only':
+        # <map> <src lighting.json> <out dir>: the same file + 'fogs' (A/B copies without the lightmap export)
+        from ue3obj import map_packages
+        mapname, src, out = sys.argv[2], sys.argv[3], sys.argv[4]
+        pkgs, _persistent = map_packages(mapname)
+        d = json.load(open(src, encoding='utf-8'))
+        d['fogs'] = fogs(Repo(pkgs))
+        os.makedirs(out, exist_ok=True)
+        json.dump(d, open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
+        print(mapname, len(d['fogs']), 'enabled height fog layers:', [(f['object'].split('.')[-1], f['Height'], f['Density']) for f in d['fogs']])
+        return
     mapname, out, umodel_dir = sys.argv[1], sys.argv[2], sys.argv[3]
     os.makedirs(os.path.join(out, 'lightmaps'), exist_ok=True)
     from ue3obj import map_packages
@@ -818,7 +849,7 @@ def main():
                'component_flags': component_flags(mapname),
                'light_visibility_volumes': light_visibility_volumes(repo, out),
                'lightmaps': {'props': props, 'atlases': atl},
-               'lights': L, 'fog': F, 'postprocess': PP},
+               'lights': L, 'fog': F, 'fogs': fogs(repo), 'postprocess': PP},
               open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
     from collections import Counter
     print('lightmapped components: %d (types %s); atlases %d; copied %d PNGs' % (len(props), kinds, len(atl), copied))
