@@ -3231,3 +3231,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   merged together on the eye check.
 2026-10-17 14:12 MERGED ea4ca7cd per-seat guided missiles for remote and online local seats (SESSIONTEST 36 / 36; offline identical). Gameplay next: the
   TRANSACT sim-only diff for the regress base, then homing lock / MinePooper / repair beam for the online local seat.
+2026-10-17 14:16 DOOR DATA LIVE 14:13 (door head complete). MERGED f1ce1c84 Systems' six-patch body / ability FX stack (body notify PASS on the card,
+  reverb-switch check PASS 3 maps, physmat pair inconclusive on Remnant -> a 5-min Streets pair with the ForceField force next
+  after Gameplay's gap; drain beam not yet exercised). ONLINE_RULES_CHECK_RE.md merged: defaults match the original; 2 divergences:
+  CTF Rounds dropped by MatchLaunch::fromURL (REAL, Gameplay) and the singular lobby status text (minor, Frontend).
