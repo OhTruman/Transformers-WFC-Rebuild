@@ -50,9 +50,16 @@ if [ -z "$SKIP_BUILD" ]; then
 fi
 [ -n "$BUILD_ONLY" ] && { st "BUILD_ONLY: done"; exit 0; }
 # ---- 1 regress (timed)
+# the render data is frozen for the whole gate (package 7 rule): one snapshot of Rebuild/work/render, every arm of every timed step
+# reads it (matb_root.ps1 -NoCandidate: map files copied, sub-folders junctioned read-only); GATE_RENDER_SNAPSHOT=0 skips it
+RD0=""; RD1=""
+if [ "${GATE_RENDER_SNAPSHOT:-1}" != 0 ] && [ $WHATIF = 0 ]; then
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/matb_root.ps1 -Name gate_$r -NoCandidate >> $L 2>&1 || { st "render snapshot failed"; exit 1; }
+  SNAPW=$(cygpath -w "$PWD/work/matb/gate_${r}_root"); RD0="WFC_RENDER_DATA=$SNAPW"; RD1=";$RD0"; st "render data frozen: $SNAPW"
+fi
 st "1 regress: hold set; waiting for a clear card"; run "touch work/PERF_HOLD; sleep 60; until [ \"\$(busy)\" = 0 ]; do sleep 15; done"
 st "1 regress START"
-REG='powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/regress/map-$m -Map $m -Arms "base|$BASE|;;head|work/ab/fast_$r|;;nolights|work/ab/fast_$r|WFC_NOTRANSIENTLIGHTS=1" -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/regress/map-$m.out 2>&1'
+REG='powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/regress/map-$m -Map $m -Arms "base|$BASE|$RD0;;head|work/ab/fast_$r|$RD0;;nolights|work/ab/fast_$r|WFC_NOTRANSIENTLIGHTS=1$RD1" -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/regress/map-$m.out 2>&1'
 for m in 501 502 503 504 507 508 509 510; do st "1 regress map $m"; run "$REG"; done
 for m in 501 502 503 504 507 508 509 510; do recontam $O/regress $m "$REG"; done
 run "rm -f work/PERF_HOLD"; st "1 regress TIMED DONE (hold removed)"
@@ -63,17 +70,17 @@ run "WFC_GATE_GPU_POLICY=shared WFC_GATE_GPU_MAX_OTHERS=1 powershell -NoProfile 
 # ---- 2b per-body cost + 5v5 (timed; Integration 2026-10-16): Berth, RT off, 3840x2160, same match, 2 reps -
 #      63 bots: base / respun head / respun head + WFC_NOCORPSE=1 (the bodies' share); 5v5 (the original lobby default): base / head
 st "2b per-body + 5v5: hold set"; run "touch work/PERF_HOLD; sleep 60; until [ \"\$(busy)\" = 0 ]; do sleep 15; done"
-NC=";;nocorpse|work/ab/fast_$r|WFC_NOCORPSE=1"   # (only if the respun exe has Gameplay's switch - else the arm would silently equal the head)
+NC=";;nocorpse|work/ab/fast_$r|WFC_NOCORPSE=1$RD1"   # (only if the respun exe has Gameplay's switch - else the arm would silently equal the head)
 [ $WHATIF = 1 ] || grep -q WFC_NOCORPSE work/ab/fast_$r/build-release/bin/wfc_rebuild.exe || { NC=""; st "2b: the respun exe has no WFC_NOCORPSE - nocorpse arm skipped"; }
-B63='powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/bodies/map-501 -Map 501 -Arms "base|$BASE|;;head|work/ab/fast_$r|$NC" -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/bodies/map-501.out 2>&1'
-B5='powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/bodies/map-501-5v5 -Map 501 -Bots 5 -Arms "base|$BASE|;;head|work/ab/fast_$r|" -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/bodies/map-501-5v5.out 2>&1'
+B63='powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/bodies/map-501 -Map 501 -Arms "base|$BASE|$RD0;;head|work/ab/fast_$r|$RD0$NC" -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/bodies/map-501.out 2>&1'
+B5='powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/bodies/map-501-5v5 -Map 501 -Bots 5 -Arms "base|$BASE|$RD0;;head|work/ab/fast_$r|$RD0" -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/bodies/map-501-5v5.out 2>&1'
 st "2b bodies 63"; run "$B63"; st "2b 5v5"; run "$B5"; recontam $O/bodies 501 "$B63"; recontam $O/bodies 501-5v5 "$B5"
 # RERUN_1B=1 (a respin that changes the Realistic path, e.g. X3): the 1b Realistic perf rows are rerun on the respun head in the same
 # hold (Realistic + HD 2 on hd_dev_full, 2560x1440, 31 v 32, 1 rep, 5 user maps - X3 rides on its defaults) instead of being carried
 if [ -n "$RERUN_1B" ]; then
   HDR=$(cygpath -w "${GATE_HD_ROOT:-F:/Transformers Rebuild/Rebuild-Systems/work/hd_dev_full}" 2>/dev/null); run "mkdir -p $O/rtperf2"
   # (package 7: the X3-off / NOCORPSE arms ride in the same run, so the X3 cost and the bodies' RT-on share are in-hold numbers)
-  RT="WFC_RT_MODE=2;WFC_HDTEXTURES=2;WFC_HD_ROOT=$HDR"
+  RT="WFC_RT_MODE=2;WFC_HDTEXTURES=2;WFC_HD_ROOT=$HDR$RD1"
   R1B='powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/rtperf2/map-$m -Map $m -Arms "realistic|work/ab/fast_$r|$RT;;x3off|work/ab/fast_$r|$RT;WFC_X3=0$NC1B" -Steps 6000 -From 2400 -Width 2560 -Height 1440 -RenderSize 2560x1440 -PlayerBot 1 -Reps 1 -Seed 1234 > $O/rtperf2/map-$m.out 2>&1'
   NC1B=""; [ -n "$NC" ] && NC1B=";;nocorpse|work/ab/fast_$r|$RT;WFC_NOCORPSE=1"
   for m in 508 510 507 504 509; do st "1b Realistic map $m"; run "$R1B"; done
