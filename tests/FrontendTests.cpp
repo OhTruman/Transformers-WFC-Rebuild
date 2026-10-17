@@ -1653,6 +1653,39 @@ struct FirstRunRig : OnlineRig {
     }
 };
 
+static void testMemberSeatOrder() {
+    // Cross-perspective (Gameplay's seat-order fix: game::MatchLaunch humans + localSeat from these inputs): a member's launch
+    // carries the host's human seats in the host's order - host, this member, Alpha - with this member as an entry at seat 1
+    // (not excluded), the host's names, and the launch record's roster overriding a stale lobby.
+    using T = SessionEvent::Type;
+    OnlineRig r;
+    SessionLobby l; l.gameModeTag = "TDM"; l.mapId = 508; l.mapSelectionMethod = 1;
+    auto human = [](const char* fp, int team) { SessionSlot s; s.kind = SessionSlot::Kind::Human; s.member.fingerprint = fp; s.team = team; return s; };
+    auto info = [](const char* fp, const char* name) { SessionMemberInfo i; i.id.fingerprint = fp; i.displayName = name; i.hasCharacter = true; return i; };
+    l.slots = {human("", 0), human("WFC-SELF-SELF-9", 1), human("WFC-AAAA-AAAA-1", 0)};
+    l.members = {info("", "Host"), info("WFC-SELF-SELF-9", "Me"), info("WFC-AAAA-AAAA-1", "Alpha")};
+    SessionEvent j = ev(T::Joined); j.lobby = l; j.member.fingerprint = "WFC-SELF-SELF-9";
+    r.fake->add(after("join", j));
+    r.f().call("Online.JoinGame", {"WFC-7QK2-M9TD-4H"});
+    const bool in = runUntil(*r.rt, [&] { return r.f().level() == LevelKind::GameLobby && !r.f().loading().active; });
+    r.frames(2);
+    SessionEvent cs = ev(T::CountdownStarted); cs.lobby = l; cs.seed = 77;
+    cs.launchUrl = "MP_IAC_Streets_Base_m?GameModeTag=TDM?GameTeamStatus=3?MapId=508";
+    r.fake->inject(cs);
+    const bool launched = runUntil(*r.rt, [&] { return r.f().hasPendingMatch(); }, 60 * 30);
+    const MatchLaunch& ml = r.f().currentMatch();
+    int seat = -1, humans = 0;
+    for (const SessionSlot& sl : ml.onlineSlots) {
+        if (sl.kind != SessionSlot::Kind::Human) continue;
+        if (sl.member == ml.self) seat = humans;
+        ++humans;
+    }
+    std::string hostName;
+    for (const auto& n : ml.onlineNames) if (n.first.fingerprint.empty()) hostName = n.second;
+    check(in && launched && humans == 3 && seat == 1 && ml.self.fingerprint == "WFC-SELF-SELF-9" && hostName == "Host" && ml.seed == 77,
+          "online.L3_member_seat_order", std::to_string(humans) + " seat " + std::to_string(seat));
+}
+
 static void testForfeitEnd() {
     // A team with no players left forfeits (Gameplay's 1.5 s check, Systems 10.5): the winners' end screen shows the
     // original "Enemy team forfeits"; any other end keeps Gameplay's line; the flow returns to the game lobby as usual.
@@ -1798,6 +1831,7 @@ int main() {
     testLaunchRecordAndIdleKick();
     testLocalizeCaseInsensitive();
     testForfeitEnd();
+    testMemberSeatOrder();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);
