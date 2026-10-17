@@ -2178,3 +2178,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Streets +1.88 -> +1.20; Molten +2.07 -> +1.26; Gorge +3.76 -> +2.64 (the static-pose fix recovers 0.5-1.1 ms per
   map; effect lights +0.04..+0.12; same match everywhere); still 8/8 REPORT with the death-body attribution. Delta
   FAST 9350f19b: PASS 59 / KNOWN 1 / PRODUCT FAIL 0 / HARNESS FAIL 0, mapswitch 6/6. Step 2b hold 19:24 (~15 min).
+  2026-10-16 19:31 RESPIN GATE DONE (19:31): step 2b Berth RT off 4K p90 r1 / r2: 63 bots base 2.19 / 2.16, 9350f19b
+  3.47 / 3.47, + NOCORPSE 2.17 / 2.18 (bodies = +1.3 ms, were +1.9); 5v5 base 1.57 / 1.57, 9350f19b 1.63 / 1.63
+  (+0.06 ms: essentially free at the original default). PACKAGE-GATE 9350f19b: regress REPORT (bodies), 1b REPORT
+  >= 60 fps, leak PASS, eye pass 1.28 / 1.30, FAST PASS x2 (results on Experimental's branch 7d736441). Systems
+  GO for the RT + HD rows, then the quiet promote; the card is Rendering's after that until 00:00.
