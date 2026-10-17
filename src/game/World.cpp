@@ -1368,7 +1368,7 @@ void World::separatePawns() {
             r = std::max(r, c.cylinderRadius(Form::Vehicle));
             core::Vec3 mn, mx;
             if (c.vehicleBoundsXZ(mn, mx)) {
-                const core::Mat4 m = c.meshMatrix(Form::Vehicle);
+                const core::Mat4 m = c.simMatrix(Form::Vehicle);
                 const float ox = m.m[12] - c.position().x, oz = m.m[14] - c.position().z;
                 const float cx = std::max(std::fabs(mn.x), std::fabs(mx.x)), cz = std::max(std::fabs(mn.z), std::fabs(mx.z));
                 const float sx = std::sqrt(m.m[0] * m.m[0] + m.m[2] * m.m[2]), sz = std::sqrt(m.m[8] * m.m[8] + m.m[10] * m.m[10]);   // box axes scale
@@ -1416,7 +1416,7 @@ void World::separatePawns() {
                 Character& V = va ? A : B; Character& Rb = va ? B : A;
                 core::Vec3 mn, mx;
                 if (!V.vehicleBoundsXZ(mn, mx)) continue;
-                const core::Mat4 m = V.meshMatrix(Form::Vehicle);
+                const core::Mat4 m = V.simMatrix(Form::Vehicle);
                 const core::Vec3 o{m.m[12], m.m[13], m.m[14]};
                 core::Vec3 fx{m.m[0], 0.0f, m.m[2]}, fz{m.m[8], 0.0f, m.m[10]};
                 fx = core::normalize(fx); fz = core::normalize(fz);
@@ -2074,6 +2074,21 @@ void World::finishRemainder() {
     stepRemainder(pendingDt_);
     // WFC_SIMHASH (determinism diagnostics): an FNV-1a hash of every pawn's exact state and every bot's steering state per step; with
     // WFC_SIMHASH=<step>, that step's per-pawn values too. Compare a serial (WFC_SIMTHREADS=0) and a threaded run of the same seed.
+    static const long stateDumpAt = std::getenv("WFC_NET_STATEDUMP") ? std::atol(std::getenv("WFC_NET_STATEDUMP")) : -1;
+    if (stateDumpAt >= 0 && (long)simTick_ == stateDumpAt) {
+        LOG_INFO("STATEDUMP tick %lld local p%d online %d simRand %08x matchRand %08x", (long long)simTick_, localPlayer_, (int)onlineSeats_, core::simRandState(), match_.rngState());
+        for (size_t q = 0; q < match_.players().size(); ++q) {
+            const Character* c = participantPawn((int)q);
+            if (!c) { LOG_INFO("STATEDUMP p%zu -", q); continue; }
+            const core::Vec3 p = c->position(), v = c->velocity(); const Weapon& w = c->weapon();
+            LOG_INFO("STATEDUMP p%zu pos %.6f %.6f %.6f vel %.6f %.6f %.6f yaw %.6f hp %.4f form %d tr %d pose %016llx drawYaw %.6f w %s ammo %d since %.4f rel %d ab %.3f/%.3f hover %d",
+                     q, p.x, p.y, p.z, v.x, v.y, v.z, c->yaw(), c->health().current, (int)c->moveForm(), (int)c->isTransforming(), (unsigned long long)c->poseHash(),
+                     c->drawYawOffset(), w.def ? w.def->id : "-", w.ammo, w.sinceShot, (int)w.reloading(), c->abilities_[0].cooldown, c->abilities_[1].cooldown, c->hoverState_);
+        }
+        for (const BotBrain& b : bots_) LOG_INFO("STATEDUMP bot p%d rng %08x tgt %d yaw %.6f wp %zu/%zu", b.player, b.rng, b.target, b.yaw, b.wp, b.path.size());
+        for (size_t q = 0; q < smart_.size(); ++q) if (smart_[q].active) LOG_INFO("STATEDUMP smart p%zu rng %08x", q, smart_[q].rng);
+        for (const auto& pr : projectiles_) LOG_INFO("STATEDUMP proj inst %d pos %.6f %.6f %.6f vel %.6f %.6f %.6f life %.4f", pr.instigator, pr.pos.x, pr.pos.y, pr.pos.z, pr.vel.x, pr.vel.y, pr.vel.z, pr.life);
+    }
     static const char* simHashEnv = std::getenv("WFC_SIMHASH");
     if (const char* sh = simHashEnv) {
         static long step = 0; ++step;
@@ -2695,6 +2710,8 @@ bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
     if (opt.count("PointsToWin")) out.settings.goalScore = std::max(0, std::atoi(opt["PointsToWin"].c_str()));
     // RoundsBase: GRI.Rounds = GoalScore for the round-based rule (CTF; must be even) [CONF RE §4].
     if (out.settings.rounds > 0 && opt.count("PointsToWin")) { out.settings.rounds = std::max(2, std::atoi(opt["PointsToWin"].c_str())); out.settings.goalScore = 1000000; }
+    // TnMultiplayerGame.InitGame: Rounds = GetIntOption(Options, "Rounds") - the Frontend's BuildURL sends it for CTF [CONF RE rules check].
+    if (out.settings.rounds > 0 && opt.count("Rounds")) { out.settings.rounds = std::max(2, std::atoi(opt["Rounds"].c_str())); out.settings.goalScore = 1000000; }
     if (opt.count("TimeLimit")) out.settings.timeLimit = std::max(0, (int)std::atof(opt["TimeLimit"].c_str()));
     // Private Match Bot Settings (Frontend contract; PC ADAPTATION). Clamped again against the slots when the bots are added.
     if (opt.count("WfcIdleKick")) out.settings.kickIdle = std::atoi(opt["WfcIdleKick"].c_str()) != 0;   // host option "Kick Idle Players"

@@ -17,6 +17,9 @@
 // Gameplay does not draw or play anything for pickups.
 // Native (not recovered): TakePickUp / GiveTo / ValidTouch / IsReadyToPickup bodies — see [PROV] below.
 #pragma once
+#include <map>
+#include <utility>
+#include <vector>
 #include "game/Actor.h"
 #include "core/Math.h"
 
@@ -81,9 +84,10 @@ private:
     float respawnTime_;
     int index_;
     bool available_ = true;
-    float traceRecheck_ = 0.0f;   // ValidTouch FastTrace failure: retry after 0.5 s while still touching
+    // Per touching pawn (match player index): Touch = overlap begin; ValidTouch FastTrace failure: retry after 0.5 s while still touching.
+    struct Touch { bool overlapping = false, now = false, began = false; float recheck = 0.0f; };
+    std::map<int, Touch> touch_;
     float respawnRemain_ = 0.0f;
-    bool overlapping_ = false;      // the player pawn's cylinder overlapped last step (Touch = overlap begin)
     bool overlaps(const Character& c) const;
     bool tryGive(Character& c);
     void take(World& world, Character& c);

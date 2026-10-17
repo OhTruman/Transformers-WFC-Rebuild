@@ -1544,6 +1544,12 @@ public:
             oppByPlayer_[(size_t)p] = o;
         }
     }
+    // The pawns the placed pickup factories test: offline the local pawn (as before), online every human seat by match player index.
+    void pickupPawns(std::vector<std::pair<int, Character*>>& out) {
+        out.clear();
+        if (!onlineSeats_) { out.push_back({localPlayer_, &player_.pawn()}); return; }
+        for (size_t q = 0; q < match_.players().size(); ++q) if (seatHuman((int)q)) if (Character* c = participantPawnMutable((int)q)) out.push_back({(int)q, c});
+    }
     bool guidedMissileAlive() const { return missile_.alive; }
     const SeatMissile* seatMissile(int p) const { return p >= 0 && (size_t)p < seatMissiles_.size() ? &seatMissiles_[(size_t)p] : nullptr; }
     const RollerMine& rollerMine() const;   // the local player's (HUD / tests)

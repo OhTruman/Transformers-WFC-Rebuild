@@ -5829,6 +5829,12 @@ void Application::runSessionTest() {
         }
         check(first == hh[0].size(), "launch identity: local at seat 0 vs seat 1 from the launch record alone, every step through the first InProgress seconds");
     }
+    {   // CTF ?Rounds=N (the Frontend's BuildURL; InitGame reads "Rounds"); without it, the PointsToWin path as before
+        game::MatchLaunch R4; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=CTF?Rounds=4", R4);
+        game::MatchLaunch R0; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=CTF", R0);
+        LOG_INFO("SESSIONTEST CTF rounds: ?Rounds=4 -> %d, none -> %d", R4.settings.rounds, R0.settings.rounds);
+        check(R4.settings.rounds == 4 && R0.settings.rounds == 2, "CTF ?Rounds=4 plays 4 rounds; no option keeps 2");
+    }
     LOG_INFO("SESSIONTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

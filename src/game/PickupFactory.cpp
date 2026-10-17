@@ -77,10 +77,10 @@ void PickupFactory::take(World& world, Character& c) {
 //              a pawn already standing on it is re-tested at once. The actor is never destroyed.
 // Touch is an overlap BEGIN, so other factories do not re-grant to a pawn that was already standing on them.
 void PickupFactory::tick(World& world, float dt) {
-    Character& c = world.player().pawn();
-    bool overlapNow = overlaps(c);
-    bool began = overlapNow && !overlapping_;
-    overlapping_ = overlapNow;
+    // The pawns that can take it (offline the local pawn; online every human seat by match player index).
+    static std::vector<std::pair<int, Character*>> pawns;
+    world.pickupPawns(pawns);
+    for (auto& pr : pawns) { Touch& t = touch_[pr.first]; t.now = overlaps(*pr.second); t.began = t.now && !t.overlapping; t.overlapping = t.now; }
     if (!available_) {
         respawnRemain_ -= dt;
         if (respawnRemain_ > 0.0f) return;                         // touches ignored while sleeping
@@ -90,20 +90,24 @@ void PickupFactory::tick(World& world, float dt) {
         e.available = true; e.pos = pos_;
         e.meshVisible = true; e.customEffectActive = customEffectActive(); e.beamActive = beamActive();
         world.raisePickupEvent(e);
-        if (kind_ == Kind::Health && overlapNow && tryGive(c)) take(world, c);   // CheckTouching
+        if (kind_ == Kind::Health)   // CheckTouching
+            for (auto& pr : pawns) if (touch_[pr.first].now && tryGive(*pr.second)) { take(world, *pr.second); break; }
         return;
     }
     if (kind_ == Kind::AmmoCrate) yaw_ += 10000.0f / 65536.0f * 6.2831853f * dt;   // PHYS_Rotating in 'Pickup'
     // Pickup.ValidTouch: a touch through a wall (FastTrace pawn -> factory fails) is rejected and re-checked in 0.5 s.
-    if (began) traceRecheck_ = 0.0f;
-    if (!overlapNow) return;
-    if (traceRecheck_ > 0.0f) { traceRecheck_ -= dt; if (traceRecheck_ > 0.0f) return; }
-    else if (!began) return;
     const CollisionWorld* lw = world.weaponCollision();
-    float th;
-    if (lw && lw->segmentHit(c.actorLocation(), pos_ + core::Vec3{0, 1.0f, 0}, th)) { traceRecheck_ = 0.5f; return; }
-    traceRecheck_ = 0.0f;
-    if (tryGive(c)) take(world, c);
+    for (auto& pr : pawns) {
+        Touch& t = touch_[pr.first]; Character& c = *pr.second;
+        if (t.began) t.recheck = 0.0f;
+        if (!t.now) continue;
+        if (t.recheck > 0.0f) { t.recheck -= dt; if (t.recheck > 0.0f) continue; }
+        else if (!t.began) continue;
+        float th;
+        if (lw && lw->segmentHit(c.actorLocation(), pos_ + core::Vec3{0, 1.0f, 0}, th)) { t.recheck = 0.5f; continue; }
+        t.recheck = 0.0f;
+        if (tryGive(c)) { take(world, c); break; }   // taken: Sleeping
+    }
 }
 
 void PickupFactory::resetToPickup(World& world) {

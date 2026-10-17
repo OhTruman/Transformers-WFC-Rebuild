@@ -1,0 +1,233 @@
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index 4e810fb1..4984d6a0 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -5829,6 +5829,12 @@ void Application::runSessionTest() {
+         }
+         check(first == hh[0].size(), "launch identity: local at seat 0 vs seat 1 from the launch record alone, every step through the first InProgress seconds");
+     }
++    {   // CTF ?Rounds=N (the Frontend's BuildURL; InitGame reads "Rounds"); without it, the PointsToWin path as before
++        game::MatchLaunch R4; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=CTF?Rounds=4", R4);
++        game::MatchLaunch R0; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=CTF", R0);
++        LOG_INFO("SESSIONTEST CTF rounds: ?Rounds=4 -> %d, none -> %d", R4.settings.rounds, R0.settings.rounds);
++        check(R4.settings.rounds == 4 && R0.settings.rounds == 2, "CTF ?Rounds=4 plays 4 rounds; no option keeps 2");
++    }
+     LOG_INFO("SESSIONTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+ }
+ 
+diff --git a/src/game/Character.cpp b/src/game/Character.cpp
+index 31341538..518b6a74 100644
+--- a/src/game/Character.cpp
++++ b/src/game/Character.cpp
+@@ -787,6 +787,13 @@ void Character::rammedAsRobot(const core::Vec3& dir) {
+     onGround_ = false;                        // Physics = PHYS_Falling
+ }
+ 
++core::Mat4 Character::simMatrix(Form f) const {
++    core::Mat4 m = core::Mat4::translate(meshOrigin(f)) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset);
++    if (moveForm() == Form::Vehicle && (veh_.pitch != 0.0f || veh_.roll != 0.0f))
++        m = m * core::Mat4::rotateZ(veh_.pitch) * core::Mat4::rotateX(veh_.roll);
++    return m;
++}
++
+ core::Mat4 Character::meshMatrix(Form f) const {
+     core::Mat4 m = core::Mat4::translate(meshOrigin(f)) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset + drawYawOffset_);
+     // Vehicle rigid-body attitude (both meshes hang off the body while the movement form is the vehicle).
+@@ -819,7 +826,7 @@ void Character::updateWeaponSocket() {
+     if (!scratch || (size_t)weaponBone_ >= scratch->size()) return;
+     weaponBoneCur_ = (*scratch)[(size_t)weaponBone_];
+     weaponCurKey_ = weaponBone_ * 2 + (scratch == &animScratch_ ? 0 : 1);
+-    weaponWorld_ = meshMatrix(Form::Robot) * weaponBoneCur_ * weaponOffset_;
++    weaponWorld_ = simMatrix(Form::Robot) * weaponBoneCur_ * weaponOffset_;   // gameplay (muzzle, traces): the simulated yaw
+     weaponValid_ = true;
+ }
+ 
+diff --git a/src/game/Character.h b/src/game/Character.h
+index 450ca990..7f0a0114 100644
+--- a/src/game/Character.h
++++ b/src/game/Character.h
+@@ -377,11 +377,20 @@ public:
+         if (!mdl) return false;
+         int n = mdl->nodeByName(bone);
+         if (n < 0 || (size_t)n >= animScratch_.size() || lastModel_ != mdl) return false;
+-        // Same model transform as draw()/updateWeaponSocket(), including the transform-shift offset.
+-        out = meshMatrix(form_) * animScratch_[(size_t)n];
++        // The simulated model transform (no presentation yaw offset), including the transform-shift offset.
++        out = simMatrix(form_) * animScratch_[(size_t)n];
+         return true;
+     }
+     static float meshYawOffset();
++    // The model transform the simulation uses: meshMatrix without the per-frame presentation yaw offset (drawYawOffset_).
++    core::Mat4 simMatrix(Form f) const;
++    // Diagnostics (WFC_NET_STATEDUMP): a hash of this step's bone pose.
++    uint64_t poseHash() const {
++        uint64_t h = 1469598103934665603ULL;
++        const unsigned char* c = animScratch_.empty() ? nullptr : (const unsigned char*)animScratch_.data();
++        for (size_t i = 0; c && i < animScratch_.size() * sizeof(animScratch_[0]); ++i) { h ^= c[i]; h *= 1099511628211ULL; }
++        return h;
++    }
+ 
+     // Weapon socket (robot form): the bone node to follow + a local offset transform.
+     // ArmBlueprint.AttachSocket (WeaponSocket_Secondary) of this chassis' robot mesh.
+diff --git a/src/game/Match.h b/src/game/Match.h
+index 709f5fe9..a79bf018 100644
+--- a/src/game/Match.h
++++ b/src/game/Match.h
+@@ -145,6 +145,7 @@ public:
+     // Online: the Match's own RNG (team ties, start choices) restarts from the host's seed at every launch, so every peer draws alike
+     // whatever matches its process played before (offline: never reseeded, as before).
+     void seedRandom(unsigned s) { rng_ = s ? s : 0x1234ABCDu; }
++    unsigned rngState() const { return rng_; }   // diagnostics (WFC_NET_STATEDUMP)
+     // The login start without advancing the clusters' round-robin (online: only this machine's player logs in locally, so a
+     // mutating login would advance a different team's iterator per perspective).
+     int loginStartPeek(int p) {
+diff --git a/src/game/PickupFactory.cpp b/src/game/PickupFactory.cpp
+index fbe3968c..e210f5fd 100644
+--- a/src/game/PickupFactory.cpp
++++ b/src/game/PickupFactory.cpp
+@@ -77,10 +77,10 @@ void PickupFactory::take(World& world, Character& c) {
+ //              a pawn already standing on it is re-tested at once. The actor is never destroyed.
+ // Touch is an overlap BEGIN, so other factories do not re-grant to a pawn that was already standing on them.
+ void PickupFactory::tick(World& world, float dt) {
+-    Character& c = world.player().pawn();
+-    bool overlapNow = overlaps(c);
+-    bool began = overlapNow && !overlapping_;
+-    overlapping_ = overlapNow;
++    // The pawns that can take it (offline the local pawn; online every human seat by match player index).
++    static std::vector<std::pair<int, Character*>> pawns;
++    world.pickupPawns(pawns);
++    for (auto& pr : pawns) { Touch& t = touch_[pr.first]; t.now = overlaps(*pr.second); t.began = t.now && !t.overlapping; t.overlapping = t.now; }
+     if (!available_) {
+         respawnRemain_ -= dt;
+         if (respawnRemain_ > 0.0f) return;                         // touches ignored while sleeping
+@@ -90,20 +90,24 @@ void PickupFactory::tick(World& world, float dt) {
+         e.available = true; e.pos = pos_;
+         e.meshVisible = true; e.customEffectActive = customEffectActive(); e.beamActive = beamActive();
+         world.raisePickupEvent(e);
+-        if (kind_ == Kind::Health && overlapNow && tryGive(c)) take(world, c);   // CheckTouching
++        if (kind_ == Kind::Health)   // CheckTouching
++            for (auto& pr : pawns) if (touch_[pr.first].now && tryGive(*pr.second)) { take(world, *pr.second); break; }
+         return;
+     }
+     if (kind_ == Kind::AmmoCrate) yaw_ += 10000.0f / 65536.0f * 6.2831853f * dt;   // PHYS_Rotating in 'Pickup'
+     // Pickup.ValidTouch: a touch through a wall (FastTrace pawn -> factory fails) is rejected and re-checked in 0.5 s.
+-    if (began) traceRecheck_ = 0.0f;
+-    if (!overlapNow) return;
+-    if (traceRecheck_ > 0.0f) { traceRecheck_ -= dt; if (traceRecheck_ > 0.0f) return; }
+-    else if (!began) return;
+     const CollisionWorld* lw = world.weaponCollision();
+-    float th;
+-    if (lw && lw->segmentHit(c.actorLocation(), pos_ + core::Vec3{0, 1.0f, 0}, th)) { traceRecheck_ = 0.5f; return; }
+-    traceRecheck_ = 0.0f;
+-    if (tryGive(c)) take(world, c);
++    for (auto& pr : pawns) {
++        Touch& t = touch_[pr.first]; Character& c = *pr.second;
++        if (t.began) t.recheck = 0.0f;
++        if (!t.now) continue;
++        if (t.recheck > 0.0f) { t.recheck -= dt; if (t.recheck > 0.0f) continue; }
++        else if (!t.began) continue;
++        float th;
++        if (lw && lw->segmentHit(c.actorLocation(), pos_ + core::Vec3{0, 1.0f, 0}, th)) { t.recheck = 0.5f; continue; }
++        t.recheck = 0.0f;
++        if (tryGive(c)) { take(world, c); break; }   // taken: Sleeping
++    }
+ }
+ 
+ void PickupFactory::resetToPickup(World& world) {
+diff --git a/src/game/PickupFactory.h b/src/game/PickupFactory.h
+index 372ba4f2..4956ecef 100644
+--- a/src/game/PickupFactory.h
++++ b/src/game/PickupFactory.h
+@@ -17,6 +17,9 @@
+ // Gameplay does not draw or play anything for pickups.
+ // Native (not recovered): TakePickUp / GiveTo / ValidTouch / IsReadyToPickup bodies — see [PROV] below.
+ #pragma once
++#include <map>
++#include <utility>
++#include <vector>
+ #include "game/Actor.h"
+ #include "core/Math.h"
+ 
+@@ -81,9 +84,10 @@ private:
+     float respawnTime_;
+     int index_;
+     bool available_ = true;
+-    float traceRecheck_ = 0.0f;   // ValidTouch FastTrace failure: retry after 0.5 s while still touching
++    // Per touching pawn (match player index): Touch = overlap begin; ValidTouch FastTrace failure: retry after 0.5 s while still touching.
++    struct Touch { bool overlapping = false, now = false, began = false; float recheck = 0.0f; };
++    std::map<int, Touch> touch_;
+     float respawnRemain_ = 0.0f;
+-    bool overlapping_ = false;      // the player pawn's cylinder overlapped last step (Touch = overlap begin)
+     bool overlaps(const Character& c) const;
+     bool tryGive(Character& c);
+     void take(World& world, Character& c);
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index c7eddcf1..28bb0333 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -1367,7 +1367,7 @@ void World::separatePawns() {
+             r = std::max(r, c.cylinderRadius(Form::Vehicle));
+             core::Vec3 mn, mx;
+             if (c.vehicleBoundsXZ(mn, mx)) {
+-                const core::Mat4 m = c.meshMatrix(Form::Vehicle);
++                const core::Mat4 m = c.simMatrix(Form::Vehicle);
+                 const float ox = m.m[12] - c.position().x, oz = m.m[14] - c.position().z;
+                 const float cx = std::max(std::fabs(mn.x), std::fabs(mx.x)), cz = std::max(std::fabs(mn.z), std::fabs(mx.z));
+                 const float sx = std::sqrt(m.m[0] * m.m[0] + m.m[2] * m.m[2]), sz = std::sqrt(m.m[8] * m.m[8] + m.m[10] * m.m[10]);   // box axes scale
+@@ -1415,7 +1415,7 @@ void World::separatePawns() {
+                 Character& V = va ? A : B; Character& Rb = va ? B : A;
+                 core::Vec3 mn, mx;
+                 if (!V.vehicleBoundsXZ(mn, mx)) continue;
+-                const core::Mat4 m = V.meshMatrix(Form::Vehicle);
++                const core::Mat4 m = V.simMatrix(Form::Vehicle);
+                 const core::Vec3 o{m.m[12], m.m[13], m.m[14]};
+                 core::Vec3 fx{m.m[0], 0.0f, m.m[2]}, fz{m.m[8], 0.0f, m.m[10]};
+                 fx = core::normalize(fx); fz = core::normalize(fz);
+@@ -2073,6 +2073,21 @@ void World::finishRemainder() {
+     stepRemainder(pendingDt_);
+     // WFC_SIMHASH (determinism diagnostics): an FNV-1a hash of every pawn's exact state and every bot's steering state per step; with
+     // WFC_SIMHASH=<step>, that step's per-pawn values too. Compare a serial (WFC_SIMTHREADS=0) and a threaded run of the same seed.
++    static const long stateDumpAt = std::getenv("WFC_NET_STATEDUMP") ? std::atol(std::getenv("WFC_NET_STATEDUMP")) : -1;
++    if (stateDumpAt >= 0 && (long)simTick_ == stateDumpAt) {
++        LOG_INFO("STATEDUMP tick %lld local p%d online %d simRand %08x matchRand %08x", (long long)simTick_, localPlayer_, (int)onlineSeats_, core::simRandState(), match_.rngState());
++        for (size_t q = 0; q < match_.players().size(); ++q) {
++            const Character* c = participantPawn((int)q);
++            if (!c) { LOG_INFO("STATEDUMP p%zu -", q); continue; }
++            const core::Vec3 p = c->position(), v = c->velocity(); const Weapon& w = c->weapon();
++            LOG_INFO("STATEDUMP p%zu pos %.6f %.6f %.6f vel %.6f %.6f %.6f yaw %.6f hp %.4f form %d tr %d pose %016llx drawYaw %.6f w %s ammo %d since %.4f rel %d ab %.3f/%.3f hover %d",
++                     q, p.x, p.y, p.z, v.x, v.y, v.z, c->yaw(), c->health().current, (int)c->moveForm(), (int)c->isTransforming(), (unsigned long long)c->poseHash(),
++                     c->drawYawOffset(), w.def ? w.def->id : "-", w.ammo, w.sinceShot, (int)w.reloading(), c->abilities_[0].cooldown, c->abilities_[1].cooldown, c->hoverState_);
++        }
++        for (const BotBrain& b : bots_) LOG_INFO("STATEDUMP bot p%d rng %08x tgt %d yaw %.6f wp %zu/%zu", b.player, b.rng, b.target, b.yaw, b.wp, b.path.size());
++        for (size_t q = 0; q < smart_.size(); ++q) if (smart_[q].active) LOG_INFO("STATEDUMP smart p%zu rng %08x", q, smart_[q].rng);
++        for (const auto& pr : projectiles_) LOG_INFO("STATEDUMP proj inst %d pos %.6f %.6f %.6f vel %.6f %.6f %.6f life %.4f", pr.instigator, pr.pos.x, pr.pos.y, pr.pos.z, pr.vel.x, pr.vel.y, pr.vel.z, pr.life);
++    }
+     static const char* simHashEnv = std::getenv("WFC_SIMHASH");
+     if (const char* sh = simHashEnv) {
+         static long step = 0; ++step;
+@@ -2693,6 +2708,8 @@ bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
+     if (opt.count("PointsToWin")) out.settings.goalScore = std::max(0, std::atoi(opt["PointsToWin"].c_str()));
+     // RoundsBase: GRI.Rounds = GoalScore for the round-based rule (CTF; must be even) [CONF RE §4].
+     if (out.settings.rounds > 0 && opt.count("PointsToWin")) { out.settings.rounds = std::max(2, std::atoi(opt["PointsToWin"].c_str())); out.settings.goalScore = 1000000; }
++    // TnMultiplayerGame.InitGame: Rounds = GetIntOption(Options, "Rounds") - the Frontend's BuildURL sends it for CTF [CONF RE rules check].
++    if (out.settings.rounds > 0 && opt.count("Rounds")) { out.settings.rounds = std::max(2, std::atoi(opt["Rounds"].c_str())); out.settings.goalScore = 1000000; }
+     if (opt.count("TimeLimit")) out.settings.timeLimit = std::max(0, (int)std::atof(opt["TimeLimit"].c_str()));
+     // Private Match Bot Settings (Frontend contract; PC ADAPTATION). Clamped again against the slots when the bots are added.
+     if (opt.count("WfcIdleKick")) out.settings.kickIdle = std::atoi(opt["WfcIdleKick"].c_str()) != 0;   // host option "Kick Idle Players"
+diff --git a/src/game/World.h b/src/game/World.h
+index bc9aec02..21cfcf73 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1540,6 +1540,12 @@ public:
+             oppByPlayer_[(size_t)p] = o;
+         }
+     }
++    // The pawns the placed pickup factories test: offline the local pawn (as before), online every human seat by match player index.
++    void pickupPawns(std::vector<std::pair<int, Character*>>& out) {
++        out.clear();
++        if (!onlineSeats_) { out.push_back({localPlayer_, &player_.pawn()}); return; }
++        for (size_t q = 0; q < match_.players().size(); ++q) if (seatHuman((int)q)) if (Character* c = participantPawnMutable((int)q)) out.push_back({(int)q, c});
++    }
+     bool guidedMissileAlive() const { return missile_.alive; }
+     const SeatMissile* seatMissile(int p) const { return p >= 0 && (size_t)p < seatMissiles_.size() ? &seatMissiles_[(size_t)p] : nullptr; }
+     const RollerMine& rollerMine() const;   // the local player's (HUD / tests)

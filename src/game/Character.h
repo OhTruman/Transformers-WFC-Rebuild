@@ -377,11 +377,20 @@ public:
         if (!mdl) return false;
         int n = mdl->nodeByName(bone);
         if (n < 0 || (size_t)n >= animScratch_.size() || lastModel_ != mdl) return false;
-        // Same model transform as draw()/updateWeaponSocket(), including the transform-shift offset.
-        out = meshMatrix(form_) * animScratch_[(size_t)n];
+        // The simulated model transform (no presentation yaw offset), including the transform-shift offset.
+        out = simMatrix(form_) * animScratch_[(size_t)n];
         return true;
     }
     static float meshYawOffset();
+    // The model transform the simulation uses: meshMatrix without the per-frame presentation yaw offset (drawYawOffset_).
+    core::Mat4 simMatrix(Form f) const;
+    // Diagnostics (WFC_NET_STATEDUMP): a hash of this step's bone pose.
+    uint64_t poseHash() const {
+        uint64_t h = 1469598103934665603ULL;
+        const unsigned char* c = animScratch_.empty() ? nullptr : (const unsigned char*)animScratch_.data();
+        for (size_t i = 0; c && i < animScratch_.size() * sizeof(animScratch_[0]); ++i) { h ^= c[i]; h *= 1099511628211ULL; }
+        return h;
+    }
 
     // Weapon socket (robot form): the bone node to follow + a local offset transform.
     // ArmBlueprint.AttachSocket (WeaponSocket_Secondary) of this chassis' robot mesh.

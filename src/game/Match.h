@@ -145,6 +145,7 @@ public:
     // Online: the Match's own RNG (team ties, start choices) restarts from the host's seed at every launch, so every peer draws alike
     // whatever matches its process played before (offline: never reseeded, as before).
     void seedRandom(unsigned s) { rng_ = s ? s : 0x1234ABCDu; }
+    unsigned rngState() const { return rng_; }   // diagnostics (WFC_NET_STATEDUMP)
     // The login start without advancing the clusters' round-robin (online: only this machine's player logs in locally, so a
     // mutating login would advance a different team's iterator per perspective).
     int loginStartPeek(int p) {

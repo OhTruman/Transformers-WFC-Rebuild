@@ -787,6 +787,13 @@ void Character::rammedAsRobot(const core::Vec3& dir) {
     onGround_ = false;                        // Physics = PHYS_Falling
 }
 
+core::Mat4 Character::simMatrix(Form f) const {
+    core::Mat4 m = core::Mat4::translate(meshOrigin(f)) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset);
+    if (moveForm() == Form::Vehicle && (veh_.pitch != 0.0f || veh_.roll != 0.0f))
+        m = m * core::Mat4::rotateZ(veh_.pitch) * core::Mat4::rotateX(veh_.roll);
+    return m;
+}
+
 core::Mat4 Character::meshMatrix(Form f) const {
     core::Mat4 m = core::Mat4::translate(meshOrigin(f)) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset + drawYawOffset_);
     // Vehicle rigid-body attitude (both meshes hang off the body while the movement form is the vehicle).
@@ -819,7 +826,7 @@ void Character::updateWeaponSocket() {
     if (!scratch || (size_t)weaponBone_ >= scratch->size()) return;
     weaponBoneCur_ = (*scratch)[(size_t)weaponBone_];
     weaponCurKey_ = weaponBone_ * 2 + (scratch == &animScratch_ ? 0 : 1);
-    weaponWorld_ = meshMatrix(Form::Robot) * weaponBoneCur_ * weaponOffset_;
+    weaponWorld_ = simMatrix(Form::Robot) * weaponBoneCur_ * weaponOffset_;   // gameplay (muzzle, traces): the simulated yaw
     weaponValid_ = true;
 }
 
