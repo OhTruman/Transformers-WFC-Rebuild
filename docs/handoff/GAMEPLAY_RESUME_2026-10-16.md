@@ -19,7 +19,10 @@
         (−100, 0, 50)), on the corpse bone, which freezes at the gib.
       - Vehicles: the wreck yaw, pitch −30. FOV 85 / 0.4; the 1.25 / 1.0 s blend from the live view; the robot wiggle; the existing
         camera collision. Held until respawn. **Not built yet.**
-      - **Not in it:** the roll (no roll in render::Camera); the 3 s → killer-cam spectating (a follow-up).
+      - **Not in it:** the roll, requested from Rendering (rebuild-rendering-fd) as a render::Camera roll field; I add `cam.roll`
+        when it lands.
+      - **The killer cam** (PlayerSpectating after 3.0 s, initial target _LastPawnWhoKilledMe) is **its own item, right after patch
+        2 and before the ride height** (Integration).
     - **Skeletal gibs are ragdolls** (`corpsep2/SKELETAL_GIBS_AUTHORED.md`, 49714373): a PBD ragdoll, 8-12 h. The initial pose
       needs RE (ReVa is down: headless export into work/).
     - **Next:** the Death camera values and the momentum picker (small), then the ragdoll. Then, after FREEZE LIFTED, build, run headless
