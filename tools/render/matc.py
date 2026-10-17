@@ -89,7 +89,8 @@ class MatCompiler:
             o = self.R.obj(p) or {}
             p = (o.get('Parent') or {}).get('ref')
         self.chain = chain
-        self.master = p if p and self.R.cls(p) == 'Material' else None
+        # (RE CAMPAIGN_MATERIAL_GAPS A.0: a DecalMaterial is an ordinary material graph - the decal part is its vertex factory)
+        self.master = p if p and self.R.cls(p) in ('Material', 'DecalMaterial') else None
         if not self.master:
             raise CompileError('no master material for %s' % inst_path)
         for mic in reversed(chain):      # parent first; child overrides
@@ -456,7 +457,7 @@ class MatCompiler:
         exc = cast(ex[0], ex[1], 1) if ex else glf(n.get('Exponent', 3.0))
         return 'pow(max(1.0 - max(dot(%s, m.cameraVector), 0.0), 0.0), %s)' % (cast(nrm[0], nrm[1], 3), exc), 1
 
-    VARYING = {'DynamicParameter', 'LensFlareRadialDistance', 'LensFlareSourceDistance', 'LensFlareIntensity', 'LensFlareOcclusion',
+    VARYING = {'Ddx', 'Ddy', 'If', 'DynamicParameter', 'LensFlareRadialDistance', 'LensFlareSourceDistance', 'LensFlareIntensity', 'LensFlareOcclusion',
                'LensFlareRayDistance', 'VertexColor', 'TextureSample', 'TextureSampleParameter2D', 'TextureCoordinate',
                'ScreenPosition', 'PixelDepth', 'SceneDepth', 'DestDepth', 'CameraVector', 'ReflectionVector',
                'LightVector', 'WorldPosition', 'ParticleSubUV', 'TextureSampleParameterCube',
@@ -527,6 +528,28 @@ class MatCompiler:
 
     def x_LensFlareIntensity(self, c, n, p, o):
         self.uses.add('lensflare'); return 'm.lensFlareIntensity', 1
+
+    # MaterialExpressionIf (RE CAMPAIGN_MATERIAL_GAPS B.1, C: SETGT / SETGTE + CNDGTE): A >= B ? (A > B ? AGreaterThanB : AEqualsB)
+    # : ALessThanB, exact float comparisons (no equality epsilon)
+    def x_If(self, c, n, p, o):
+        a = self.input(c, n, 'A', ('0.0', 1)); b = self.input(c, n, 'B', ('0.0', 1))
+        g = self.input(c, n, 'AGreaterThanB', ('0.0', 1)); e = self.input(c, n, 'AEqualsB', ('0.0', 1))
+        l = self.input(c, n, 'ALessThanB', ('0.0', 1))
+        t = max(g[1], e[1], l[1])
+        av, bv = self.tmp(1, cast(a[0], a[1], 1)), self.tmp(1, cast(b[0], b[1], 1))
+        return '(%s >= %s ? (%s > %s ? %s : %s) : %s)' % (av, bv, av, bv, cast(g[0], g[1], t), cast(e[0], e[1], t),
+                                                           cast(l[0], l[1], t)), t
+
+    # screen-space derivatives (RE B.2 / B.3): D3D y grows downward, GL's framebuffer y upward -> Ddy = -dFdy
+    def x_Ddx(self, c, n, p, o):
+        v = self.input(c, n, 'Input', ('0.0', 1)); return 'dFdx(%s)' % v[0], v[1]
+
+    def x_Ddy(self, c, n, p, o):
+        v = self.input(c, n, 'Input', ('0.0', 1)); return '(-dFdy(%s))' % v[0], v[1]
+
+    # CameraWorldPosition (RE B.5): the camera's world position in UE units / axes
+    def x_CameraWorldPosition(self, c, n, p, o):
+        return '(uCamPos.xzy * 100.0)', 3
 
     def x_ParticleSubUV(self, c, n, p, o):
         # M67: the particle's two SubUV cells (m.uv0 = cell 1, m.subUV2.xy = cell 2) lerped by its interp
