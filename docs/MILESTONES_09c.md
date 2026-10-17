@@ -2973,3 +2973,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 11:31 AssetTools dry-ran build_map_fx.py on the current pstream: the only MP change is H2H_Punch01_FX's SubUVDirect confidence /
   partial labels (RE's resolution), no runtime values; the base-index fix changes no MP LOD -> one regen later with Rendering's
   always-include selector (gate: labels + the 5 added templates only). Door captures extraction next.
+2026-10-17 11:34 MERGED 4c392ea5 Rendering's build_map_fx.py always-include selector (tools/render/fx_always.txt = Systems' exact 5 templates);
+  the 10-map regen runs into the scratchpad; gate: live + exactly the 5 added, every other system identical with decoder metadata
+  (confidence / partial) stripped, nothing removed; then installed and Systems' re-run scheduled.
