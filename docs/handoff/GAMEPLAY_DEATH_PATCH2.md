@@ -20,6 +20,15 @@ applied in this order from a tree root (new files in `corpsep2/new/`: `src/game/
 | 10 | `edit_deathfx_log.js` | DEATHFX diagnostics (WFC_CORPSETEST / WFC_DEATHFXLOG) for Systems' FX-count row |
 | 11 | `edit_default_gibs_socket.js` | The default death's gibs effect at PositionSocket |
 
+| 12 | `edit_death_camera_anchor.js` | The death camera traces from the anchor (bone + anchor offset), not the bone (crop fix) |
+| 13 | `edit_scorch_gate.js` | The scorch is gated OFF by default (`WFC_DEATHSCORCH=1` turns it on) until Systems' regenerated DeathDecal_MAT is in the material sets: the translated material took Color.rgb as the lerp weight where the original uses G × Color.a (Rendering / RE). The follow-up flips the default |
+
+**Crop slot 2026-10-17:** the behaviour all passes.
+- The scorch blend: a material-data bug, gated (edit 13).
+- The gib materials: Systems compiles DeathSkelGib / DeathGib_Mat_INST, then `edit_gib_materials.js` (prepared).
+- The death camera anchor: fixed (edit 12), re-crop pending.
+- Rendering's modulate clamp was tried and reverted (unfaithful: the original scorch has a ×2.2 core).
+
 **Systems' FX-count row: PASS** on 8e4ecc6b (seeds 1 + 7): every entry matches its DeathFx row; 209 / 215 play effects at the authored
 socket, and the 6 fallbacks are deaths mid-transform. The default-death placement was fixed after it, in a208d3b0.
 
