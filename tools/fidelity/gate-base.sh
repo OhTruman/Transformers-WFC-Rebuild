@@ -38,9 +38,13 @@ bad=0; for f in "${!last[@]}"; do git show ${last[$f]}:$f | cmp -s - $T/$f && st
 [ $bad = 0 ] || { st "byte-check failed: a listed commit depends on others - ask Integration for a diff against $BASE_REF"; exit 1; }
 PATH="$TC/llvm-mingw-20260922-ucrt-x86_64/bin:$PATH" "$CM" --build $T/build-release --parallel 4 >> $L 2>&1 || { st "rebuild failed"; exit 1; }
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/link-render.ps1 -Target $T | tee -a $L
+# HEADLESS=1 (package 7, 2026-10-17): the verify runs both exes under WFC_NULLRENDER (Systems' headless match runner be54be6d;
+# the base carries gatebase/headless_runner_be54be6d_af4d.patch) - CPU only, no card; SIMHASH identical to the windowed run (proven
+# 2026-10-17: the hover base headless == windowed on 10,200 steps)
+HLE=""; HLMAX=1; [ -n "$HEADLESS" ] && { HLE="WFC_NULLRENDER=1"; HLMAX=9; }
 if [ -n "$VERIFY" ]; then
   st "verify vs $VERIFY on Streets (steps 600-9600, RT off, shared GPU, untimed)"
-  WFC_GATE_GPU_POLICY=shared WFC_GATE_GPU_MAX_OTHERS=1 WFC_GATE_GPU_GRACE_MIN=0 powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir work/gatebase_${N}_verify -Map 508 -Arms "base|$T|;;head|$VERIFY|" -Steps 9600 -From 600 -RenderSize 1280x720 -PlayerBot 1 -Reps 1 -Seed 1234 > work/gatebase_${N}_verify.out 2>&1
+  WFC_GATE_GPU_POLICY=shared WFC_GATE_GPU_MAX_OTHERS=${HLMAX:-1} WFC_GATE_GPU_GRACE_MIN=0 powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir work/gatebase_${N}_verify -Map 508 -Arms "base|$T|$HLE;;head|$VERIFY|$HLE" -Steps 9600 -From 600 -RenderSize 1280x720 -PlayerBot 1 -Reps 1 -Seed 1234 > work/gatebase_${N}_verify.out 2>&1
   grep -o "head: steps [0-9]* ([0-9-]*), same match as 'base' [A-Za-z]*" work/gatebase_${N}_verify.out | tee -a $L
 fi
 st "done: GATE_BASE=$T GATE_BASE_NAME=\"$BASE_REF + $*\""
