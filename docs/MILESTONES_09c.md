@@ -2613,3 +2613,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   KillBox 4); semantics follow in usage order; Rendering's package 7 effects item = make the 12 faithful with crops.
   AssetTools MP collision physmat export merged (0f3d9b89; 10 sibling JSONs, GLBs byte-identical); campaign chapters next;
   movies 27 / 54 encoded.
+2026-10-17 09:00 Merged 44b65357 online phase 1 group F (voice UI state): PHASE 1 FRONTEND FLOWS A-F COMPLETE on integration (ISession + FakeSession,
+  tests 205 / 0, offline byte-identical); Systems' transport + voice lane implement under ISession next (after its package 7
+  items). 56d5e2dc particle module audit batch 1 (the four PARTIAL modules' semantics; Rendering has them). Presenter loop:
+  64 / 64 runs, 0 hangs, 0 no-drain; FG / resize / map switch running.
