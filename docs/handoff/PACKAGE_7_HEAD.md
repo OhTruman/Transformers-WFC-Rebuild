@@ -46,6 +46,11 @@ The user's package 7 scope (2026-10-17), in the order given; visual items first.
 
 ### Details (filled as items merge)
 
+- **The local player's death sound** (Systems SYSTEMS_LOCAL_DEATH_SOUND.patch, integration a2ee795b): the original's
+  TnPlayerController.DeathSound (BL_LVL_HUD_INTERFACE.HUD_DEATH_POWER_DOWN) now plays, 2D, at every local death (killed,
+  suicide, KillZ / fall); our data had it but nothing played it. Audio only: SIMHASH identical (18,000 steps); paced Rust
+  check 2 / 2 local deaths with the cue started in the mixer, no channel refused.
+
 [PLACEHOLDER: one bullet per merged item - what the user sees, commit, switch (WFC_*=0 off), Realistic-only / identity
 note, measured cost.]
 
