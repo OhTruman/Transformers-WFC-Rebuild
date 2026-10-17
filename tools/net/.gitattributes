@@ -1,0 +1,4 @@
+# Systems: files that run on Linux / under bash keep LF line endings in every checkout
+*.sh text eol=lf
+*.service text eol=lf
+lobby_service.py text eol=lf
