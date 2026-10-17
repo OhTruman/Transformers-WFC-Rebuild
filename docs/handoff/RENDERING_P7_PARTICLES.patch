@@ -1,0 +1,227 @@
+diff -ru base/src/render/gl/WfcMapFx.cpp particles/src/render/gl/WfcMapFx.cpp
+--- base/src/render/gl/WfcMapFx.cpp	2026-10-17 15:03:40.851860900 -0500
++++ particles/src/render/gl/WfcMapFx.cpp	2026-10-17 15:03:40.865909300 -0500
+@@ -318,6 +318,8 @@
+                         lod.trailCap = std::max(1, bt["MaxTrailCount"].asInt(1)) * std::max(1, bt["MaxParticleInTrailCount"].asInt(100));
+                         lod.tessFactor = std::max(1, bt["TessellationFactor"].asInt(1));   // 0 -> 1 (native)
+                         lod.tessStrength = bt["TessellationStrength"].asFloat(1.0f);
++                        lod.connectToSource = bt["bConnectToSource"].asBool(true);
++                        lod.emitOnlyWhenMoving = bt["bEmitOnlyWhenMoving"].asBool(true);
+                     }
+                     if (L["size_param"].isObject()) {
+                         lod.sizeParam = L["size_param"]["name"].asString();
+@@ -667,14 +669,14 @@
+                 while (!rt.trail.empty() && rt.trail.front()[3] > life) rt.trail.erase(rt.trail.begin());
+                 if (in.active && in.hasTarget && rt.parts.empty() && rt.loop == 0 && rt.time == 0.0f)
+                     rt.forceSpawn = 1;                   // a trail spawned along a segment (tracer): one ribbon
+-                if (in.active && !in.hasTarget) {
+-                    const auto& last = rt.trail.empty() ? std::array<float, 4>{1e30f, 0, 0, 0} : rt.trail.back();
+-                    float dx = in.T[0] - last[0], dy = in.T[1] - last[1], dz = in.T[2] - last[2];
+-                    if (dx * dx + dy * dy + dz * dz > 25.0f || rt.trail.empty()) {
+-                        rt.trail.push_back({in.T[0], in.T[1], in.T[2], 0.0f});
+-                        ++rt.forceSpawn;                 // UE3 trails spawn per distance travelled (not by rate)
+-                    }
+-                    if (rt.trail.size() > 96) rt.trail.erase(rt.trail.begin());
++                if (in.active && !in.hasTarget && !L.particleTrail) {
++                    // a source-following trail (AssetTools TRAIL2_TEMPLATES, CONFIRMED: no TrailSource / SpawnPerUnit /
++                    // taper modules in this engine): the ribbon's points are the emitter's own particles, spawned at
++                    // SpawnRate where the emitter is (the notify socket, moved every tick); bEmitOnlyWhenMoving holds
++                    // the spawn while the source is still; drawn as one chain with the source joined (bConnectToSource)
++                    float dx = in.T[0] - rt.srcLast[0], dy = in.T[1] - rt.srcLast[1], dz = in.T[2] - rt.srcLast[2];
++                    rt.srcStill = rt.srcLastSet && dx * dx + dy * dy + dz * dz < 1e-4f;
++                    std::copy(in.T, in.T + 3, rt.srcLast); rt.srcLastSet = true;
+                 }
+             }
+             // update / kill
+@@ -869,14 +871,18 @@
+                     rt.burstFired.clear();
+                 } else { rt.done = true; continue; }
+             }
+-            float efrac = rt.time / L.duration;
++            float efrac = rt.time / L.duration;   // (BurstList.Time: a fraction of the duration)
++            // spawn-time distributions: the emitter time in SECONDS within the loop (RE, native spawn runner 0x8303E288 passes
++            // EmitterTime = fmod(SecondsSinceCreation, EmitterDuration); the emitter tick 0x83044E10) - not normalized
++            const float etime = rt.time;
+             int spawn = 0;
+-            float rate[1]; L.spawnRate.eval(efrac, in.rng, rate);
++            float rate[1]; L.spawnRate.eval(etime, in.rng, rate);
+             rt.spawnFrac += std::max(rate[0], 0.0f) * dt;
+             spawn += (int)std::floor(rt.spawnFrac);
+             rt.spawnFrac -= std::floor(rt.spawnFrac);
+             spawn += rt.forceSpawn;
+             rt.forceSpawn = 0;
++            if (L.typeData == 2 && !L.particleTrail && !in.hasTarget && L.emitOnlyWhenMoving && rt.srcStill) spawn = 0;
+             rt.burstFired.resize(L.bursts.size(), false);
+             for (size_t b = 0; b < L.bursts.size(); ++b) {
+                 if (rt.burstFired[b] || efrac < L.bursts[b].time) continue;
+@@ -887,7 +893,7 @@
+             }
+             const int peak = L.maxBeams > 0 ? std::min(em.maxPeak, L.maxBeams)              // Beam2: MaxBeamCount
+                              : L.trailCap > 0 ? L.trailCap : em.maxPeak;                    // Trail2: trail capacity
+-            if (L.particleTrail) spawn = std::min(spawn, 1);   // Trail2 Spawn clamps to 1 per tick (RE s14)
++            if (L.typeData == 2) spawn = std::min(spawn, 1);   // Trail2 Spawn clamps to 1 per tick (RE s14)
+             {   // AMD stability: a global live-particle budget across every effect (authored peaks are per emitter)
+                 constexpr size_t kMaxLive = 250000;
+                 if (statLiveParticles_ >= kMaxLive) {
+@@ -914,20 +920,20 @@
+                     // flagA = 0: a spawn-class module contributes nothing under either flag reading
+                     if (m.flagA == 0) continue;
+                     if (m.name == "PMI_Lifetime") {
+-                        evalDist(m, "Lifetime", efrac, in.rng, v1);
++                        evalDist(m, "Lifetime", etime, in.rng, v1);
+                         // (RE particle audit (c) batch 1: a second Lifetime module stacks, 1 / (1 / old + L); the first sets)
+                         if (q.oneOverLife > 0.0f && v1[0] > 0.0f) q.oneOverLife = 1.0f / (1.0f / q.oneOverLife + v1[0]);
+                         else q.oneOverLife = v1[0] > 0.0f ? 1.0f / v1[0] : 0.0f;   // 0 = lives until killed
+                     } else if (m.name == "PMI_Size") {
+-                        evalDist(m, "StartSize", efrac, in.rng, v3);
++                        evalDist(m, "StartSize", etime, in.rng, v3);
+                         for (int c = 0; c < 3; ++c) q.baseSize[c] += v3[c];
+                     } else if (m.name == "PMI_Color") {
+-                        evalDist(m, "StartColor", efrac, in.rng, v3);
+-                        evalDist(m, "StartAlpha", efrac, in.rng, v1);
++                        evalDist(m, "StartColor", etime, in.rng, v3);
++                        evalDist(m, "StartAlpha", etime, in.rng, v1);
+                         for (int c = 0; c < 3; ++c) q.baseColor[c] = v3[c];
+                         q.baseColor[3] = v1[0];
+                     } else if (m.name == "PMI_Location") {
+-                        evalDist(m, "StartLocation", efrac, in.rng, v3);
++                        evalDist(m, "StartLocation", etime, in.rng, v3);
+                         toWorldDir(v3, w3);
+                         for (int c = 0; c < 3; ++c) q.pos[c] += w3[c];
+                     } else if ((m.name == "PMI_LocationEmitter" || m.name == "PMI_LocationEmitterDirect") &&
+@@ -993,9 +999,9 @@
+                         const bool kNeg[3] = {m.field("Negative_X", 1) != 0, m.field("Negative_Y", 1) != 0, m.field("Negative_Z", 1) != 0};
+                         const bool kSurface = m.field("SurfaceOnly", 0) != 0, kVelocity = m.field("Velocity", 0) != 0;
+                         float rad[1], vs[1], off[3], d[3], n[3];
+-                        evalDist(m, "StartRadius", efrac, in.rng, rad);
+-                        evalDist(m, "VelocityScale", efrac, in.rng, vs);
+-                        evalDist(m, "StartLocation", efrac, in.rng, off);
++                        evalDist(m, "StartRadius", etime, in.rng, rad);
++                        evalDist(m, "VelocityScale", etime, in.rng, vs);
++                        evalDist(m, "StartLocation", etime, in.rng, off);
+                         for (int c = 0; c < 3; ++c) {
+                             in.rng = in.rng * 1664525u + 1013904223u;
+                             const float r = (float)(in.rng >> 8) / 16777216.0f;
+@@ -1018,7 +1024,7 @@
+                     } else if (m.name == "PMI_LocationDirect") {   // RE audit (c) batch 2, spawn: Location = Location(RelTime)
+                         float l[3], o[3];                          // -> world + LocationOffset(EmitterTime), the offset stored
+                         evalDist(m, "Location", 0.0f, in.rng, l);
+-                        evalDist(m, "LocationOffset", efrac, in.rng, o);
++                        evalDist(m, "LocationOffset", etime, in.rng, o);
+                         toWorldDir(o, q.locDirect);
+                         if (!L.localSpace) for (int c = 0; c < 3; ++c) q.pos[c] = l[0] * in.R[0][c] + l[1] * in.R[1][c] + l[2] * in.R[2][c] + in.T[c] + q.locDirect[c];
+                         else for (int c = 0; c < 3; ++c) q.pos[c] = l[c] + q.locDirect[c];
+@@ -1035,10 +1041,10 @@
+                         for (int c = 0; c < 3; ++c) { kp[c] = m.field(posN[c], 1) != 0; kn[c] = m.field(negN[c], 1) != 0; }
+                         const bool surf = m.field("SurfaceOnly", 0) != 0, velOn = m.field("Velocity", 0) != 0, radial = m.field("RadialVelocity", 1) != 0;
+                         float rad[1], hgt[1], vs[1], sl[3], d[3];
+-                        evalDist(m, "StartRadius", efrac, in.rng, rad);
+-                        evalDist(m, "StartHeight", efrac, in.rng, hgt);
+-                        evalDist(m, "VelocityScale", efrac, in.rng, vs);
+-                        evalDist(m, "StartLocation", efrac, in.rng, sl);
++                        evalDist(m, "StartRadius", etime, in.rng, rad);
++                        evalDist(m, "StartHeight", etime, in.rng, hgt);
++                        evalDist(m, "VelocityScale", etime, in.rng, vs);
++                        evalDist(m, "StartLocation", etime, in.rng, sl);
+                         const float R = rad[0], H = hgt[0] * 0.5f;
+                         for (int tries = 0;; ++tries) {
+                             for (int c = 0; c < 3; ++c) {
+@@ -1068,30 +1074,30 @@
+                         }
+                     } else if (m.name == "PMI_VelocityInheritParent") {   // RE audit (c) batch 2: Velocity and BaseVelocity
+                         if (!L.localSpace) {                              // += Scale(EmitterTime) x the emitter's velocity (0 local)
+-                            evalDist(m, "Scale", efrac, in.rng, v3);
++                            evalDist(m, "Scale", etime, in.rng, v3);
+                             for (int c = 0; c < 3; ++c) q.baseVel[c] += v3[c] * in.vel[c];
+                         }
+                     } else if (m.name == "PMI_Velocity") {
+-                        evalDist(m, "StartVelocity", efrac, in.rng, v3);
++                        evalDist(m, "StartVelocity", etime, in.rng, v3);
+                         toWorldDir(v3, w3);
+                         for (int c = 0; c < 3; ++c) q.baseVel[c] += w3[c];
+-                        evalDist(m, "StartVelocityRadial", efrac, in.rng, v1);
++                        evalDist(m, "StartVelocityRadial", etime, in.rng, v1);
+                         radial += v1[0];
+                     } else if (m.name == "PMI_Rotation") {
+-                        evalDist(m, "StartRotation", efrac, in.rng, v1);
++                        evalDist(m, "StartRotation", etime, in.rng, v1);
+                         q.rot += v1[0] * 6.2831853f;                     // turns -> radians
+                     } else if (m.name == "PMI_MeshRotation") {
+-                        evalDist(m, "StartRotation", efrac, in.rng, v3);
++                        evalDist(m, "StartRotation", etime, in.rng, v3);
+                         for (int c = 0; c < 3; ++c) q.meshRot[c] += v3[c] * 360.0f;   // turns -> degrees
+                     } else if (m.name == "PMI_RotationRate") {   // turns / s -> radians / s
+-                        evalDist(m, "StartRotationRate", efrac, in.rng, v1);
++                        evalDist(m, "StartRotationRate", etime, in.rng, v1);
+                         q.rotRate += v1[0] * 6.2831853f;
+                     } else if (m.name == "PMI_ColorOverLife") {  // spawn: Color = BaseColor = value at RelativeTime 0
+                         auto ic = m.dists.find("ColorOverLife"), ia = m.dists.find("AlphaOverLife");
+                         if (ic != m.dists.end()) { ic->second.eval(0.0f, in.rng, v3); for (int c = 0; c < 3; ++c) q.baseColor[c] = v3[c]; }
+                         if (ia != m.dists.end()) { ia->second.eval(0.0f, in.rng, v1); q.baseColor[3] = v1[0]; }
+                     } else if (m.name == "PMI_Acceleration") {
+-                        evalDist(m, "Acceleration", efrac, in.rng, v3);
++                        evalDist(m, "Acceleration", etime, in.rng, v3);
+                         toWorldDir(v3, w3);
+                         for (int c = 0; c < 3; ++c) q.accel[c] += w3[c];
+                     } else if (m.name == "PMI_SubUV" && L.subMethod != 0) {   // spawn = the first update (M67)
+@@ -1099,7 +1105,7 @@
+                     } else if (m.name == "PMI_SubUVDirect" && L.subMethod != 0) {   // spawn = the first update (M71)
+                         subuvDirect(m, q, in.rng);
+                     } else if (m.name == "PMI_MeshRotationRate") {
+-                        evalDist(m, "StartRotationRate", efrac, in.rng, v3);
++                        evalDist(m, "StartRotationRate", etime, in.rng, v3);
+                         for (int c = 0; c < 3; ++c) q.meshRotRate[c] += v3[c] * 360.0f;
+                     } else if (m.name == "PMI_ColorByParameter") {
+                         // Color = BaseColor = the component's colour InstanceParameter (Steam_Sm_FX: 'SteamColor',
+@@ -1132,7 +1138,7 @@
+                     } else if (m.name == "PMI_DynamicParameter") {          // [PARTIAL] slot order
+                         for (int k = 0; k < 4; ++k) {
+                             auto it = m.dists.find("DynamicParams[" + std::to_string(k) + "].ParamValue");
+-                            if (it != m.dists.end()) { it->second.eval(efrac, in.rng, v1); rt.dynParam[k] = v1[0]; }
++                            if (it != m.dists.end()) { it->second.eval(etime, in.rng, v1); rt.dynParam[k] = v1[0]; }
+                         }
+                         rt.hasDyn = true;
+                     }
+@@ -1983,13 +1989,22 @@
+                         quad(a, b, w, w, q.color, q.color, 0.0f, 1.0f);
+                     }
+                   }
+-                } else if (L.typeData == 2 && L.particleTrail) {
++                } else if (L.typeData == 2 && (L.particleTrail || !in.hasTarget)) {
+                     // M63 Trail2 placed by LocationEmitter (RE pass 5 s14, CONFIRMED): one chain through this emitter's
+                     // own particles in spawn order (each new particle becomes the head; no per-source trails; the head
+                     // does not follow its source). Per-particle size / colour; U from the head by distance (s13).
++                    // A source-following trail (no LocationEmitter) draws the same chain, its newest point joined to the
++                    // emitter's current location (bConnectToSource, stock UE3 [HIGH]) with that particle's size / colour.
+                     std::vector<const FxParticle*> chain;
+                     for (const FxParticle& q : rt.parts) chain.push_back(&q);
+                     std::sort(chain.begin(), chain.end(), [](const FxParticle* x, const FxParticle* y) { return x->seq < y->seq; });
++                    FxParticle srcPt;
++                    if (!L.particleTrail && L.connectToSource && in.active && !chain.empty()) {
++                        srcPt = *chain.back();
++                        if (L.localSpace) std::fill(srcPt.pos, srcPt.pos + 3, 0.0f);
++                        else std::copy(in.T, in.T + 3, srcPt.pos);
++                        chain.push_back(&srcPt);
++                    }
+                     if (chain.size() >= 2) {
+                         auto wpos = [&](const FxParticle& q) {
+                             if (!L.localSpace) return ueToGltf(q.pos);
+diff -ru base/src/render/gl/WfcPipeline.h particles/src/render/gl/WfcPipeline.h
+--- base/src/render/gl/WfcPipeline.h	2026-10-17 15:03:40.927620700 -0500
++++ particles/src/render/gl/WfcPipeline.h	2026-10-17 15:03:40.941167300 -0500
+@@ -1272,6 +1272,7 @@
+         bool tilePerParticle = false;     // Trail2 bTilePerParticle
+         bool particleTrail = false;       // M63 Trail2 placed by LocationEmitter: one chain through its own particles
+         int trailCap = 0;                 // Trail2: MaxTrailCount x MaxParticleInTrailCount (spawn cap; RE s14)
++        bool connectToSource = true, emitOnlyWhenMoving = true;   // Trail2 (TypeDataTrail2 CDO true; AssetTools TRAIL2)
+         int billboardAxis = -1;           // M65 BillboardSettings.Direction: -1 camera facing, 0..2 local X/Y/Z, 3..5 world
+         float sideScale[2] = {1, 1};      // Alignment: V0 / V1 side scales (Centered 1/1, Positive 0/2, Negative 2/0)
+         FxDist distance;
+@@ -1324,6 +1325,7 @@
+         std::vector<FxParticle> parts;
+         float dynParam[4] = {1, 1, 1, 1}; bool hasDyn = false;
+         std::vector<std::array<float, 4>> trail;   // Trail2: recent source positions (UE) + age (s), newest last
++        float srcLast[3] = {0, 0, 0}; bool srcLastSet = false, srcStill = false;   // Trail2: the source at the last tick
+         int forceSpawn = 0;                        // Trail2: particles owed by source movement (spawn per unit)
+         int locSequence = 0;                       // LocationEmitter Sequential selection counter
+         uint32_t spawnSeq = 0;                     // next particle spawn order
