@@ -2212,3 +2212,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Gameplay latches Defrag bodies to the CPU path meanwhile); other bodies differ only at rounding level (1-2 at
   silhouette edges; one frame 24 px max 91) = GPU-vs-CPU skinning noise pending Rendering's confirmation; 16v16:
   0 refusals / 0 rows-full. Rerun of the crops granted on the rebuilt int_gcn.
+  2026-10-16 20:11 GPU-CORPSE CROPS round 2: PASS (Defrag frames byte-identical via the CPU latch; 10 m 57 / 65
+  identical, the rest rounding (max 2) plus f920's single edge pixel at 91 = accepted by my eye (f920_detail.png);
+  40 m 64 / 65, 1 px at 1); 16v16 0 refusals. Corpse arm GO (int_gcb / int_gcn / + NOCORPSE, Berth RT off 4K,
+  target within 0.1 ms of NOCORPSE); merge GAMEPLAY_CORPSE_GPU.patch on its PASS. Pool 7.0 GB at 20:09.
