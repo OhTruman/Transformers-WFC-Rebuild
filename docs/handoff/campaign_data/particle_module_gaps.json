@@ -1,0 +1,813 @@
+{
+ "modules": [
+  {
+   "module": "PMI_Size",
+   "lods": 3514,
+   "emitters": 1506,
+   "systems": 266,
+   "disabled_lods": 2,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_Vehicle_FX",
+    "FX_AssaultRifle_p.FX.Impact_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX"
+   ],
+   "cats": {
+    "weapon": 1783,
+    "death/hit": 460,
+    "anim_notify": 898,
+    "mp_map": 272,
+    "chassis": 431,
+    "ability/buff/class": 318
+   }
+  },
+  {
+   "module": "PMI_Lifetime",
+   "lods": 3510,
+   "emitters": 1507,
+   "systems": 266,
+   "disabled_lods": 9,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_Vehicle_FX",
+    "FX_AssaultRifle_p.FX.Impact_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX"
+   ],
+   "cats": {
+    "weapon": 1792,
+    "death/hit": 447,
+    "anim_notify": 892,
+    "mp_map": 274,
+    "chassis": 431,
+    "ability/buff/class": 318
+   }
+  },
+  {
+   "module": "PMI_SizeMultiplyLife",
+   "lods": 2737,
+   "emitters": 1140,
+   "systems": 249,
+   "disabled_lods": 36,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_Vehicle_FX",
+    "FX_AssaultRifle_p.FX.Impact_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX"
+   ],
+   "cats": {
+    "weapon": 1362,
+    "death/hit": 394,
+    "anim_notify": 689,
+    "mp_map": 249,
+    "chassis": 398,
+    "ability/buff/class": 199
+   }
+  },
+  {
+   "module": "PMI_ColorScaleOverLife",
+   "lods": 2673,
+   "emitters": 1145,
+   "systems": 257,
+   "disabled_lods": 49,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_Vehicle_FX",
+    "FX_AssaultRifle_p.FX.Impact_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX"
+   ],
+   "cats": {
+    "weapon": 1262,
+    "death/hit": 323,
+    "anim_notify": 686,
+    "mp_map": 240,
+    "chassis": 377,
+    "ability/buff/class": 265
+   }
+  },
+  {
+   "module": "PMI_Velocity",
+   "lods": 2567,
+   "emitters": 1081,
+   "systems": 251,
+   "disabled_lods": 154,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_Vehicle_FX",
+    "FX_AssaultRifle_p.FX.Impact_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX"
+   ],
+   "cats": {
+    "weapon": 1348,
+    "death/hit": 399,
+    "anim_notify": 674,
+    "mp_map": 218,
+    "chassis": 246,
+    "ability/buff/class": 196
+   }
+  },
+  {
+   "module": "PMI_Rotation",
+   "lods": 2262,
+   "emitters": 950,
+   "systems": 242,
+   "disabled_lods": 65,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_Vehicle_FX",
+    "FX_AssaultRifle_p.FX.Impact_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX"
+   ],
+   "cats": {
+    "weapon": 1231,
+    "death/hit": 288,
+    "anim_notify": 545,
+    "mp_map": 187,
+    "chassis": 242,
+    "ability/buff/class": 173
+   }
+  },
+  {
+   "module": "PMI_Location",
+   "lods": 1956,
+   "emitters": 823,
+   "systems": 230,
+   "disabled_lods": 94,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_Vehicle_FX",
+    "FX_AssaultRifle_p.FX.Impact_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX"
+   ],
+   "cats": {
+    "weapon": 1024,
+    "death/hit": 187,
+    "anim_notify": 458,
+    "mp_map": 142,
+    "chassis": 290,
+    "ability/buff/class": 177
+   }
+  },
+  {
+   "module": "PMI_ColorByParameter",
+   "lods": 1697,
+   "emitters": 732,
+   "systems": 170,
+   "disabled_lods": 22,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Impact_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_HeavyMG_FX"
+   ],
+   "cats": {
+    "weapon": 941,
+    "anim_notify": 320,
+    "death/hit": 84,
+    "ability/buff/class": 168,
+    "mp_map": 210,
+    "chassis": 257
+   }
+  },
+  {
+   "module": "PMI_Color",
+   "lods": 1640,
+   "emitters": 707,
+   "systems": 184,
+   "disabled_lods": 71,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_Vehicle_FX",
+    "FX_AssaultRifle_p.FX.Impact_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.Shell_AssaultRifle_FX"
+   ],
+   "cats": {
+    "weapon": 693,
+    "death/hit": 249,
+    "anim_notify": 427,
+    "mp_map": 81,
+    "chassis": 246,
+    "ability/buff/class": 184
+   }
+  },
+  {
+   "module": "PMI_LocationPrimitiveSphere",
+   "lods": 1482,
+   "emitters": 593,
+   "systems": 154,
+   "disabled_lods": 26,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_Vehicle_FX",
+    "FX_AssaultRifle_p.FX.Impact_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX"
+   ],
+   "cats": {
+    "weapon": 847,
+    "death/hit": 246,
+    "anim_notify": 384,
+    "mp_map": 117,
+    "chassis": 91,
+    "ability/buff/class": 121
+   }
+  },
+  {
+   "module": "PMI_Gravity",
+   "lods": 1285,
+   "emitters": 511,
+   "systems": 161,
+   "disabled_lods": 79,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_Vehicle_FX",
+    "FX_AssaultRifle_p.FX.Impact_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX"
+   ],
+   "cats": {
+    "weapon": 701,
+    "death/hit": 249,
+    "anim_notify": 324,
+    "mp_map": 139,
+    "chassis": 97,
+    "ability/buff/class": 81
+   }
+  },
+  {
+   "module": "PMI_VelocityOverLife",
+   "lods": 1117,
+   "emitters": 448,
+   "systems": 129,
+   "disabled_lods": 96,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_Vehicle_FX",
+    "FX_AssaultRifle_p.FX.Impact_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX"
+   ],
+   "cats": {
+    "weapon": 639,
+    "death/hit": 204,
+    "anim_notify": 299,
+    "mp_map": 110,
+    "chassis": 80,
+    "ability/buff/class": 49
+   }
+  },
+  {
+   "module": "PMI_DynamicParameter",
+   "lods": 773,
+   "emitters": 302,
+   "systems": 114,
+   "disabled_lods": 11,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Impact_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_HeavyMG_FX"
+   ],
+   "cats": {
+    "weapon": 512,
+    "anim_notify": 117,
+    "death/hit": 99,
+    "mp_map": 86,
+    "chassis": 29,
+    "ability/buff/class": 52
+   }
+  },
+  {
+   "module": "PMI_RotationRate",
+   "lods": 716,
+   "emitters": 303,
+   "systems": 146,
+   "disabled_lods": 48,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_Vehicle_FX",
+    "FX_Corruptor_p.Corruptor_Impact_Long_FX",
+    "FX_Corruptor_p.Corruptor_Thump_FX",
+    "FX_Corruptor_p.FX.AE_Blast_FX"
+   ],
+   "cats": {
+    "death/hit": 74,
+    "weapon": 292,
+    "mp_map": 79,
+    "anim_notify": 206,
+    "chassis": 93,
+    "ability/buff/class": 81
+   }
+  },
+  {
+   "module": "PMI_ColorOverLife",
+   "lods": 613,
+   "emitters": 254,
+   "systems": 77,
+   "disabled_lods": 53,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_Vehicle_FX",
+    "FX_AssaultRifle_p.FX.Impact_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_HeavyMG_FX"
+   ],
+   "cats": {
+    "weapon": 382,
+    "death/hit": 140,
+    "mp_map": 22,
+    "anim_notify": 185,
+    "chassis": 36,
+    "ability/buff/class": 17
+   }
+  },
+  {
+   "module": "PMI_SubUV",
+   "lods": 601,
+   "emitters": 238,
+   "systems": 115,
+   "disabled_lods": 8,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX",
+    "FX_BurstRifle_p.FX.MuzzleFlash_BurstRifle_FX",
+    "FX_Corruptor_p.Corruptor_Chargeup_FX",
+    "FX_Corruptor_p.Corruptor_Thump_FX"
+   ],
+   "cats": {
+    "anim_notify": 147,
+    "weapon": 334,
+    "mp_map": 74,
+    "death/hit": 104,
+    "chassis": 47,
+    "ability/buff/class": 58
+   }
+  },
+  {
+   "module": "PMI_MeshRotation",
+   "lods": 235,
+   "emitters": 112,
+   "systems": 92,
+   "disabled_lods": 36,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.Shell_AssaultRifle_FX",
+    "FX_BurstRifle_p.FX.Shell_BurstRifle_FX"
+   ],
+   "cats": {
+    "anim_notify": 69,
+    "weapon": 84,
+    "death/hit": 18,
+    "chassis": 51,
+    "ability/buff/class": 31,
+    "mp_map": 6
+   }
+  },
+  {
+   "module": "PMI_LocationEmitter",
+   "lods": 207,
+   "emitters": 83,
+   "systems": 44,
+   "disabled_lods": 6,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Shell_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Tracer_AssaultRifle_FX",
+    "FX_BurstRifle_p.FX.Shell_BurstRifle_FX",
+    "FX_Corruptor_p.Corruptor_Impact_Long_FX"
+   ],
+   "cats": {
+    "weapon": 124,
+    "mp_map": 12,
+    "anim_notify": 42,
+    "death/hit": 32,
+    "ability/buff/class": 25,
+    "chassis": 14
+   }
+  },
+  {
+   "module": "PMI_LocationPrimitiveCylinder",
+   "lods": 179,
+   "emitters": 80,
+   "systems": 43,
+   "disabled_lods": 4,
+   "grep": "-",
+   "example_systems": [
+    "FX_Corruptor_p.Corruptor_Impact_Long_FX",
+    "FX_Corruptor_p.FX.Corruptor_Death_FX",
+    "FX_Explosives_p.FX.Smoke_Dmg_Lrg_FX",
+    "FX_Explosives_p.FX.TF_Death_Energy_Med_FX"
+   ],
+   "cats": {
+    "mp_map": 65,
+    "anim_notify": 59,
+    "chassis": 43,
+    "death/hit": 15,
+    "weapon": 11,
+    "ability/buff/class": 16
+   }
+  },
+  {
+   "module": "PMI_VelocityInheritParent",
+   "lods": 154,
+   "emitters": 66,
+   "systems": 43,
+   "disabled_lods": 10,
+   "grep": "-",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Reload_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Shell_AssaultRifle_FX",
+    "FX_BurstRifle_p.FX.MuzzleFlash_BurstRifle_FX"
+   ],
+   "cats": {
+    "anim_notify": 45,
+    "weapon": 107,
+    "mp_map": 10,
+    "chassis": 11,
+    "death/hit": 15,
+    "ability/buff/class": 6
+   }
+  },
+  {
+   "module": "PMI_SwitchableColorScaleOverLife",
+   "lods": 130,
+   "emitters": 56,
+   "systems": 26,
+   "disabled_lods": 0,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.Tracer_AssaultRifle_FX",
+    "FX_BurstRifle_p.FX.MuzzleFlash_BurstRifle_FX"
+   ],
+   "cats": {
+    "anim_notify": 10,
+    "weapon": 102,
+    "chassis": 14,
+    "ability/buff/class": 14
+   }
+  },
+  {
+   "module": "PMI_Collision",
+   "lods": 107,
+   "emitters": 50,
+   "systems": 37,
+   "disabled_lods": 80,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_Vehicle_FX",
+    "FX_Corruptor_p.Corruptor_Impact_Long_FX",
+    "FX_EMPShotgun_p.FX.Magazine_EMPShotgun_FX",
+    "FX_EMPShotgun_p.FX.Magazine_Shotgun_FX"
+   ],
+   "cats": {
+    "death/hit": 8,
+    "weapon": 92,
+    "mp_map": 5,
+    "anim_notify": 9
+   }
+  },
+  {
+   "module": "PMI_BeamSource",
+   "lods": 107,
+   "emitters": 53,
+   "systems": 25,
+   "disabled_lods": 0,
+   "grep": "C?",
+   "example_systems": [
+    "FX_Corruptor_p.corruptor_plasma_arcs_FX",
+    "FX_DeathBeam_p.FX.MuzzleFlash_DeathBeam_FX",
+    "FX_Explosives_p.FX.EXP_Mortar_FX",
+    "FX_Explosives_p.FX.TF_Death_Buildup_FX"
+   ],
+   "cats": {
+    "mp_map": 8,
+    "weapon": 57,
+    "anim_notify": 33,
+    "death/hit": 8,
+    "ability/buff/class": 12,
+    "chassis": 6
+   }
+  },
+  {
+   "module": "PMI_BeamTarget",
+   "lods": 107,
+   "emitters": 53,
+   "systems": 25,
+   "disabled_lods": 0,
+   "grep": "-",
+   "example_systems": [
+    "FX_Corruptor_p.corruptor_plasma_arcs_FX",
+    "FX_DeathBeam_p.FX.MuzzleFlash_DeathBeam_FX",
+    "FX_Explosives_p.FX.EXP_Mortar_FX",
+    "FX_Explosives_p.FX.TF_Death_Buildup_FX"
+   ],
+   "cats": {
+    "mp_map": 8,
+    "weapon": 57,
+    "anim_notify": 33,
+    "death/hit": 8,
+    "ability/buff/class": 12,
+    "chassis": 6
+   }
+  },
+  {
+   "module": "PMI_AttractorPoint",
+   "lods": 97,
+   "emitters": 45,
+   "systems": 33,
+   "disabled_lods": 7,
+   "grep": "-",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_Vehicle_FX",
+    "FX_Corruptor_p.Corruptor_Impact_Long_FX",
+    "FX_Corruptor_p.Corruptor_Thump_FX",
+    "FX_Corruptor_p.FX.Corruptor_Death_FX"
+   ],
+   "cats": {
+    "death/hit": 6,
+    "weapon": 19,
+    "mp_map": 22,
+    "anim_notify": 30,
+    "chassis": 4,
+    "ability/buff/class": 20
+   }
+  },
+  {
+   "module": "PMI_SizeScale",
+   "lods": 86,
+   "emitters": 39,
+   "systems": 20,
+   "disabled_lods": 0,
+   "grep": "C",
+   "example_systems": [
+    "FX_Corruptor_p.Corruptor_Chargeup_FX",
+    "FX_Corruptor_p.Corruptor_Thump_FX",
+    "FX_Corruptor_p.FX.AE_Blast_FX",
+    "FX_Corruptor_p.FX.Corruptor_Death_FX"
+   ],
+   "cats": {
+    "anim_notify": 52,
+    "mp_map": 8,
+    "ability/buff/class": 22,
+    "weapon": 4,
+    "death/hit": 2
+   }
+  },
+  {
+   "module": "PMI_MeshRotationRate",
+   "lods": 84,
+   "emitters": 35,
+   "systems": 24,
+   "disabled_lods": 4,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Shell_AssaultRifle_FX",
+    "FX_BurstRifle_p.FX.Shell_BurstRifle_FX",
+    "FX_EMPShotgun_p.FX.Magazine_EMPShotgun_FX",
+    "FX_EMPShotgun_p.FX.Magazine_Shotgun_FX"
+   ],
+   "cats": {
+    "weapon": 44,
+    "anim_notify": 10,
+    "ability/buff/class": 30
+   }
+  },
+  {
+   "module": "PMI_BeamNoise",
+   "lods": 66,
+   "emitters": 33,
+   "systems": 17,
+   "disabled_lods": 13,
+   "grep": "C",
+   "example_systems": [
+    "FX_DeathBeam_p.FX.MuzzleFlash_DeathBeam_FX",
+    "FX_Explosives_p.FX.TF_Death_Buildup_FX",
+    "FX_FusionCannon_p.FX.Muzzleflash_FusionCannon_FX",
+    "FX_Level_Generic_p.FX.Electricity_OuterSpace_purple_FX"
+   ],
+   "cats": {
+    "weapon": 40,
+    "anim_notify": 20,
+    "death/hit": 8,
+    "mp_map": 6
+   }
+  },
+  {
+   "module": "PMI_AccelerationOverLife",
+   "lods": 33,
+   "emitters": 14,
+   "systems": 8,
+   "disabled_lods": 0,
+   "grep": "-",
+   "example_systems": [
+    "FX_Explosives_p.FX.Smoke_Dmg_Lrg_FX",
+    "FX_HomingRocket_p.FX.Squib_HomRocket_01_FX",
+    "FX_Level_Generic_p.FX.Fire_Energon_FX",
+    "FX_Level_Generic_p.FX.Fire_Energon_Lrg_FX"
+   ],
+   "cats": {
+    "chassis": 4,
+    "weapon": 3,
+    "mp_map": 20,
+    "anim_notify": 2,
+    "death/hit": 4
+   }
+  },
+  {
+   "module": "PMI_LocationDirect",
+   "lods": 22,
+   "emitters": 10,
+   "systems": 7,
+   "disabled_lods": 0,
+   "grep": "-",
+   "example_systems": [
+    "FX_GrenadeLauncher_p.FX.Tracer_GrenadeLauncher_FX",
+    "FX_HomingRocket_p.FX.Tracer_HomRocket_FX",
+    "FX_HomingRocket_p.FX.Tracer_WarshipHomRocket_FX",
+    "FX_Multiplayer_p.FX.WarCry_Buff_01_FX"
+   ],
+   "cats": {
+    "weapon": 8,
+    "ability/buff/class": 12,
+    "anim_notify": 2
+   }
+  },
+  {
+   "module": "PMI_AttractorParticle",
+   "lods": 20,
+   "emitters": 7,
+   "systems": 2,
+   "disabled_lods": 0,
+   "grep": "-",
+   "example_systems": [
+    "FX_Pickups_p.FX.Shard_FX",
+    "FX_Pickups_p.FX.Shard_FadeOut_FX"
+   ],
+   "cats": {
+    "ability/buff/class": 20
+   }
+  },
+  {
+   "module": "PMI_Orbit",
+   "lods": 18,
+   "emitters": 7,
+   "systems": 7,
+   "disabled_lods": 4,
+   "grep": "-",
+   "example_systems": [
+    "FX_Explosives_p.FX.TF_Death_Energy_Med_FX",
+    "FX_HomingRocket_p.FX.Squib_HomRocket_01_FX",
+    "FX_Level_Generic_p.FX.Fire_Energon_FX",
+    "FX_Level_Generic_p.FX.Fire_Energon_Lrg_FX"
+   ],
+   "cats": {
+    "anim_notify": 3,
+    "chassis": 3,
+    "death/hit": 3,
+    "weapon": 3,
+    "mp_map": 6,
+    "ability/buff/class": 6
+   }
+  },
+  {
+   "module": "PMI_BeamSineWave",
+   "lods": 14,
+   "emitters": 7,
+   "systems": 3,
+   "disabled_lods": 0,
+   "grep": "C",
+   "example_systems": [
+    "FX_Multiplayer_p.FX.DrainRay_Beam_FX",
+    "FX_OmegaSupremeAE_p.FX.OmegaHeal_Beam_FX",
+    "FX_RepairBeam_p.FX.Tracer_RepairBeam_FX"
+   ],
+   "cats": {
+    "ability/buff/class": 8,
+    "anim_notify": 6,
+    "weapon": 4
+   }
+  },
+  {
+   "module": "PMI_Acceleration",
+   "lods": 8,
+   "emitters": 3,
+   "systems": 3,
+   "disabled_lods": 0,
+   "grep": "C",
+   "example_systems": [
+    "FX_Level_Generic_p.FX.Fire_Energon_FX",
+    "FX_Level_Generic_p.FX.Fire_Energon_Lrg_FX",
+    "FX_Transformers_p.FX.Shield_BlastWave_A_FX"
+   ],
+   "cats": {
+    "mp_map": 6,
+    "anim_notify": 2
+   }
+  },
+  {
+   "module": "PMI_LocationEmitterDirect",
+   "lods": 6,
+   "emitters": 3,
+   "systems": 3,
+   "disabled_lods": 0,
+   "grep": "C",
+   "example_systems": [
+    "FX_AssaultRifle_p.FX.Shell_AssaultRifle_FX",
+    "FX_BurstRifle_p.FX.Shell_BurstRifle_FX",
+    "FX_HeavyPistol_p.FX.Shell_HeavyPistol_FX"
+   ],
+   "cats": {
+    "weapon": 6
+   }
+  },
+  {
+   "module": "PMI_KillBox",
+   "lods": 4,
+   "emitters": 2,
+   "systems": 2,
+   "disabled_lods": 0,
+   "grep": "-",
+   "example_systems": [
+    "FX_Sword_p.FX.MeleeEquip_Purple_FX",
+    "FX_Sword_p.FX.SwordEquip_Red_FX"
+   ],
+   "cats": {
+    "weapon": 4
+   }
+  },
+  {
+   "module": "PMI_SubUVDirect",
+   "lods": 2,
+   "emitters": 1,
+   "systems": 1,
+   "disabled_lods": 0,
+   "grep": "C",
+   "example_systems": [
+    "FX_H2H_p.FX.H2H_Punch01_FX"
+   ],
+   "cats": {
+    "anim_notify": 2
+   }
+  }
+ ],
+ "typedata": [
+  {
+   "typedata": "(sprite)",
+   "lods": 2899,
+   "systems": 253,
+   "grep": "C",
+   "example": [
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Impact_AssaultRifle_Vehicle_FX",
+    "FX_AssaultRifle_p.FX.Impact_HeavyMG_FX"
+   ]
+  },
+  {
+   "typedata": "ParticleModuleTypeDataMesh",
+   "lods": 325,
+   "systems": 106,
+   "grep": "C",
+   "example": [
+    "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.MuzzleFlash_HeavyMG_FX",
+    "FX_AssaultRifle_p.FX.Shell_AssaultRifle_FX"
+   ]
+  },
+  {
+   "typedata": "ParticleModuleTypeDataTrail2",
+   "lods": 170,
+   "systems": 50,
+   "grep": "N",
+   "example": [
+    "FX_AssaultRifle_p.FX.Shell_AssaultRifle_FX",
+    "FX_AssaultRifle_p.FX.Tracer_AssaultRifle_FX",
+    "FX_BurstRifle_p.FX.Shell_BurstRifle_FX"
+   ]
+  },
+  {
+   "typedata": "ParticleModuleTypeDataBeam2",
+   "lods": 107,
+   "systems": 25,
+   "grep": "N",
+   "example": [
+    "FX_Corruptor_p.corruptor_plasma_arcs_FX",
+    "FX_DeathBeam_p.FX.MuzzleFlash_DeathBeam_FX",
+    "FX_Explosives_p.FX.EXP_Mortar_FX"
+   ]
+  }
+ ]
+}
