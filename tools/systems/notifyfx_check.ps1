@@ -3,7 +3,7 @@
 # Reports: the new arm's NOTIFYFX lines (local / participant, per template), the captures that differ (crops via
 # shot_diff_crops.py) and every cue that started in the base arm (the CUELOG list for the E-class check), written to
 # <Out>\cues_started.txt. One exe at a time, killed by PID on timeout, waits for PERF_HOLD.
-param([switch]$MuzzlePair, [string]$PairEnv = '', [Parameter(Mandatory)] [string]$BaseBin, [Parameter(Mandatory)] [string]$NewBin, [string]$Out = 'F:\Transformers Rebuild\Rebuild-Systems\work\notifyfx_check',
+param([switch]$MuzzlePair, [string]$PairEnv = '', [string]$Extra = '', [Parameter(Mandatory)] [string]$BaseBin, [Parameter(Mandatory)] [string]$NewBin, [string]$Out = 'F:\Transformers Rebuild\Rebuild-Systems\work\notifyfx_check',
       [string]$Map = 'MP_IAC_Streets', [int]$Seconds = 90)
 $hold = 'F:\Transformers Rebuild\Rebuild-Experimental\work\PERF_HOLD'
 $py = 'F:\Transformers Rebuild\AssetTools\bin\py\python.exe'
@@ -37,6 +37,7 @@ foreach ($arm in 'base', 'new') {
     $envs = @{ WFC_SKIPINTRO = '1'; WFC_LOCKSTEP = '1'; WFC_FRAMELIMIT = '60'; WFC_PLAYERBOT = '1'; WFC_RT_MODE = '0';
         WFC_LOGTIME = '1'; WFC_CUELOG = '1'; WFC_NOTIFYLOG = '1'; WFC_BOOT = 'match'; WFC_MATCH_SECONDS = "$Seconds"; WFC_SMOKE_FRAMES = '2000000';
         WFC_MATCH_URL = "$($Map)?GameModeTag=TDM?BotsFriendly=4?BotsEnemy=5?PointsToWin=1000"; WFC_SHOTMATCH = ((Join-Path $dir 'shots') -replace '\\', '/') + ',150,5400,150' }
+    foreach ($kv in ($Extra -split ';')) { if ($kv -match '^(WFC_\w+)=(.*)$') { $envs[$Matches[1]] = $Matches[2] } }   # both arms (e.g. WFC_TESTABILITIES=Drain,Warcry;WFC_AUTOABILITY_EVERY=600)
     if ($PairEnv -and $arm -eq 'new') { $envs[$PairEnv] = '1' }
     Run $bin $dir $envs
 }
@@ -50,6 +51,8 @@ if ($bf.Count) {
 }
 $pm = @(Select-String -LiteralPath $nl -Pattern 'PHYSMAT p-?\d+ \S+ -> (\S+)' | ForEach-Object { $_.Matches[0].Groups[1].Value })
 if ($pm.Count) { Write-Host ("new arm participant shot surfaces: " + (($pm | Group-Object | Sort-Object Count -Descending | ForEach-Object { '{0} x{1}' -f ($_.Name -replace '^.*\.', ''), $_.Count }) -join ', ')) }
+$ab = @(Select-String -LiteralPath $nl -Pattern 'ABILITYFX p(-?\d+) (\S+) ' | ForEach-Object { $_.Matches[0].Groups[2].Value })
+if ($ab.Count) { Write-Host ("new arm ABILITYFX: " + (($ab | Group-Object | ForEach-Object { '{0} x{1}' -f $_.Name, $_.Count }) -join ', ')) }
 $nf | Group-Object { $_.Groups[2].Value } | Sort-Object Count -Descending | Select-Object -First 12 | ForEach-Object { Write-Host ("   {0,5}  {1}" -f $_.Count, $_.Name) }
 Write-Host (SimHash (Join-Path $Out 'base\wfc.log') (Join-Path $Out 'new\wfc.log'))
 Write-Host "captures base vs new:"
