@@ -178,7 +178,7 @@ Party lobby menu:
    - full: "Join Game Failed" / "Could not join the game. The game is full or no longer available." (original);
    - no answer within the original's InitialConnectTimeout (50 s): the same text;
    - a different simId or protocol version (PC EXTENSION; netcode section 3): "Join Game Failed" / "This game runs a
-     different version of the rebuild." (new text);
+     different version of the rebuild." (superseded: the original $Engine.Errors.ClientOutdated text, ONLINE_MP_UI_STRINGS.md);
    - a missing map: the original's "Map Not Found" popup and text.
 4. On success the client is in the host's game lobby as a member:
    - **no host controls:** CanHostRequestGameStart false (the Start Game row greys out, as the original's member
