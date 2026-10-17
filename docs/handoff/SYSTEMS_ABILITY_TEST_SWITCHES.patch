@@ -1,6 +1,6 @@
 diff -ruN a/src/core/Application.cpp b/src/core/Application.cpp
---- a/src/core/Application.cpp	2026-10-17 10:19:03.469875800 -0500
-+++ b/src/core/Application.cpp	2026-10-17 10:19:41.190155600 -0500
+--- a/src/core/Application.cpp	2026-10-17 10:23:47.770063700 -0500
++++ b/src/core/Application.cpp	2026-10-17 10:23:47.794647000 -0500
 @@ -616,6 +616,9 @@
          if (const char* s = WFC_ENV("WFC_AUTOSWITCH_EVERY"))        // repeated NextWeapon press every N frames (soak)
              if (long n = std::atol(s); n > 0 && frame > 0 && frame % n == 0) input.pressed[(int)platform::Button::NextWeapon] = true;
@@ -12,8 +12,8 @@ diff -ruN a/src/core/Application.cpp b/src/core/Application.cpp
          if (const char* s = WFC_ENV("WFC_AUTOWALK_UNTIL"))           // release scripted input
              if (frame > std::atol(s)) {
 diff -ruN a/src/game/World.cpp b/src/game/World.cpp
---- a/src/game/World.cpp	2026-10-17 10:19:03.438267100 -0500
-+++ b/src/game/World.cpp	2026-10-17 10:19:41.160553800 -0500
+--- a/src/game/World.cpp	2026-10-17 10:23:47.779094500 -0500
++++ b/src/game/World.cpp	2026-10-17 10:23:47.804681600 -0500
 @@ -1809,7 +1809,7 @@
      }
      const double t1 = profNowMs();
@@ -58,8 +58,8 @@ diff -ruN a/src/game/World.cpp b/src/game/World.cpp
      abilityAudio_.abilityTriggered(cues_, abilityId, atPawn(), 0.0f);
      spawnAbilityTriggerFx(localPlayer_, abilityId);
 diff -ruN a/src/game/World.h b/src/game/World.h
---- a/src/game/World.h	2026-10-17 10:19:03.446294700 -0500
-+++ b/src/game/World.h	2026-10-17 10:19:41.167577900 -0500
+--- a/src/game/World.h	2026-10-17 10:23:47.787122300 -0500
++++ b/src/game/World.h	2026-10-17 10:23:47.812207800 -0500
 @@ -1351,6 +1351,7 @@
      bool bodySocketWorld(const Character& c, const std::string& socket, core::Mat4& out) const;
      void tickBodyNotifyFx(float dt);
