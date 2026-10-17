@@ -213,7 +213,7 @@ peer and dropped afterwards (the peer's address is then the key).
 | join timeout | Systems emits `JoinFailed{Timeout}` at 50 s; the frontend's own timer is a 55 s backstop |
 | pumping | one socket; whichever pump runs first (`ISession::poll`, every frontend update incl. the match, or the LockstepLayer's per-tick poll) drains it and dispatches by channel into two queues (lockstep / session+voice); each consumer reads only its queue |
 | slots / teams | the host's GameFlow decides (PickTeam: smaller team; humans take bot slots) and publishes `SessionLobby.slots`; SessionLayer owns membership / connectivity; in-match slot changes go through `SessionSlotSwap` at a tick the host's LockstepLayer picks |
-| idle kick | public sessions only (10.2: the original never kicks in private matches; phase 1 sessions are private); then the host's LockstepLayer detects 180 s without a non-idle command; SessionLayer kicks (`Kicked{Idle}` to that member, `PeerDropped{Kicked}` to the others); `kick()` stays for manual kicks |
+| idle kick | host row Kick Idle Players, default Off (10.2); when on (?WfcIdleKick=1): the host's LockstepLayer detects 180 s without a non-idle command; SessionLayer kicks (`Kicked{Idle}` to that member, `PeerDropped{Kicked}` to the others); `kick()` stays for manual kicks |
 | desync text | "The game has gone out of sync and cannot continue." - the tick goes to the log / dump only |
 
 - **Addition (agents/frontend 1c2dbd11):** `SessionMemberInfo::iconicCharacter` (std::string) - in iconic mode the member's claimed
@@ -244,23 +244,27 @@ peer and dropped afterwards (the peer's address is then the key).
   stick held at the pitch clamp and very slow turns, which an aim-delta threshold misses) or it sent team chat since its last command
   (ServerTeamSay refreshes LastActiveTime). The 0.5 deg aim test is dropped. World then calls noteRemoteCommand; the transport never
   calls it.
-- **Idle kick only in PUBLIC sessions** (Integration decision; RE 4a1f8fb: the original never kicks in private matches - TnGame.InitGame
-  clears bKickLiveIdlers when IsPrivateMatch(); MaxIdleTime 180 / bKickLiveIdlers apply to public Live matches only). World gets an
-  isPublic flag (Gameplay). Phase 1's code-joined sessions are private, so nothing is kicked; the path (180 s, the host's own player
-  never kicked [H]) stays for a later public mode.
+- **Idle kick: an online-only host row, "Kick Idle Players" (Off / On, default Off)** (Integration's latest decision, relayed by the
+  Frontend; it supersedes the isPublic wording). Off is the original's private-match behaviour (RE 4a1f8fb: TnGame.InitGame clears
+  bKickLiveIdlers when IsPrivateMatch()). On rides the match URL as `?WfcIdleKick=1` into Gameplay's MatchSettings.kickIdle: 180 s,
+  and the host's own player is never kicked [H]. Kicked{Idle} / PeerDropped{Kicked} are unchanged.
 - **No holes:** a missing command for N stalls the step (section 4). A dropped peer becomes a SlotSwap to Bot at an agreed simTick.
 - **Button count:** the Button enum is static_assert-ed to <= 32 bits.
 
-### 10.3 Identical launch on every peer (with the Frontend, 2026-10-17)
+### 10.3 Identical launch on every peer (REQUIREMENT, confirmed by Integration; with the Frontend, 2026-10-17)
 - **The problem:** today each member builds its own match URL from its local profile, with only the map and mode from the host. For
   lockstep the launch must be identical on every peer.
-- **The rule:** the host's start message (CountdownStarted) carries:
-  - `matchUrl`: the host's full launch URL, every option, the bot rows and the mode / idle flags;
-  - `seed`: the match RNG seed, chosen by the host.
-- Members launch from these verbatim. Nothing sim-affecting comes from a member's local profile; presentation settings stay local.
-- **Version check:** the first bundle carries a hash of (matchUrl, seed, the exe's sim build id). A mismatch refuses the match with
-  "different game version" instead of desyncing later.
-- **Field name:** the Frontend's choice (SessionEvent fields or SessionLobby at countdown), recorded here once picked.
+- **The launch record:** every peer starts from the host's launch record:
+  - map and mode;
+  - the URL options, including the bot rows, Iconic and WfcIdleKick;
+  - the roster (onlineSlots + names);
+  - the seed (the match RNG seed, chosen by the host).
+- **When:** the host publishes it at the load gate (with CountdownStarted or AllLoaded).
+- **Field:** `SessionEvent.launchUrl`, the host's full match URL (Frontend). Members use it verbatim when present. The roster and the
+  seed travel beside it in the same event.
+- **Members** launch from the record and never from their local profile rows; presentation settings stay local.
+- **Version check:** the first bundle carries a hash of (launch record, the exe's sim build id). A member whose record or build
+  differs refuses to start, with JoinFailed{Version}-style text, instead of desyncing later.
 
 ## 11. Phases and exit criteria
 
