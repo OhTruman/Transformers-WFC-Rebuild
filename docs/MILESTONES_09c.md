@@ -3097,3 +3097,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   by Systems: match player numbering differs per peer (local first) -> Gameplay's priority 1: a global human seat order from the
   launch record (humans + localSeat), iteration by match player index, a cross-perspective SESSIONTEST; Frontend adapts
   fillOnlineLaunch after. Systems builds INetTransport / Udp / Loopback / LockstepLayer meanwhile.
+2026-10-17 12:38 Gate tooling: the headless runner moves the regress-base same-match checks off the card (gate-base.sh HEADLESS=1: Streets TDM seed
+  1234 + PlayerBot, 160 s sim per exe, SIMHASH diff, CPU-only seconds); be54be6d's runner joins the base as a non-sim item (proved
+  once windowed). Runner exit code 1 today (init-return path), not a failure.
