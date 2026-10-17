@@ -54,8 +54,14 @@ for m in ['508', '510', '507', '504', '509']:
     blk = [r['id'].split('.', 1)[1] for r in L if r['id'].endswith(('contaminated', 'client_rect'))] + (["HD not on"] if row and 'HD requested but not on' in str(row.get('note')) else []) + (["no modern material maps"] if row and 'no modern material maps' in str(row.get('note')) else []) + (["Modern not on"] if row and "no 'Modern materials on" in str(row.get('note')) else []) + (["PBR programs failed"] if row and 'PBR programs failed' in str(row.get('note')) else [])
     if not x: rrows.append(f"| {m} | - | - | incomplete |"); rbad += 1; continue
     p50, p90 = float(x.group(1)), float(x.group(2)); fl = p50 > 16.7; flags += fl
-    rrows.append(f"| {m} | {p50:.2f} | {p90:.2f} | {'UNKNOWN (' + ', '.join(blk) + ')' if blk else ('FLAG: p50 > 16.7 ms (below 60 fps)' if fl else 'ok')} |"); rbad += bool(blk)
-lines += ["## 1b. Realistic perf (package 6 defaults + HD Enhanced, 2560x1440, 31 v 32, 1 rep, report-only)", "", "| map | p50 ms | p90 ms | note |", "|---|---|---|---|"] + rrows + [""]
+    # (package 7: in-hold X3-off / NOCORPSE arms in the same run -> the X3 cost and the bodies' RT-on share at p50)
+    def arm50(a):
+        r = next((r for r in L if r['id'] == f'lockstep.{a}.r1'), None); y = re.search(r'p50 / p90 / p99 ([\d.]+)', str(r and r.get('note')))
+        return float(y.group(1)) if y else None
+    x3, nc = arm50('x3off'), arm50('nocorpse')
+    extra = (f" {x3:.2f} | {p50 - x3:+.2f} |" if x3 is not None else " - | - |") + (f" {nc:.2f} | {p50 - nc:+.2f} |" if nc is not None else " - | - |")
+    rrows.append(f"| {m} | {p50:.2f} | {p90:.2f} |{extra} {'UNKNOWN (' + ', '.join(blk) + ')' if blk else ('FLAG: p50 > 16.7 ms (below 60 fps)' if fl else 'ok')} |"); rbad += bool(blk)
+lines += ["## 1b. Realistic perf (package defaults + HD Enhanced, 2560x1440, 31 v 32, 1 rep, report-only; X3 = 0 / NOCORPSE arms in the same run)", "", "| map | p50 ms | p90 ms | X3 = 0 p50 | X3 cost | NOCORPSE p50 | bodies' RT-on share | note |", "|---|---|---|---|---|---|---|---|"] + rrows + [""]
 verdicts.append(("Realistic perf", "UNKNOWN (blocking row)" if rbad else (f"REPORT - FLAG {flags} map(s) p50 > 16.7 ms" if flags else "REPORT - all maps >= 60 fps (p50)")))
 
 # 2 leak: lobby dips of GPU dedicated
