@@ -141,6 +141,7 @@ private:
     // Online (PC EXTENSION, ONLINE_MP_UI_STRINGS.md 1 / 4): the party lobby's Join Game row (-> TextPrompt -> Online.JoinGame)
     // and the host's join panel in the game lobby (join code, address, copy key, privacy line). Online only.
     void syncJoinGameRow(gfx::Player& p, frontend::GameFlow& flow);
+    void syncIconicVersusMenu(gfx::Player& p);
     void syncJoinPanel(gfx::Player& p, frontend::GameFlow& flow, const platform::InputFrame& in);
     float codeCopiedFor_ = 0.0f;
     std::string loadingMessageSent_;

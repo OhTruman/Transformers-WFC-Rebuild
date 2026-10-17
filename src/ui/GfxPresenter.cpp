@@ -1278,6 +1278,37 @@ void GfxPresenter::syncVolumetricRow(gfx::Player& p) {
     volumetricGateShown_ = realistic ? 1 : 0;
 }
 
+// PC EXTENSION (versus "Iconic Characters"): GameLobby_GFX's iconic menu (mc_menuMultiplayerIconicPC) is Escalation's; in a
+// versus lobby its Escalation Info row (escalationTut_mc, the Escalation tutorial) is removed and the rows below close up
+// one pitch; focus skips it. Escalation itself (GameTeamStatus 2) keeps the row.
+void GfxPresenter::syncIconicVersusMenu(gfx::Player& p) {
+    gfx::MovieClip* tut = findClipNamed(p.root(), "escalationTut_mc");
+    if (!tut || !tut->script || !tut->parent || !tut->visible) return;
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    gfx::avm1::Object* menu = tut->parent->script;
+    const double y = vm.toNumber(vm.get(tut->script, "_y"));
+    double nextY = 0.0;   // the pitch: the nearest row below
+    for (auto& [depth, child] : tut->parent->children) {
+        auto* mc = dynamic_cast<gfx::MovieClip*>(child.get());
+        if (!mc || mc == tut || !mc->script) continue;
+        const double cy = vm.toNumber(vm.get(mc->script, "_y"));
+        if (cy > y + 1.0 && (nextY == 0.0 || cy < nextY)) nextY = cy;
+    }
+    const double pitch = nextY > 0.0 ? nextY - y : 0.0;
+    for (auto& [depth, child] : tut->parent->children) {
+        auto* mc = dynamic_cast<gfx::MovieClip*>(child.get());
+        if (!mc || mc == tut || !mc->script) continue;
+        const double cy = vm.toNumber(vm.get(mc->script, "_y"));
+        if (cy > y + 1.0) vm.set(mc->script, "_y", V(cy - pitch));
+    }
+    vm.set(tut->script, "_visible", V(false));
+    const V up = vm.get(tut->script, "focusUp"), down = vm.get(tut->script, "focusDown");
+    if (menu && up.isString()) { const V a = vm.get(menu, vm.toString(up)); if (a.isObject()) vm.set(a.o, "focusDown", down); }
+    if (menu && down.isString()) { const V b = vm.get(menu, vm.toString(down)); if (b.isObject()) vm.set(b.o, "focusUp", up); }
+    frontend::FlowTrace::emit("lobby.iconicVersusMenu", {{"removed", "escalationTut_mc"}, {"provenance", "PC EXTENSION"}});
+}
+
 void GfxPresenter::syncJoinGameRow(gfx::Player& p, frontend::GameFlow& flow) {
     gfx::MovieClip* host = findClipNamed(p.root(), "hostGame_mc");
     if (!host || !host->script || !host->parent || !host->parent->script) return;
@@ -1512,6 +1543,9 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     if (graphicsPagePlayer_) syncVolumetricRow(*graphicsPagePlayer_);
     for (Open& op : movies_) {
         if (flow.online() && op.object.find("PartyLobby_GFX") != std::string::npos) syncJoinGameRow(op.movie->player(), flow);
+        if (flow.iconicMode() && flow.lobby().gameTeamStatus != 2 && op.object.find("GameLobby_GFX") != std::string::npos &&
+            (!flow.lobby().settings || flow.lobby().settings->teamTypeValue == 3))
+            syncIconicVersusMenu(op.movie->player());
         if (flow.online() && op.object.find("GameLobby_GFX") != std::string::npos) syncJoinPanel(op.movie->player(), flow, in);
         if (op.object.find("PartyLobby_GFX") != std::string::npos) syncModeOptionBots(op.movie->player(), flow);
         if (op.object.find("GameLobby_GFX") == std::string::npos) continue;

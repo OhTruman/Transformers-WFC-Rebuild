@@ -241,9 +241,10 @@ public:
     // URL's ?IconicMode. PC EXTENSION: the versus row "Iconic Characters" (default Off) turns both on. Lobby: the current settings (a member: the host's published row); match:
     // the launched URL's ?IconicMode. Versus default: false, every URL keeps ?IconicMode=0.
     bool iconicMode() const;
-    // <CurrentGame:ClaimedIconicCharacters>: the iconic characters this player's teammates hold (online members; offline
-    // none - bots play the class presets). A claim by an earlier teammate wins (the host's gate counts the later one as
-    // "no character" until it picks another one).
+    // <CurrentGame:ClaimedIconicCharacters>: the iconic characters the other players hold (GRI.RefreshClaimedCharacters
+    // over every PRI; GRI.ValidateCharacterSelection refuses a name any other PRI has - the whole PRIArray, not only
+    // teammates [CONFIRMED script, RE]). Offline none (bots play the class presets). Online the earlier claim wins: the
+    // host's gate counts the later one as "no character" until it picks another one.
     std::vector<std::string> claimedIconicCharacters() const;
     std::string lobbyUrlForTest() const { return lobby_.settings ? buildLobbyUrl(*lobby_.settings) : std::string(); }
     int humanFaction() const { return lobby_.localTeam == 1 ? 1 : 0; }   // 0 Autobots, 1 Decepticons
