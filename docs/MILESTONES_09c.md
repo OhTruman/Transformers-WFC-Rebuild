@@ -2536,3 +2536,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   on ISession + FakeSession (16-18 h, 6 groups) started; E7 + the versus <Strings:> fix merge after the shots gap.
   Experimental: presenter loop restarted 08:13 as cand15b (the 08:08 "hang" was the harness start gate waiting on Gameplay's
   headless exes; fixed bda00781).
+2026-10-17 08:14 RE lane GAMEPLAY_WEAPON_PRESENTATION_AUDIT_RE.md (39ff0082): 34 MP weapons; gaps: camera recoil / FOV kick + per-shot shake
+  authored (weapons_mp.json) but unread in src -> Gameplay, presentation-only, ahead of the perf levers; every weapon on
+  IonBlaster's spine / hand recoil -> Gameplay, batched into the one sim-identity change (with transforming actors + dying-vehicle
+  collision); shell / magazine / reload notify FX only for AssaultRifle / IonBlaster, physmat impact overrides unused, R-only
+  muzzle assets -> Systems after (B) and the online doc. Material fix (B): microcode spot check PASS on 3 representatives (force
+  field, plasma, light shafts read the alpha as its own scalar); the global candidate builds into Rebuild-Systems/work/matB/out;
+  the eye pass (Off / Faithful before vs after on all 10 maps with 360 references) is booked with Experimental after Rendering's
+  slot. RE lane next: the same audit for abilities, melee, transformation and vehicle weapons.
