@@ -76,6 +76,7 @@ with a negative control.
 | 104b31cc Decoy Trap | none in bot matches (bots never select it) | no, unless bots or the PlayerBot loadout pick it up |
 | pending: Gameplay's per-weapon recoil + melee values batch | sim (its owner records the new NAVQ references) | **yes**, as a further item when it lands |
 | pending: transforming actors + dying-vehicle collision | sim (expected) | **yes**, if merged before the head is named |
+| pending: the door head (Gameplay's transact 1b894dc7 + Rendering's door draw + (b) lighting + materials) | sim (Integration) | **yes**: only the sim part (the transact side) goes into the base; the draw / lighting / materials stay head-only |
 | 8454c173 / f46bdfe4 remote-seat paths | sim only with remote seats / a host seed | no: offline identical (seed 7 48 / 48) |
 
 The base is rebuilt once the head is named. Today's fast_af4d073_hover carries cfca1717 only.
@@ -197,7 +198,14 @@ These are also written into package-respin.sh's header.
    - WFC_MUTE=1 and WFC_NOINTERACT=1 on every exe.
    - Never edit a running gate script: run a copy.
    - Never kill anything by name: kill by PID with the parent chain checked.
-7. **The D3D12 presenter exit hang.** A 1-in-32 exit hang leaves an unkillable exe stuck in the kernel. Until Rendering's fix is
+7. **A new harness switch is checked before its first run** (Integration 2026-10-17, after a 13:04-13:06 slip).
+   - It must already be in Application_Frontend.cpp's direct-boot list (wantsFrontendBoot), and it's tested with only the env a
+     plain user would set.
+   - A switch missing from the list made WFC_NULLRENDER refuse: "WFC_NULLRENDER: only for direct-boot harnesses". The exe booted
+     the frontend windowed for about 2 min during Rendering's x14.
+   - Such a refusal is never retried before the list is fixed. Nothing that can open a window runs while another lane holds the
+     card.
+8. **The D3D12 presenter exit hang.** A 1-in-32 exit hang leaves an unkillable exe stuck in the kernel. Until Rendering's fix is
    verified, no gate arm uses WFC_D3D12PRESENT / FG, except the presenter-fix verification itself.
 
 ## Messages to Integration
