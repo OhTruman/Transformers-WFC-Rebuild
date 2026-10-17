@@ -11,12 +11,14 @@
 # GATE_BASE_NAME="398b27ef + <commits>".
 cd "F:/Transformers Rebuild/Rebuild-Experimental" || exit 1
 N=${1:?name}; shift; [ $# -ge 1 ] || { echo "list the sim commits"; exit 1; }
-T=work/ab/fast_398b27e_$N; L=work/gatebase_$N.log; : > $L
+# BASE_REF (package 7, 2026-10-17): the checkpoint the sim commits go onto (default 398b27ef = the package 6 base; package 7: af4d0731)
+BASE_REF=${BASE_REF:-398b27ef}; br=${BASE_REF:0:7}
+T=work/ab/fast_${br}_$N; L=work/gatebase_$N.log; : > $L
 TC="$PWD/.toolchain"; CM="$TC/cmake-4.4.3-windows-x86_64/bin/cmake.exe"
 st() { echo "$(date +%T) $*" | tee -a $L; }
 [ -e $T ] && { st "$T exists - remove it first (rmdir /s /q)"; exit 1; }
-st "build 398b27ef -> $T"
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/m05/build-target.ps1 -Ref 398b27ef -Name fast_398b27e_$N -Jobs 4 -NoDebug -ThirdParty work/ab/_third_party >> $L 2>&1 || { st "build-target failed"; exit 1; }
+st "build $BASE_REF -> $T"
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/m05/build-target.ps1 -Ref $BASE_REF -Name fast_${br}_$N -Jobs 4 -NoDebug -ThirdParty work/ab/_third_party >> $L 2>&1 || { st "build-target failed"; exit 1; }
 declare -A last
 for c in "$@"; do
   if [ -f "$c" ]; then   # a minimal sim-only diff against 398b27ef (when a commit's other hunks need non-sim history): applied, not byte-checked;
@@ -33,7 +35,7 @@ for c in "$@"; do
   st "applied $c ($sp): $(git show --name-only --format= $c -- $sp | tr '\n' ' ')"
 done
 bad=0; for f in "${!last[@]}"; do git show ${last[$f]}:$f | cmp -s - $T/$f && st "  same as ${last[$f]}: $f" || { st "  DIFFERS from ${last[$f]}: $f"; bad=1; }; done
-[ $bad = 0 ] || { st "byte-check failed: a listed commit depends on others - ask Integration for a diff against 398b27ef"; exit 1; }
+[ $bad = 0 ] || { st "byte-check failed: a listed commit depends on others - ask Integration for a diff against $BASE_REF"; exit 1; }
 PATH="$TC/llvm-mingw-20260922-ucrt-x86_64/bin:$PATH" "$CM" --build $T/build-release --parallel 4 >> $L 2>&1 || { st "rebuild failed"; exit 1; }
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/link-render.ps1 -Target $T | tee -a $L
 if [ -n "$VERIFY" ]; then
@@ -41,4 +43,4 @@ if [ -n "$VERIFY" ]; then
   WFC_GATE_GPU_POLICY=shared WFC_GATE_GPU_MAX_OTHERS=1 WFC_GATE_GPU_GRACE_MIN=0 powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir work/gatebase_${N}_verify -Map 508 -Arms "base|$T|;;head|$VERIFY|" -Steps 9600 -From 600 -RenderSize 1280x720 -PlayerBot 1 -Reps 1 -Seed 1234 > work/gatebase_${N}_verify.out 2>&1
   grep -o "head: steps [0-9]* ([0-9-]*), same match as 'base' [A-Za-z]*" work/gatebase_${N}_verify.out | tee -a $L
 fi
-st "done: GATE_BASE=$T GATE_BASE_NAME=\"398b27ef + $*\""
+st "done: GATE_BASE=$T GATE_BASE_NAME=\"$BASE_REF + $*\""
