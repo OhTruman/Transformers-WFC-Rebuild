@@ -409,6 +409,25 @@ print('match messages: %d game types, %d progress sounds, %d music cues' % (len(
 # all its sublevels (touch volumes from the AssetTools zones, zones, reverb, mixer, pools, flybys, beds, delays, gates,
 # remote events, sub-sequences), the per-cue-asset limits, and the announcer set of its persistent level's TnWorldInfo.
 MAPS_DIR = 'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps/'
+# The MP transforming world actors (doors / bridges): their AnimSets' HmAnimNotify_Sound cues play on every client as the transform
+# anim runs [RE MP_TRANSFORMING_ACTOR_CUES_RE], so each map that places one carries those cues too.
+TA_MANIFEST = 'F:/Transformers Rebuild/AssetTools/manifests/maps/mp_transforming_actors.json'
+ta_sets_by_map = {}
+for a in json.load(io.open(TA_MANIFEST, encoding='utf-8'))['actors']:
+    if a.get('animset'): ta_sets_by_map.setdefault(a['map'], set()).add((a['animset'], a.get('anim_sequence') or ''))
+def actor_notify_cues(sets):   # {(animset, the sequence the actor plays)}
+    out = set()
+    for s, name in sets:
+        for (pr,) in c.execute("select props from objects where class='AnimSequence' and opath like ? escape '\\'",
+                               (s.replace('_', '\\_') + '.%',)):
+            seq = json.loads(pr or '{}')
+            if seq.get('SequenceName') != name: continue
+            for n in seq.get('Notifies') or []:
+                r = c.execute('select class, props from objects where opath=?', (n.get('Notify') or '',)).fetchone()
+                if r and r[0] == 'HmAnimNotify_Sound':
+                    q = json.loads(r[1] or '{}').get('SoundCue')
+                    if q: out.add(q)
+    return out
 announcer_sets = {}
 for level_name in sorted(d for d in os.listdir(MAPS_DIR) if d.startswith('MP_') and os.path.exists(MAPS_DIR + d + '/audio.json')):
     am = json.load(io.open(MAPS_DIR + level_name + '/audio.json', encoding='utf-8'))
@@ -418,6 +437,12 @@ for level_name in sorted(d for d in os.listdir(MAPS_DIR) if d.startswith('MP_') 
            for z in am['zones'] if z.get('trigger_polygons_gltf')}
     audio_pkg = [x for x in subs if 'audio' in x.lower()]
     doc = level(level_name, subs, geo, frozenset(am['cues']), audio_pkg[0] if audio_pkg else None)
+    ta = sorted(q for q in actor_notify_cues(ta_sets_by_map.get(level_name, ())) if q not in am['cues'] and q not in doc['cues'])
+    for q in ta:
+        d = cue_tree(q)
+        if d: doc['cues'][q] = d; doc['cue_limits'][q] = cue_limits(q)
+        else: print('  WARN', level_name, 'transforming-actor cue not found', q)
+    if ta: print('%s: + %d transforming-actor notify cues' % (level_name, len(ta)))
     wi = c.execute("select props from objects where package=? and class='TnWorldInfo'", (base[0],)).fetchone()
     setname = json.loads(wi[0]).get('AnnouncerSoundEventSet') if wi else None
     if setname:
