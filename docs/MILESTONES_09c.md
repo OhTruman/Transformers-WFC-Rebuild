@@ -2978,3 +2978,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (confidence / partial) stripped, nothing removed; then installed and Systems' re-run scheduled.
 2026-10-17 11:34 Gameplay CARD FREE 11:33 (recoil eye check done, 12 runs; verdict pending). Card -> Frontend 5 min (onlinehud + iconic) ->
   Rendering slot_all.
+2026-10-17 11:35 Gameplay's recoil eye verdict: as authored, OK (shotgun / burst / pistol / launcher kick visibly; rifle + IonBlaster identical by
+  authored data; no artefacts); Integration checked the shotgun sheet; RE's second look pending, then the weapon + melee batch
+  merges (dry run on the head clean). DECISION (A) for the online local player: simulated through the remote-seat path with the
+  command carrying a camera-derived AIM POINT (eye-to-target shots land where the camera line would); vehicle facing from the
+  same field; offline unchanged; (B) a sim-side camera rejected. Systems writes the encoding into 10.2 with Gameplay.
