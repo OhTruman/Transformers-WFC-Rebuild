@@ -238,7 +238,7 @@ peer and dropped afterwards (the peer's address is then the key).
 - **World builds the MoveIntent** from the axes, aim and buttons, and judges idle itself. Any held / pressed bit, a non-zero axis, or
   an aim change > 0.5 deg against that player's previously APPLIED command counts as non-idle; World then calls noteRemoteCommand.
   The transport never calls it.
-- **No holes:** a missing command for N stalls the step (section 5). A dropped peer becomes a SlotSwap to Bot at an agreed simTick.
+- **No holes:** a missing command for N stalls the step (section 4). A dropped peer becomes a SlotSwap to Bot at an agreed simTick.
 - **Button count:** the Button enum is static_assert-ed to <= 32 bits.
 
 ## 11. Phases and exit criteria
