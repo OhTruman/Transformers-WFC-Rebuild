@@ -2932,3 +2932,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   inputs = VF interpolators but NO lens-flare VF shaders cooked anywhere: how the 32 LensFlareComponents draw is UNKNOWN;
   DecalMaterial = Material root + VF projection). RE next: the interpolated-lightmap decode for the 32 doors (~1.5 h), then the
   lens-flare runtime look, with Gameplay's recoil crops in between.
+2026-10-17 11:22 Transforming-actor prep (Rendering 4cbf8511): the 6 missing door / bridge materials merged into copies of the live
+  materials_glsl.json (BrokenHope / Remnant / Rust; gate: live + exactly those keys); hook agreed with Gameplay; the original
+  lerps several baked captures per actor by the anim position (RE decode ~1.5 h granted). Draw ships DLE-lit PARTIAL with the
+  collision in one head; the lightmapped look follows.
