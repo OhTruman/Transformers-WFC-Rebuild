@@ -51,6 +51,8 @@ void HudController::reset() {
     rewards_.clear();
     events_.clear();
     progressLabel_.clear();
+    objective_.clear();
+    sentObjective_.clear();
 }
 
 std::string HudController::killMessage(const Catalog& cat, const HudKill& k, int localTeam) {
@@ -195,6 +197,8 @@ void HudController::update(IMoviePresenter* p, const Catalog& cat, bool open, bo
             call("NotifySpectating", {f.spectating});
             call("GameMessageSpectatorMode", {f.spectating});   // the kill feed moves up 160 px while spectating
         }
+        if (!objective_.empty() && (!sentValid_ || objective_ != sentObjective_)) call("AddObjective", {objective_});
+        sentObjective_ = objective_;
         sent_ = f;
         sentValid_ = true;
     }

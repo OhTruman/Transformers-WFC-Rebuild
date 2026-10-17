@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include "frontend/CampaignObjectives.h"
 #include "frontend/Catalog.h"
 #include "frontend/Profile.h"
 #include "frontend/Session.h"
@@ -208,6 +209,8 @@ public:
     static bool isCampaignTag(const std::string& tag) { return tag == "SOLO" || tag == "CP" || tag == "CCP"; }
     bool campaign() const { return campaignForced_ || isCampaignTag(match_.modeTag); }
     void setCampaignForTest(bool on) { campaignForced_ = on; }
+    CampaignObjectives& objectives() { return objectives_; }
+    const CampaignObjectives& objectives() const { return objectives_; }
     // Kismet-driven frontend presentation (UI_FrontEnd_m Main_Sequence).
     const std::string& kismetMovie() const { return kismetMovie_; }        // SeqAct_MoviePlayer currently playing
     const std::vector<std::string>& queuedMovies() const { return movieQueue_; }   // the chain still to play
@@ -335,6 +338,7 @@ private:
     std::map<std::string, std::map<std::string, int>> settingValues_;   // class -> field -> value index
     MatchLaunch match_;
     bool campaignForced_ = false;
+    CampaignObjectives objectives_;
     bool pendingMatch_ = false, unloadWorld_ = false, quit_ = false;
 
     // Frontend Kismet state.

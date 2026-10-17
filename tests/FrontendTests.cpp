@@ -777,6 +777,46 @@ static void testSceneCamera() {
           "djDS01 " + std::to_string(dj0) + " DSbooster@250s " + std::to_string(boost));
 }
 
+static void testCampaignObjectives() {
+    // E1: the bank (test-only until AssetTools' map export carries TnWorldInfo._ObjectiveBank), the current objective,
+    // the HUD's AddObjective on change / on a fresh movie, the pause menu's ActiveObjectives, versus silent.
+    FrontendRuntime rt;
+    check(rt.init(), "objectives.init");
+    GameFlow& f = rt.flow();
+    CampaignObjectives& o = f.objectives();
+    o.setBank({"D1_ORB_OBJ01", "D1_ORB_OBJ02", "D1_ORB_OBJ03"});
+    RecordingPresenter p;
+    HudController hud;
+    HudFrame fr; fr.valid = true;
+    hud.setFrame(fr);
+    auto frame = [&]() { hud.setObjective(f.campaign() ? o.activeText() : std::string()); hud.update(&p, rt.catalog(), true, true); };
+    auto adds = [&]() { int n = 0; for (const auto& c : p.calls) n += c.rfind("_global.AddObjective(", 0) == 0; return n; };
+    o.setCurrent("D1_ORB_OBJ01", rt.catalog());
+    frame();
+    const bool versusSilent = adds() == 0 && rt.dataStores().call("ReadValue", {"<CurrentGame:ActiveObjectives>"}).s.empty();
+    f.setCampaignForTest(true);
+    p.calls.clear(); frame();
+    const bool first = adds() == 1 && p.has("_global.AddObjective(Escape the crash site)");
+    p.calls.clear(); frame(); frame();
+    const bool same = adds() == 0;
+    o.setCurrent("D1_ORB_OBJ02", rt.catalog());
+    p.calls.clear(); frame();
+    const bool next = adds() == 1 && p.has("_global.AddObjective(Secure the station)") &&
+                      rt.dataStores().call("ReadValue", {"<CurrentGame:ActiveObjectives>"}).s == "Secure the station" &&
+                      o.completedTexts(rt.catalog()) == std::vector<std::string>{"Escape the crash site"};
+    const bool unknown = !o.setCurrent("NO_SUCH_KEY", rt.catalog()) && o.current() == 1;
+    hud.update(&p, rt.catalog(), false, false);   // the HUD closes and reopens (map load): the current one again
+    p.calls.clear(); frame();
+    const bool reopened = adds() == 1 && p.has("_global.AddObjective(Secure the station)");
+    o.setCurrent("", rt.catalog());
+    p.calls.clear(); frame();
+    const bool none = adds() == 0 && rt.dataStores().call("ReadValue", {"<CurrentGame:ActiveObjectives>"}).s.empty();
+    f.setCampaignForTest(false);
+    check(versusSilent && first && same && next && unknown && reopened && none, "hud.campaign_objective",
+          std::to_string(versusSilent) + std::to_string(first) + std::to_string(same) + std::to_string(next) + std::to_string(unknown) +
+          std::to_string(reopened) + std::to_string(none));
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -791,6 +831,7 @@ int main() {
     testFpsCounter();
     testFakeSession();
     testCampaignStrings();
+    testCampaignObjectives();
     testVolumetricSetting();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);

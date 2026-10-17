@@ -93,6 +93,9 @@ public:
     void promptsChanged() { promptsDirty_ = true; }
     // Values the frontend derives itself (kept across setFrame): the OnAttackingTeam status from MatchValues.
     void setAttackingTeamStatus(std::optional<int> v) { attacking_ = v; }
+    // Campaign objective text (CAMPAIGN_HUD_PLAN.md E1): _global.AddObjective when it changes to a non-empty text, and
+    // once more on a fresh movie (a reopened HUD shows the current objective); "" (versus, no objective) sends nothing.
+    void setObjective(const std::string& text) { objective_ = text; }
     void addKill(const HudKill& k, int localTeam) { kills_.push_back({k, localTeam}); }
     void announce(const std::string& text) { announcements_.push_back(text); }   // _global.GameAnnouncement
     void reward(const std::string& text) { rewards_.push_back(text); }           // _global.RewardAnnouncement
@@ -129,6 +132,7 @@ public:
 private:
     HudFrame frame_, sent_;
     std::optional<int> attacking_;
+    std::string objective_, sentObjective_;
     std::function<std::string(const std::string&)> translate_;
     bool promptsDirty_ = false;
     std::string progressLabel_;   // the bar's last label: kept while it fades out (the observer keeps its own label)
