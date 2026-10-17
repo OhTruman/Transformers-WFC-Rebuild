@@ -103,6 +103,20 @@ public:
     // No pawn (PendingMatch: ShouldSpectateOnLogin): the controller views from its own location / rotation, which
     // GameInfo.Login took from FindPlayerStart [HIGH: stock UE3 Login + PlayerWaitingSpectating].
     void setSpectatorView(const core::Vec3& pos, float yaw) { spectating_ = true; specPos_ = pos; specYaw_ = yaw; specPitch_ = 0.0f; specFov_ = 0.0f; }
+    // Death_STRATEGY / Death_Vehicle_STRATEGY (local player death): freezes the live orbit rotation and offset, then views from the
+    // corpse bone the World feeds each tick (setDeathAnchor) until endDeathCamera (respawn). wreckYaw: the vehicle's yaw at death.
+    void beginDeathCamera(bool vehicle, float wreckYaw);
+    void setDeathAnchor(const core::Vec3& boneWorld) { deathAnchor_ = boneWorld; deathAnchorOk_ = true; }
+    void endDeathCamera() { deathCam_ = false; deathAnchorOk_ = false; }
+    bool deathCamera() const { return deathCam_; }
+    // SpectateOverTheShoulder_STRATEGY on a target pawn (the killer cam): begin / re-target = a hard cut behind the target, level.
+    void beginSpectateTarget(float targetYaw);
+    void setSpectateAnchor(const core::Vec3& targetActorLoc) { specAnchor_ = targetActorLoc; }
+    void endSpectateTarget() { specTarget_ = false; }
+    bool spectatingTarget() const { return specTarget_; }
+    // TnPawn.GibbedCameraShake (a pawn gibbed within 1000 UU of the local pawn): restarts the fades.
+    void gibbedShake() { shakeRemain_ = 0.89f; }
+    int takeSpectateCycle() { const int c = specCycle_; specCycle_ = 0; return c; }   // SwitchSpectatorTarget presses since the last call
     // Camera strategy override with pitch / FOV (TnGuidedMissileCameraStrategyType).
     void setSpectatorView(const core::Vec3& pos, float yaw, float pitch, float fov) { spectating_ = true; specPos_ = pos; specYaw_ = yaw; specPitch_ = pitch; specFov_ = fov; }
     // PlayerController state GuidingMissile: inputs cleared (the pawn stops), camera deltas steer, an ability press detonates.
@@ -197,6 +211,18 @@ private:
     core::Vec3 camOld_{0, 0, 0};                 // smoothed camera offset in target space (UE X fwd, Y right, Z up)
     bool camOldValid_ = false;
     bool spectating_ = false;
+    // Death camera state (beginDeathCamera): the frozen orbit, the anchor, the strategy blend from the live view.
+    bool deathCam_ = false, deathVehicle_ = false, deathAnchorOk_ = false;
+    float deathT_ = 0.0f, deathYaw_ = 0.0f, deathPitch_ = 0.0f;
+    core::Vec3 deathAnchor_{0, 0, 0}, deathOff_{0, 0, 0};   // deathOff_: orbit space (x forward, y right, z up), m
+    core::Vec3 deathAnchorOff_{0, 0, 0};                   // the strategy's anchor offset (camera axes, m): the trace origin
+    core::Vec3 deathFromPos_{0, 0, 0}; float deathFromYaw_ = 0.0f, deathFromPitch_ = 0.0f;
+    void deathCameraView(render::Camera& cam) const;
+    bool specTarget_ = false; core::Vec3 specAnchor_{0, 0, 0}, specOff_{1.5f, 0.0f, -0.35f}; int specCycle_ = 0; uint32_t specUiPrev_ = 0;
+    C2Smoother specOffXS_, specOffZS_;
+    void spectateView(render::Camera& cam) const;
+    float shakeRemain_ = 0.0f, shakeGenT_ = 0.0f;   // TnShakeCameraBehavior: the fade left (s); the wave generator's time
+    void applyShake(render::Camera& cam) const;
     int cantTransformCount_ = 0, forcedVehicleCount_ = 0;
     float lookScale_ = 1.0f;
     float lookUpSmoothed_ = 0.0f, tank180Cooldown_ = 0.0f;

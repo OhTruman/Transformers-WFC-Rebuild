@@ -122,6 +122,7 @@ void World::fireHitscanAs(int instigator, const Character& shooter, const Weapon
     if (hitBarrier) damageBarrier(w.damageAt(dist), w.damageType ? w.damageType : "");
     if (hitPlayer >= 0) {
         // (the local damage-taken count / direction are recorded once, in applyMatchDamage)
+        noteHitDir(dir);
         applyMatchDamage(hitPlayer, instigator, w.damageAt(dist), false, w.damageType ? w.damageType : "");
         for (BotBrain& b : bots_) {
             if (b.player == hitPlayer) { b.lastDamageTime = match_.matchTime(); b.lastAttacker = instigator; }

@@ -101,6 +101,7 @@ struct ChassisDef {
     // (robot.animations: clip name, source AnimSet export, category, additive), so a body can be assembled from AnimSets
     // parsed once and shared by every chassis (World::chassisAssets).
     struct AnimRef { std::string name, source, category; bool additive = false; };
+    std::string vehicleSkelGltf;   // character.json vehicle.source_gltf (the death sockets' mesh key)
     std::string robotSkelGltf;
     std::vector<AnimRef> robotAnims;
     std::string armGltf, armAnimGltf;         // ArmBlueprint (umodel content paths)

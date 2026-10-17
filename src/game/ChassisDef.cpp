@@ -170,6 +170,7 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     d.robotGlb = c["robot"]["glb"].asString();
     d.vehicleGlb = c["vehicle"]["glb"].asString();
     d.robotSkelGltf = c["robot"]["source_gltf"].asString();
+    d.vehicleSkelGltf = c["vehicle"]["source_gltf"].asString();
     {
         const assets::Json& an = c["robot"]["animations"];
         for (size_t i = 0; i < an.size(); ++i) {

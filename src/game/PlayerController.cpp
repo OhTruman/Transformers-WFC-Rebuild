@@ -220,6 +220,26 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
 // TransformToRobo), HoverTruck_Optimus for Hovering (and TransformToVehicle), Truck_Optimus for Driving.
 void PlayerController::updateCameraStrategy(const platform::InputFrame& in, float dt) {
     namespace cfg = core::config;
+    shakeGenT_ += dt; shakeRemain_ = std::max(0.0f, shakeRemain_ - dt);
+    {   // SwitchSpectatorTarget input (LB / ']' = +1, RB / '[' = -1), edges of the UiKey bits and the bound keys
+        const uint32_t lb = 1u << (int)platform::UiKey::LB, rb = 1u << (int)platform::UiKey::RB;
+        if (((in.uiDown & lb) && !(specUiPrev_ & lb)) || in.wasPressed(platform::Button::SpectateNext)) ++specCycle_;
+        if (((in.uiDown & rb) && !(specUiPrev_ & rb)) || in.wasPressed(platform::Button::SpectatePrev)) --specCycle_;
+        specUiPrev_ = in.uiDown;
+        if (!specTarget_) specCycle_ = 0;
+    }
+    if (specTarget_) {   // SpectateOverTheShoulder: FOV 80 (0.4); screen-space offset (150, 0, 150 / -35 / 150) by pitch, SmoothTime 0.3
+        fovCur_ = fovS_.smooth(fovCur_, 80.0f, 0.4f, dt);
+        const float f = pitchFraction(camPitch_ * 57.29578f, -75.0f, 75.0f);
+        specOff_.x = specOffXS_.smooth(specOff_.x, 1.5f, 0.3f, dt);
+        specOff_.z = specOffZS_.smooth(specOff_.z, curve3(1.5f, -0.35f, 1.5f, f), 0.3f, dt);
+        return;
+    }
+    if (deathCam_) {   // Death strategies: the live strategy state stays frozen; FOV 85, SmoothTime 0.4
+        deathT_ += dt;
+        fovCur_ = fovS_.smooth(fovCur_, 85.0f, 0.4f, dt);
+        return;
+    }
     if (!pawn_) return;
     bool vehicleForm = pawn_->moveForm() == Form::Vehicle;
     const Character::VehicleState& vs = pawn_->vehicleState();
@@ -924,8 +944,11 @@ void PlayerController::applyToPawn(World& world, float dt) {
 
 void PlayerController::updateCamera(render::Camera& cam) const {
     if (!pawn_) return;
+    cam.roll = 0.0f;   // only the death strategies roll
     namespace cfg = core::config;
     if (spectating_) { cam.pos = specPos_; cam.yaw = specYaw_; cam.pitch = specPitch_; cam.fovXDeg = specFov_ > 0.0f ? specFov_ : fovCur_; return; }
+    if (specTarget_) { spectateView(cam); applyShake(cam); return; }
+    if (deathCam_) { deathCameraView(cam); if (!deathVehicle_) applyShake(cam); return; }
     cam.pos = cameraPos() + pawn_->renderOffset();   // presentation interpolation (the sim camera / start trace are unchanged)
     cam.yaw = viewYaw_;
     cam.pitch = viewPitch_;
@@ -939,6 +962,82 @@ void PlayerController::updateCamera(render::Camera& cam) const {
         cam.pitch += amp * std::sin(6.2831853f * 12.0f * 1.37f * wiggleT_ + 1.0f);
     }
     cam.fovXDeg = fovCur_;
+    if (strategy_ == 0) applyShake(cam);   // OverTheShoulder has TnShakeCameraBehavior [vehicle strategies: PROV, not applied]
+}
+
+void PlayerController::applyShake(render::Camera& cam) const {
+    if (shakeRemain_ <= 0.0f) return;
+    const float f = shakeRemain_ / 0.89f, k = 0.55f * 0.0174533f;   // linear fades; Intensity 0.55; degrees
+    cam.yaw += k * 3.0f * std::sin(6.2831853f * 5.0f * shakeGenT_) * f;
+    cam.pitch += k * 5.0f * std::sin(6.2831853f * 4.0f * shakeGenT_) * f;
+    cam.roll += k * 0.75f * f * f;   // RollFalloff: one-sided, quadratic
+}
+
+void PlayerController::beginSpectateTarget(float targetYaw) {
+    // StartSpectating / SwitchSpectatorTarget -> Camera.Reset(): the strategy's state starts over (a hard cut).
+    deathCam_ = false;
+    specTarget_ = true;
+    shakeRemain_ = 0.0f;   // Activate -> Shaker.Reset
+    camYaw_ = targetYaw; camPitch_ = 0.0f;   // TnOrbitRotation.Reset: (0, target yaw, 0)
+    specOff_ = core::Vec3{1.5f, 0.0f, -0.35f}; specOffXS_.reset(); specOffZS_.reset();
+    fovCur_ = 80.0f; fovS_.reset();
+}
+
+void PlayerController::spectateView(render::Camera& cam) const {
+    const float yaw = camYaw_, pitch = core::clampf(camPitch_, -75.0f * 0.0174533f, 75.0f * 0.0174533f);
+    const core::Vec3 F = core::forwardFromYawPitch(yaw, pitch);
+    const core::Vec3 R = core::normalize(core::cross(core::forwardFromYawPitch(yaw, 0.0f), core::Vec3{0, 1, 0}));
+    const core::Vec3 U = core::cross(R, F);
+    const core::Vec3 focus = specAnchor_ + core::Vec3{0, 2.0f, 0};   // HmOffsetAnchorPointRelativeToActor (0, 0, 200)
+    core::Vec3 to = focus + F * (specOff_.x - 16.0f) + R * specOff_.y + U * specOff_.z;   // TnLocationOffset 1600
+    if (col_) {   // TnThirdPersoncollision: the live pull-in toward the anchor in front of the first hit
+        const core::Vec3 d = to - focus; const float len = core::length(d); float t;
+        if (len > 1e-3f && col_->segmentHit(focus, to, t)) to = focus + d * (std::max(0.0f, t * len - 0.3f) / len);
+    }
+    cam.pos = to; cam.yaw = yaw; cam.pitch = pitch; cam.fovXDeg = fovCur_; cam.roll = 0.0f;
+}
+
+void PlayerController::beginDeathCamera(bool vehicle, float wreckYaw) {
+    if (deathCam_ || spectating_) return;
+    render::Camera from; updateCamera(from);   // the live POV: the strategy blend starts from it
+    deathFromPos_ = from.pos; deathFromYaw_ = from.yaw; deathFromPitch_ = from.pitch;
+    shakeRemain_ = 0.0f;   // Activate -> Shaker.Reset
+    deathVehicle_ = vehicle;
+    // The inherited CameraState: orbit rotation and orbit location offset as the live strategy left them.
+    deathYaw_ = vehicle ? wreckYaw : viewYaw_;
+    deathPitch_ = vehicle ? -30.0f * 0.0174533f : viewPitch_;   // TnFixedOrbitRotation PitchDeg -30, bRelativeToActor
+    deathOff_ = core::Vec3{offset_.x - distCur_, offset_.y, offset_.z};
+    // The death strategy's HmOffsetAnchorPointRelativeToActor (OffsetUsesCameraRotation): robot (0, -300, 150), vehicle (-100, 0, 50).
+    deathAnchorOff_ = vehicle ? core::Vec3{-1.0f, 0.0f, 0.5f} : core::Vec3{0.0f, -3.0f, 1.5f};   // kept apart: the trace starts there
+    deathAnchor_ = pawn_ ? pawn_->actorLocation() : from.pos; deathAnchorOk_ = false;
+    deathT_ = 0.0f;
+    deathCam_ = true;
+}
+
+void PlayerController::deathCameraView(render::Camera& cam) const {
+    float yaw = deathYaw_, pitch = deathPitch_;
+    if (!deathVehicle_) {   // TnWiggler3 DefaultProfile rotation noise (pitch 0.3, yaw 0.2 deg at 1 Hz) [waveform PROV]
+        pitch += 0.3f * 0.0174533f * std::sin(6.2831853f * deathT_);
+        yaw += 0.2f * 0.0174533f * std::sin(6.2831853f * deathT_ + 1.0f);
+    }
+    const core::Vec3 F = core::forwardFromYawPitch(yaw, pitch);
+    const core::Vec3 R = core::normalize(core::cross(core::forwardFromYawPitch(yaw, 0.0f), core::Vec3{0, 1, 0}));
+    const core::Vec3 U = core::cross(R, F);
+    const core::Vec3 focus = deathAnchor_ + F * deathAnchorOff_.x + R * deathAnchorOff_.y + U * deathAnchorOff_.z;   // the anchor point
+    core::Vec3 to = focus + F * deathOff_.x + R * deathOff_.y + U * deathOff_.z;
+    if (col_) {   // TnThirdPersoncollision: pull in toward the anchor in front of the first hit (as the live default)
+        const core::Vec3 d = to - focus; const float len = core::length(d); float t;
+        if (len > 1e-3f && col_->segmentHit(focus, to, t)) to = focus + d * (std::max(0.0f, t * len - 0.3f) / len);
+    }
+    // The strategy blend: the old-to-new POV delta lerps to 0 over TransitionTime (robot 1.25 s, vehicle 1.0) [curve PROV, as live].
+    const float k = 1.0f - smoothstep01(deathT_ / (deathVehicle_ ? 1.0f : 1.25f));
+    cam.pos = to + (deathFromPos_ - to) * k;
+    cam.yaw = yaw + std::remainder(deathFromYaw_ - yaw, 6.2831853f) * k;
+    cam.pitch = pitch + (deathFromPitch_ - pitch) * k;
+    cam.fovXDeg = fovCur_;
+    cam.roll = deathVehicle_ ? -1.0f * 0.0174533f                                            // TnDutchRoll RollDeg -1
+                             : 0.1f * 0.0174533f * std::sin(6.2831853f * deathT_ + 2.0f);   // TnWiggler3 roll 0.1 deg, 1 Hz
+    cam.roll *= 1.0f - k;   // blended in with the strategy transition (the live view has no roll)
 }
 
 } // namespace game

@@ -111,6 +111,8 @@ int vkFor(Button b) {
         case Button::DebugPrevStart: return VK_F7;
         case Button::Dash:         return VK_SHIFT; // [CONF] Shift = "Ability0 | VehicleSpecialMove";
         case Button::RenderMode:   return VK_F9;    // PC ADAPTATION: the Ray Tracing mode cycle
+        case Button::SpectateNext: return VK_OEM_6;   // ']' SwitchSpectatorTarget +1 [CONF RE KILLER_CAM_RE]
+        case Button::SpectatePrev: return VK_OEM_4;   // '[' -1
                                                     // PlayerInCarForm.StartVehicleSpecialMove -> set_DashingInput
         default:                   return 0;
     }

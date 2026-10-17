@@ -7,6 +7,7 @@
 #include "core/LoadYield.h"
 #include "game/CharacterAudio.h"
 #include "game/GpuSkin.h"
+#include "game/GibRagdoll.h"
 #include "game/DamageTarget.h"
 #include "render/Renderer.h"
 #include "render/Camera.h"
@@ -45,6 +46,7 @@ struct DamageDeathTypeDef { const char* damage; const char* death; };
 struct DeathChooserDef { const char* group; const char* anim; int weight; };
 struct ChassisDeathDef { const char* chassis; const char* robotDeaths; const char* vehicleDeaths; const char* hull; float transfer; };
 #include "game/DeathEntries.inc"
+#include "game/DeathFx.inc"   // [Systems] the entries' gibs / PlayEffect effects (agents/systems 299d85da)
 // Vehicle headlights: INVENTED PLACEMENT (the original authors none; Realistic-only addition, Integration 2026-10-16).
 struct HeadlightDef { const char* chassis; const char* bone; float pos[3]; float dir[3]; float color[3]; };
 #include "game/VehicleHeadlights.inc"
@@ -807,7 +809,7 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
     { float th; if (barrierRayHit(origin, dir, range, th) && th <= targetDist + 0.05f) { targetDist = th; hitBarrier = true; hitTarget = nullptr; hitDes = nullptr; hitOpp = nullptr; } }
     float dist = (hitTarget || hitDes || hitOpp || hitBarrier) ? targetDist : bestDist;
     if (hitBarrier) damageBarrier(w.damageAt(dist), w.damageType ? w.damageType : "");
-    if (hitOpp) applyMatchDamage(hitOpp->matchPlayer(), localPlayer_, w.damageAt(dist), false, w.damageType);   // InstantHitDamage, falloff, the weapon's InstantHitDamageTypes[0]
+    if (hitOpp) { noteHitDir(dir); applyMatchDamage(hitOpp->matchPlayer(), localPlayer_, w.damageAt(dist), false, w.damageType); }   // InstantHitDamage, falloff, the weapon's InstantHitDamageTypes[0]
     core::Vec3 hitPoint = origin + dir * dist;
     if (hitTarget) hitTarget->applyDamage(w.damageAt(dist));   // [CONF] range-based falloff
     if (hitDes) hitDes->applyDamage(*this, w.damageAt(dist));
@@ -1555,7 +1557,7 @@ void World::addTransientLight(const LiveTransientLight& l) {
 void World::tickTransientLights(float dt) {
     for (size_t i = 0; i < transientLights_.size();) {
         LiveTransientLight& l = transientLights_[i];
-        if ((l.age += dt) >= std::max(l.lightTime, l.rampIn) + l.rampOut) { l = transientLights_.back(); transientLights_.pop_back(); }
+        if ((l.age += dt) >= std::max(l.lightTime, l.rampIn) + l.rampOut || (l.cutAt >= 0.0f && l.age >= l.cutAt)) { l = transientLights_.back(); transientLights_.pop_back(); }
         else ++i;
     }
 }
@@ -1960,6 +1962,7 @@ void World::joinStep() {
     if (!deferredHooks_.empty()) { std::vector<std::function<void()>> hooks; hooks.swap(deferredHooks_); for (auto& h : hooks) h(); }
     if (!fxOps_.empty()) { std::vector<FxOp> ops; ops.swap(fxOps_); for (const FxOp& op : ops) runFxOp(op); }
     tickCorpses(pendingDt_);   // [Gameplay] presentation only (main thread, after the deferred corpse requests ran)
+    tickDeathCamera(pendingDt_);
 }
 
 // The background part's presented() goes to presentedBack_: the front's unconsumed queues stay first, the back's follow.
@@ -3014,11 +3017,13 @@ bool World::launchMatch(const MatchLaunch& l) {
 }
 
 bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe, const std::string& damageType) {
+    const bool hitDirOk = pendingHitDirOk_; const core::Vec3 hitDir = pendingHitDir_; pendingHitDirOk_ = false;
     if (!matchActive_ || match_.state() != Match::State::InProgress || victim < 0 || (size_t)victim >= match_.players().size()) return false;
     if (qaGod_ && victim == localPlayer_) return false;   // DEV / QA TOOLING god mode
     if (!match_.players()[(size_t)victim].alive) return false;
     // TnPlayerPawn.TakeDamage: teammates' damage is discarded except TnDamageTypeAOE (NotifyHitByFriendlyFire).
     if (instigator != victim && match_.sameTeam(instigator, victim) && !aoe) return false;
+    if (hitDirOk) lastHitDir_[victim] = hitDir; else lastHitDir_.erase(victim);
     Health* h = nullptr;
     MatchOpponent* opp = nullptr;
     if (victim == localPlayer_) h = &player_.pawn().health();
@@ -3442,10 +3447,10 @@ void World::tickMatch(float dt) {
         for (const auto& rd : sc.radiusDamage) {
             LOG_INFO("match: HurtRadius %.0f within %.0f m (%s)", rd.damage, rd.radius, rd.damageType.c_str());
             if (!localDead_ && core::length(pc.actorLocation() - rd.pos) <= rd.radius && radiusVisible(rd.pos, pc.actorLocation()))
-                applyMatchDamage(localPlayer_, rd.instigator, rd.damage, true, rd.damageType);
+                { noteHitDir(pc.actorLocation() - rd.pos); applyMatchDamage(localPlayer_, rd.instigator, rd.damage, true, rd.damageType); }
             for (MatchOpponent* o : opponents_)
                 if (o->spawned() && core::length(o->position() - rd.pos) <= rd.radius && radiusVisible(rd.pos, o->pawn().actorLocation()))
-                    applyMatchDamage(o->matchPlayer(), rd.instigator, rd.damage, true, rd.damageType);
+                    { noteHitDir(o->pawn().actorLocation() - rd.pos); applyMatchDamage(o->matchPlayer(), rd.instigator, rd.damage, true, rd.damageType); }
         }
         std::vector<Match::SpawnModifier> mods;
         for (const ObjectiveObject& o : mapState_.objectives()) {
@@ -4512,12 +4517,12 @@ void World::radiusDamage(const core::Vec3& at, float damage, float radius, int i
     auto colR = [](const Character& c) { return c.cylinderRadius(c.moveForm()); };
     if (matchActive_ && !localDead_) {
         float k = falloff(player_.pawn().actorLocation(), colR(player_.pawn()));
-        if (k > 0.0f && radiusVisible(at, player_.pawn().actorLocation())) applyMatchDamage(localPlayer_, instigator, damage * k, false, type);
+        if (k > 0.0f && radiusVisible(at, player_.pawn().actorLocation())) { noteHitDir(player_.pawn().actorLocation() - at); applyMatchDamage(localPlayer_, instigator, damage * k, false, type); }
     }
     for (MatchOpponent* o : opponents_) {
         if (!o->spawned()) continue;
         float k = falloff(o->pawn().actorLocation(), colR(o->pawn()));
-        if (k > 0.0f && radiusVisible(at, o->pawn().actorLocation())) applyMatchDamage(o->matchPlayer(), instigator, damage * k, false, type);
+        if (k > 0.0f && radiusVisible(at, o->pawn().actorLocation())) { noteHitDir(o->pawn().actorLocation() - at); applyMatchDamage(o->matchPlayer(), instigator, damage * k, false, type); }
     }
     for (Destructible* d : destructibles_)
         if (d->state() == 0) {
@@ -4789,6 +4794,7 @@ void World::applyShockwave(Character& pc, int self) {
     auto hit = [&](int victim, const Character& v) {
         if (victim == self || core::length(v.actorLocation() - at) > 25.0f || !radiusVisible(at, v.actorLocation())) return;
         const core::Vec3 dir = v.actorLocation() - at;
+        noteHitDir(dir);
         applyMatchDamage(victim, self, 65.0f, false, "TransGame.TnDamageTypeShockwave");
         if (core::length(dir) > 1e-4f && !(match_.settings().teamGame && match_.sameTeam(victim, self)))
             applyKnockback(victim, core::normalize(dir) * 700000.0f, "TransGame.TnDamageTypeShockwave");
@@ -5049,6 +5055,7 @@ void World::tickMeleeFor(Character& pc, int self, float dt) {
             float t;
             if (line && line->segmentHit(pc.actorLocation(), c, t)) continue;
             pc.meleeHit_.push_back(vp); ++pc.meleeHitCount_;
+            noteHitDir(c - pc.actorLocation());
             applyMatchDamage(vp, self, damage, false, type);
             onPawnHitEffect(type, v.chassis().id, vp, c);   // [Systems M08p] the victim's melee hit effect
             // Momentum = normal(victim - attacker) x Impulse (WeaponAttack 30000, flag / bomb 80000, Whirlwind 2000) [CONF].
@@ -6861,6 +6868,13 @@ void World::requestCorpse(const Character& pawn, int player, int owner, bool ai,
     q.jet = q.vehicle && pawn.vehicleParams().form == VehicleFormType::Jet; q.ai = ai;
     q.airborne = !q.vehicle && !pawn.onGround(); q.hovering = !q.vehicle && pawn.hoverState_ > 0;
     q.pos = pawn.actorLocation(); q.vel = pawn.velocity(); q.fwd = core::forwardFromYawPitch(pawn.yaw(), 0.0f);
+    if (pawn.chassis().positionSocket.valid) { q.socketBone = pawn.chassis().positionSocket.bone; q.socketLocal = pawn.chassis().positionSocket.local; }
+    {   // "content/<pkg>/<mesh>.gltf" -> "<pkg>.<mesh>" (Systems' kDeathSockets key)
+        const std::string& g = q.vehicle ? pawn.chassis().vehicleSkelGltf : pawn.chassis().robotSkelGltf;
+        const size_t s1 = g.rfind('/'), s0 = s1 == std::string::npos ? std::string::npos : g.rfind('/', s1 - 1), dot = g.rfind('.');
+        if (s0 != std::string::npos && dot != std::string::npos && dot > s1) q.meshKey = g.substr(s0 + 1, s1 - s0 - 1) + "." + g.substr(s1 + 1, dot - s1 - 1);
+    }
+    { auto hd = lastHitDir_.find(player); if (hd != lastHitDir_.end()) { q.hitDir = hd->second; q.haveHitDir = true; lastHitDir_.erase(hd); } }
     // The killing hit (the newest kill / suicide record for this victim): headshot and the killer's position (the momentum types).
     for (auto it = match_.gameplayEvents().rbegin(); it != match_.gameplayEvents().rend(); ++it) {
         if (it->victim != player || (it->type != GameplayEventType::Kill && it->type != GameplayEventType::Suicide && it->type != GameplayEventType::EnvironmentDeath)) continue;
@@ -6869,14 +6883,17 @@ void World::requestCorpse(const Character& pawn, int player, int owner, bool ai,
         if (k && it->instigator != player) { q.killerPos = k->actorLocation(); q.haveKiller = true; }
         break;
     }
-    presentHook([this, q] { spawnCorpse(q); });
+    presentHook([this, q] {
+        spawnCorpse(q);
+        if (q.player == localPlayer_) player_.controller().beginDeathCamera(q.vehicle, std::atan2(-q.fwd.x, -q.fwd.z));
+    });
 }
 
 void World::spawnCorpse(const CorpseRequest& q) {
     if (corpses_.size() >= 32) corpses_.erase(corpses_.begin());   // a cap for very large matches (oldest first)
     Corpse c;
     c.player = q.player; c.owner = q.owner; c.model = q.model; c.world = q.world; c.start = q.pose; c.vehicle = q.vehicle; c.jet = q.jet;
-    c.pos = q.pos; c.vel = q.vel; c.chassis = q.chassis;
+    c.pos = q.pos; c.vel = q.vel; c.chassis = q.chassis; c.socketBone = q.socketBone; c.socketLocal = q.socketLocal; c.meshKey = q.meshKey;
     c.rng = 0x9e3779b9u ^ (unsigned)(q.player * 7919) ^ (unsigned)(match_.matchTime() * 1000.0f);
     // TnDeathFactory.Create -> Picker.Pick: the first entry, in authored order, all of whose Types are active; none -> the default death
     // (no animation, TotalTime 1.0). TnVehicleDeathPicker: Car (car / truck) / Tank + Moving (over 50 UU/s) or Stationary; Plane.
@@ -6895,10 +6912,12 @@ void World::spawnCorpse(const CorpseRequest& q) {
         if (q.hovering) active.push_back("Hovering");
         if (q.airborne) active.push_back("Airborne");
         // Momentum: TearOffMomentum yaw in the pawn's frame (the push away from the killer; PROV until the hit momentum is kept).
-        core::Vec3 m = q.haveKiller ? q.pos - q.killerPos : core::Vec3{0, 0, 0}; m.y = 0.0f;
+        core::Vec3 m = q.haveHitDir ? q.hitDir : q.haveKiller ? q.pos - q.killerPos : core::Vec3{0, 0, 0}; m.y = 0.0f;
         const float ml = core::length(m);
         const float cosA = ml > 1e-3f ? core::dot(m * (1.0f / ml), core::Vec3{q.fwd.x, 0.0f, q.fwd.z}) : 1.0f;
-        active.push_back(cosA >= 0.7071f ? "ForwardMomentum" : cosA <= -0.7071f ? "BackwardMomentum" : "SideMomentum");
+        const core::Vec3 rgt = core::normalize(core::cross(core::Vec3{q.fwd.x, 0.0f, q.fwd.z}, core::Vec3{0, 1, 0}));
+        const float sinA = ml > 1e-3f ? core::dot(m * (1.0f / ml), rgt) : 0.0f;
+        active.push_back(cosA >= 0.7071f ? "ForwardMomentum" : cosA <= -0.7071f ? "BackwardMomentum" : sinA > 0.0f ? "RightMomentum" : "LeftMomentum");
         const char* dt = damageDeathType(q.damageType);
         if (*dt) active.push_back(dt);
     }
@@ -6917,6 +6936,26 @@ void World::spawnCorpse(const CorpseRequest& q) {
         if (e->mods & 4u) c.fxAt = c.frand() * 0.5f;   // PlayEffect after Delay U(0, 0.5)
     }
     c.total = tMin + (tMax - tMin) * c.frand();
+    // The entry's custom gibs and effects (DeathFx.inc): gibs blueprint effects, chunks, skeletal gibs, decal, PlayEffect.
+    if (e) {
+        const std::string bpFx = q.vehicle && bpName.empty() ? std::string("SharedCarDeaths") : bpName;
+        for (int pass = 0; pass < 2 && c.fxRow < 0; ++pass)
+            for (size_t i = 0; i < sizeof(kDeathFx) / sizeof(kDeathFx[0]); ++i)
+                if (bpFx == (pass == 0 ? kDeathFx[i].blueprint : (q.vehicle ? "SharedCarDeaths" : "SharedRobotDeaths")) && !std::strcmp(kDeathFx[i].entry, c.entry)) { c.fxRow = (int)i; break; }
+    }
+    if (c.fxRow >= 0) {
+        const DeathFxEntry& R = kDeathFx[(size_t)c.fxRow];
+        c.noGibs = R.nGibFx == 0 && !R.chunks && !R.skeletalGibs; c.noSkelGib = !R.skeletalGibs; c.noDecal = !R.decals;
+        float dm = 0.0f; for (int i = 0; i < R.nPlay; ++i) dm = std::max(dm, R.play[i].delayMax);
+        if (c.fxAt >= 0.0f && dm <= 0.0f) c.fxAt = 0.0f;   // no authored Delay (vehicles, Energy): at once (the frand draw stays)
+    }
+    // TnPawn.Dying.BeginState: ShouldInstaGib after PlayDeath (CanInstaGib on every playable blueprint): the damage type's ShouldGib.
+    {   // (both forms: the same pawn and blueprint)
+        const std::string& d = q.damageType;
+        const bool insta = d == "Engine.DmgType_Fell" || d == "TransGame.TnDamageTypeBruteBackpack" || d == "TransGame.TnDamageTypeDeathAnim" ||
+                           (d == "TransGame.TnDamageTypeEmpShotgun" && q.haveKiller && core::length(q.killerPos - q.pos) <= 10.0f);
+        if (insta) { c.instaGib = true; c.total = 0.0f; }
+    }
     // The animation: an AnimSet chooser group (weighted pick of the anims this model has), else a clip of that name, else none (the
     // animator's lookup fails: the pose holds, as the default death).
     if (*c.animName) {
@@ -6940,12 +6979,43 @@ void World::spawnCorpse(const CorpseRequest& q) {
     ++corpsesMade_;
 }
 
+static bool deathFxLogOn() { static const bool on = std::getenv("WFC_CORPSETEST") || std::getenv("WFC_DEATHFXLOG"); return on; }
+
+bool World::Corpse::deathSocketWorld(const char* socket, core::Vec3& out) const {
+    if (meshKey.empty() || !model || glob.empty()) return false;
+    for (const DeathSocket& d : kDeathSockets) {
+        if (meshKey != d.mesh || std::strcmp(socket, d.socket)) continue;
+        const int bn = model->nodeByName(d.bone);
+        if (bn < 0 || (size_t)bn >= glob.size()) return false;
+        out = core::transformPoint(world * glob[(size_t)bn], core::Vec3{d.x, d.z, d.y} * 0.01f);   // UE bone frame -> the export's
+        return true;
+    }
+    return false;
+}
+
 void World::gibCorpse(Corpse& c) {
     c.gibbed = true;
+    for (LiveTransientLight& l : transientLights_) if (l.key == 1000 + c.player && l.cutAt < 0.0f) l.cutAt = l.age + 1.0f;   // LifeSpan 1
+    if (!localDead_ && core::length(player_.pawn().actorLocation() - c.pos) < 10.0f) player_.controller().gibbedShake();   // GibbedCameraShake
+    if (c.noGibs) {   // Melee: the Defrag dissolve alone
+        if (deathFxLogOn()) LOG_INFO("DEATHFX p%d %s entry %s gib: fx [] chunks 0/0 skel 0/0 decal 0", c.player, c.chassis.c_str(), c.entry);
+        return;
+    }
+    std::string fxList;   // DEATHFX: the gibs blueprint's effects as spawned (template @ PositionSocket / pos)
     // TnPawn.Dying.Gib -> the form's PlayGib: the gibs blueprint's effect state at PositionSocket (+100 UU up for the chunk cone).
-    const char* fx = c.jet ? "FX_Explosives_p.FX.Exp_Death_Lrg_FX" : c.vehicle ? "FX_Explosives_p.FX.TF_Death_MED_FX" : "FX_Explosives_p.FX.Exp_Death_FX";
-    const core::Vec3 at = c.pos + core::Vec3{0, c.vehicle ? 0.0f : 0.5f, 0};
-    if (renderer_) fxStepSpawn(fx, at, core::Vec3{0, 1, 0}, core::Vec3{0, 0, -1}, -1, true);
+    const DeathFxEntry* fxr = c.fxRow >= 0 ? &kDeathFx[(size_t)c.fxRow] : nullptr;
+    if (fxr) {   // the gibs blueprint's effect state at PositionSocket + its offset (UU: Z up)
+        core::Vec3 ps = c.pos; const bool psOk = c.deathSocketWorld("PositionSocket", ps);
+        for (int i = 0; i < fxr->nGibFx; ++i) fxList += std::string(fxList.empty() ? "" : ", ") + fxr->gibFx[i].tmpl + (psOk ? "@PositionSocket" : "@pos");
+        for (int i = 0; i < fxr->nGibFx && renderer_; ++i)
+            fxStepSpawn(fxr->gibFx[i].tmpl, ps + core::Vec3{fxr->gibFx[i].x, fxr->gibFx[i].z, fxr->gibFx[i].y} * 0.01f, core::Vec3{0, 1, 0}, core::Vec3{0, 0, -1}, -1, true);
+    } else {
+        const char* fx = c.jet ? "FX_Explosives_p.FX.Exp_Death_Lrg_FX" : c.vehicle ? "FX_Explosives_p.FX.TF_Death_MED_FX" : "FX_Explosives_p.FX.Exp_Death_FX";
+        core::Vec3 ps = c.pos; const bool psOk = c.deathSocketWorld("PositionSocket", ps);
+        const core::Vec3 at = ps + core::Vec3{0, c.vehicle ? 0.0f : 0.5f, 0};
+        fxList = std::string(fx) + (psOk ? "@PositionSocket" : "@pos");
+        if (renderer_) fxStepSpawn(fx, at, core::Vec3{0, 1, 0}, core::Vec3{0, 0, -1}, -1, true);
+    }
     if (!gibMeshesTried_ && renderer_) {
         gibMeshesTried_ = true;
         for (int i = 1; i <= 11; ++i) {
@@ -6956,7 +7026,7 @@ void World::gibCorpse(Corpse& c) {
     }
     // HmGibsDestructionEffect: NumChunks 4, LinearSpeed U(800, 2000) UU/s (jets U(2000, 4000)) in a 60 deg half-cone about +Z from a
     // 100 UU sphere 100 UU up, AngularSpeed U(12000, 20000) (rotator units / s) about a random axis, LifeSpan 5, TF_Death_GibsTrail_FX.
-    for (int i = 0; i < 4 && !gibMeshes_.empty(); ++i) {
+    for (int i = 0; i < 4 && !gibMeshes_.empty() && (!fxr || fxr->chunks); ++i) {
         CorpseChunk k;
         k.mesh = (int)(c.frand() * (float)gibMeshes_.size()) % (int)gibMeshes_.size();
         const float th = 6.2831853f * c.frand(), cz = 1.0f - c.frand() * 0.5f, sz = std::sqrt(std::max(0.0f, 1.0f - cz * cz));
@@ -6968,6 +7038,46 @@ void World::gibCorpse(Corpse& c) {
         k.w = (12000.0f + 8000.0f * c.frand()) * (6.2831853f / 65536.0f);
         if (renderer_) k.fx = fxStepSpawnPlain("FX_Explosives_p.FX.TF_Death_GibsTrail_FX", k.p, core::normalize(k.v + core::Vec3{1e-3f, 0, 0}), core::Vec3{0, 1, 0});
         c.chunks.push_back(k);
+    }
+    // The death scorch (robots): DeathDecal_MAT on the floor below the pawn origin (actorLocation: the capsule centre, as UE3).
+    static const bool scorchOn = std::getenv("WFC_DEATHSCORCH") != nullptr;   // gated until the runtime-decal blend is fixed (Rendering)
+    if (scorchOn && !c.vehicle && !c.noDecal && renderer_ && collision_.valid()) {
+        const float y0 = c.pos.y;
+        float gy; core::Vec3 n;
+        if (collision_.groundHeight(c.pos.x, c.pos.z, y0, 0.0f, gy, n) && gy >= y0 - 3.0f && std::fabs(n.y) >= 0.5f) {
+            unsigned h = c.rng ^ 0x5bd1e995u;
+            auto hrand = [&h]() { h ^= h << 13; h ^= h >> 17; h ^= h << 5; return (float)(h >> 8) / 16777216.0f; };
+            const float sz = (800.0f + 150.0f * hrand()) * 0.01f;
+            renderer_->spawnDecal("FX_Decals_p.DeathDecal_MAT", core::Vec3{c.pos.x, gy, c.pos.z}, core::Vec3{0, -1, 0}, sz, sz, 3.0f, 360.0f * hrand(), 30.0f);
+        }
+    }
+    // TnSkeletalGibSpawner (robots): one of the two templates, at PositionSocket in the gib mesh's reference pose, at rest.
+    if (!c.vehicle && !c.noSkelGib && renderer_) {
+        if (!skelGibModelsTried_) {
+            skelGibModelsTried_ = true;
+            for (int g = 0; g < 2; ++g) {
+                std::unique_ptr<assets::SkinnedModel> m = std::make_unique<assets::SkinnedModel>();
+                if (assets::loadSkinnedGlb(assetRoot() + gibMeshPath(g), *m) && m->valid()) { resolveModelTextures(*m); skelGibModels_[g] = std::move(m); }
+                else LOG_INFO("skeletal gib %s: not loaded", gibMeshPath(g));
+            }
+        }
+        unsigned h = c.rng ^ 0x27d4eb2fu;
+        auto hrand = [&h]() { h ^= h << 13; h ^= h >> 17; h ^= h << 5; return (float)(h >> 8) / 16777216.0f; };
+        const int g = hrand() < 0.5f ? 0 : 1;   // Templates[Rand(2)]
+        const float life = 5.0f + 10.0f * hrand();   // LifeSpan U(5, 15) (Brute's {15, 5}: the same range)
+        if (skelGibModels_[g]) {
+            core::Vec3 at = c.pos;   // Owner.Mesh.GetSocketWorldLocation('PositionSocket'), the body's pose at the gib
+            const int sn = c.socketBone.empty() || !c.model ? -1 : c.model->nodeByName(c.socketBone);
+            if (sn >= 0 && (size_t)sn < c.glob.size()) { const core::Mat4 w = c.world * c.glob[(size_t)sn] * c.socketLocal; at = core::Vec3{w.m[12], w.m[13], w.m[14]}; }
+            core::Mat4 rot = c.world; rot.m[12] = rot.m[13] = rot.m[14] = 0.0f;   // the pawn's Rotation (mesh yaw convention)
+            size_t nb = 0, nj = 0;
+            const GibBodyDef* bd = gibBodies(g, nb); const GibJointDef* jd = gibJoints(g, nj);
+            std::unique_ptr<GibRagdoll> rd = std::make_unique<GibRagdoll>();
+            if (rd->init(*skelGibModels_[g], core::Mat4::translate(at) * rot, bd, nb, jd, nj)) {
+                c.skelGib = std::move(rd); c.skelGibModel = skelGibModels_[g].get(); c.skelGibAge = 0.0f; c.skelGibLife = life;
+                c.skelGib->globals(c.skelGibGlob); buildPalette(*c.skelGibModel, c.skelGibGlob, c.skelGibPalette); c.skelGibSerial = ++skelGibSerial_;
+            }
+        }
     }
     // TnSkeletalGibSpawner (vehicles): the form's DefaultSkeletalGibTemplate hull at PositionSocket, TransferVelocityMultiplier x the vehicle's
     // velocity plus the radial force U(300, 700) (PROV: a rigid upward kick; no per-bone physics), LifeSpan U(3, 5) (jets 7), the Defrag
@@ -6991,6 +7101,69 @@ void World::gibCorpse(Corpse& c) {
                 c.hullDefragTime = c.jet ? 6.0f : 4.5f;
             }
         }
+    }
+    if (deathFxLogOn())
+        LOG_INFO("DEATHFX p%d %s entry %s gib: fx [%s] chunks %d/%d skel %d/%d decal %d", c.player, c.chassis.c_str(), c.entry, fxList.c_str(),
+                 (int)c.chunks.size(), (!fxr || fxr->chunks) ? 4 : 0, c.skelGib ? 1 : 0, (!c.vehicle && !c.noSkelGib) ? 1 : 0, (!c.vehicle && !c.noDecal) ? 1 : 0);
+}
+
+// Death camera anchor: the local corpse's bone (robot C_Spine01_Lumbar01_XB, vehicle C_Reference_XR) while the body stands; once
+// the pawn is destroyed (gib) or the body is gone the anchor stays where it was (the original's anchor freezes). Ends at respawn.
+// A valid spectator target: a spawned, live pawn, on the spectator's team or the killer (until the first cycle press).
+bool World::specValid(int p) const {
+    if (p < 0 || p == localPlayer_ || (size_t)p >= match_.players().size() || !match_.players()[(size_t)p].alive) return false;
+    if (!participantPawn(p)) return false;
+    return match_.sameTeam(p, localPlayer_) || (specKillerOk_ && p == specKiller_);
+}
+
+void World::tickDeathCamera(float dt) {
+    PlayerController& ctl = player_.controller();
+    if (!localDead_) {   // respawned: RestartPlayer -> OverTheShoulder + PlayerCamera.Reset (a hard cut)
+        if (ctl.deathCamera()) ctl.endDeathCamera();
+        if (ctl.spectatingTarget()) { ctl.endSpectateTarget(); if (renderer_) renderer_->notifyCameraCut("spectate end"); }
+        specTarget_ = specKiller_ = -1; specKillerOk_ = true;
+        return;
+    }
+    // PlayerSpectating after MinRespawnDelay 3.0 s: the killer cam (SpectateOverTheShoulder on the target).
+    if (matchActive_ && localPlayer_ >= 0 && match_.spectating(localPlayer_)) {
+        const int n = (int)match_.players().size();
+        auto firstValid = [&](int from, int step) { for (int k = 1; k <= n; ++k) { const int p = ((from + step * k) % n + n) % n; if (specValid(p)) return p; } return -1; };
+        auto cut = [&](int p) {
+            specTarget_ = p;
+            if (const Character* t = participantPawn(p)) { ctl.beginSpectateTarget(t->yaw()); ctl.setSpectateAnchor(t->actorLocation()); }
+            if (renderer_) renderer_->notifyCameraCut("spectate target");
+        };
+        if (!ctl.spectatingTarget()) {   // StartSpectating(_LastPawnWhoKilledMe)
+            specKiller_ = -1; specKillerOk_ = true; specRecheck_ = 0.0f;
+            for (auto it = match_.gameplayEvents().rbegin(); it != match_.gameplayEvents().rend(); ++it)
+                if (it->victim == localPlayer_ && (it->type == GameplayEventType::Kill || it->type == GameplayEventType::Suicide || it->type == GameplayEventType::EnvironmentDeath)) {
+                    if (it->instigator != localPlayer_) specKiller_ = it->instigator;
+                    break;
+                }
+            const int p = specValid(specKiller_) ? specKiller_ : firstValid(-1, 1);
+            if (p >= 0) cut(p);
+        } else {
+            if (const int c = ctl.takeSpectateCycle()) {   // SwitchSpectatorTarget: the first press drops the killer exemption
+                specKillerOk_ = false;
+                const int p = firstValid(specTarget_, c > 0 ? 1 : -1);
+                if (p >= 0 && p != specTarget_) cut(p);
+            }
+            if ((specRecheck_ += dt) >= 1.0f) {   // the 1.0 s recheck: a dead / gone target moves to the first valid pawn
+                specRecheck_ = 0.0f;
+                if (!specValid(specTarget_)) { const int p = firstValid(-1, 1); if (p >= 0) cut(p); }   // none: stay (no LevelCamera)
+            }
+            if (const Character* t = specTarget_ >= 0 && specValid(specTarget_) ? participantPawn(specTarget_) : nullptr) ctl.setSpectateAnchor(t->actorLocation());
+        }
+        if (ctl.spectatingTarget()) return;
+    }
+    if (!ctl.deathCamera()) return;
+    for (auto it = corpses_.rbegin(); it != corpses_.rend(); ++it) {
+        const Corpse& c = *it;
+        if (c.player != localPlayer_) continue;
+        if (c.gibbed || !c.model || c.glob.empty()) break;
+        const int n = c.model->nodeByName(c.vehicle ? "C_Reference_XR" : "C_Spine01_Lumbar01_XB");
+        ctl.setDeathAnchor(n >= 0 && (size_t)n < c.glob.size() ? core::transformPoint(c.world * c.glob[(size_t)n], core::Vec3{0, 0, 0}) : c.pos);
+        break;
     }
 }
 
@@ -7023,7 +7196,26 @@ void World::tickCorpses(float dt) {
         if (!c.gibbed) {
             if (c.fxAt >= 0.0f && c.t >= c.fxAt) {   // TnDeathModifierPlayEffect (robot Exp_Death_Sm_FX at Head_FX + BoosterSocket_C; vehicle A)
                 c.fxAt = -1.0f;
-                if (renderer_) {
+                if (deathFxLogOn() && c.fxRow >= 0) {
+                    const DeathFxEntry& R = kDeathFx[(size_t)c.fxRow];
+                    std::string pl;
+                    for (int i = 0; i < R.nPlay; ++i) { core::Vec3 tmp; pl += std::string(pl.empty() ? "" : ", ") + R.play[i].tmpl + "@" + (c.deathSocketWorld(R.play[i].socket, tmp) ? R.play[i].socket : "fallback"); }
+                    LOG_INFO("DEATHFX p%d entry %s play: [%s]", c.player, c.entry, pl.c_str());
+                }
+                if (renderer_ && c.fxRow >= 0) {
+                    const DeathFxEntry& R = kDeathFx[(size_t)c.fxRow];
+                    for (int i = 0; i < R.nPlay; ++i) {
+                        const char* so = R.play[i].socket;
+                        core::Vec3 at = c.pos + core::Vec3{0, c.vehicle ? 1.0f : 1.5f, 0};   // BoosterSocket_C / TargetingSocket [PROV]
+                        const char* bone = !std::strcmp(so, "Head_FX") ? "C_Spine04_Head_XB" : !std::strcmp(so, "Chest_FX") ? "C_Spine02_Lumbar02_XB" : nullptr;
+                        if (!std::strcmp(so, "VaporTrailSocket_R")) at = c.pos;
+                        const int bn = bone && c.model ? c.model->nodeByName(bone) : -1;
+                        if (bn >= 0 && (size_t)bn < c.glob.size()) { const core::Mat4 w = c.world * c.glob[(size_t)bn]; at = core::Vec3{w.m[12], w.m[13], w.m[14]}; }
+                        else if (bone && !std::strcmp(so, "Head_FX")) at = c.pos + core::Vec3{0, 3.0f, 0};
+                        c.deathSocketWorld(so, at);   // the authored socket (kDeathSockets) overrides the placement above
+                        fxStepSpawn(R.play[i].tmpl, at, core::Vec3{0, 1, 0}, core::Vec3{0, 0, -1}, -1, true);
+                    }
+                } else if (renderer_) {
                     if (c.vehicle) fxStepSpawn(c.frand() < 0.5f ? "FX_Explosives_p.FX.TF_Death_Buildup_FX" : "FX_Explosives_p.FX.TF_Death_MED_FX", c.pos + core::Vec3{0, 1.0f, 0}, core::Vec3{0, 1, 0}, core::Vec3{0, 0, -1}, -1, true);
                     else {
                         core::Vec3 head = c.pos + core::Vec3{0, 3.0f, 0};
@@ -7069,6 +7261,17 @@ void World::tickCorpses(float dt) {
                 }
             }
         }
+        if (c.skelGib) {
+            c.skelGibAge += dt;
+            if (c.skelGibAge >= c.skelGibLife) c.skelGib.reset();   // LifeSpanExpired: hidden, destroyed (no fade)
+            else {
+                live = true;
+                if (!c.skelGib->asleep()) {
+                    c.skelGib->step(dt, collision_.valid() ? &collision_ : nullptr);
+                    c.skelGib->globals(c.skelGibGlob); buildPalette(*c.skelGibModel, c.skelGibGlob, c.skelGibPalette); c.skelGibSerial = ++skelGibSerial_;
+                }
+            }
+        }
         if (!live) { corpses_.erase(corpses_.begin() + (long)i); continue; }   // removed (the original: TotalTime + 1 s; chunks / wreck live on)
         ++i;
     }
@@ -7102,6 +7305,14 @@ void World::drawCorpseGibs(render::IRenderer& r) const {
             if (k.age < 5.0f && k.mesh >= 0 && (size_t)k.mesh < gibMeshes_.size()) {
                 r.drawMesh(gibMeshes_[(size_t)k.mesh], core::Mat4::translate(k.p) * core::Mat4::rotateY(k.ang) * core::Mat4::rotateX(k.ang * 0.7f), core::Vec3{1, 1, 1});
             }
+        if (c.skelGib && c.skelGibModel && !c.skelGibPalette.empty()) {
+            r.setDrawOwner(c.owner);
+            if (c.owner) r.setCharacterColors(render::CharacterColors{});
+            render::MeshData& bind = bindMeshOf(*c.skelGibModel); syncMats(bind.mats, c.skelGibModel->mats);
+            drawSkinnedGpu(r, bind, c.skelGibModel->joints, c.skelGibModel->weights, c.skelGibPalette, nullptr, 1.0f, core::Mat4{}, core::Vec3{1, 1, 1},
+                           c.skelGibKey.get(), c.skelGibSerial, 0);
+            r.setDrawOwner(0);
+        }
         if (c.hull) {
             r.setDrawOwner(c.owner);
             if (c.owner) r.setCharacterColors(render::CharacterColors{});

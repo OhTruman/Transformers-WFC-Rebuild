@@ -31,6 +31,7 @@
 #include "game/Collision.h"
 #include "render/Mesh.h"
 #include "assets/SkinnedModel.h"
+#include "game/GibRagdoll.h"
 #include "audio/Audio.h"
 #include "game/WeaponMesh.h"
 #include "game/WeaponFx.h"
@@ -668,8 +669,16 @@ public:
         bool vehicle = false, jet = false, headShrink = false, defrag = false, gibbed = false;
         int headNode = -1;
         unsigned mods = 0; const char* entry = "Default"; const char* animName = "";
+        bool instaGib = false, noGibs = false, noSkelGib = false, noDecal = false;   // ShouldInstaGib; the entry's custom gibs
+        // The robot skeletal gib (one ragdoll, after the gib): its model, physics, life, and GPU-skin draw state.
+        std::unique_ptr<GibRagdoll> skelGib; const assets::SkinnedModel* skelGibModel = nullptr; float skelGibAge = 0.0f, skelGibLife = 0.0f;
+        std::vector<core::Mat4> skelGibGlob, skelGibPalette; std::unique_ptr<uint8_t> skelGibKey = std::make_unique<uint8_t>(0); unsigned skelGibSerial = 0;
+        std::string socketBone; core::Mat4 socketLocal;   // the robot's PositionSocket (bone + local), for the gib location
+        std::string meshKey;   // kDeathSockets key of the dying form's mesh
+        bool deathSocketWorld(const char* socket, core::Vec3& out) const;   // an authored death socket's world position
         core::Vec3 pos{}, vel{};
         float fxAt = -1.0f;                               // PlayEffect modifier: start time (-1 none / done)
+        int fxRow = -1;                                   // the blueprint entry's row in DeathFx.inc (-1: the default death)
         render::MeshData mesh; std::vector<core::Mat4> glob;
         // Gib: chunks and the vehicle hull wreck
         std::vector<CorpseChunk> chunks;
@@ -686,16 +695,30 @@ public:
         int player = -1, owner = 0; const assets::SkinnedModel* model = nullptr; core::Mat4 world; assets::LocalPose pose;
         std::string chassis, damageType; bool vehicle = false, jet = false, headshot = false, airborne = false, hovering = false, ai = true;
         core::Vec3 pos{}, vel{}, fwd{1, 0, 0}, killerPos{}; bool haveKiller = false;
+        core::Vec3 hitDir{}; bool haveHitDir = false;   // TearOffMomentum direction of the killing hit (lastHitDir_)
+        std::string socketBone; core::Mat4 socketLocal;   // PositionSocket
+        std::string meshKey;   // the source skeletal mesh opath ("<pkg>.<mesh>") of the dying form (kDeathSockets)
     };
     std::vector<Corpse> corpses_;
     uint64_t corpsePoseSerial_ = 0;                        // unique pose serials for drawDynamicMeshPosed (corpses move in corpses_)
     std::map<std::string, std::unique_ptr<render::MeshData>> hullMeshes_;   // hull wreck glTFs by path (bind pose)
+    std::unique_ptr<assets::SkinnedModel> skelGibModels_[2];   // GIB_Body_SKEL, GIB_LowBody2_SKEL (loaded at the first robot gib)
+    bool skelGibModelsTried_ = false;
+    unsigned skelGibSerial_ = 0;
     std::vector<render::MeshHandle> gibMeshes_; bool gibMeshesTried_ = false; // TR_Death_Gibs_p RB_Gib_01..11
     int corpsesMade_ = 0;                                  // diagnostics (BOTTEST / WFC_CORPSETEST)
+    // TearOffMomentum direction of each player's last applied damage (presentation only: the death picker's momentum types).
+    // A hit site calls noteHitDir just before applyMatchDamage; the call consumes it (no note = no direction).
+    core::Vec3 pendingHitDir_{0, 0, 0}; bool pendingHitDirOk_ = false;
+    std::unordered_map<int, core::Vec3> lastHitDir_;
+    void noteHitDir(const core::Vec3& d) { const float l = core::length(d); pendingHitDirOk_ = l > 1e-4f; if (pendingHitDirOk_) pendingHitDir_ = d * (1.0f / l); }
     void requestCorpse(const Character& pawn, int player, int owner, bool ai, const std::string& damageType);
     void presentBotDeathNow(MatchOpponent& o, const char* damageType);   // a bot death that despawns before tickMatch's event
     void spawnCorpse(const CorpseRequest& q);
     void tickCorpses(float dt);
+    void tickDeathCamera(float dt);   // the local player's death camera anchor and the killer cam (presentation; after tickCorpses)
+    int specTarget_ = -1, specKiller_ = -1; bool specKillerOk_ = true; float specRecheck_ = 0.0f;   // the killer cam's target state
+    bool specValid(int p) const;
     void gibCorpse(Corpse& c);
     void drawCorpses(render::IRenderer& r) const;
     void drawCorpseGibs(render::IRenderer& r) const;
@@ -1443,7 +1466,8 @@ private:
     // A live gameplay light: muzzle (rampIn 0, lightTime = MuzzleFlashDuration) or death ramp (RampLightProperties: brightness
     // ramps 0 -> 1 over rampIn, holds until lightTime from the start, then ramps out over rampOut). key: shooter / 1000 + victim.
     struct LiveTransientLight { core::Vec3 pos; core::Vec3 color; float radius = 0.0f, falloff = 0.0f, rampIn = 0.0f, lightTime = 0.0f,
-                                rampOut = 0.0f, age = 0.0f; int key = 0; bool rtOnly = false; };   // rtOnly: RT-era effect light (Realistic only)
+                                rampOut = 0.0f, age = 0.0f; int key = 0; bool rtOnly = false;
+                                float cutAt = -1.0f; };   // cutAt >= 0: the owning pawn is destroyed at that age (the light goes with it)   // rtOnly: RT-era effect light (Realistic only)
     std::vector<LiveTransientLight> transientLights_;
     int unkeyedDeaths_ = 0;
     int fxLightSerial_ = 0;

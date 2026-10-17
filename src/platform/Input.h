@@ -22,6 +22,7 @@ enum class Button {
     Ability1,  // Ctrl = Ability1 (Ability0 is Shift = Button::Dash in robot form) [CONF Controls card]   // Swap Weapons: PC PgUp / PgDn (and the mouse wheel) [CONF Controls card]   // jet Hover Up / Down: PC C / V [CONF Controls card, TnPlayerInput.KeyDescriptions]
     DebugNextStart, DebugPrevStart,   // test only (not WFC): F6 / F7 cycle the authored player starts
     RenderMode,   // PC ADAPTATION: F9 cycles the Ray Tracing mode (Off / Faithful / Realistic) for side-by-side comparison
+    SpectateNext, SpectatePrev,   // SwitchSpectatorTarget +1 / -1 while spectating: keyboard ']' / '[' (pad LB / RB arrive as UiKey bits)
     Count
 };
 
