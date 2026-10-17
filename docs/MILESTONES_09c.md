@@ -3409,3 +3409,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 15:48 Escalation data (AssetTools, GO): both maps ship the ORIGINAL Escalation nav mesh (NavigationCell 469 / 625 + tactical / path
   nodes) = the authored bot nav for the mode; plan A geometry per generator / event target, B original navmesh in bot_nav schema
   (primary), C closed-doors bot_nav (cross-check), D SurvivalData rows (fallback UNKNOWN -> RE asked). ~30 min CPU.
+2026-10-17 15:51 USER (2026-10-17 15:51): hold ALL new builds until everything incl. Escalation is in the next build; no VPS for now: peer-to-peer only, but
+  build the entire lobby-service system VPS-ready. -> Systems: codes encode the host endpoint (UPnP + optional STUN), LAN
+  broadcast discovery for public lists, the lobby service written + loopback-tested with a configurable endpoint; Frontend:
+  Lobby Service address setting, "service needed" over the internet, Escalation in Game Settings; Gameplay: E1-E6 after the
+  online pieces.
