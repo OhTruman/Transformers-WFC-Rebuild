@@ -61,3 +61,28 @@ set aside for package 6. Plan and findings: RENDERING_X3_VOLUMETRICS.md.
 - X6.
 - X7: the RT lightmap super-sample (item 7's deferred part).
 - The FX VelocityOverLife decode (AssetTools 7b1908a queue), so effect particles move as authored.
+
+## 4. Mine / explosion saturation (user item, 2026-10-17): scope after the 360 evidence
+
+Evidence: integration docs/handoff/RENDERING_HDR_SCENE_PATH_RE.md + SYSTEMS_HDR_SHADER_DECODE.md.
+- **360 path:** 7e3 scene colour with bias 3, resolved /8, so the real ceiling is 3.984. The gather's min(c, 4) is a no-op
+  above it. The visible clip is that ceiling, then the uber post's saturate.
+- **Faithful:** stays exact, unchanged.
+
+What Realistic already has: the GL scene target is FP16. The soft-bloom gather clamps at uBloomMax 16, not 4, and the
+tone curve rolls off instead of clipping (wfcFilmShoulder + the X1 white roll to a warm white of the pixel's own hue).
+So the core already has headroom above 3.98 in Realistic.
+
+What remains is how much of the frame the flash covers (item 1's bar: Gorge step 1080 near-white 55-62 %). The treatment:
+1. **Flash term:** item 1's design (flash share F, fast attack / slow release, exposure and bloom mix scaled by
+   smoothstep(F0, F1, F)).
+2. **Core path audit:** check that no Realistic-path pass before the tone curve still clamps at 4 or saturates. Candidates:
+   - the additive particle blend into the FP16 target;
+   - any min(c, 4) left in the composite;
+   - the TAA / FSR input range.
+   A clamp found there is lifted for Realistic only.
+3. **Roll-off check:** the white roll's last stage (to pure white by 8 x whiteHi) is the remaining "saturation" lever for
+   the core. If the eye sheet still reads as a flat white disc, lower whiteMix for F > F0 only.
+
+Eye sheet: Gorge step 1080 and one Molten mine close-up, against the bar above. Off / Faithful identity unchanged.
+Estimate 4-5 h (not a two-hour item): queued after X6, X7 and the Streets haze.
