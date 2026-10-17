@@ -3060,3 +3060,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (the 5 extended decks have no nav cells: off-mesh 17 %). Decision (c): BrokenHope versus = doors open, bridges retracted
   (Escalation start state) in this patch; AssetTools regenerates BrokenHope's nav with the decks baked in later (no versus boot
   there yet). Gameplay posts the transact patch at base parity.
+2026-10-17 12:17 All 32 WFC campaign Kismet classes decoded (RE d677248): the campaign scripting step is fully specified (general VM + 36 doc'd +
+  51 stock natives + these 32; native H parts: Conversation sequencing, the special-spawn caller).
