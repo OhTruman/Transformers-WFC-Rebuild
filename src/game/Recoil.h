@@ -41,6 +41,21 @@ inline RecoilDef ionBlasterRightHandRecoil() {
     return d;
 }
 
+// Per-weapon recoil: the firing weapon's resolved {spine, right hand} pair (WeaponRecoilTable.inc); unknown / null id = the archetype.
+struct WeaponRecoilDef { const char* id; RecoilDef spine, hand; };
+inline const WeaponRecoilDef& weaponRecoil(const char* weaponId) {
+    static const WeaponRecoilDef kTable[] = {
+#include "game/WeaponRecoilTable.inc"
+    };
+    if (weaponId)
+        for (const WeaponRecoilDef& d : kTable) {
+            const char* a = d.id; const char* b = weaponId;
+            while (*a && *a == *b) { ++a; ++b; }
+            if (!*a && !*b) return d;
+        }
+    return kTable[0];
+}
+
 // Runtime state of one recoil skel-control. [MED] update law reconstructed from UE3
 // GameSkelCtrl_Recoil: restart -> TimeToGo=TimeDuration, sin offsets 0 or random*2pi; each tick
 // SinOffset += Frequency*dt, Offset = Alpha*Amplitude*sin(SinOffset), Alpha = smoothstep(TimeToGo/TimeDuration).

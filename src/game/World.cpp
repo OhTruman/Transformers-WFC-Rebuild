@@ -2986,6 +2986,7 @@ void World::fillPresented(PresentedFrame& p) {
                 param(m, "TeamID", (float)id);
                 m.relation = id == 0 ? 0 : (id == 2 ? 2 : 1);
                 m.label = std::to_string(ob.pointNumber);                     // NodeID
+                param(m, "NodeID", (float)ob.pointNumber);                   // the marker material's point number
                 if (ob.beingCaptured) param(m, "Flashing", 1.0f);
                 m.action = id == 0 ? "Defend" : "Capture";
             } else if (ob.markerType == "KingOfTheHill") {                     // only the Active zone
@@ -3631,7 +3632,7 @@ void World::remoteFire(SeatRef& s, Weapon& w, const core::Vec3& aimPt, bool cons
     const int p = s.player;
     pc.exposeSelf();
     if (consume) w.onFired();
-    pc.notifyFired();
+    pc.notifyFired(w.def ? w.def->id : nullptr);   // per-shot skeletal recoil, the weapon's values (seat path)
     if (p == localPlayer_) player_.controller().onLocalShot(w.def ? w.def->id : nullptr);   // the local seat: camera recoil + shake
     const core::Vec3 eye = botEye(pc), d = core::normalize(aimPt - eye);   // from the eye toward the aim point
     if (pc.moveForm() == Form::Vehicle && !pc.isTransforming() && &w == pc.vehicleWeapon()) {
@@ -5947,6 +5948,17 @@ void World::loadWeaponPhysmats(const std::string& mapDir, const render::MeshData
     }
 }
 
+// The chassis' player TnMeleeSet (CharacterData.MeleeSet): 0 HeavyMedium, 1 HeavySmall, 2 LightMedium, 3 LightSmall, -1 unlisted.
+static int meleeSetOf(const char* chassisId) {
+    static const struct { const char* id; int set; } kSets[] = {
+        {"Tank", 0}, {"Truck", 0}, {"Truck7", 0}, {"Jet5", 0}, {"Jet7", 0}, {"Tank2", 0}, {"Tank3", 0}, {"Tank4", 0}, {"Tank5", 0}, {"Truck5", 0},
+        {"Minion2", 1},
+        {"Jet", 2}, {"Car5", 2}, {"Jet2", 2}, {"Jet3", 2}, {"Jet4", 2}, {"Jet6", 2}, {"Jet8", 2}, {"Truck2", 2}, {"Truck3", 2}, {"Truck4", 2}, {"Truck6", 2},
+        {"Car", 3}, {"Car2", 3}, {"Car3", 3}, {"Car4", 3}, {"Car6", 3}, {"Car7", 3}};
+    if (chassisId) for (const auto& s : kSets) if (std::strcmp(s.id, chassisId) == 0) return s.set;
+    return -1;
+}
+
 void World::startLocalMelee(bool whirlwind) {
     if (localPlayerDead()) return;
     startMeleeFor(player_.pawn(), localPlayer_, whirlwind, player_.controller().viewYaw());
@@ -5970,8 +5982,8 @@ void World::startMeleeFor(Character& pc, int self, bool whirlwind, float viewYaw
     }
     if (pc.meleeCarrier_) {
         // FindAttack: current weapon MeleeWeaponType MWT_Flag / MWT_Bomb -> Melee_Mace (chooser _01/_02/_03), 9999, AttackDash
-        // Speed 0 (no lunge), GroundSpeedMultiplier 0.75 [CONF TnMeleeSet]. Clip lengths / sweep times from the anim set when
-        // the robot export lacks the clip.
+        // Speed 0 (no lunge; LightMedium: 3000 for 1 s), GroundSpeedMultiplier 0.75 [CONF TnMeleeSet]. Clip lengths / sweep times
+        // from the anim set when the robot export lacks the clip.
         static const char* kMace[3] = {"Melee_Mace_01", "Melee_Mace_02", "Melee_Mace_03"};
         static const float kMaceLen[3] = {1.033f, 1.233f, 1.167f};
         const int k = pc.meleeAlternate_++ % 3;
@@ -5979,9 +5991,9 @@ void World::startMeleeFor(Character& pc, int self, bool whirlwind, float viewYaw
         pc.playAction(kMace[k], false);
         pc.meleeLen_ = kMaceLen[k];
         if (const assets::SkinnedModel* m = pc.currentModel()) { int ci = m->clipByName(kMace[k]); if (ci >= 0) pc.meleeLen_ = m->clips[(size_t)ci].duration; }
-        return;
+        if (meleeSetOf(pc.chassis().id.c_str()) != 2) return;   // only LightMedium's flag / bomb attacks dash
     }
-    if (pc.meleePoke_) {
+    if (pc.meleePoke_ || pc.meleeCarrier_) {
         // fall through to the assist lunge
     } else if (whirlwind) {
         pc.meleeLen_ = 5.9f;
@@ -5990,7 +6002,7 @@ void World::startMeleeFor(Character& pc, int self, bool whirlwind, float viewYaw
     }
     // AnimSet chooser: Melee_EnergonSword -> _01 / _03 alternately; clip length (1.0 s authored) from the model when present.
     const char* clip = (pc.meleeAlternate_++ % 2) ? "Melee_EnergonSword_03" : "Melee_EnergonSword_01";
-    if (!pc.meleePoke_) {
+    if (!pc.meleePoke_ && !pc.meleeCarrier_) {
     pc.playAction(clip, false);
     pc.meleeLen_ = 1.0f;
     if (const assets::SkinnedModel* m = pc.currentModel()) { int ci = m->clipByName(clip); if (ci >= 0) pc.meleeLen_ = m->clips[(size_t)ci].duration; }
@@ -6012,7 +6024,10 @@ void World::startMeleeFor(Character& pc, int self, bool whirlwind, float viewYaw
         if (std::acos(core::clampf(core::dot(d * (1.0f / dist), fwd), -1.0f, 1.0f)) > half) continue;
         if (dist < best) { best = dist; pc.lungeDir_ = d * (1.0f / dist); }
     }
-    if (best < 1e9f) { pc.lungeRemain_ = 0.25f; pc.setYaw(std::atan2(-pc.lungeDir_.x, -pc.lungeDir_.z)); }
+    if (best < 1e9f) {
+        pc.lungeRemain_ = pc.meleeCarrier_ ? 1.0f : 0.25f; pc.lungeSpeed_ = pc.meleeCarrier_ ? 30.0f : 25.0f;   // AttackDash Time / Speed
+        pc.setYaw(std::atan2(-pc.lungeDir_.x, -pc.lungeDir_.z));
+    }
 }
 
 void World::tickLocalMelee(float dt) { tickMeleeFor(player_.pawn(), localPlayer_, dt); }
@@ -6071,8 +6086,9 @@ void World::tickMeleeFor(Character& pc, int self, float dt) {
             noteHitDir(c - pc.actorLocation());
             applyMatchDamage(vp, self, damage, false, type);
             onPawnHitEffect(type, v.chassis().id, vp, c);   // [Systems M08p] the victim's melee hit effect
-            // Momentum = normal(victim - attacker) x Impulse (WeaponAttack 30000, flag / bomb 80000, Whirlwind 2000) [CONF].
-            const float impulse = whirl ? 2000.0f : pc.meleeCarrier_ ? 80000.0f : pc.meleePoke_ ? 200000.0f : 30000.0f;
+            // Momentum = normal(victim - attacker) x Impulse (WeaponAttack 30000 / LightMedium 20000, flag / bomb 80000, Whirlwind 2000) [CONF].
+            const float impulse = whirl ? 2000.0f : pc.meleeCarrier_ ? 80000.0f : pc.meleePoke_ ? 200000.0f
+                                : meleeSetOf(pc.chassis().id.c_str()) == 2 ? 20000.0f : 30000.0f;
             core::Vec3 dir = c - pc.actorLocation();
             if (core::length(dir) > 1e-4f) applyKnockback(vp, core::normalize(dir) * impulse, type);
         }

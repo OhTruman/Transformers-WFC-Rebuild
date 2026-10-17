@@ -210,6 +210,7 @@ public:
     int meleeState_ = 0;
     float meleeT_ = 0.0f, meleeLen_ = 0.0f, lungeRemain_ = 0.0f;
     core::Vec3 lungeDir_{0, 0, 0};
+    float lungeSpeed_ = 25.0f;   // AttackDash Speed (m/s) of the lunge in progress
     int meleeSweep_ = -1;                 // index of the active sweep window
     std::vector<int> meleeHit_;           // match players already hit by the active sweep
     int meleeAlternate_ = 0;
@@ -554,7 +555,9 @@ public:
     bool weaponRestored() const;
 
     // A shot was fired this step: restart the weapon recoil skel-controls (TnRecoiler.Recoil).
-    void notifyFired() {   // deterministic per pawn and shot (the recoil phase reaches the simulation through hand-bone sockets)
+    void notifyFired(const char* weaponId) {   // deterministic per pawn and shot (the recoil phase reaches the simulation through hand-bone sockets)
+        const WeaponRecoilDef& r = weaponRecoil(weaponId);   // the firing weapon's SpineRecoil / RightHandRecoil
+        recoilSpine_.def = r.spine; recoilHand_.def = r.hand;
         const unsigned s = (++recoilShots_ * 2654435761u) ^ (unsigned)(uintptr_t)stepCounter_ * 0x85ebca6bu ^ 0x9e3779b9u;
         recoilSpine_.start(s | 1u); recoilHand_.start((s * 0xc2b2ae35u) | 1u);
     }

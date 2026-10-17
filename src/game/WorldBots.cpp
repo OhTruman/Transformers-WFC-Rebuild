@@ -150,7 +150,7 @@ void World::botFire(BotBody o, BotBrain& b, Weapon& w, const core::Vec3& aimPoin
     Character& pc = o.pawn();
     pc.exposeSelf();
     w.onFired();
-    pc.notifyFired();
+    pc.notifyFired(w.def ? w.def->id : nullptr);
     ++b.shots;
     if (pc.moveForm() == Form::Vehicle) ++b.vehicleShots;
     const core::Vec3 eye = botEye(pc);

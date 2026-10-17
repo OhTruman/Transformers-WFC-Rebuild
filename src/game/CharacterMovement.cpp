@@ -813,10 +813,11 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
         if (c.hoverRemain_ <= 0.0f || in.wantJump) c.hoverState_ = 0;
     }
     const bool hovering = c.hoverState_ == 2;
-    // Melee AttackDash: yaw-only lunge at Speed 2500 UU/s for Time 0.25 s, then Velocity x EndVelocityScaler 0.3 [CONF].
+    // Melee AttackDash: yaw-only lunge at Speed (2500 UU/s; LightMedium flag / bomb 3000) for Time (0.25 s; 1 s), then Velocity x
+    // EndVelocityScaler 0.3 [CONF].
     if (c.lungeRemain_ > 0.0f) {
         c.lungeRemain_ -= dt;
-        v.x = c.lungeDir_.x * 25.0f; v.z = c.lungeDir_.z * 25.0f;
+        v.x = c.lungeDir_.x * c.lungeSpeed_; v.z = c.lungeDir_.z * c.lungeSpeed_;
         if (c.lungeRemain_ <= 0.0f) { v.x *= 0.3f; v.z *= 0.3f; }
         hv = core::Vec3{v.x, 0, v.z};
     }

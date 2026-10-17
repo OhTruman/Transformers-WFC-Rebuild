@@ -884,7 +884,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
             const Weapon& w = sw;
             pawn_->exposeSelf();          // TnWeapon.OnPreServerFire -> ExposeSelf (decloak)
             static const bool noRecoil = std::getenv("WFC_NORECOIL") != nullptr;   // A/B diagnostic
-            if (!noRecoil) pawn_->notifyFired();   // per-shot skeletal recoil (TnRecoiler)
+            if (!noRecoil) pawn_->notifyFired(w.def ? w.def->id : nullptr);   // per-shot skeletal recoil (TnRecoiler), the weapon's values
             onLocalShot(w.def ? w.def->id : nullptr);   // TnPlayerController.OnWeaponFired: camera recoil + shake
             // TnPlayerPawn.GetWeaponStartTraceLocation: ViewLoc + ProjectOnTo(Location - ViewLoc, view dir) - the point on the
             // camera's crosshair ray nearest the pawn. Instant-hit / beam traces run from there along the aim for the weapon range
