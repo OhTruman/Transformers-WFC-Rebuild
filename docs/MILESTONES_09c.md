@@ -3400,3 +3400,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   flare mode + X7 slot + campaign materials; AssetTools sweep now + Escalation data; RE Escalation asks + original public-match
   rules. Sweep so far: Integration -94 GB, Rendering -165 GB, Gameplay -80 GB, Frontend -26.5 GB, Systems -3.9 GB; F: 267 GB.
 2026-10-17 15:46 AssetTools sweep done: 31 approved paths, 12.9 GB, live indexes verified intact. F: 279 GB free. Day total freed ~385 GB.
+2026-10-17 15:46 ONLINE_LOBBY_FLOW_V2.md merged (Frontend): Private Match hosts straight into the lobby; host-only Game Settings page; member menu
+  = Create a Character / Teletran I / Friends; Find Match = Quick Match (original playlist) or Browse Games. Labels: "Game
+  Settings" (user's words), "Create a Character" (original). Frontend builds it against FakeSession now.
