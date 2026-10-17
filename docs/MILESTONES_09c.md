@@ -3361,3 +3361,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   02 / Base_SUN DistMap last-point lift is authored-heavy: PC option = first point, listed to the user). Candidate to be RE-NAMED
   ~16:00 = 057aded3 + flares + Systems' lead-delay auto-D (rttjump stall 24.1 -> 0.68 s; five profiles exit 0) + verify_slim
   package 7 data checks. Experimental holds the eye pass for the final head (b).
+2026-10-17 15:21 MERGED 51d32eaf Systems' lead-based auto-D (rttjump stall 24.1 -> 0.68 s) + netshim rttjump + verify_slim 'package 7 data:' row;
+  c71ff133 gatebase/WEAPON_sim_only_af4d.patch. Regress base COMPLETE: base + transact + weapon == 057aded3 on all 9001 steps at the
+  gate's exact settings (control differs at 1558); the recoil explanation withdrawn (gate doc: "verified against 057aded3").
+  Offline SIMHASH identical. Waiting on Rendering's flare patch for the final candidate.
