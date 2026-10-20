@@ -29,4 +29,5 @@ PYTHONDONTWRITEBYTECODE=1 "$PY" -I tools/fidelity/matb_sheet.py work/eyepass/${N
 if [ -d work/eyepass/${N}_before/views ]; then
   PYTHONDONTWRITEBYTECODE=1 "$PY" -I tools/fidelity/matb_sheet.py work/eyepass/${N}_before/views work/eyepass/${N}_after/views $O/views "$MAPS" "$MODES" --sub . --materials "$MATS" --top 5 >> $L 2>&1 || st "views sheet failed"
 fi
+{ echo; echo "Exe (both arms): $EXE${EXE_SHA:+ (integration $EXE_SHA)}. Roots: before $BEFORE_ROOT, after $AFTER_ROOT (one snapshot of integration's render data at $(stat -c %y "$BEFORE_ROOT" | cut -c1-16); the after arm = the same + the (B) entries of Systems' MATFIX_MANIFEST.json)."; } >> $O/MATB.md
 st "MATERIAL EYE PASS $N DONE: $O/MATB.md, $O/sheet_<map>.png"
