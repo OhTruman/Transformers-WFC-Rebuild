@@ -4030,3 +4030,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   black frames = menus (Mission Failed, scoreboard). Open: the A1 lift matinee Interp_15149 never starts in the menu run
   with an idle human (Gameplay asked: trigger = human in the pod? else a bug); esc_p05 cyan shape = GFx wave intro? (Frontend
   asked). Post-build: silence poses for non-resident units.
+2026-10-23 11:04 Eye-pass follow-ups: A1 lift = NOT a bug (Interp_15149 plays 94.96-118.78 s wall, pawns at y 405.8; streaming after the
+  lift needs the player to walk on: test artifact; the remaining black slot = suspected pod skeletal mesh at bind pose,
+  data / anim item). esc_p05 cyan shape = a MESH (unchanged with WFC_NOMAPFX=1), suspect WEP_Shield_p.Barrier with the
+  Defrag material param missing; Rendering builds a WFC_SKIPMAT exe, the Frontend reruns 3 arms with it.
