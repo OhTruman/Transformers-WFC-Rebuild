@@ -3756,3 +3756,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 04:12 Rendering verdicts: smoke stage 1 FAIL by eye (11 / 221 frames hold smoke; ~3 levels difference); Enhanced water not
   user-ready (Fresnel ~3 % at play angles). DECISION: both rows dev-only; x39tune next (tuned contrast / puff shape / flow,
   SSR x2.5 + Fresnel floor); if still flat -> stage 2 froxel plumes, Enhanced smoke Realistic-only. x37: same-moment arms OK.
+2026-10-23 04:16 MERGED 72a0043d Escalation E3a: the horde's real bodies (ESC_<id> chassis, per-entry weapons + ROBODEF health, wave
+  buffs; ESCTEST 35 / 35 + 6 / 6; BrokenHope horde kills with its AR, Remnant PlayerBot reaches wave 3). E3 open: GOAP brains,
+  Brute / Tank weak points, Jet flight, loot. Gameplay -> campaign runtime (D5_OME headless boot) now.
