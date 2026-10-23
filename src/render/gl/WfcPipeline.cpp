@@ -9004,8 +9004,15 @@ void Pipeline::smokeVolumeAdd(const Sprite* sp, size_t n) {
         }
         for (int k = 0; k < ncl && smokeVolAcc_.size() < 256; ++k) {
             const float a = cl[k].a / (float)cl[k].n;
-            if (r[k] > 0.1f && a > 0.01f)
-                smokeVolAcc_.push_back({cl[k].sum.x, cl[k].sum.y, cl[k].sum.z, r[k], volK * a / r[k]});
+            if (r[k] > 0.1f && a > 0.01f) {
+                // the in-scatter colour: stage 1's light environment at the plume (ambient + its direct lights), x WFC_SMOKEVOLEMIT
+                static const float emitK = std::getenv("WFC_SMOKEVOLEMIT") ? (float)std::atof(std::getenv("WFC_SMOKEVOLEMIT")) : 1.0f;
+                core::Vec3 amb, dl[3], dc[3]; int nl = 0;
+                smokeLight(cl[k].sum, amb, nl, dl, dc);
+                for (int i = 0; i < nl; ++i) amb = amb + dc[i];
+                amb = amb * emitK;
+                smokeVolAcc_.push_back({cl[k].sum.x, cl[k].sum.y, cl[k].sum.z, r[k], volK * a / r[k], amb.x, amb.y, amb.z});
+            }
         }
     }
 }

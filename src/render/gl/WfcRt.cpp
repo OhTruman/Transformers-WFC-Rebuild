@@ -1277,9 +1277,10 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                     for (const auto& rk : rank) {
                         if (fr.smokeBlobN >= 16) break;
                         const auto& b = smokeVolAcc_[rk.second];
-                        float* p = fr.smokeBlobs[2 * fr.smokeBlobN];
+                        float* p = fr.smokeBlobs[3 * fr.smokeBlobN];
                         p[0] = b[0]; p[1] = b[1]; p[2] = b[2]; p[3] = b[3];
                         p[4] = b[4]; p[5] = time_ * 0.35f; p[6] = 0.0f; p[7] = 0.0f;   // (density, the ripple's rise (m))
+                        p[8] = b[5]; p[9] = b[6]; p[10] = b[7]; p[11] = 0.0f;           // (the in-scatter colour)
                         ++fr.smokeBlobN;
                     }
                 }

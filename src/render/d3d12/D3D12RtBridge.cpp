@@ -999,7 +999,7 @@ private:
         for (auto& r : readback_) r = makeBuffer(dev_, kStatN * 4, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST);
         // (item 2) the shadow-light ring: made here, before the descriptors are written (made lazily at the first frame, its
         // SRV stayed null until the next map's descriptor rewrite - every light read radius 0 and was skipped)
-        if (!lightBuf_) lightBuf_ = makeBuffer(dev_, 120 * 16, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ);   // (+ X3 v3: 4 halo lamps + colours)   // (2 slots x (4 shadow + 4 transient + 4 prev VP + 4 transient colours + 4 shadow colours))
+        if (!lightBuf_) lightBuf_ = makeBuffer(dev_, 152 * 16, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ);   // (+ X3 v3: 4 halo lamps + colours)   // (2 slots x (4 shadow + 4 transient + 4 prev VP + 4 transient colours + 4 shadow colours))
         if (!stats_ || !zeros_ || !readback_[0] || !readback_[1]) return false;
         if (depth_.res) writeDescriptors();
         return true;
@@ -1064,7 +1064,7 @@ private:
         for (int k = 0; k < kMaxLm; ++k)                 // R4: the GI pages (UAV space1; null past / between them)
             uav(k < (int)gi_.size() ? gi_[(size_t)k].res : nullptr, k < (int)gi_.size() && gi_[(size_t)k].res ? gi_[(size_t)k].res->GetDesc().Format : DXGI_FORMAT_R16G16B16A16_FLOAT);
         uav(lvis_.res, DXGI_FORMAT_R8G8B8A8_UNORM);      // (item 2) u0 space2: the per-light visibility
-        sbuf(lightBuf_, 120, 16);                         // (item 2) t0 space4: the shadow lights (2 ring slots x 60 float4; 28.. the smoke blobs)
+        sbuf(lightBuf_, 152, 16);                         // (item 2) t0 space4: the shadow lights (2 ring slots x 76 float4; 28.. the smoke blobs)
         for (int table = 0; table < 3; ++table) {        // R4: E (the texel tracer) / F (the gutter) / G (S3 probes): t1 .. t13 as A .. D
             tex(depth_.res, DXGI_FORMAT_R32_FLOAT); tex(wdepth_.res, DXGI_FORMAT_R32_FLOAT);
             tex(atlas_.res, DXGI_FORMAT_R8_UNORM);
@@ -1138,17 +1138,17 @@ private:
         if (lightBuf_) {                                 // (Extra2.z = shadow count + 8 x transient count, .w = the slot's base)
             void* lp = nullptr; D3D12_RANGE none{0, 0};
             if (SUCCEEDED(lightBuf_->Map(0, &none, &lp))) {
-                std::memcpy((char*)lp + (size_t)slot * 960, fr.shadowLights, 64);
-                std::memcpy((char*)lp + (size_t)slot * 960 + 64, fr.transLights, 64);
-                std::memcpy((char*)lp + (size_t)slot * 960 + 128, fr.prevVP, 64);
-                std::memcpy((char*)lp + (size_t)slot * 960 + 192, fr.transColors, 64);
-                std::memcpy((char*)lp + (size_t)slot * 960 + 256, fr.shadowColors, 64);
-                std::memcpy((char*)lp + (size_t)slot * 960 + 320, fr.volLights, 64);
-                std::memcpy((char*)lp + (size_t)slot * 960 + 384, fr.volColors, 64);
-                std::memcpy((char*)lp + (size_t)slot * 960 + 448, fr.smokeBlobs, 512);   // (Smoke stage 2: 16 x (centre + radius, density))
+                std::memcpy((char*)lp + (size_t)slot * 1216, fr.shadowLights, 64);
+                std::memcpy((char*)lp + (size_t)slot * 1216 + 64, fr.transLights, 64);
+                std::memcpy((char*)lp + (size_t)slot * 1216 + 128, fr.prevVP, 64);
+                std::memcpy((char*)lp + (size_t)slot * 1216 + 192, fr.transColors, 64);
+                std::memcpy((char*)lp + (size_t)slot * 1216 + 256, fr.shadowColors, 64);
+                std::memcpy((char*)lp + (size_t)slot * 1216 + 320, fr.volLights, 64);
+                std::memcpy((char*)lp + (size_t)slot * 1216 + 384, fr.volColors, 64);
+                std::memcpy((char*)lp + (size_t)slot * 1216 + 448, fr.smokeBlobs, 768);   // (Smoke stage 2: 16 x (centre + radius, density + rise, colour))
                 lightBuf_->Unmap(0, nullptr);
             }
-            cE[50] = (float)(std::min(fr.shadowLightN, 4) + 8 * std::min(fr.transLightN, 4)); cE[51] = (float)(slot * 60);
+            cE[50] = (float)(std::min(fr.shadowLightN, 4) + 8 * std::min(fr.transLightN, 4)); cE[51] = (float)(slot * 76);
             cE[48] = fr.transClear;
         }
         list_->SetComputeRootSignature(rs_);
@@ -1222,7 +1222,7 @@ private:
             cv[36] = fr.volMisc[0]; cv[37] = 64.0f; cv[38] = (float)volTx_; cv[39] = (float)volTy_;
             cv[40] = 0.0f; cv[41] = (float)volParity_; cv[42] = (volHistValid_ && fr.prevValid) ? 1.0f : 0.0f;
             cv[43] = (float)std::min(fr.transLightN, 4);
-            cv[44] = fr.znear; cv[45] = fr.zfar; cv[46] = (float)(slot * 60); cv[47] = fr.volLampK;
+            cv[44] = fr.znear; cv[45] = fr.zfar; cv[46] = (float)(slot * 76); cv[47] = fr.volLampK;
             cv[48] = fr.volHistory; cv[49] = 16.0f; cv[50] = (float)std::min(fr.volLightN, 4); cv[51] = fr.volTransK;
             cv[23] = fr.volLampCore;                     // (Size.w: the lamp / transient core radius)
             cv[27] = fr.volCap;                          // (Params.w: the cap on the integrated in-scatter)
@@ -1264,7 +1264,7 @@ private:
             c2[48] = fr.time; c2[49] = fr.pixelSpread;
             const bool reflTlOff = !render::wfc::rtdef::reflTl();   // (v3 row 6 off)
             c2[50] = (fr.prevValid && pcol_.res ? 1.0f : 0.0f) + (reflTlOff ? 0.0f : 2.0f * (float)std::min(fr.transLightN, 4));   // (item 3: the previous frame; v3 row 6: the transient lights)
-            c2[51] = (float)(slot * 60 + 8);           // (ring: the slot's prev VP columns; transient lights at -4, their colours at +4)
+            c2[51] = (float)(slot * 76 + 8);           // (ring: the slot's prev VP columns; transient lights at -4, their colours at +4)
             list_->SetComputeRoot32BitConstants(0, 52, c2, 0);
             list_->SetComputeRootShaderResourceView(1, jobTlas_->GetGPUVirtualAddress());
             D3D12_GPU_DESCRIPTOR_HANDLE t3 = heap_->GetGPUDescriptorHandleForHeapStart();

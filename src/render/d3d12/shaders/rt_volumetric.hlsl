@@ -51,25 +51,29 @@ bool blocked(float3 o, float3 dir, float tMax, uint mask) {
     }
     return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
 }
-float density(float3 x) {
+float density(float3 x, out float3 emit) {
     // (round 3: the haze follows the authored fog's height falloff too - a constant haze over 120 m of corridor was the
     // grey veil on Streets' match frames)
     const float above = max(x.y - VFog.z, 0.0);
     float sig = (VFog.x + VFog.w) * exp(-above * VFog.y);
-    // (Smoke stage 2, Enhanced smoke in Realistic: the frame's smoke plumes as density blobs - ring + 28: centre (m) + radius,
-    // density (1 / m) + the rise phase (m); a smooth (1 - q)^2 core broken up by a drifting two-octave ripple, so the plume
-    // catches the sun's shafts and the lamps' halos where the sprites alone are flat cards. Params.x = 0: none)
+    // (Smoke stage 2, Enhanced smoke in Realistic: the frame's smoke plumes as density blobs - ring + 28, 3 per blob: centre (m)
+    // + radius, density (1 / m) + the rise phase (m), the in-scatter colour; a smooth (1 - q)^2 core broken up by a drifting
+    // two-octave ripple. Emit: sigma x the plume's light environment (stage 1's), so a plume glows in its surroundings' light -
+    // x43: with the shafts / halos alone, Remnant's plumes only absorbed. Params.x = 0: none)
+    emit = 0.0;
     const uint nb = (uint)Params.x, b0 = (uint)Extra.z + 28;
     [loop] for (uint k = 0; k < 16; ++k) {
         if (k >= nb) break;
-        const float4 B = ShadowLights[b0 + 2 * k], D = ShadowLights[b0 + 2 * k + 1];
+        const float4 B = ShadowLights[b0 + 3 * k], D = ShadowLights[b0 + 3 * k + 1], C = ShadowLights[b0 + 3 * k + 2];
         const float3 d = x - B.xyz;
         const float q = dot(d, d) / max(B.w * B.w, 1e-4);
         if (q >= 1.0) continue;
         const float3 u = (x - float3(0.0, D.y, 0.0)) / max(B.w, 0.25);
         const float n = 0.55 + 0.3 * sin(dot(u, float3(4.1, 3.3, 2.7)) + 1.3) * sin(dot(u, float3(-2.9, 4.7, 3.1)))
                       + 0.15 * sin(dot(u, float3(9.3, -7.1, 8.3)));
-        sig += D.x * (1.0 - q) * (1.0 - q) * saturate(n);
+        const float s = D.x * (1.0 - q) * (1.0 - q) * saturate(n);
+        sig += s;
+        emit += s * C.rgb;
     }
     return sig;
 }
@@ -133,7 +137,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     const float z = sliceZ((float)sl + rnd(seed));
     const float3 x = eye + dir * (z / max(dot(dir, fwd), 1e-3));
-    const float sig = density(x);
+    float3 emitSig;
+    const float sig = density(x, emitSig);
     float3 L = 0.0;
     if (sig > 0.0) {
         const uint mask = (uint)Params.z;
@@ -174,7 +179,7 @@ void main(uint3 id : SV_DispatchThreadID) {
             L += Tc.rgb * pow(saturate(1.0 - x2), max(Tc.w, 0.5)) * core * (1.0 / 12.566371) * Extra2.w;
         }
     }
-    float4 cur = float4(sig * L, sig);
+    float4 cur = float4(sig * L + emitSig, sig);
     // temporal: the same point in the previous frame's grid (its view-projection columns at ring + 8)
     if (VCtl.z > 0.5 && sig > 0.0) {
         const uint b = (uint)Extra.z + 8;
