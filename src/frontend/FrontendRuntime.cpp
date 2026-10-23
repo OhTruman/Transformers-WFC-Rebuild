@@ -109,6 +109,8 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
             else if (c == "frontend") ok = flow.frontEndStarted();
             else if (c == "loading=0") ok = !flow.loading().active;
             else if (c == "loading=1") ok = flow.loading().active;
+            else if (c == "fmv=0") ok = !movieHook || !movieHook();   // no full-screen movie (e.g. a chapter's intro FMV) is up
+            else if (c == "fmv=1") ok = movieHook && movieHook();
             else if (c.rfind("movie=", 0) == 0) {
                 for (const std::string& m : flow.openMovies()) if (m.find(c.substr(6)) != std::string::npos) ok = true;
             } else if (c.rfind("t=", 0) == 0) {
@@ -267,6 +269,7 @@ bool FrontendRuntime::init() {
     else if (std::getenv("WFC_LOCKSTEP")) o.seed = 12345u;
     if (o.seed == 0 && (std::getenv("WFC_SEED") || std::getenv("WFC_LOCKSTEP"))) o.seed = 1u;   // 0 means "clock"
     script_.bridgeHook = [this](const std::string& fn, const std::vector<std::string>& a) { bridge("", fn, a); };
+    script_.movieHook = [this] { return movieOpen() || fullScreenMovie_; };
     script_.hudCallHook = [this](const std::string& fn, const std::vector<std::string>& a) {
         if (!presenter_) return;
         std::vector<BridgeValue> args;

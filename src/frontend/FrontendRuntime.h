@@ -107,6 +107,7 @@ public:
     std::function<void(const std::string& cmd)> qaHook;        // qa:<cmd> - TEST ONLY match actions (the Application: die)
     std::function<void(const std::string& label)> navCheckHook;   // navcheck:<label> (navigation stress harness)
     std::function<void(const std::string& spec)> sessionHook;    // session:<Event>[,args] (DEV TOOL, WFC_FAKESESSION)
+    std::function<bool()> movieHook;                           // wait:fmv=0 / fmv=1: a full-screen movie (intro FMV) is up
     std::function<void(int w, int h, bool fullscreen)> displayHook;   // display:<w>,<h>,<0|1> (runtime resolution change)
     // call:<fn>,<args>: the same bridge the movies use (PCSettings.*, Customize.*, Online.*, Game.* ...); flow.call if unset.
     std::function<void(const std::string& fn, const std::vector<std::string>& args)> bridgeHook;
