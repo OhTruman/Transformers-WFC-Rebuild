@@ -121,6 +121,7 @@ struct MatchPlayer {
     // Killstreaks: PRI._CurrentKillStreak (+kills, reset by AddDeaths -> KillStreakEnded) and the controller's
     // AcquiredKillstreaks stack (UpdateKillstreakRewards: FindKillstreak(Specialty, count); cleared at ClientGameEnded).
     int currentKillStreak = 0;
+    bool dormant = false;              // online: a reserved seat no one holds yet (join in progress): no team, no spawn, not counted
     bool directorSpawned = false;      // Escalation horde: spawned only by the director (never at the match start, never respawned)
     std::vector<std::string> acquiredKillstreaks;
 };
@@ -223,6 +224,10 @@ public:
     void endSurvival(const std::string& reason) { endGame(-1, reason); }
     int drawInt(int n) { return randomInt(n); }
     float drawFloat() { rng_ = rng_ * 1664525u + 1013904223u; return (float)((rng_ >> 8) & 0xFFFFFFu) / 16777216.0f; }
+    // Join in progress: a dormant seat wakes (name, member, team; no character: Choose Character, then an immediate spawn while
+    // InProgress) / a bot leaves for a joiner (despawned by the host first; dormant from here on).
+    void wakePlayer(int p, const std::string& name, const std::string& member, int team);
+    void retirePlayer(int p);
     void requireCharacterSelection(int p) { if (p >= 0 && (size_t)p < players_.size()) players_[(size_t)p].hasSelectedCharacter = false; }
     void tick(float dt);
     // Rounds (CTF) and the attacking team (CTF: SingleFlagCTF; EXT: the bomb holder's team, set by the objective layer).

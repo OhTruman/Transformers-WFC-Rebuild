@@ -61,7 +61,8 @@ namespace game {
 // "MP_IAC_Streets_Base_m?Game=TransContent.TnVersusGame?GameModeTag=TDM?PointsToWin=40?TimeLimit=900.00..."
 // [CONF RE MILESTONE05_FRONTEND_MATCH_BOOTSTRAP §3.1 / §5.1]. Missing keys keep the TnOnlineGameSettings defaults.
 // Online (Frontend's session layer, PC EXTENSION): another peer's human in this match -> a ParticipantKind::Remote participant.
-struct RemoteSeat { std::string name; int team = 255; std::string member; CharacterSelection selection; bool selected = false; };
+struct RemoteSeat { std::string name; int team = 255; std::string member; CharacterSelection selection; bool selected = false;
+                    bool dormant = false; };   // dormant: a reserved seat for join in progress (no team / spawn until queueLateSeat)
 // A slot handover the session agreed (frontend::SessionSlotSwap in game terms). matchPlayer < 0: found by member (sessionMember).
 // toBot: Remote -> Bot; else Bot -> Remote (late join, member = who takes it). atTick: World::simTick() to apply at (<= 0: next tick).
 struct SlotSwap { int matchPlayer = -1; bool toBot = true; std::string member; int64_t atTick = 0; };
@@ -1259,6 +1260,10 @@ private:
     std::vector<SeatLock> seatLocks_;   // per seat (match player index): the homing lock
     void tickSeatLock(int p, const Character& pc, const core::Vec3& eye, const core::Vec3& fwd, float dt);
     struct PendingSelection { int seat; uint32_t tick; CharacterSelection sel; };
+    struct PendingLateSeat { int seat; uint32_t tick; RemoteSeat r; };
+    std::vector<PendingLateSeat> pendingLateSeats_;   // by (tick, seat)
+    int launchHumans_ = 0;                            // the launch's humans (dormant seats included)
+    void applyPendingLateSeats();
     std::vector<PendingSelection> pendingSelections_;   // by (tick, seat); applied in the step prefix
     void applyPendingSelections();
     bool pbSandbox_ = false;            // online: the player bot's brain is running (input only: its actions become presses)
@@ -1593,6 +1598,13 @@ public:
     int seatLockTarget(int p) const { return p >= 0 && (size_t)p < seatLocks_.size() && seatLocks_[(size_t)p].locked ? seatLocks_[(size_t)p].target : -1; }
     // Online Choose Character: apply seat's pick at sim tick atTick (every peer the same tick; the net driver delivers it before).
     void queueSeatSelection(int seat, const CharacterSelection& sel, uint32_t atTick);
+    // Join in progress (Systems' driver, every peer, before the step of atTick): the dormant seat wakes as r (name, member, the host's
+    // team); a team full with bot fill retires its last bot at the same tick. seatPlayer: the match player of a launch seat (seat i =
+    // player i; -1 past the launch's humans). smallerTeam (host): fewer non-dormant participants (bots included); a tie or both full:
+    // fewer humans; then team 0. No RNG.
+    void queueLateSeat(int seat, const RemoteSeat& r, uint32_t atTick);
+    int seatPlayer(int seat) const { return seat >= 0 && seat < launchHumans_ ? seat : -1; }
+    int smallerTeam() const;
     const SeatMissile* seatMissile(int p) const { return p >= 0 && (size_t)p < seatMissiles_.size() ? &seatMissiles_[(size_t)p] : nullptr; }
     const RollerMine& rollerMine() const;   // the local player's (HUD / tests)
     const std::vector<KamikazeMine>& kamikazeMines() const { return mines_; }

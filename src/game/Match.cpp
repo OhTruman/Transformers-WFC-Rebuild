@@ -351,6 +351,7 @@ std::vector<KillFeedEntry> Match::killFeed() const {
 }
 
 bool Match::spectating(int p) const {
+    if (p >= 0 && (size_t)p < players_.size() && players_[(size_t)p].dormant) return true;   // a joiner before its wake
     if (p < 0 || (size_t)p >= players_.size() || players_[(size_t)p].alive || deathTime_[(size_t)p] < 0.0f) return false;
     return matchTime_ - deathTime_[(size_t)p] >= kMinRespawnDelay;
 }
@@ -500,6 +501,7 @@ void Match::endGame(int winnerPlayer, const std::string& reason) {
 
 void Match::restartPlayer(int p) {
     MatchPlayer& P = players_[(size_t)p];
+    if (P.dormant) { P.alive = false; P.timeToRespawn = -1.0f; return; }   // a reserved seat: nobody to spawn
     if (!P.hasSelectedCharacter) { P.timeToRespawn = 0.1f; return; }   // CheckReadySpawn: no selection, no spawn (retry)
     P.chassis = resolveChassis(P.selection, faction(p));
     // CustomCharacterOptions.FindChassis: the chassis must resolve to a buildable body; no substitute exists.
@@ -526,6 +528,24 @@ void Match::restartPlayer(int p) {
         LOG_INFO("MATCH respawn player=%d delay_s=%.2f reason=%s t=%.2f", p, matchTime_ - deathTime_[(size_t)p], roundRestarting_ ? "round" : "wave", matchTime_);
     P.spawnTime = matchTime_;
     emit(MatchEvent::Type::PlayerSpawned, p, st, st >= 0 ? starts_[(size_t)st].actor : std::string());
+}
+
+void Match::wakePlayer(int p, const std::string& name, const std::string& member, int team) {
+    if (p < 0 || (size_t)p >= players_.size()) return;
+    MatchPlayer& P = players_[(size_t)p];
+    P.dormant = false; P.name = name; P.sessionMember = member; P.team = team; P.alive = false;
+    P.hasSelectedCharacter = false;   // Choose Character first
+    // The joiner spawns at once (TnRespawnHelperWave TimeToAllowInstantInitialSpawns -1); Escalation (TnRespawnHelperRoundEnd): at once
+    // only within the first 30 s of the match, else at the end of the current wave; MatchOver / pending: no spawn here [RE join-in-progress].
+    P.timeToRespawn = state_ == State::InProgress && (!s_.survival || matchTime_ <= 30.0f) ? 0.0f : -1.0f;
+    LOG_INFO("MATCH join player=%d name=%s team=%d t=%.2f", p, name.c_str(), team, matchTime_);   // audit line
+}
+
+void Match::retirePlayer(int p) {
+    if (p < 0 || (size_t)p >= players_.size()) return;
+    MatchPlayer& P = players_[(size_t)p];
+    LOG_INFO("MATCH leave player=%d name=%s team=%d t=%.2f (a bot makes room for a joiner)", p, P.name.c_str(), P.team, matchTime_);
+    P.alive = false; P.dormant = true; P.team = 255; P.timeToRespawn = -1.0f;
 }
 
 void Match::restartPlayerAt(int p, const core::Vec3& pos, float yaw) {

@@ -105,6 +105,7 @@ private:
     void runCameraTest();
     void runChaosTest();
     void runTdmSessionTest();
+    void runLateSeatTest();     // WFC_LATESEATTEST (Application_LateSeatTest.cpp)
     void runEscalationTest();   // WFC_ESCTEST (Application_EscTest.cpp)
     void runCameraSyncTest();
     void runModePlayTest();

@@ -2150,6 +2150,7 @@ void World::tickPrefix(float dt) {
     joinStep();
     applyQueuedRemoteCommands(dt);   // the Remote seats' commands for this step (main thread, after the background part joined)
     tickSlotSwaps(dt);   // session slot handovers at their agreed tick (main thread, before any bot / pawn work)
+    applyPendingLateSeats();    // join in progress: dormant seats waking this tick (before their picks)
     applyPendingSelections();   // online Choose Character picks due this tick (before spawns)
     tickSeatMissiles(dt);   // the seats' guided missiles (every peer, by match player index)
     static const bool secLog = std::getenv("WFC_ASYNCLOG") != nullptr;
@@ -3149,11 +3150,12 @@ bool World::launchMatch(const MatchLaunch& l) {
             me.name = l.humans[(size_t)ls].name; me.sessionMember = l.humans[(size_t)ls].member;
             if (l.humans[(size_t)ls].selected) match_.selectCharacter(localPlayer_, l.humans[(size_t)ls].selection);   // as the remote seats
             if (match_.settings().teamGame) me.team = svTeam >= 0 ? svTeam : l.humans[(size_t)ls].team;
+            if (l.humans[(size_t)ls].dormant) { me.dormant = true; me.team = 255; }   // the joiner: spectates until its seat wakes
         }
         std::vector<int> order(l.humans.size(), -1);
         order[(size_t)ls] = localPlayer_;
         for (size_t i = 0; i < l.humans.size(); ++i)
-            if ((int)i != ls) { RemoteSeat h = l.humans[i]; if (svTeam >= 0) h.team = svTeam; order[i] = addRemoteParticipant(h, true); }
+            if ((int)i != ls) { RemoteSeat h = l.humans[i]; if (svTeam >= 0 && !h.dormant) h.team = svTeam; order[i] = addRemoteParticipant(h, true); }
         match_.reorderPlayers(order);
         std::vector<int> newOf(order.size());
         for (size_t i = 0; i < order.size(); ++i) newOf[(size_t)order[i]] = (int)i;
@@ -3161,6 +3163,7 @@ bool World::launchMatch(const MatchLaunch& l) {
         for (MatchOpponent* o : opponents_) o->setMatchPlayer(newOf[(size_t)o->matchPlayer()]);
         rebuildOppIndex();
         remoteIdle_.assign(match_.players().size(), 0.0f);
+        launchHumans_ = (int)l.humans.size();
         LOG_INFO("session: %zu humans in the host's seat order, this machine at seat %d", l.humans.size(), ls);
     } else
         for (const RemoteSeat& r : l.remotes) { RemoteSeat h = r; if (svTeam >= 0) h.team = svTeam; addRemoteParticipant(h, svTeam >= 0); }   // online: the other peers' humans (before the bot fill counts them)
@@ -3354,7 +3357,7 @@ int World::addBots(const BotLaunch& launch) {
     const MatchSettings& s = match_.settings();
     std::vector<std::string> taken;
     int humans = 0;
-    for (const MatchPlayer& p : match_.players()) { taken.push_back(p.name); humans += p.kind != ParticipantKind::Bot; }
+    for (const MatchPlayer& p : match_.players()) { taken.push_back(p.name); humans += p.kind != ParticipantKind::Bot && !p.dormant; }
     const int humanTeam = refPlayer >= 0 ? match_.players()[(size_t)refPlayer].team : 0;
     static unsigned matchSeed = 0x5eed;
     // WFC_SEED (DEV / TEST only): offsets every bot / spawn random source so two runs can be compared or varied; unset = unchanged.
@@ -3407,6 +3410,7 @@ int World::addRemoteParticipant(const RemoteSeat& r, bool exactTeam) {
         MatchPlayer& mp = match_.playerMutable(p);
         mp.kind = ParticipantKind::Remote;
         mp.sessionMember = r.member;
+        if (r.dormant) { mp.dormant = true; mp.team = 255; }
     }
     if (r.selected) match_.selectCharacter(p, r.selection);
     const MatchPlayer& mp = match_.players()[(size_t)p];
@@ -3883,6 +3887,53 @@ void World::tickSeatMissiles(float dt) {
     }
 }
 
+void World::queueLateSeat(int seat, const RemoteSeat& r, uint32_t atTick) {
+    if ((int64_t)atTick <= (int64_t)simTick_) LOG_WARN("session: seat %d join for tick %u arrived at tick %lld: applied at the next step", seat, atTick, (long long)simTick_);
+    PendingLateSeat p{seat, atTick, r};
+    auto it = std::upper_bound(pendingLateSeats_.begin(), pendingLateSeats_.end(), p, [](const PendingLateSeat& a, const PendingLateSeat& b) {
+        return a.tick != b.tick ? a.tick < b.tick : a.seat < b.seat; });
+    pendingLateSeats_.insert(it, p);
+}
+
+void World::applyPendingLateSeats() {
+    size_t n = 0;
+    for (; n < pendingLateSeats_.size() && (int64_t)pendingLateSeats_[n].tick <= (int64_t)simTick_; ++n) {
+        const PendingLateSeat& q = pendingLateSeats_[n];
+        if (!matchActive_ || seatPlayer(q.seat) < 0 || !match_.players()[(size_t)q.seat].dormant) { LOG_WARN("session: seat %d join refused (not a dormant seat)", q.seat); continue; }
+        const int team = match_.settings().teamGame ? q.r.team : 255;
+        if (team == 0 || team == 1) {   // a team full with bot fill: its last bot leaves (despawned, dormant) so the joiner takes its place
+            int count = 0, lastBot = -1;
+            for (size_t i = 0; i < match_.players().size(); ++i) {
+                const MatchPlayer& mp = match_.players()[i];
+                if (mp.dormant || mp.team != team) continue;
+                ++count;
+                if (mp.kind == ParticipantKind::Bot && !mp.directorSpawned) lastBot = (int)i;
+            }
+            if (count >= match_.settings().maxPerTeam && lastBot >= 0) {
+                for (MatchOpponent* o : opponents_) if (o->matchPlayer() == lastBot && o->spawned()) o->despawn();
+                match_.retirePlayer(lastBot);
+            }
+        }
+        match_.wakePlayer(q.seat, q.r.name, q.r.member, team);
+        if (remoteIdle_.size() > (size_t)q.seat) remoteIdle_[(size_t)q.seat] = 0.0f;
+        LOG_INFO("session: seat %d (%s) joined at tick %lld on team %d%s", q.seat, q.r.name.c_str(), (long long)simTick_, team, q.seat == localPlayer_ ? " (this machine)" : "");
+    }
+    if (n) pendingLateSeats_.erase(pendingLateSeats_.begin(), pendingLateSeats_.begin() + (long)n);
+}
+
+int World::smallerTeam() const {
+    int n[2] = {0, 0}, h[2] = {0, 0};
+    for (const MatchPlayer& mp : match_.players()) {
+        if (mp.dormant || (mp.team != 0 && mp.team != 1)) continue;
+        ++n[mp.team];
+        h[mp.team] += mp.kind != ParticipantKind::Bot;
+    }
+    const int cap = match_.settings().maxPerTeam;
+    if (n[0] != n[1] && !(n[0] >= cap && n[1] >= cap)) return n[0] < n[1] ? 0 : 1;
+    if (h[0] != h[1]) return h[0] < h[1] ? 0 : 1;
+    return 0;
+}
+
 void World::queueSeatSelection(int seat, const CharacterSelection& sel, uint32_t atTick) {
     if ((int64_t)atTick <= (int64_t)simTick_) LOG_WARN("session: p%d pick for tick %u arrived at tick %lld: applied at the next step", seat, atTick, (long long)simTick_);
     PendingSelection p{seat, atTick, sel};
@@ -3947,7 +3998,7 @@ void World::clearAllParticipants() {
     for (size_t i = 0; i < actors_.size();) { if (!actors_[i]->alive()) { actors_[i] = std::move(actors_.back()); actors_.pop_back(); } else ++i; }
     match_.truncatePlayers(0);
     localPlayer_ = -1;
-    bots_.clear(); smart_.clear(); anySmart_ = false; remoteIdle_.clear(); seatLocks_.clear(); pendingSelections_.clear();
+    bots_.clear(); smart_.clear(); anySmart_ = false; remoteIdle_.clear(); seatLocks_.clear(); pendingSelections_.clear(); pendingLateSeats_.clear(); launchHumans_ = 0;
 }
 
 uint64_t World::simStateHash() const {
@@ -4160,6 +4211,7 @@ HudGameState World::hudState() const {
     h.killFeed = match_.killFeed();
     for (size_t i = 0; i < match_.players().size(); ++i) {
         const MatchPlayer& p = match_.players()[i];
+        if (p.dormant) continue;   // a reserved seat is nobody yet
         h.scoreboard.push_back({(int)i, p.name, p.team, p.score, p.kills, p.deaths, p.assists, p.alive, (int)i == localPlayer_});
     }
     h.modeTag = match_.settings().modeTag;
@@ -8605,6 +8657,7 @@ void World::gibCorpse(Corpse& c) {
 bool World::specValid(int p) const {
     if (p < 0 || p == localPlayer_ || (size_t)p >= match_.players().size() || !match_.players()[(size_t)p].alive) return false;
     if (!participantPawn(p)) return false;
+    if (match_.players()[(size_t)localPlayer_].dormant) return true;   // a joiner before its wake follows anyone
     return match_.sameTeam(p, localPlayer_) || (specKillerOk_ && p == specKiller_);
 }
 

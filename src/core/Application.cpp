@@ -214,6 +214,7 @@ bool Application::init() {
     }
     if (std::getenv("WFC_CHAOS")) { runChaosTest(); return false; }            // measurements only
     if (std::getenv("WFC_TDMTEST")) { runTdmSessionTest(); return false; }     // measurements only
+    if (std::getenv("WFC_LATESEATTEST")) { runLateSeatTest(); return false; }   // join in progress (dormant seats)
     if (std::getenv("WFC_ESCTEST")) { runEscalationTest(); return false; }     // Escalation E1 director (WFC_MAP=MP_ESC_BrokenHope)
     if (std::getenv("WFC_CAMSYNC")) { runCameraSyncTest(); return false; }     // measurements only
     if (std::getenv("WFC_MODEPLAYTEST")) { runModePlayTest(); return false; }  // measurements only
