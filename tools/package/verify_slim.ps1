@@ -55,7 +55,8 @@ param(
     [switch]$Strict,
     [string[]]$OmitRoot = @(),   # self-test: leave these data-root variables unset (the check must then FAIL)
     [switch]$NoHd,               # skip the optional HD pack checks (static and runtime)
-    [switch]$HdForced,           # force HD on (WFC_HDTEXTURES=1): the pack's textures load (else the first launch must keep HD off)
+    [switch]$HdForced,           # force HD on (WFC_HDTEXTURES=<HdLevel>): the pack's textures load (else the first launch must keep HD off)
+    [int]$HdLevel = 1,           # the HD level -HdForced sets: 1 Faithful, 2 Enhanced (Modern materials + the M6 roughness maps)
     [switch]$StaticOnly,         # file checks only (HD pack), no game runs
     [string]$ExeBin = "",           # candidate exe tree: its *.exe / *.dll replace the package's in the run copy (the package stays as is)
     [string]$RtBuildDir = "",    # the cmake build tree the package's exe came from: rt-build-check's build half (build.ninja, generated/rt)
@@ -71,6 +72,51 @@ param(
                                  # MAX_PATH (260) that are 213 chars under Play.bat's F:. Removed at the end.
 )
 $ErrorActionPreference = 'Stop'
+
+# Package 6 Realistic defaults (Integration's list, 6155925b; refreshed with the final head): the RT gate's Realistic run (every
+# WFC_* cleared) must log "RT Realistic defaults (first Realistic frame): k=v k=v ..." (Rendering) with these values. Strings
+# compare exactly, numbers within 1e-3. A key the line has but this table lacks is reported (INFO), not a fail.
+$RealisticDefaults = [ordered]@{
+    tone = 'on'          # X1 tone curve (WFC_RT_TONE=0 off; WFC_TONE_ADAPT / _BLOOM / _CONTRAST / _GAIN tune it)
+    lmspecgain = 2.5     # X2 specular gain (WFC_RT_LMSPECGAIN)
+    tlgain = 2           # row 4 transient light gain (WFC_RT_TLGAIN)
+    gisat = 2.5          # X4 coloured bounce saturation (WFC_RT_GISAT)
+    giemissive = 4       # X4 emissive bounce gain (WFC_RT_GIEMISSIVE; 4 from Rendering e233a641, the Molten lava)
+    charao = 3           # X5-1 character AO radius, m (WFC_RT_CHARAORADIUS)
+    softparticles = 'on' # WFC_SOFTPARTICLES=0 off
+    tiled = 'on'         # tiled transient lights (WFC_TLTILED=0 off)
+    charsun = 'on'       # row 1 (WFC_RT_CHARSUN)
+    charlampcal = 'on'   # row 8 (WFC_RT_CHARLAMPCAL)
+    refltl = 'on'        # row 6 (WFC_RT_REFLTL)
+    sunshare = 'on'      # row 2 (WFC_RT_SUNSHARE)
+    probefill = 'on'     # row 5 (WFC_RT_PROBEFILL)
+    origspec = 'on'      # Enhanced: the Modern lobe only where the original had a specular input (WFC_PBR_ORIGSPEC=0 restores it)
+    refltemporal = 'on'  # item 7 temporal reflections (WFC_RT_REFLTEMPORAL; Rendering 8d50190a)
+    sunsharemax = 0.75   # row 2 character sun-shadow cap (WFC_RT_SUNSHAREMAX; Rendering 18483783)
+    tonekey = 0.02       # X1 default key (WFC_TONE_KEY; Molten applies its own 0.03 at runtime, the line prints the default)
+    toneadapt = 0.65     # X1 eye adaptation (WFC_TONE_ADAPT)
+    tonegain = 1.3       # X1 gain (WFC_TONE_GAIN)
+    tonesat = 1.1        # X1 saturation (WFC_TONE_SAT)
+    tonecontrast = 1.15  # X1 contrast (WFC_TONE_CONTRAST)
+    tonebloom = 0.8      # X1 bloom (WFC_TONE_BLOOM)
+    bloommax = 16        # X1 soft-bloom input cap (WFC_TONE_BLOOMMAX)
+    whiteroll = 'on'     # X1 very bright pixels desaturate toward white before the shoulder (WFC_TONE_WHITEROLL=0 off)
+    whitelo = 1.5        # white-roll start (WFC_TONE_WHITELO; retuned after the Gorge recheck)
+    whitehi = 6          # white-roll end (WFC_TONE_WHITEHI)
+    whitemix = 0.5       # white-roll strength, keeps the warm tint (WFC_TONE_WHITEMIX)
+    x3 = 'on'            # X3 froxel volumetrics (WFC_X3=0 off; Rendering 607baafd) - global defaults, the per-map table is not on the line
+    x3density = 0.3      # medium = authored height fog x density (WFC_X3_DENSITY)
+    x3haze = 0.0015      # haze floor, 1 / m, following the fog's height falloff (WFC_X3_HAZE; round 3)
+    x3sun = 0.6          # sun in-scatter, peak-normalised (WFC_X3_SUN)
+    x3lamp = 2           # in-view lamps (WFC_X3_LAMP)
+    x3trans = 0.2        # transient lights, with the lamps' inverse-square core (WFC_X3_TRANS; round 4)
+    x3g = 0.5            # phase g (WFC_X3_G)
+    x3dist = 120         # froxel range, m (WFC_X3_DIST)
+    x3history = 0.9      # temporal history (WFC_X3_HISTORY)
+    x3lampcore = 2       # lamp core size (WFC_X3_LAMPCORE)
+    x3tonecontrast = 1.2 # X1 contrast on X3 frames (WFC_X3_TONECONTRAST)
+    x3cap = 0.2          # integrated in-scatter cap per channel (WFC_X3_CAP; 0 = none; round 4)
+}
 
 function Norm([string]$p) {
     # long-path opens (platform::longPath) log as \\?\F:\... or \\?\UNC\server\...: classify them by the path itself
@@ -116,6 +162,7 @@ $roots = [ordered]@{
     WFC_ASSETTOOLS_MANIFESTS = "$pkg\AssetTools\manifests"
     WFC_DDS_ROOT             = "$pkg\AssetTools\out\dds"
     WFC_FRONTEND_DATA        = "$pkg\Rebuild\data\frontend"    # Frontend's runtime lookup (logged "frontend data: <dir>")
+    WFC_CAMPAIGN_ROOT        = "$pkg\AssetTools\out\campaign_render"    # Gameplay's CampaignChapter::root() (Play.bat sets it too)
 }
 foreach ($k in $OmitRoot) { if ($roots.Contains($k)) { $roots.Remove($k); Write-Warning "self-test: $k left unset" } else { throw "unknown root $k" } }
 foreach ($k in $roots.Keys) { if (-not (Test-Path -LiteralPath $roots[$k])) { Write-Warning "$k -> $($roots[$k]) does not exist in the package" } }
@@ -126,7 +173,7 @@ foreach ($k in $roots.Keys) { if (-not (Test-Path -LiteralPath $roots[$k])) { Wr
 # count and a supported format. Static check: every row present (+ bytes, format), every DDS under the root indexed (the
 # pack's source dir also holds non-PASS textures that must not ship). Runtime: with a pack, the maps run with
 # WFC_HDTEXTURES=1 and the log must say "HD texture pack available: <rows> textures". -NoHd skips both.
-$hd = [pscustomobject]@{ Root = $null; Where = 'not shipped'; Rows = 0; Files = 0; Bytes = 0L; Problems = @() }
+$hd = [pscustomobject]@{ Root = $null; Where = 'not shipped'; Rows = 0; Files = 0; Bytes = 0L; Problems = @(); PbrRows = 0 }
 if (-not $NoHd) {
     $cands = @(@{ Dir = Join-Path $pkg 'AssetTools\out\hd'; Where = 'AssetTools\out\hd (loader default)' },
                @{ Dir = Join-Path $pkgTop 'hd'; Where = '<package>\hd (needs WFC_HD_ROOT: the loader default is AssetTools\out\hd)' })
@@ -164,9 +211,37 @@ if (-not $NoHd) {
             if ($miss) { $hd.Problems += "$miss of $($rows.Count) rows missing (the loader ignores the whole pack)" }
             if ($size) { $hd.Problems += "$size rows with a wrong byte count (the loader ignores the whole pack)" }
             if ($fmt) { $hd.Problems += "$fmt rows in an unsupported format (the loader ignores the whole pack)" }
+            # M6 modern material maps (HD Enhanced; build_slim --hd-pbr): hd_pbr_index.json beside hd_index.json, dds relative to
+            # the same root. The loader skips a bad row (that material derives its roughness) - a package ships none.
+            $pbrPath = Join-Path $hd.Root 'hd_pbr_index.json'
+            if (Test-Path -LiteralPath $pbrPath) {
+                $PJ = Get-Content -LiteralPath $pbrPath -Raw -Encoding UTF8 | ConvertFrom-Json
+                $prows = $null
+                foreach ($k in 'rows', 'textures', 'entries') { $v = $PJ.$k; if ($v -is [array] -and $v.Count) { $prows = $v; break } }
+                if (-not $prows) { $hd.Problems += 'hd_pbr_index.json has no rows' }
+                else {
+                    $hd.PbrRows = $prows.Count
+                    $pbad = 0; $pshown = 0
+                    foreach ($r in $prows) {
+                        if ($r.dds) { [void]$indexed.Add((Norm (Join-Path $hd.Root $r.dds))) }
+                        $f = $r.format -replace '^PF_', ''
+                        $why = $null
+                        if (-not $r.tex -or -not $r.role -or -not $r.dds) { $why = 'tex / role / dds missing' }
+                        elseif ($f -ne 'BC4' -and $f -ne 'BC7') { $why = "format $($r.format)" }
+                        elseif ($r.space -and $r.space -ne 'linear') { $why = "space $($r.space)" }
+                        else {
+                            $fi = Get-Item -LiteralPath (Join-Path $hd.Root $r.dds) -ErrorAction SilentlyContinue
+                            if (-not $fi) { $why = 'file missing' }
+                            elseif ($null -ne $r.bytes -and [long]$r.bytes -ne $fi.Length) { $why = "byte count $($fi.Length) != $($r.bytes)" }
+                        }
+                        if ($why) { $pbad++; if ($pshown++ -lt 10) { $hd.Problems += "M6 row $($r.dds): $why" } }
+                    }
+                    if ($pbad) { $hd.Problems += "$pbad of $($prows.Count) M6 modern material rows bad (the loader skips each: that material derives its roughness)" }
+                }
+            }
             $files = @(Get-ChildItem -LiteralPath $hd.Root -Recurse -File)
             $hd.Files = $files.Count; $hd.Bytes = ($files | Measure-Object -Property Length -Sum).Sum
-            $extra = @($files | Where-Object { $_.Name -ne 'hd_index.json' -and $_.Extension -ne '.txt' -and -not $indexed.Contains((Norm $_.FullName)) })
+            $extra = @($files | Where-Object { $_.Name -ne 'hd_index.json' -and $_.Name -ne 'hd_pbr_index.json' -and $_.Extension -ne '.txt' -and -not $indexed.Contains((Norm $_.FullName)) })
             if ($extra.Count) {
                 $hd.Problems += "$($extra.Count) files in the HD folder not in the index (non-PASS textures must not ship)"
                 foreach ($x in ($extra | Select-Object -First 10)) { $hd.Problems += "unindexed: $($x.FullName.Substring($hd.Root.Length + 1))" }
@@ -174,7 +249,7 @@ if (-not $NoHd) {
         }
     }
 }
-Write-Host ("HD pack: {0}{1}" -f $hd.Where, $(if ($hd.Root) { ": $($hd.Rows) rows, $($hd.Files) files, $([math]::Round($hd.Bytes / 1GB, 2)) GB, $($hd.Problems.Count) problems" } else { '' }))
+Write-Host ("HD pack: {0}{1}" -f $hd.Where, $(if ($hd.Root) { ": $($hd.Rows) rows + $($hd.PbrRows) M6 modern material rows, $($hd.Files) files, $([math]::Round($hd.Bytes / 1GB, 2)) GB, $($hd.Problems.Count) problems" } else { '' }))
 
 # ---- the package's bin against build_slim.json (tools/package/build_slim.py): every listed file present, nothing else; the
 # M5 runtime (FidelityFX DLLs + D3D12\D3D12Core.dll) exactly when the manifest's m5_runtime is set; never the D3D12 debug
@@ -233,6 +308,40 @@ if (Test-Path -LiteralPath $renderDir) {
     Write-Host "render data: materials_pbr.json in $pbrMaps map folder(s)"
 }
 
+# ---- package 7 data (Systems 2026-10-17): the files new in package 7 ship, and the late render data ships as the live tree has it.
+# (1) the 10 weapon-collision physmat files (Gameplay's hit-surface lookup), (2) the frontend PC texts, (3) the Opus licence beside the
+# exe, (4) every map_fx_runtime.json (the FX always-include regen) and the lighting.json of the 3 maps with the door / light data
+# byte-equal to F:\Transformers Rebuild\Rebuild\work\render (sha256; checked against the live tree, so run it at build time), (5) the
+# FX always-include templates present in every MP map's map_fx_runtime.json. A miss is a package problem.
+$p7 = @()
+$physmat = @(Get-ChildItem -Path (Join-Path $pkg 'AssetTools\manifests\maps\MP_*\collision_weapon_physmat.json') -ErrorAction SilentlyContinue)
+if ($physmat.Count -ne 10) { $pk.Problems += "package 7: $($physmat.Count) of 10 collision_weapon_physmat.json files" } else { $p7 += 'physmat 10 / 10' }
+if (Test-Path -LiteralPath (Join-Path $pkg 'Rebuild\data\frontend\pc_strings.int')) { $p7 += 'pc_strings.int' } else { $pk.Problems += 'package 7: Rebuild\data\frontend\pc_strings.int missing' }
+if (Test-Path -LiteralPath (Join-Path $pkg 'Rebuild\build\release\bin\licenses\opus\COPYING')) { $p7 += 'licenses\opus' } else { $pk.Problems += 'package 7: bin\licenses\opus\COPYING missing' }
+$liveRender = 'F:\Transformers Rebuild\Rebuild\work\render'
+$same = 0; $want = @()
+if (Test-Path -LiteralPath $renderDir) {
+    foreach ($d in Get-ChildItem -LiteralPath $renderDir -Directory) { if (Test-Path -LiteralPath (Join-Path $d.FullName 'map_fx_runtime.json')) { $want += "$($d.Name)\map_fx_runtime.json" } }
+}
+foreach ($m in 'MP_IAC_Rust', 'MP_ESC_Remnant', 'MP_ESC_BrokenHope') { $want += "$m\lighting.json" }
+foreach ($rel in $want) {
+    $a = Join-Path $renderDir $rel; $b = Join-Path $liveRender $rel
+    if (-not (Test-Path -LiteralPath $a)) { $pk.Problems += "package 7: render\$rel missing"; continue }
+    if (-not (Test-Path -LiteralPath $b)) { continue }   # not in the live tree any more: nothing to compare
+    if ((Get-FileHash -LiteralPath $a -Algorithm SHA256).Hash -eq (Get-FileHash -LiteralPath $b -Algorithm SHA256).Hash) { $same++ }
+    else { $pk.Problems += "package 7: render\$rel differs from the live $liveRender (a stale slim_files row?)" }
+}
+$p7 += "late render data $same / $($want.Count) byte-equal to the live tree"
+$tmpl = 'Drain_Blast', 'WarCry_AOE', 'DrainRay_Beam', 'DecoyTrap'
+$fxOk = 0; $fxN = 0
+foreach ($rel in ($want | Where-Object { $_ -like 'MP_*\map_fx_runtime.json' })) {   # the MP maps (the UI levels have no abilities)
+    $fxN++
+    $miss = @($tmpl | Where-Object { -not (Select-String -LiteralPath (Join-Path $renderDir $rel) -Pattern $_ -SimpleMatch -Quiet) })
+    if ($miss.Count) { $pk.Problems += "package 7: $rel lacks the always-include template(s) $($miss -join ', ')" } else { $fxOk++ }
+}
+$p7 += "FX always-include templates in $fxOk / $fxN map_fx_runtime.json"
+Write-Host ("package 7 data: " + ($p7 -join '; '))
+
 function WaitHold {
     if (-not $HoldFile) { return }
     $said = $false
@@ -279,7 +388,7 @@ try {
         if ($hd.Root) {
             # user 2026-10-12 (reversed the same day): HD is OFF by default - a first launch (no profile, auto-detect as
             # shipped) must keep it off while the pack is accepted; -HdForced checks that the pack's textures load
-            if ($HdForced) { $env:WFC_HDTEXTURES = '1' }
+            if ($HdForced) { $env:WFC_HDTEXTURES = "$HdLevel" }
             # (Frontend 391706f: a scripted boot keeps the seeded defaults unless auto-detect is asked for; windowed, so no
             # display mode switch. The HD default needs the pack and >= 6000 MB of VRAM: frontend::hdTexturesDefault)
             else { $env:WFC_AUTODETECT = '1'; $env:WFC_AUTODETECT_WINDOWED = '1' }
@@ -345,6 +454,9 @@ try {
                     $twin = RealTwin $n
                     if (Test-Path -LiteralPath ($raw + '.xpr')) { $note = 'compressed twin shipped (.xpr)' }
                     elseif ($raw -match '\.wav$' -and (Test-Path -LiteralPath ($raw.Substring(0, $raw.Length - 4) + '.fsb'))) { $note = 'FSB bank shipped (.fsb)' }
+                    # the HD loader's dev-layout fallback (WfcPipeline: <root>/pack/hd_index.json, opened only when <root> has no
+                    # hd_index.json): a package without the HD pack (--no-hd) makes this probe; the dev tree has the file
+                    elseif ($n -match '/assettools/out/hd/pack/hd_(pbr_|modern_)?index\.json$') { $note = 'optional probe (the HD loader''s dev-layout fallback; the package ships no HD root index)' }
                     elseif ($twin -and (Test-Path -LiteralPath $twin)) { $fail = $true; $note = 'omission: the full tree has it' }
                     else { $note = 'optional probe (in neither tree)' }
                 }
@@ -394,7 +506,20 @@ try {
         }
         if ($hd.Root -and $HdForced -and -not $NoHd) {
             $hdOn = $log | Select-String -SimpleMatch 'renderer: HD textures on' | Select-Object -Last 1
-            if (-not $hdOn) { $reasons += 'HD textures forced on (WFC_HDTEXTURES=1) but the renderer did not turn them on' }
+            if (-not $hdOn) { $reasons += "HD textures forced on (WFC_HDTEXTURES=$HdLevel) but the renderer did not turn them on" }
+        }
+        # HD Enhanced (level 2) with the M6 maps shipped: every row loads ("HD modern material maps: <rows> (hd_pbr_index.json)",
+        # no "rows skipped") and the map runs the Modern materials ("Modern materials on for <map>")
+        if ($hd.Root -and $HdForced -and $HdLevel -eq 2 -and -not $NoHd) {
+            $mm = $log | Select-String -Pattern 'wfc: HD modern material maps: (\d+) \(([^)]+)\)(.*)' | Select-Object -First 1
+            if ($hd.PbrRows -gt 0) {
+                if (-not $mm) { $reasons += 'HD Enhanced: no "HD modern material maps" line (the M6 index was never read)' }
+                elseif ([int]$mm.Matches[0].Groups[1].Value -ne $hd.PbrRows -or $mm.Matches[0].Groups[2].Value -ne 'hd_pbr_index.json' -or $mm.Matches[0].Groups[3].Value -match 'skipped') {
+                    $reasons += "HD Enhanced: M6 maps not all loaded: $($mm.Line.Trim()) (index rows $($hd.PbrRows))"
+                }
+            }
+            $modernOn = $log | Select-String -Pattern 'wfc: Modern materials on for MP_' | Select-Object -First 1
+            if (-not $modernOn) { $reasons += 'HD Enhanced: no "Modern materials on for MP_<map>" line (the match map ran the original materials)' }
         }
         # Modern materials (HD Enhanced): the loader falls back to the original materials per map when materials_pbr.json is
         # missing / unparsable / empty (Rendering a2067e5d) - a package that ships the file must never log the fallback
@@ -527,6 +652,33 @@ try {
                 }
                 if (-not $ok) { $rtGate.Status = 'FAIL' }
             } else { $rtGate.Lines += 'INFO rtcheck.r1: the package ships no MP_IAC_Streets\vbake (Realistic has no sun swap)' }
+            # Package 6 default flip (Systems SYSTEMS_FXLIGHTS_DEFAULT_ON): Realistic turns the RT-era effect lights and the vehicle
+            # headlights on by default (WFC_FXLIGHTS=0 / WFC_HEADLIGHTS=0 turn them off; Off / Faithful never have them). The gate's
+            # Realistic run (no WFC_FXLIGHTS / WFC_HEADLIGHTS set) must log both on at its first Realistic frame.
+            $rl2 = if (Test-Path -LiteralPath $rtLogPath) { Get-Content -LiteralPath $rtLogPath } else { @() }
+            $rtl = $rl2 | Select-String -Pattern 'RT-era lights \(first Realistic frame\): effect lights (on|off), headlights (on|off)' | Select-Object -First 1
+            $rtlOk = $rtl -and $rtl.Matches[0].Groups[1].Value -eq 'on' -and $rtl.Matches[0].Groups[2].Value -eq 'on'
+            $rtGate.Lines += "$(if ($rtlOk) { 'PASS' } else { 'FAIL' }) rtcheck.rtlights: $(if ($rtl) { $rtl.Line.Trim() } else { 'no RT-era lights line in the Realistic run (an exe before the package 6 default flip)' })"
+            if (-not $rtlOk) { $rtGate.Status = 'FAIL' }
+            # Package 6 Realistic defaults ($RealisticDefaults above)
+            $rdl = $rl2 | Select-String -Pattern 'RT Realistic defaults \(first Realistic frame\): (.*)$' | Select-Object -First 1
+            if (-not $rdl) { $rtGate.Lines += "FAIL rtcheck.defaults: no 'RT Realistic defaults' line in the Realistic run (an exe before Rendering's defaults line)"; $rtGate.Status = 'FAIL' }
+            else {
+                $got = @{}
+                foreach ($kv in ($rdl.Matches[0].Groups[1].Value.Trim() -split '\s+')) { $i = $kv.IndexOf('='); if ($i -gt 0) { $got[$kv.Substring(0, $i)] = $kv.Substring($i + 1) } }
+                $bad = @(); $info = @()
+                foreach ($k in $RealisticDefaults.Keys) {
+                    $want = $RealisticDefaults[$k]
+                    if (-not $got.ContainsKey($k)) { $bad += "$k missing"; continue }
+                    $v = $got[$k]; $ok = $false
+                    if ($want -is [string]) { $ok = $v -eq $want }
+                    else { $d = 0.0; $ok = [double]::TryParse($v, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$d) -and [math]::Abs($d - [double]$want) -le 1e-3 }
+                    if (-not $ok) { $bad += "$k=$v (want $want)" }
+                }
+                foreach ($k in $got.Keys) { if (-not $RealisticDefaults.Contains($k)) { $info += "$k=$($got[$k])" } }
+                $rtGate.Lines += "$(if ($bad.Count) { 'FAIL' } else { 'PASS' }) rtcheck.defaults: $($RealisticDefaults.Count - $bad.Count) of $($RealisticDefaults.Count) as expected$(if ($bad.Count) { ' - ' + ($bad -join ', ') })$(if ($info.Count) { '; not in the table: ' + ($info -join ' ') })"
+                if ($bad.Count) { $rtGate.Status = 'FAIL' }
+            }
             Write-Host "[Ray Tracing] $($rtGate.Status): $(($rtGate.Lines + $rtGate.Note | Where-Object { $_ }) -join '; ')"
         }
     }
@@ -588,18 +740,19 @@ $md += 'Per-map detail: <map>\opens.csv (every open, classified), <map>\bin\wfc.
 # parent released it, no RT gate / settings test): it must log "HD texture pack available: <all rows> textures".
 if ($hd.Root -and -not $HdForced -and -not $StaticOnly -and -not $NoHd -and -not $NoHdRuntime) {
     $hdArgs = @{ Package = $Package; WorkDir = (Join-Path $WorkDir 'hd_runtime'); Maps = ($Maps.Split(',')[0]); MatchSeconds = $MatchSeconds;
-                 HdForced = $true; NoRtCheck = $true; NoSettingsTest = $true; NoHdRuntime = $true; TimeoutSeconds = $TimeoutSeconds }
+                 HdForced = $true; NoRtCheck = $true; NoSettingsTest = $true; NoHdRuntime = $true; TimeoutSeconds = $TimeoutSeconds
+                 HdLevel = $(if ($hd.PbrRows -gt 0) { 2 } else { 1 }) }   # Enhanced when the M6 maps ship: D pack + M6 maps + Modern materials
     if ($SkipIntro) { $hdArgs.SkipIntro = $true }
     if ($SubstDrive) { $hdArgs.SubstDrive = $SubstDrive }
     if ($HoldFile) { $hdArgs.HoldFile = $HoldFile }
     if ($ExeBin) { $hdArgs.ExeBin = $ExeBin }
-    Write-Host "HD runtime row: re-running $($hdArgs.Maps) with HD forced on"
+    Write-Host "HD runtime row: re-running $($hdArgs.Maps) with HD forced on (level $($hdArgs.HdLevel))"
     $hdOut = @(& $PSCommandPath @hdArgs 2>&1 | ForEach-Object { "$_" })
     $hdOk = $LASTEXITCODE -eq 0
     $hdRep = Join-Path $hdArgs.WorkDir 'REPORT.md'
     $hdLine = if (Test-Path -LiteralPath $hdRep) { (Select-String -LiteralPath $hdRep -Pattern 'HD: ' | Select-Object -First 1).Line } else { 'no report' }
     $md += ''
-    $md += "HD runtime row (HD forced on, $($hdArgs.Maps)): $(if ($hdOk) { 'PASS' } else { 'FAIL' }) - $hdLine (report $hdRep)"
+    $md += "HD runtime row (HD forced on at level $($hdArgs.HdLevel), $($hdArgs.Maps)): $(if ($hdOk) { 'PASS' } else { 'FAIL' }) - $hdLine (report $hdRep)"
     if (-not $hdOk) { $overall = $false }
     Write-Host "HD runtime row: $(if ($hdOk) { 'PASS' } else { 'FAIL' })"
 }
