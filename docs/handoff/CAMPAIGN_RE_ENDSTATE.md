@@ -230,3 +230,27 @@ vmrghw128 / vmrglw128, vdot4fp128 = vmsum4fp128, plus the common integer / float
 This closes the last chapter-independent H in the Matinee move path. No runtime capture is needed. If Gameplay wants a regression
 check anyway: at Matinee start, record an actor's Location / Rotation, the Base transform, and the first evaluated world transform of a
 RelativeToInitial group with a Base (A1 DecoInt robot arm). The world transform must equal the start pose.
+
+## Pass 6 (2026-10-23): FMV speaker layout (C for the routing, H for the bin names)
+
+**Routing:** after BinkOpen, the FMV path (0x82CE0F00) calls **0x82CCA028(bink, trackList, volume)**. For every enabled track it calls
+BinkSetVolume (0x8369A6E8, the track's +0x164 backend hook) and **BinkSetMixBins (0x8369A780, +0x178) with a single bin**:
+
+| Bink track | mix bin | speaker (Xenon channel order FL FR C LFE BL BR, H) |
+|---|---|---|
+| 0 | 0 | front left |
+| 1 | 1 | front right |
+| 2 | 4 | back / surround left |
+| 3 | 5 | back / surround right |
+| 4 | 3 | LFE |
+| 5 + language (the voice) | 2 | **center** |
+
+- So the **track order is FL, FR, SL, SR, LFE, C(voice)**, which matches the order Systems cited.
+- The bin numbers are C. Their speaker names assume Bink's standard Xenon speaker order (H). The internal consistency (the voice
+  goes to bin 2 and the one sub-like track to bin 3) supports it.
+
+**Volume (C):**
+- `volume = (int)(params->Volume [+0x14] × 65536)`, clamped to 0..65536.
+- **Any movie listed in `[Engine.MovieSettings] MoviesToAlwaysPlaySound` gets 0xCCCC (0.8) instead**: Logo_Activision,
+  Logo_Hasbro, Logo_HighMoon (Xe-TransEngine.ini).
+- H: the source of the +0x14 volume (likely the user's volume settings) isn't traced.
