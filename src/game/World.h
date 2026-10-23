@@ -1236,6 +1236,12 @@ private:
     bool onlineSeats_ = false;          // online: the local seat through the wire path (MatchLaunch.online, or the test override)
     bool seatOrdered_ = false;          // the running match numbers its humans by the host's seat order (the next launch clears all)
     void clearAllParticipants();
+    struct SeatLock { int candidate = -1, target = -1; float timer = 0.0f, hold = 0.0f; bool locked = false; };
+    std::vector<SeatLock> seatLocks_;   // per seat (match player index): the homing lock
+    void tickSeatLock(int p, const Character& pc, const core::Vec3& eye, const core::Vec3& fwd, float dt);
+    struct PendingSelection { int seat; uint32_t tick; CharacterSelection sel; };
+    std::vector<PendingSelection> pendingSelections_;   // by (tick, seat); applied in the step prefix
+    void applyPendingSelections();
     bool pbSandbox_ = false;            // online: the player bot's brain is running (input only: its actions become presses)
     uint32_t pbPress_ = 0;              // the presses it asked for (platform::Button bits)
     std::vector<char> seatFineAim_;     // online: each seat's last command FineAim bit (the snapshot's fine-aim flag)
@@ -1420,7 +1426,7 @@ private:
     std::vector<BuffShot> buffShots_;
     // TnProjectileKamikazeMineKillstreak (MinePooper) [CONF RE §K]: hover 2 s, then seek an enemy within SearchRadius 2000 UU
     // at HomingSpeed 2300 UU/s; 125 / 500 UU on contact; Health 50; LifeSpan 60.
-    struct KamikazeMine { core::Vec3 pos, vel; float t = 0.0f, health = 50.0f; int target = -1; int audioKey = 0; };   // [Systems M08p] audioKey
+    struct KamikazeMine { core::Vec3 pos, vel; float t = 0.0f, health = 50.0f; int target = -1; int audioKey = 0; int owner = -1; };   // [Systems M08p] audioKey; owner (online seats; -1 = the local player)
     std::vector<KamikazeMine> mines_;
     // [Gameplay] Presentation of mines_ (TnProjectileKamikazeMine + HmProjectile, CONF script / authored; no sim state): by audioKey.
     // MeshA WEP_KamikazeMine_SKEL (WEP_KamikazeMine_MATINST, the owner's TnCharacterApplier colours); spawned with the owner's
@@ -1551,6 +1557,9 @@ public:
         for (size_t q = 0; q < match_.players().size(); ++q) if (seatHuman((int)q)) if (Character* c = participantPawnMutable((int)q)) out.push_back({(int)q, c});
     }
     bool guidedMissileAlive() const { return missile_.alive; }
+    int seatLockTarget(int p) const { return p >= 0 && (size_t)p < seatLocks_.size() && seatLocks_[(size_t)p].locked ? seatLocks_[(size_t)p].target : -1; }
+    // Online Choose Character: apply seat's pick at sim tick atTick (every peer the same tick; the net driver delivers it before).
+    void queueSeatSelection(int seat, const CharacterSelection& sel, uint32_t atTick);
     const SeatMissile* seatMissile(int p) const { return p >= 0 && (size_t)p < seatMissiles_.size() ? &seatMissiles_[(size_t)p] : nullptr; }
     const RollerMine& rollerMine() const;   // the local player's (HUD / tests)
     const std::vector<KamikazeMine>& kamikazeMines() const { return mines_; }

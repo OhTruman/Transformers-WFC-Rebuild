@@ -2152,6 +2152,7 @@ void World::tickPrefix(float dt) {
     joinStep();
     applyQueuedRemoteCommands(dt);   // the Remote seats' commands for this step (main thread, after the background part joined)
     tickSlotSwaps(dt);   // session slot handovers at their agreed tick (main thread, before any bot / pawn work)
+    applyPendingSelections();   // online Choose Character picks due this tick (before spawns)
     tickSeatMissiles(dt);   // the seats' guided missiles (every peer, by match player index)
     static const bool secLog = std::getenv("WFC_ASYNCLOG") != nullptr;
     auto prefixMark = [&](int i) { if (!secLog) return; const double t = profNowMs(); prefixSecMs_[i] += t - prefixMark_; prefixMark_ = t; };
@@ -3477,6 +3478,12 @@ void World::applySeat(SeatRef& s, const RemoteCommand& c, float dt) {
         if (!s.spawned) { s.intent = MoveIntent{}; return; }
         Character& pc = *s.pc;
         pc.setAimPitch(c.aimPitch);
+        {   // the homing lock from the eye toward the command's aim point
+            const Weapon* hw = pc.moveForm() == Form::Vehicle ? pc.vehicleWeapon() : &pc.weapon();
+            const core::Vec3 eye = botEye(pc), at = seatAimPoint(pc, c, hw && hw->rangeM > 0.0f ? hw->rangeM : 300.0f);
+            const core::Vec3 d = at - eye;
+            tickSeatLock(p, pc, eye, core::length(d) > 1e-4f ? core::normalize(d) : core::forwardFromYawPitch(c.aimYaw, c.aimPitch), dt);
+        }
         if (pc.inputLocked()) { s.intent = MoveIntent{}; return; }   // TnBuffDecoyTrap: no movement / buttons
         if (SeatMissile* gm = seatMissileMut(p); gm && gm->alive) {   // GuidingMissile: ClearInputs / StopMovement; the axes steer
             gm->lr = core::clampf(c.moveRight / 127.0f, -1.0f, 1.0f); gm->ud = core::clampf(c.moveForward / 127.0f, -1.0f, 1.0f);
@@ -3669,6 +3676,7 @@ void World::remoteFire(SeatRef& s, Weapon& w, const core::Vec3& aimPt, bool cons
         if (two) w.muzzleSocket = (sock + 1) % 2;
         if (w.projectile()) {   // RealStartLoc = the socket, aimed at the aim point
             spawnProjectile(origin, core::normalize(aimPt - origin) * w.projSpeed, w, p);
+            if (w.projHoming && seatLockTarget(p) >= 0) projectiles_.back().target = seatLockTarget(p);   // SetTarget(locked ? target : none)
             participantShots_.push_back({p, w.def ? w.def->id : "", origin, aimPt, false, -1});
             return;
         }
@@ -3677,6 +3685,7 @@ void World::remoteFire(SeatRef& s, Weapon& w, const core::Vec3& aimPt, bool cons
     if (w.projectile()) {
         const core::Vec3 muzzle = eye + d * 1.5f;   // the bots' muzzle stand-in (no posed held weapon on participants)
         spawnProjectile(muzzle, d * w.projSpeed, w, p);
+        if (w.projHoming && seatLockTarget(p) >= 0) projectiles_.back().target = seatLockTarget(p);   // SetTarget(locked ? target : none)
         participantShots_.push_back({p, w.def ? w.def->id : "", muzzle, aimPt, false, -1});
     } else if (w.simulated() && !w.beam()) {
         for (int k = 0; k < std::max(1, w.shots); ++k) { pellet_ = k; fireHitscanAs(p, pc, w, eye, d); }
@@ -3866,6 +3875,62 @@ void World::tickSeatMissiles(float dt) {
     }
 }
 
+void World::queueSeatSelection(int seat, const CharacterSelection& sel, uint32_t atTick) {
+    if ((int64_t)atTick <= (int64_t)simTick_) LOG_WARN("session: p%d pick for tick %u arrived at tick %lld: applied at the next step", seat, atTick, (long long)simTick_);
+    PendingSelection p{seat, atTick, sel};
+    auto it = std::upper_bound(pendingSelections_.begin(), pendingSelections_.end(), p, [](const PendingSelection& a, const PendingSelection& b) {
+        return a.tick != b.tick ? a.tick < b.tick : a.seat < b.seat; });
+    pendingSelections_.insert(it, p);
+}
+
+void World::applyPendingSelections() {
+    size_t n = 0;
+    for (; n < pendingSelections_.size() && (int64_t)pendingSelections_[n].tick <= (int64_t)simTick_; ++n) {
+        const PendingSelection& p = pendingSelections_[n];
+        if (!matchActive_ || p.seat < 0 || (size_t)p.seat >= match_.players().size()) continue;
+        const bool ok = match_.selectCharacter(p.seat, p.sel);
+        LOG_INFO("session: p%d Choose Character at tick %lld: %s", p.seat, (long long)simTick_, ok ? "applied (next spawn)" : "refused");
+    }
+    if (n) pendingSelections_.erase(pendingSelections_.begin(), pendingSelections_.begin() + (long)n);
+}
+
+void World::tickSeatLock(int p, const Character& pc, const core::Vec3& eye, const core::Vec3& fwd, float dt) {
+    if (seatLocks_.size() <= (size_t)p) seatLocks_.resize((size_t)p + 1);
+    SeatLock& L = seatLocks_[(size_t)p];
+    const Weapon* w = pc.moveForm() == Form::Vehicle ? pc.vehicleWeapon() : &pc.weapon();
+    if (!matchActive_ || pc.isTransforming() || !w || !w->projHoming || w->lockOnTime <= 0.0f) { L = SeatLock{}; return; }
+    const float deg4 = 4.0f * 0.0174533f;
+    int best = -1; float bestAng = 1e9f;
+    for (size_t i = 0; i < match_.players().size(); ++i) {   // by match player index
+        const int q = (int)i;
+        if (q == p || match_.sameTeam(q, p)) continue;
+        const Character* t = participantPawn(q);
+        if (!t) continue;
+        const bool robot = t->moveForm() == Form::Robot;
+        if (robot && !w->lockRobots) continue;
+        const core::Vec3 d = t->actorLocation() - eye;
+        const float dist = core::length(d);
+        if (dist < 1e-3f || dist > w->rangeM) continue;
+        const float minR = robot ? 6.0f : 5.0f, maxR = 7.0f;
+        float half = std::max(std::atan(minR / dist), std::min(deg4, std::atan(maxR / dist)));
+        half = std::min(half, std::atan(maxR / dist));
+        const float ang = std::acos(core::clampf(core::dot(d * (1.0f / dist), fwd), -1.0f, 1.0f));
+        if (ang <= half && ang < bestAng) { bestAng = ang; best = q; }
+    }
+    if (best >= 0) {
+        L.hold = 0.0f;
+        if (best != L.candidate) { L.candidate = best; L.timer = 0.0f; if (best != L.target) L.locked = false; }
+        L.timer += dt;
+        if (L.timer >= w->lockOnTime && (w->ammo > 0 || w->magSize <= 0)) { L.locked = true; L.target = best; }
+    } else {
+        L.candidate = -1; L.timer = 0.0f;
+        if (L.locked) {
+            L.hold += dt;
+            if (L.hold >= w->holdLockOnTime || !participantPawn(L.target)) { L.locked = false; L.target = -1; L.hold = 0.0f; }
+        }
+    }
+}
+
 void World::clearAllParticipants() {
     // Every participant leaves (the online seat order rebuilds the numbering identically on every peer).
     for (MatchOpponent* o : opponents_) o->destroy();
@@ -3874,7 +3939,7 @@ void World::clearAllParticipants() {
     for (size_t i = 0; i < actors_.size();) { if (!actors_[i]->alive()) { actors_[i] = std::move(actors_.back()); actors_.pop_back(); } else ++i; }
     match_.truncatePlayers(0);
     localPlayer_ = -1;
-    bots_.clear(); smart_.clear(); anySmart_ = false; remoteIdle_.clear();
+    bots_.clear(); smart_.clear(); anySmart_ = false; remoteIdle_.clear(); seatLocks_.clear(); pendingSelections_.clear();
 }
 
 uint64_t World::simStateHash() const {
@@ -5543,7 +5608,7 @@ std::string World::triggerKillstreakFor(int player) {
         LOG_INFO("killstreak %s triggered (p%d)", id.c_str(), player);
         return id;
     }
-    if (player != localPlayer_ && (id == "GuidedMissileStreak" || id == "MinePooperStreak")) return "";
+    if (player != localPlayer_ && (id == "GuidedMissileStreak" || (id == "MinePooperStreak" && !seatHuman(player)))) return "";   // every human seat (bots: not yet)
     mp.acquiredKillstreaks.pop_back();
     const int team = mp.team;
     const bool teamGame = match_.settings().teamGame;
@@ -5763,7 +5828,11 @@ void World::tickAbilityEffects(float dt) {
         if (!localDead_) onDrainTick(targets);          // [Systems M08i] TnBuffDrainSource.HealSound (>= 1 target)
     }
     if (!onlineSeats_) tickLocalMelee(dt);   // online: the seat ticks
-    tickHomingLock(dt);
+    if (!onlineSeats_) tickHomingLock(dt);
+    else {   // online: the HUD lock is the local seat's (applySeat ticks it on every peer)
+        const SeatLock* sl = localPlayer_ >= 0 && (size_t)localPlayer_ < seatLocks_.size() ? &seatLocks_[(size_t)localPlayer_] : nullptr;
+        locked_ = sl && sl->locked; lockTarget_ = sl ? sl->target : -1; lockCandidate_ = sl ? sl->candidate : -1; lockTimer_ = sl ? sl->timer : 0.0f;
+    }
     grenadeCooldown_ = std::max(0.0f, grenadeCooldown_ - dt);
     if (grenadeTossDelay_ >= 0.0f) {
         grenadeTossDelay_ -= dt;
@@ -7263,12 +7332,14 @@ void World::tickKillstreakItems(float dt) {
         ++i;
     }
     // MinePooper: every 2.0 s while the 15 s buff lasts, spawn at owner + (400, 100, 0) rotated.
-    if (pc.minePooperRemain_ > 0.0f && !localDead_) {
+    auto pooper = [&](Character& pc, int owner) {
+    if (pc.minePooperRemain_ > 0.0f) {
         pc.minePooperRemain_ -= dt; pc.minePooperTimer_ -= dt;
         if (pc.minePooperTimer_ <= 0.0f) {
             pc.minePooperTimer_ += 2.0f;
             const core::Vec3 f = core::forwardFromYawPitch(pc.yaw(), 0.0f), r = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));
             KamikazeMine m; m.pos = pc.actorLocation() + f * 4.0f + r * 1.0f; m.vel = {0, 0, 0};
+            m.owner = owner == localPlayer_ && !onlineSeats_ ? -1 : owner;   // -1 = the offline local player (the old path)
             m.audioKey = ++projAudioKey_;                  // [Systems M08p]
             mines_.push_back(m);
             static const bool noMinePres = std::getenv("WFC_NOMINEPRES") != nullptr;   // harness (perf bisects): no mine presentation
@@ -7276,31 +7347,43 @@ void World::tickKillstreakItems(float dt) {
                 ensureAbilityModels();
                 MinePres& mp = minePres_[m.audioKey];
                 mp.yaw = pc.yaw();
-                if (renderer_) { const core::Vec3 ff = f, uu{0, 1, 0}; mp.fx = fxStepSpawn("FX_KamikazeMine_p.FX.Trail_KamikazeMine_FX", m.pos, ff, uu, fxTeamOf(localPlayer_), false); }
+                if (renderer_) { const core::Vec3 ff = f, uu{0, 1, 0}; mp.fx = fxStepSpawn("FX_KamikazeMine_p.FX.Trail_KamikazeMine_FX", m.pos, ff, uu, fxTeamOf(owner), false); }
             }
         }
     }
+    };
+    for (size_t q = 0; q < match_.players().size(); ++q)   // every human seat by match player index (offline: the local player only)
+        if (seatHuman((int)q)) if (Character* oc = participantPawnMutable((int)q)) pooper(*oc, (int)q);
     const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
     for (size_t i = 0; i < mines_.size();) {
         KamikazeMine& m = mines_[i];
         m.t += dt;
-        bool boom = false, gone = m.t >= 60.0f || m.health <= 0.0f || localDead_;   // LifeSpan 60; destroyed with the owner [PROV]
+        const int mo = m.owner >= 0 ? m.owner : localPlayer_;
+        bool boom = false, gone = m.t >= 60.0f || m.health <= 0.0f || (m.owner >= 0 ? participantPawn(mo) == nullptr : localDead_);   // LifeSpan 60; destroyed with the owner [PROV]
         if (m.t < 2.0f) {
             // Hover phase (2 s) between 50 and 150 UU above the floor: rise to 1.0 m [PROV height within the range].
             float gy; core::Vec3 gn;
             if (collision_.valid() && collision_.groundHeight(m.pos.x, m.pos.z, m.pos.y + 0.5f, 0.5f, gy, gn)) m.pos.y += (gy + 1.0f - m.pos.y) * std::min(1.0f, 4.0f * dt);
         } else {
             // Seek: closest visible enemy within SearchRadius 2000 UU (disguised pawns ignored), HomingSpeed 2300 UU/s.
-            const MatchOpponent* tgt = nullptr; float best = 20.0f;
-            if (matchActive_)
+            const Character* tgt = nullptr; float best = 20.0f;
+            if (matchActive_ && m.owner >= 0) {   // online: the owner's enemies by match player index
+                for (size_t q = 0; q < match_.players().size(); ++q) {
+                    const Character* c = (int)q == mo || match_.sameTeam((int)q, mo) ? nullptr : participantPawn((int)q);
+                    float tt;
+                    if (!c) continue;
+                    const float d = core::length(c->actorLocation() - m.pos);
+                    if (d < best && !(line && line->segmentHit(m.pos, c->actorLocation(), tt))) { best = d; tgt = c; }
+                }
+            } else if (matchActive_)
                 for (const MatchOpponent* o : opponents_) {
                     if (!o->spawned() || match_.sameTeam(o->matchPlayer(), localPlayer_)) continue;
                     float d = core::length(o->pawn().actorLocation() - m.pos), tt;
-                    if (d < best && !(line && line->segmentHit(m.pos, o->pawn().actorLocation(), tt))) { best = d; tgt = o; }
+                    if (d < best && !(line && line->segmentHit(m.pos, o->pawn().actorLocation(), tt))) { best = d; tgt = &o->pawn(); }
                 }
             if (tgt) {
-                m.vel = core::normalize(tgt->pawn().actorLocation() - m.pos) * 23.0f;
-                const Character& e = tgt->pawn();
+                m.vel = core::normalize(tgt->actorLocation() - m.pos) * 23.0f;
+                const Character& e = *tgt;
                 const core::Vec3 d = e.actorLocation() - m.pos;
                 if (std::hypot(d.x, d.z) <= e.cylinderRadius(e.moveForm()) + 0.3f && std::fabs(d.y) <= e.cylinderHalfHeight(e.moveForm()) + 0.3f) boom = true;
             } else m.vel = {0, 0, 0};
@@ -7309,7 +7392,7 @@ void World::tickKillstreakItems(float dt) {
             if (line && core::length(m.vel) > 0.0f && line->segmentHit(m.pos, next, tt)) boom = true;
             else m.pos = next;
         }
-        if (boom) radiusDamage(m.pos, 125.0f, 5.0f, localPlayer_, "TransGame.TnDamageTypeKamikazeMine");
+        if (boom) radiusDamage(m.pos, 125.0f, 5.0f, mo, "TransGame.TnDamageTypeKamikazeMine");
         // [Systems M08p] FoundTarget once tracking (m.vel set toward a target); explosion (target / wall / shot) vs the fizzle
         if (!boom && !gone) setKamikazeMineAudio(m.audioKey, m.pos, core::length(m.vel) > 0.0f);
         else if (boom || m.health <= 0.0f) onKamikazeMineExploded(m.audioKey, m.pos);

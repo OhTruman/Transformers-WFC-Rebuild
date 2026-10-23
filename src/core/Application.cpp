@@ -5671,6 +5671,29 @@ void Application::runSessionTest() {
                      (int)launched, m0.x, m0.y, m0.z, (int)frozen, (int)steered, (int)cooling, (int)boom);
             return launched && frozen && steered && cooling && boom;
         });
+    partialCase("remote homing lock: the aimed enemy locked, the rocket takes it", game::Specialty::Soldier, {"HomingRocket", "AssaultRifle", "FlakGrenades"}, {"Hover", "Cloaking"},
+        [&](int q, game::MatchOpponent* T, game::RemoteCommand& cmd, const std::function<void()>& stepCmd, const std::function<void()>& aimAt) {
+            const game::Character* me = world_.participantPawn(q);
+            if (!me || !me->weapon().projHoming) { LOG_INFO("SESSIONTEST homing: held weapon %s", me && me->weapon().def ? me->weapon().def->id : "-"); return false; }
+            if (!me->weapon().lockRobots) {   // Thermo rockets lock onto vehicles only (authored): the target transforms first
+                T->pawn().beginTransform();
+                for (int i = 0; i < 150; ++i) { aimAt(); stepCmd(); }
+            }
+            int lockedAt = -1;
+            for (int i = 0; i < 180 && lockedAt < 0; ++i) { aimAt(); stepCmd(); if (world_.seatLockTarget(q) == T->matchPlayer()) lockedAt = i; }
+            LOG_INFO("SESSIONTEST homing: lock on p%d after %d steps (LockOnTime %.2f s)", T->matchPlayer(), lockedAt, me->weapon().lockOnTime);
+            return lockedAt >= 0;
+        });
+    partialCase("remote Thermo Mine Re-Spawner: the seat's mines spawn and seek", game::Specialty::Soldier, {"AssaultRifle", "HomingRocket", "FlakGrenades"}, {"Hover", "Cloaking"},
+        [&](int q, game::MatchOpponent*, game::RemoteCommand& cmd, const std::function<void()>& stepCmd, const std::function<void()>& aimAt) {
+            world_.match().playerMutable(q).acquiredKillstreaks.push_back("MinePooperStreak");
+            aimAt(); cmd.pressed = 1u << (int)platform::Button::Killstreak; stepCmd();
+            size_t most = 0;
+            for (int i = 0; i < 300; ++i) { aimAt(); stepCmd(); most = std::max(most, world_.kamikazeMines().size()); }
+            int owned = 0; for (const auto& m : world_.kamikazeMines()) owned += m.owner == q;
+            LOG_INFO("SESSIONTEST mines: up to %zu live, %d owned by the seat now", most, owned);
+            return world_.match().players()[(size_t)q].acquiredKillstreaks.empty() && most >= 2;
+        });
     // The online local seat through the wire path: two peers with the same seed and the same local command stream reach an equal state.
     {
         uint64_t hs[2] = {0, 0};
@@ -5834,6 +5857,25 @@ void Application::runSessionTest() {
         game::MatchLaunch R0; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=CTF", R0);
         LOG_INFO("SESSIONTEST CTF rounds: ?Rounds=4 -> %d, none -> %d", R4.settings.rounds, R0.settings.rounds);
         check(R4.settings.rounds == 4 && R0.settings.rounds == 2, "CTF ?Rounds=4 plays 4 rounds; no option keeps 2");
+    }
+    {   // Online Choose Character: seat 1 picks the Scout preset for tick 300 (before the start); both perspectives apply it alike
+        uint64_t hs[2] = {0, 0}; std::string spec[2];
+        for (int ls = 0; ls < 2; ++ls) {
+            game::MatchLaunch S; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsFriendly=1?BotsEnemy=1", S);
+            S.seed = 0x5eedc5e1u; S.online = true; S.localTeam = ls == 0 ? 0 : 1;
+            S.humans = {seat("Seat0", 0, "WFC-CS-0"), seat("Seat1", 1, "WFC-CS-1")}; S.localSeat = ls;
+            world_.launchMatch(S);
+            game::CharacterSelection sc; sc.type = 0; sc.specialty = game::Specialty::Scout; sc.weapons = {"PlasmaCannon", "HeavyPistol", "FlakGrenades"};
+            world_.queueSeatSelection(1, sc, (uint32_t)(world_.simTick() + 300));
+            for (int i = 0; i < 900; ++i) {
+                for (int st = 0; st < 2; ++st) { game::RemoteCommand c; c.tick = (uint32_t)(world_.simTick() + 1); c.aimYaw = st ? 0.785398f : -2.356194f; world_.applyRemoteCommand(st, c); }
+                world_.handleInput(idle, dt); world_.tick(dt);
+            }
+            hs[ls] = world_.simStateHash();
+            if (const game::Character* c = world_.participantPawn(1)) spec[ls] = c->specialty();
+        }
+        LOG_INFO("SESSIONTEST Choose Character: seat 1 specialty %s / %s, hashes %016llx %016llx", spec[0].c_str(), spec[1].c_str(), (unsigned long long)hs[0], (unsigned long long)hs[1]);
+        check(hs[0] == hs[1] && spec[0] == spec[1] && spec[0] == "Scout", "online Choose Character: seat 1's tick-stamped Scout pick applies alike from both perspectives");
     }
     LOG_INFO("SESSIONTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
