@@ -3819,7 +3819,12 @@ void Pipeline::computeEnv(const core::Vec3& p, bool dynamicObject, LightEnv& env
     // (S3, RT Realistic with R4 and its probes: the RT world's ambient - sky + bounce - in place of the SkyLights' terms;
     // the folded lights below stay)
     core::Vec3 rtAmb[6];
-    const bool rtProbe = giProbeAt(p, rtAmb);
+    bool rtProbe = giProbeAt(p, rtAmb);
+    // (a dynamic object whose probes trace near black - giProbeDark: the SkyLight terms below as in Off)
+    float probePeak = 0.0f;
+    if (rtProbe) for (int f = 0; f < 6; ++f) probePeak = std::max(probePeak, 0.2126f * rtAmb[f].x + 0.7152f * rtAmb[f].y + 0.0722f * rtAmb[f].z);
+    const bool probeDark = rtProbe && dynamicObject && giProbeDark(rtAmb);
+    if (probeDark) rtProbe = false;
     if (rtProbe) for (int f = 0; f < 6; ++f) env.cube[f] = rtAmb[f];
     // [CONF] TnRobotForm/TnVehicleForm LightEnvironmentComponent TotalLightCount = 2 (TransGame.xxx):
     // the brightest 2 lights stay direct, everything else is folded into the ambient cube.
@@ -3912,6 +3917,18 @@ void Pipeline::computeEnv(const core::Vec3& p, bool dynamicObject, LightEnv& env
                 float w = std::max(core::dot(c.L, axes[f]), 0.0f);
                 env.cube[f] = env.cube[f] + c.I * (w * vis);
             }
+        }
+    }
+    // (diagnostics) WFC_ENVLOG=1: a dynamic object's environment that ends near black - where its light came from
+    static const bool envLog = std::getenv("WFC_ENVLOG") != nullptr;
+    static int envLogged = 0;
+    if (envLog && dynamicObject && envLogged < 40) {
+        float peak = 0.0f;
+        for (int f = 0; f < 6; ++f) peak = std::max(peak, 0.2126f * env.cube[f].x + 0.7152f * env.cube[f].y + 0.0722f * env.cube[f].z);
+        if (peak < 0.02f || probeDark) {
+            ++envLogged;
+            LOG_INFO("ENVLOG f%d at (%.2f %.2f %.2f): ambient peak %.4f, %d direct, RT probe %s (peak %.4f)", frameNo_, p.x, p.y, p.z, peak,
+                     env.n, probeDark ? "REJECTED dark" : (rtProbe ? "used" : "none"), probePeak);
         }
     }
 }

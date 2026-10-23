@@ -186,7 +186,21 @@ void Pipeline::doDirectLightEnvUpdate(int form, bool full) {
         static const bool noProbes = std::getenv("WFC_NOBEASTPROBES") != nullptr;   // A/B
         core::Vec3 pc[6];
         // (S3, RT Realistic with R4: the RT probe grid in place of the bake's Beast probes)
-        if (!noProbes && (giProbeAt(origin, pc) || beastAmbient(toUE(origin), pc)))
+        // (a traced cube that comes out near black - giProbeDark - is not used: the Beast probe as in Off)
+        bool got = !noProbes && giProbeAt(origin, pc) && !giProbeDark(pc);
+        if (!got && !noProbes) got = beastAmbient(toUE(origin), pc);
+        static const bool envLog = std::getenv("WFC_ENVLOG") != nullptr;
+        static int dleLogged = 0;
+        if (envLog && dleLogged < 40) {
+            core::Vec3 rt[6];
+            const bool rtHit = !noProbes && giProbeAt(origin, rt);
+            if (rtHit && giProbeDark(rt)) {
+                ++dleLogged;
+                LOG_INFO("ENVLOG DLE form %d at (%.2f %.2f %.2f): RT probe REJECTED dark, bake ambient %s", form, origin.x, origin.y, origin.z,
+                         got ? "used" : "none");
+            }
+        }
+        if (got)
             for (int fc = 0; fc < 6; ++fc) env.cube[fc] = env.cube[fc] + pc[fc];
     }
     core::Vec3 lightsSH[6];               // LightsSH (+0x108): direct lights folded into the ambient cube
