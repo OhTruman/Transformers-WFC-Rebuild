@@ -3727,3 +3727,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   compile; 0 missing textures); gaps for Rendering: 3 Omega Supreme robot material instances (translator), the
   PostProcessVolumeHeightFog subclass not read by tools/render, the M72 fallback MP-only (campaign extras cooked in sibling
   sublevels). A1_IAC running (48 sublevels).
+2026-10-23 03:47 MERGED 2c6cc2b3 mid-match leave (host-run SeatLeave at an agreed tick; WFC_UDPLEAVE_AT; CatchUpProgress stops at live),
+  d6220894 Escalation E2b part 1 (Wall_Crashers; G1 Taken path tested; ESCTEST 29 / 29 + 6 / 6), 743992eb WFC_STUCKLOG,
+  two-PC test doc. DECISIONS: leave rule = SeatLeave only sim change + D16 bot always (Frontend drops its PeerDropped swap);
+  overlay f approved (e + Debris / Gorge broken floors back to hulls; 18 -> 12 fall-through candidates); Enhanced water row
+  hidden until tuned; PPV fog accepted (subtle, authored); X7 parked (mirrored det -1 instances lose 18-28 % at 2x).
+  x36: same-moment arms confirmed after the seed fix. Card: Frontend campaign + pt9 -> Rendering x37 (smoke frames).
+  Internal test package on my word after pt9 + both leave halves + overlay f.
