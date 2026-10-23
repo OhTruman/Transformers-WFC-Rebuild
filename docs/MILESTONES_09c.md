@@ -4034,3 +4034,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   lift needs the player to walk on: test artifact; the remaining black slot = suspected pod skeletal mesh at bind pose,
   data / anim item). esc_p05 cyan shape = a MESH (unchanged with WFC_NOMAPFX=1), suspect WEP_Shield_p.Barrier with the
   Defrag material param missing; Rendering builds a WFC_SKIPMAT exe, the Frontend reruns 3 arms with it.
+2026-10-23 11:05 GATE FINDING (Gameplay): TnSeqAct_TransformWorldProp unimplemented: campaign doors / tube doors / pods (A1 174 ops / 47
+  actors, A2 184 / 29, A3 11 / 72, A4 39, D1 5) never open -> progression blocked at scripted doors; the A1 black slot = the
+  untransformed pod. GO: AssetTools per-chapter transforming_actors export (MP schema; A1 first), Gameplay loader + op +
+  nav states + FINAL_BASE_ITEMS 07, Rendering poses them from TransformingActors' t. Also: barrier Fresnel fix (Rendering).
+  The cut moves to the head carrying both; the timed gate waits for the reboot anyway.
