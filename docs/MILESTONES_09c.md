@@ -3884,3 +3884,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 07:40 MERGED a90bea42 campaign RT calibration fix (the Omega blotches = a wrong sunless fit from the tracer counting the 9 km
   SpaceDome as a wall; sky rule aligned with the runtime; D5 now a real sun fit k 0.137). A1's opening = the intro lift
   (MoverPathNodes on the elevator): AssetTools exports mover-attached nav, Gameplay's BotNav rides a mover base.
+2026-10-23 07:44 MERGED f18a203c Escalation E3b2 (Jet boosters as hover weak points, loot by spawn-list row, +3 ability resource on
+  touch; GOAP port deferred behind the campaign runtime), 89d4acd9 Escalation launches from the menus (SV tag accepted,
+  URL SV -> ESC). Open at Gameplay: the human's in-map pick must displace the squad member (re-SetupAiSquad).
