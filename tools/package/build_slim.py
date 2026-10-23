@@ -78,6 +78,9 @@ ASSETTOOLS_TREES = ['AssetTools/out/escalation_characters',   # + the campaign c
 # data (ExtractedAssets content, out/campaign_characters, out/campaign_anims): AssetTools' list, ROOT-relative paths.
 CAMPAIGN_RENDER = 'AssetTools/out/campaign_render'
 CAMPAIGN_OUTSIDE_TSV = 'AssetTools/manifests/campaign/campaign_assets_outside_render.tsv'
+# ... and per chapter the manifests the runtime reads (a5d088db: WorldCampaign / Matinee / Runtime, MapState, CampaignObjectives):
+# next_map/<CH>_<kind>.json and campaign/<ch prefix, lower case>_assets.json. The other next_map files (audits, ~3.3 GB) stay out.
+CAMPAIGN_NEXT_MAP = ['kismet', 'matinee', 'pawn_factories', 'objectives', 'movers']
 # the head's own data folders (this repo): every file ships from the head being packaged, at Rebuild/<dir>/ (slim_files.tsv listed 7
 # of data/frontend's 9 files - iconic_presets.json and bot_skill.json were missing - and sources them from the live Rebuild tree)
 HEAD_DATA_DIRS = ['data/frontend', 'data/gameplay', 'data/campaign']   # + the chapters' generated audio (SYSTEMS_CAMPAIGN_AUDIO_HOSTED)
@@ -207,6 +210,18 @@ def main():
         if not os.path.isdir(cdir):
             continue
         chapter_lm = os.path.isdir(os.path.join(cdir, 'lightmaps'))
+        mans = ['AssetTools/manifests/next_map/%s_%s.json' % (ch, k) for k in CAMPAIGN_NEXT_MAP] + \
+               ['AssetTools/manifests/campaign/%s_assets.json' % ch.split('_')[0].lower()]
+        for src in mans:
+            dst = 'Transformers Rebuild/' + src
+            if dst in have_dest:
+                continue
+            if not os.path.isfile(os.path.join(ROOT, src)):
+                problems.append('campaign manifest missing: %s' % src)
+                continue
+            sz = os.path.getsize(os.path.join(ROOT, src))
+            rows.append(dict(dest=dst, source=src, bytes=str(sz), action='keep', reason='campaign manifest'))
+            have_dest.add(dst); camp_files += 1; camp_bytes += sz
         camp_chapters.append(ch + (' (chapter lightmaps)' if chapter_lm else ''))
         for dp, _, fs in os.walk(cdir):
             rel = os.path.relpath(dp, cdir).replace(os.sep, '/')
@@ -226,7 +241,7 @@ def main():
     if os.path.isfile(tsvp):
         for r in csv.DictReader(open(tsvp, encoding='utf-8'), delimiter='\t'):
             src = (r.get('path') or '').replace('\\', '/')
-            if not src:
+            if not src or src.endswith('.py'):   # (the list names its own export scripts: not game data)
                 continue
             dst = 'Transformers Rebuild/' + src
             if dst in have_dest:
