@@ -304,6 +304,21 @@ void World::tickCampaign(float dt) {
     // The squad respawns at once (AIRespawnDelay 0) near a player, on the nav (PROV: the nav cell nearest a point 6 m in front of the
     // nearest human; the original takes the closest unoccupied nav point in front of a player).
     if (match_.state() != Match::State::InProgress || cp_.gameOver) return;
+    // A squad member stranded 30 s (the versus bots' unstick would suicide): the original squad has no such rule, so it is moved back
+    // beside its buddy instead (PROV, PC adaptation; flagged by the strand rules, applied here in the sequential part of the step).
+    for (BotBrain& b : bots_) {
+        if (!b.cpRecover) continue;
+        b.cpRecover = false;
+        Character* pc = participantPawnMutable(b.player);
+        const Character* lead = cpLeader(b.player);
+        if (!pc || !lead) continue;
+        core::Vec3 at = lead->position();
+        if (botNav_.valid()) { const int c = botNav_.findCell(at, 4.0f); if (c >= 0) at = botNav_.cells()[(size_t)c].centroid; }
+        at = at + core::Vec3{std::cos(lead->yaw()) * 3.0f, 0.5f, -std::sin(lead->yaw()) * 3.0f};
+        pc->setPosition(at); pc->velocity() = core::Vec3{0, 0, 0};
+        b.offMeshRun = 0.0f; b.noWaySince = -1.0f; b.path.clear(); b.wp = 0; b.wantRepath = true;
+        LOG_INFO("campaign: squad p%d stranded 30 s: moved back beside its buddy at (%.1f %.1f %.1f)", b.player, at.x, at.y, at.z);
+    }
     for (int p : cp_.squad) {
         if (p < 0 || (size_t)p >= match_.players().size() || match_.players()[(size_t)p].alive) continue;
         const Character* lead = cpLeader(p);

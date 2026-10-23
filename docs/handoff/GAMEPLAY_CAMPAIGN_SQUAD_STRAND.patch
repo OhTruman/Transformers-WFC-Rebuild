@@ -1,0 +1,76 @@
+diff --git a/src/game/BotBrain.h b/src/game/BotBrain.h
+index 64259ef8..44a4745e 100644
+--- a/src/game/BotBrain.h
++++ b/src/game/BotBrain.h
+@@ -95,6 +95,7 @@ struct BotBrain {
+     core::Vec3 rejoin{0, 0, 0}; float rejoinUntil = 0.0f;
+     // Stranded with no way back: since when (continuous: searches every 4 s, a gap over 6 s restarts it); 30 s -> suicide.
+     float noWaySince = -1.0f, noWayLast = -1.0f; bool suicideWish = false;
++    bool cpRecover = false;    // campaign AI squad: stranded 30 s -> moved back beside its buddy (World::tickCampaign), never a suicide
+     float offMeshRun = 0.0f;   // robot form, continuously off the mesh (0.5 m tolerance), path or no path
+     // Off-mesh entry diagnostics (log only): how the current off-mesh run began.
+     float lastVehT = -100.0f, lastOnMeshT = -100.0f; bool lastVehJet = false; core::Vec3 lastOnMeshPos{};
+diff --git a/src/game/World.h b/src/game/World.h
+index 5a47c874..8f3f7c0d 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1419,6 +1419,7 @@ private:
+     const Character* cpLeader(int bot) const;
+     bool cpSquadGoal(BotBrain& b, BotGoal& g);
+     bool cpLeaderMoved(const BotBrain& b) const;
++    bool cpSquadMember(int p) const { return cp_.active && std::find(cp_.squad.begin(), cp_.squad.end(), p) != cp_.squad.end(); }
+     void tickSurvival(float dt);
+     float svZoneScore(int zone, int type) const;
+     void svSort(int type);
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index afe122ee..352e666d 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -896,7 +896,9 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
+                     b.noWayLast = nowS;
+                     static const bool noSuicide = std::getenv("WFC_NOSTRANDSUICIDE") != nullptr;   // regression A/B against older builds
+                     // The Escalation horde never suicides (the original's AI does not; the unstick is a versus-bot PC adaptation).
+-                    if (nowS - b.noWaySince >= 30.0f && !noSuicide && !match_.players()[(size_t)b.player].directorSpawned) b.suicideWish = true;
++                    if (nowS - b.noWaySince >= 30.0f && !noSuicide && !match_.players()[(size_t)b.player].directorSpawned) {
++                        if (cpSquadMember(b.player)) b.cpRecover = true; else b.suicideWish = true;   // the campaign squad: moved back, no suicide
++                    }
+                 }
+                 LOG_INFO("bots: p%d stranded off the mesh at t %.2f at (%.1f %.1f %.1f): %s", b.player, match_.matchTime(), pos.x, pos.y, pos.z,
+                          b.hasRejoin ? "walking to the mesh" : "no way found");
+@@ -1281,7 +1283,9 @@ void World::botOffMeshWatch(BotBrain& b, const Character& pc, float dt) {
+             b.omEntrySinceVeh = now - b.lastVehT; b.omEntryJet = b.lastVehJet; b.omEntrySinceDmg = now - b.lastDamageTime;
+         }
+         static const bool noSuicide = std::getenv("WFC_NOSTRANDSUICIDE") != nullptr;
+-        if ((b.offMeshRun += dt) >= 30.0f && !noSuicide && !b.suicideWish && !match_.players()[(size_t)b.player].directorSpawned) {
++        b.offMeshRun += dt;
++        if (b.offMeshRun >= 30.0f && !noSuicide && !b.suicideWish && cpSquadMember(b.player)) b.cpRecover = true;   // the campaign squad: moved back
++        else if (b.offMeshRun >= 30.0f && !noSuicide && !b.suicideWish && !match_.players()[(size_t)b.player].directorSpawned) {
+             const core::Vec3 p = pc.position(), e = b.omEntryPos;
+             LOG_INFO("bots: p%d stranded 30 s off the mesh with a path at t %.2f at (%.1f %.1f %.1f)", b.player, now, p.x, p.y, p.z);
+             LOG_INFO("bots: p%d off-mesh entry (%s): t %.2f at (%.1f %.1f %.1f), life %.1f s, vel y %.1f, %.1f s after %s form, %.1f s after damage; "
+diff --git a/src/game/WorldCampaign.cpp b/src/game/WorldCampaign.cpp
+index 71dafd14..d594bde3 100644
+--- a/src/game/WorldCampaign.cpp
++++ b/src/game/WorldCampaign.cpp
+@@ -304,6 +304,21 @@ void World::tickCampaign(float dt) {
+     // The squad respawns at once (AIRespawnDelay 0) near a player, on the nav (PROV: the nav cell nearest a point 6 m in front of the
+     // nearest human; the original takes the closest unoccupied nav point in front of a player).
+     if (match_.state() != Match::State::InProgress || cp_.gameOver) return;
++    // A squad member stranded 30 s (the versus bots' unstick would suicide): the original squad has no such rule, so it is moved back
++    // beside its buddy instead (PROV, PC adaptation; flagged by the strand rules, applied here in the sequential part of the step).
++    for (BotBrain& b : bots_) {
++        if (!b.cpRecover) continue;
++        b.cpRecover = false;
++        Character* pc = participantPawnMutable(b.player);
++        const Character* lead = cpLeader(b.player);
++        if (!pc || !lead) continue;
++        core::Vec3 at = lead->position();
++        if (botNav_.valid()) { const int c = botNav_.findCell(at, 4.0f); if (c >= 0) at = botNav_.cells()[(size_t)c].centroid; }
++        at = at + core::Vec3{std::cos(lead->yaw()) * 3.0f, 0.5f, -std::sin(lead->yaw()) * 3.0f};
++        pc->setPosition(at); pc->velocity() = core::Vec3{0, 0, 0};
++        b.offMeshRun = 0.0f; b.noWaySince = -1.0f; b.path.clear(); b.wp = 0; b.wantRepath = true;
++        LOG_INFO("campaign: squad p%d stranded 30 s: moved back beside its buddy at (%.1f %.1f %.1f)", b.player, at.x, at.y, at.z);
++    }
+     for (int p : cp_.squad) {
+         if (p < 0 || (size_t)p >= match_.players().size() || match_.players()[(size_t)p].alive) continue;
+         const Character* lead = cpLeader(p);
