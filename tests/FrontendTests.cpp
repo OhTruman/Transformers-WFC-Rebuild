@@ -1946,7 +1946,8 @@ static void testLobbyFlowV2() {
                               (disjoint || v.maps.size() < 3);
         const bool closed = runUntil(*h.rt, [&] { return !h.f().mapVote().open; }, 3000) && h.f().lobby().countdown <= 10 &&
                             h.f().mapVote().winner == h.f().lobby().mapId &&
-                            std::find(v.maps.begin(), v.maps.end(), h.f().mapVote().winner) != v.maps.end() && h.fake->count("setLaunch") == 1;
+                            std::find(v.maps.begin(), v.maps.end(), h.f().mapVote().winner) != v.maps.end() && h.fake->count("setLaunch") == 1 &&
+                            h.fake->last("setLateJoinLimit") && h.fake->last("setLateJoinLimit")->arg == "300";
         // member: the vote arrives with the LobbyState; a cast goes to the host in the member info
         SessionLobby l; l.gameModeTag = "TDM"; l.mapId = 508; l.voteMaps = {508, 501, 503}; l.voteCounts = {1, 0, 0, 0}; l.voteRound = 1; l.voteOpen = true;
         SessionEvent j = ev(T::Joined); j.lobby = l; j.member.fingerprint = "WFC-SELF-SELF-9";
@@ -1988,8 +1989,15 @@ static void testLobbyFlowV2() {
                              !r.f().lobby().countingDown && r.f().currentMatch().seed == 42u && r.f().currentMatch().teamIndex == 1;
         r.f().matchLoaded();   // the Application loads the world; the replay (CatchUpProgress) runs under the load gate
         const bool progress = runUntil(*r.rt, [&] { return r.f().loading().message.find("50") != std::string::npos; });
-        check(d6.ok && waits && r.ok && asked && loading && progress, "lobby.LV8_join_in_progress",
-              std::to_string(waits) + std::to_string(asked) + std::to_string(loading) + std::to_string(progress));
+        // a refusal (the match is past the catch-up limit): the lobby wait stays, with the reason
+        SessionEvent tfa = ev(T::JoinFailed); tfa.joinFailure = SessionJoinFailure::TooFarAlong;
+        OnlineRig x({after("join", mip), after("joinRunningMatch", tfa)});
+        x.fake->lateJoin = true;
+        x.f().call("Online.JoinGame", {"7QK2M-9TDAB"});
+        const bool refused = runUntil(*x.rt, [&] { return x.popupIs("$WfcPC.Online.LateJoinTitle", "$WfcPC.Online.LateJoinTooLate"); }) &&
+                             x.f().level() == LevelKind::GameLobby && x.f().matchInProgressForMember();
+        check(d6.ok && waits && r.ok && asked && loading && progress && x.ok && refused, "lobby.LV8_join_in_progress",
+              std::to_string(waits) + std::to_string(asked) + std::to_string(loading) + std::to_string(progress) + std::to_string(refused));
     }
     // LV4: a member cannot change the mode
     {

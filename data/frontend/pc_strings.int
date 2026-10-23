@@ -21,6 +21,9 @@ PlatformWeb=Web
 WaitingForPlayers=Waiting for `n players
 WaitingForOnePlayer=Waiting for `n player
 CatchingUp=Joining the match in progress... `p%
+LateJoinTitle=Match in Progress
+LateJoinFull=The match is full. You will join the next one from this lobby.
+LateJoinTooLate=The match is too far along to join. You will join the next one from this lobby.
 HostMigrated=The host left. `k is now the host.
 Resync=Resynchronising...
 [FirstRun]

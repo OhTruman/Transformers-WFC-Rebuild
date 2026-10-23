@@ -1,0 +1,26 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 668b3d2..9f45ffe 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -119,6 +119,13 @@ template <class P> void fillRemote(const P& mp, frontend::MatchValues::Player& p
+ void fillOnlineLaunch(game::MatchLaunch& gl, const frontend::MatchLaunch& m) {
+     // Every human in the host's seat order, this machine's included (game::MatchLaunch::humans + localSeat): one numbering on every peer.
+     for (const frontend::SessionSlot& sl : m.onlineSlots) {
++        if (sl.kind == frontend::SessionSlot::Kind::Reserved) {   // [Systems] a seat kept for a joiner: dormant until it wakes
++            game::RemoteSeat d;
++            d.dormant = true;
++            d.team = 255;
++            gl.humans.push_back(d);
++            continue;
++        }
+         if (sl.kind != frontend::SessionSlot::Kind::Human) continue;
+         game::RemoteSeat h;
+         h.team = sl.team;
+@@ -128,6 +135,7 @@ void fillOnlineLaunch(game::MatchLaunch& gl, const frontend::MatchLaunch& m) {
+         if (sl.member == m.self) gl.localSeat = (int)gl.humans.size();
+         gl.humans.push_back(h);
+     }
++    if (m.lateSeat >= 0 && m.lateSeat < (int)gl.humans.size()) gl.localSeat = m.lateSeat;   // a late joiner: its own Reserved slot
+     // [Systems] No remote human (a private match hosted alone): the pre-phase-2 local path - no seat order, no lockstep driver (a
+     // 1-seat driver stepped nothing through Application's local loop: matchSteps froze, WFC_SHOTMATCH took no shots, same-seed
+     // arms diverged; Rendering 2026-10-23). The driver runs only when another human holds a seat.
