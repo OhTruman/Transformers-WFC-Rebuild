@@ -147,6 +147,9 @@ for m in ['MP_ESC_BrokenHope', 'MP_ESC_Remnant']:
                              'respawn': w.get('respawn_time') or 2.0, 'pos': [round(v, 3) for v in w['location_gltf']],
                              'yaw': round(math.atan2(-math.cos(math.radians(w.get('yaw_deg', 0.0))), -math.sin(math.radians(w.get('yaw_deg', 0.0)))), 5)}
                             for w in geo.get('weapon_pickups', [])]
+    # The dropped-weapon mesh (TnDroppedPickupWeapon draws the inventory's PickupMesh, as the factory's): weapon id -> mesh object.
+    out['dropMeshes'] = {w['inventory_type'].split('.')[-1].replace('TnWeapon', ''): w['pickup_mesh']['mesh']
+                         for w in geo.get('weapon_pickups', []) if (w.get('pickup_mesh') or {}).get('mesh')}
     path = os.path.join(OUT, 'escalation_' + m + '.json')
     with open(path, 'w') as f:
         json.dump(out, f, indent=1)

@@ -8,6 +8,7 @@
 
 #include <array>
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -82,6 +83,7 @@ struct SurvivalData {
     // TnWeaponPickupFactory (AssetTools weapon_pickups): the weapon id (our WeaponDef id), RespawnTime, location / yaw.
     struct WeaponPickup { std::string actor, weapon; float respawn = 2.0f; core::Vec3 pos{0, 0, 0}; float yaw = 0.0f; };
     std::vector<WeaponPickup> weaponPickups;
+    std::map<std::string, std::string> dropMeshes;   // weapon id -> its pickup mesh object ("WEP_RocketLauncher_p.WEP_RocketLauncher_SKEL")
     // RE's initial sorted order per type (the original binary's sort of the starting Zones list): ESCTEST's test vector.
     std::array<std::vector<std::string>, kSvTypes> initialSorted;
     static bool load(const std::string& map, SurvivalData& out);

@@ -131,6 +131,7 @@ bool SurvivalData::load(const std::string& map, SurvivalData& out) {
             w.pos = {r["pos"][0].asFloat(0), r["pos"][1].asFloat(0), r["pos"][2].asFloat(0)}; w.yaw = r["yaw"].asFloat(0);
             out.weaponPickups.push_back(w);
         }
+        for (const auto& kv : j["dropMeshes"].obj) out.dropMeshes[kv.first] = kv.second.asString();
         for (int t = 0; t < kSvTypes; ++t)
             for (size_t k = 0; k < j["initialSorted"][(size_t)t].size(); ++k) out.initialSorted[(size_t)t].push_back(j["initialSorted"][(size_t)t][k].asString());
         out.ok = !out.waves.empty() && !out.enemies.empty() && !out.zones.empty();
@@ -634,6 +635,19 @@ void World::svDropLoot(const KillFeedEntry& e) {
             }
         return;
     }
+}
+
+// The mesh a dropped weapon is drawn with (Rendering): the weapon's pickup mesh on this map's factories (escalation_geometry), else the
+// held weapon's own glTF (WeaponDef meshGltf: a weapon no factory offers, e.g. the boss Tank's rare drop). Content-relative.
+std::string World::svDropMesh(const std::string& weaponId) const {
+    auto it = svData_.dropMeshes.find(weaponId);
+    if (it != svData_.dropMeshes.end()) {
+        const std::string& m = it->second;   // "<package>.<object>" -> "<package>/<object>.gltf" (the content export layout)
+        const size_t k = m.find('.');
+        return k == std::string::npos ? m : m.substr(0, k) + "/" + m.substr(k + 1) + ".gltf";
+    }
+    if (const WeaponDef* d = findWeaponDef(weaponId)) return d->meshGltf ? d->meshGltf : "";
+    return {};
 }
 
 // The wave buffs on damage: a horde victim's DecreaseDamageTaken, a horde instigator's IncreaseDamage.
