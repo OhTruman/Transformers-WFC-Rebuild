@@ -1,0 +1,13 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 8d7427fd..5c4b8061 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -1730,7 +1730,7 @@ void Application::routeMatchToFrontend(float dt) {
+             if (e.value == 14) flow.campaignGameOver();         // SendGameOverEvent, 1 s after the death
+             break;
+         case game::MatchEvent::Type::CheckpointReached:        // text = the checkpoint actor, value = its DisplayOrder (-1: not a menu one)
+-            flow.campaignCheckpointReached(flow.currentMatch().mapId, e.value);
++            flow.campaignCheckpointReached(flow.currentMatch().mapId, e.value, e.text);   // + the faction checkpoint save
+             break;
+         case game::MatchEvent::Type::MissionComplete:          // text = the chapter, value = MapId
+             flow.campaignMissionComplete(e.value, flow.profile().campaign.difficulty);
