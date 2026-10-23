@@ -709,6 +709,10 @@ public:
         std::string socketBone; core::Mat4 socketLocal;   // the robot's PositionSocket (bone + local), for the gib location
         std::string meshKey;   // kDeathSockets key of the dying form's mesh
         bool deathSocketWorld(const char* socket, core::Vec3& out) const;   // an authored death socket's world position
+        core::Vec3 playAt(const char* socket) const;      // [Systems] where a PlayEffect entry sits now (authored socket, else the placement)
+        // [Systems] the PlayEffect entries' live effects (vid, socket): they follow the body and stop with it (playtest 2026-10-23 #5:
+        // a looping one - the jet's Smoke_Trail_Jet_Fast_FX - spawned fire-and-forget emitted at the death spot for the whole match)
+        std::vector<std::pair<int, const char*>> playFx;
         core::Vec3 pos{}, vel{};
         float fxAt = -1.0f;                               // PlayEffect modifier: start time (-1 none / done)
         int fxRow = -1;                                   // the blueprint entry's row in DeathFx.inc (-1: the default death)

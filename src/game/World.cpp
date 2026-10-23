@@ -3291,6 +3291,7 @@ void World::clearMatchActors() {
     decoys_.clear();
     buffShots_.clear();
     for (Corpse& c : corpses_) for (CorpseChunk& k : c.chunks) if (k.fx >= 0) fxStepStop(k.fx);
+    for (Corpse& c : corpses_) { for (auto& f : c.playFx) fxStepStop(f.first); c.playFx.clear(); }
     corpses_.clear();
     for (auto& kv : minePres_) if (kv.second.fx >= 0) fxStepStop(kv.second.fx);
     minePres_.clear(); mineFades_.clear();
@@ -8331,7 +8332,7 @@ void World::requestCorpse(const Character& pawn, int player, int owner, bool ai,
 }
 
 void World::spawnCorpse(const CorpseRequest& q) {
-    if (corpses_.size() >= 32) corpses_.erase(corpses_.begin());   // a cap for very large matches (oldest first)
+    if (corpses_.size() >= 32) { for (auto& f : corpses_.front().playFx) fxStepStop(f.first); corpses_.erase(corpses_.begin()); }   // a cap (oldest first)
     Corpse c;
     c.player = q.player; c.owner = q.owner; c.model = q.model; c.world = q.world; c.start = q.pose; c.vehicle = q.vehicle; c.jet = q.jet;
     c.pos = q.pos; c.vel = q.vel; c.chassis = q.chassis; c.socketBone = q.socketBone; c.socketLocal = q.socketLocal; c.meshKey = q.meshKey;
@@ -8434,8 +8435,22 @@ bool World::Corpse::deathSocketWorld(const char* socket, core::Vec3& out) const 
     return false;
 }
 
+core::Vec3 World::Corpse::playAt(const char* so) const {
+    core::Vec3 at = pos + core::Vec3{0, vehicle ? 1.0f : 1.5f, 0};   // BoosterSocket_C / TargetingSocket [PROV]
+    const char* bone = !std::strcmp(so, "Head_FX") ? "C_Spine04_Head_XB" : !std::strcmp(so, "Chest_FX") ? "C_Spine02_Lumbar02_XB" : nullptr;
+    if (!std::strcmp(so, "VaporTrailSocket_R")) at = pos;
+    const int bn = bone && model ? model->nodeByName(bone) : -1;
+    if (bn >= 0 && (size_t)bn < glob.size()) { const core::Mat4 w = world * glob[(size_t)bn]; at = core::Vec3{w.m[12], w.m[13], w.m[14]}; }
+    else if (bone && !std::strcmp(so, "Head_FX")) at = pos + core::Vec3{0, 3.0f, 0};
+    deathSocketWorld(so, at);   // the authored socket (kDeathSockets) overrides the placement above
+    return at;
+}
+
 void World::gibCorpse(Corpse& c) {
     c.gibbed = true;
+    // [Systems] the attached PlayEffect effects end with the dying actor (its PSCs go with it at the gib); their particles fade
+    for (auto& f : c.playFx) fxStepStop(f.first);
+    c.playFx.clear();
     for (LiveTransientLight& l : transientLights_) if (l.key == 1000 + c.player && l.cutAt < 0.0f) l.cutAt = l.age + 1.0f;   // LifeSpan 1
     if (!localDead_ && core::length(player_.pawn().actorLocation() - c.pos) < 10.0f) player_.controller().gibbedShake();   // GibbedCameraShake
     if (c.noGibs) {   // Melee: the Defrag dissolve alone
@@ -8653,14 +8668,12 @@ void World::tickCorpses(float dt) {
                     for (int i = 0; i < R.nPlay; ++i) {
                         if (onlyPlay >= 0 && i != onlyPlay) continue;
                         const char* so = R.play[i].socket;
-                        core::Vec3 at = c.pos + core::Vec3{0, c.vehicle ? 1.0f : 1.5f, 0};   // BoosterSocket_C / TargetingSocket [PROV]
-                        const char* bone = !std::strcmp(so, "Head_FX") ? "C_Spine04_Head_XB" : !std::strcmp(so, "Chest_FX") ? "C_Spine02_Lumbar02_XB" : nullptr;
-                        if (!std::strcmp(so, "VaporTrailSocket_R")) at = c.pos;
-                        const int bn = bone && c.model ? c.model->nodeByName(bone) : -1;
-                        if (bn >= 0 && (size_t)bn < c.glob.size()) { const core::Mat4 w = c.world * c.glob[(size_t)bn]; at = core::Vec3{w.m[12], w.m[13], w.m[14]}; }
-                        else if (bone && !std::strcmp(so, "Head_FX")) at = c.pos + core::Vec3{0, 3.0f, 0};
-                        c.deathSocketWorld(so, at);   // the authored socket (kDeathSockets) overrides the placement above
-                        fxStepSpawn(R.play[i].tmpl, at, core::Vec3{0, 1, 0}, core::Vec3{0, 0, -1}, -1, true);
+                        const core::Vec3 at = c.playAt(so);
+                        // attached to the body (HmDeathModifierPlayEffect: a PSC on the dying actor) - kept, moved with it, stopped
+                        // at the gib - not a pooled one-shot: a looping entry (the jet's smoke trail) must not emit there forever
+                        fxLight(R.play[i].tmpl, at);   // the explosion light the pooled path gave it
+                        const int vid = fxStepSpawn(R.play[i].tmpl, at, core::Vec3{0, 1, 0}, core::Vec3{0, 0, -1}, -1, false);
+                        if (vid >= 0) c.playFx.push_back({vid, so});
                     }
                 } else if (renderer_) {
                     if (c.vehicle) fxStepSpawn(c.frand() < 0.5f ? "FX_Explosives_p.FX.TF_Death_Buildup_FX" : "FX_Explosives_p.FX.TF_Death_MED_FX", c.pos + core::Vec3{0, 1.0f, 0}, core::Vec3{0, 1, 0}, core::Vec3{0, 0, -1}, -1, true);
@@ -8673,6 +8686,7 @@ void World::tickCorpses(float dt) {
                     }
                 }
             }
+            for (auto& f : c.playFx) fxStepMove(f.first, c.playAt(f.second), core::Vec3{0, 1, 0}, core::Vec3{0, 0, -1});   // follow the body
             if (c.t >= c.total) gibCorpse(c);   // _GibTimer = TotalTime
         }
         bool live = !c.gibbed;
@@ -8719,7 +8733,7 @@ void World::tickCorpses(float dt) {
                 }
             }
         }
-        if (!live) { corpses_.erase(corpses_.begin() + (long)i); continue; }   // removed (the original: TotalTime + 1 s; chunks / wreck live on)
+        if (!live) { for (auto& f : c.playFx) fxStepStop(f.first); corpses_.erase(corpses_.begin() + (long)i); continue; }   // removed (the original: TotalTime + 1 s; chunks / wreck live on)
         ++i;
     }
 }
