@@ -3747,3 +3747,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   fixes), a0781461 Quick Match host owns its port (pt9 root cause: the host kept the search transport = seat 255 -> 11 seats
   -> no driver; UDPSESSIONTEST repro). pt9 rerun on a0781461 next after Rendering's relay; internal package after it passes.
   RE D5_OME pass: AnimNodeSlot skip flag HIGH, FMV outro 10 tracks (selection UNKNOWN -> Ghidra job), RandomSeed default 0.
+2026-10-23 04:06 MERGED 1615196f voice chat step 1 (in-match mic + Audio rows + mute + talking indicators + Opus in refresh.sh;
+  VOICETEST PASS). RE: Bink FMV track rule C (tracks 0-4 bed + 5 + Lang; English = 0-5) -> Systems wires the FMV player.
