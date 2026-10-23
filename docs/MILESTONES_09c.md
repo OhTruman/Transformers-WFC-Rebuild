@@ -3690,3 +3690,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   spanned (Debris -3,113 m2 walkable), so the original nav ships where it fits; Seed's off-mesh comes from the 40 #13 meshes ->
   candidate v3 nav (shipped collision + authored hulls of those 40) for Gameplay's A/B; Berth = no hole (a hover on a BSP pit via
   the rebuilt nav). FROZEN overlay_20261023d: 114 files (collision for all 10 maps; rebuilt nav on BrokenHope / Remnant / Seed).
+2026-10-23 02:43 RE E2a review: correct except G1 (a bought item stays out for good in the original: the -cost drop re-fires New Power Level)
+  -> DECISION faithful; Gameplay folds it into E2b.
