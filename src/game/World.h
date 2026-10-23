@@ -895,6 +895,7 @@ public:
     MatchOpponent* addMatchOpponent(const std::string& name, bool drawn);
     // Escalation: the director state and the map's data (tests, HUD).
     const SurvivalState& survival() const { return sv_; }
+    mutable std::vector<int> lootFx_;                // (Escalation M11) the loot shards' effect handles (draw: one per entry)
     const SurvivalData& survivalData() const { return svData_; }
     std::string svDropMesh(const std::string& weaponId) const;   // Escalation: a dropped weapon's mesh (content-relative glTF; Rendering)
     int svTestSpawn(const std::string& typePrefix);   // WFC_ESCTEST: spawn one horde entry of that type now (its match player, or -1)

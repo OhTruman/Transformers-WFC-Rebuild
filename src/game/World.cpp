@@ -4640,6 +4640,19 @@ void World::syncMapPresentation(render::IRenderer& r) const {
                           sv_.weaponPicks[i].available;
         r.setActorHidden(svData_.weaponPickups[i].actor, !live);
     }
+    // (Escalation M11) the loot shards: FX_Pickups_p.FX.Shard_FX at each loot entry, 75 UU up (AssetTools
+    // escalation_loot_pickup.json). The shards are alike, so a pool of effect handles follows the live entries in order -
+    // repositioned every frame, grown / stopped to the count; a handle the renderer no longer knows (map change) respawns
+    for (size_t i = 0; i < sv_.loot.size(); ++i) {
+        const core::Vec3 p = sv_.loot[i].pos + core::Vec3{0.0f, 0.75f, 0.0f};
+        if (i >= lootFx_.size()) lootFx_.push_back(-1);
+        int& h = lootFx_[i];
+        if (h < 0 || !r.setParticleEffectTransform(h, p, core::Vec3{1, 0, 0}, core::Vec3{0, 1, 0}))
+            h = r.spawnParticleEffect("FX_Pickups_p.FX.Shard_FX", p, core::Vec3{1, 0, 0}, core::Vec3{0, 1, 0});
+    }
+    for (size_t i = sv_.loot.size(); i < lootFx_.size(); ++i)
+        if (lootFx_[i] >= 0) { r.stopParticleEffect(lootFx_[i]); lootFx_[i] = -1; }
+    lootFx_.resize(sv_.loot.size());
     // (Escalation / campaign) the dropped weapons: the weapon's pickup mesh where it lies (Rendering spins / tilts / settles it)
     for (const SurvivalState::Drop& d : sv_.drops) {
         if (!d.w.def) continue;
