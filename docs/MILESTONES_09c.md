@@ -3887,3 +3887,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 07:44 MERGED f18a203c Escalation E3b2 (Jet boosters as hover weak points, loot by spawn-list row, +3 ability resource on
   touch; GOAP port deferred behind the campaign runtime), 89d4acd9 Escalation launches from the menus (SV tag accepted,
   URL SV -> ESC). Open at Gameplay: the human's in-map pick must displace the squad member (re-SetupAiSquad).
+2026-10-23 07:47 AssetTools: A1_IAC inputs FROZEN (48 units collision / physics, gameplay.json, navigation + navmesh, floor-level bot_nav
+  with 34 mover-attached lift cells + 3,531 campaign_fill cells + the 92.6 m airborne_drop link; 27 / 27 starts on the nav;
+  no air nav: over the 6 GB cap). The remaining 8 chapters run as one background chain in play order. D5 calibration =
+  Rendering's corrected sun fit.
