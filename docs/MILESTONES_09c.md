@@ -4084,3 +4084,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 12:26 HAND-OVER RERUN PASS (Frontend, code dffcf31f): 249 / 249 tests, 6 / 6 runs clean, Megatron lit in D5 Realistic. Shots
   Rebuild-Frontend/work/bins/handover/. The Frontend + Rendering + Gameplay + Experimental (pre) are DONE. Waiting only
   on: chapters D2 / D3A / D3B / A5 (~14:30) and the user's reboot for the timed gate.
+2026-10-23 13:13 D2 + D3A shipped (8 / 10). Gameplay D3A mines check: 42 mines launched, 36 explode (shot / fuse / touch), no crash, no
+  patch. Open: 64 D3A transforming actors have gameplay rows but no render node (AssetTools: are their levels chapter
+  units? drop the rows if not). Air-nav queue + lanes reboot-safe and PERF_HOLD-aware (air_queue.sh, resume_lanes.ps1).
