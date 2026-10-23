@@ -3483,3 +3483,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   switch, boost trails, headlight flicker, bots floating, Seed collision, load times, smoke lifetime, HD row, video settings,
   scoreboard, health bars, switch anims, water, TTK; "do not wait for me between straightforward fixes"; a retest checklist
   when the batch is ready). Lobby v2 step 5a merged (1e9b7a73). RE §9 horde AI merged -> Gameplay. Escalation spec COMPLETE.
+2026-10-23 00:16 AssetTools: slim refresh 101,214 rows (+161 escalation, +16 campaign_anims, +6 lens_flares); CeremonialStaffHolo hum cues
+  silent as cooked (CONFIRMED); package 6 DOES carry hd_pbr_index + m6 -> #4 is a runtime condition (HD root lookup or the
+  HD 2 -> 1 clamp) for the Frontend / Systems.
