@@ -1405,6 +1405,7 @@ private:
     void svSetZoneActive(int zone, bool on);
     bool svInteractHeld(int player) const;
     void svFireGenerator(int generator, bool levelDrop = false);
+    void svTickKismet();   // Wall_Crashers (map Kismet as data)
     bool svLaunching_ = false;   // the next resetForNewLevel is an Escalation level (transforming actors: the SV start state)
     SurvivalData svData_;
     SurvivalState sv_;

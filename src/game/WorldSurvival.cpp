@@ -3,6 +3,7 @@
 // bodies / weapons / health are the versus bot presets of the horde faction with the Classic brain (the GOAP sets are not ported),
 // no power / generators / downed state; spawn point positions inside the zone box until AssetTools' PossibleSpawnPoints land.
 #include "game/World.h"
+#include "game/Destructible.h"
 #include "assets/Json.h"
 #include "core/Log.h"
 
@@ -86,6 +87,28 @@ bool SurvivalData::load(const std::string& map, SurvivalData& out) {
             }
             out.generators.push_back(g);
         }
+        const assets::Json& km = j["kismet"];
+        auto vol = [&](const std::string& name) {
+            for (size_t v = 0; v < out.volumes.size(); ++v) if (out.volumes[v].first == name) return (int)v;
+            const assets::Json& r = km["volumes"][name];
+            if (!r.isObject()) return -1;
+            Shape s;
+            s.mn = {r["min"][0].asFloat(0), r["min"][1].asFloat(0), r["min"][2].asFloat(0)};
+            s.mx = {r["max"][0].asFloat(0), r["max"][1].asFloat(0), r["max"][2].asFloat(0)};
+            for (size_t k = 0; k < r["planes"].size(); ++k) { const assets::Json& q = r["planes"][k]; s.planes.push_back({q[0].asFloat(0), q[1].asFloat(0), q[2].asFloat(0), q[3].asFloat(0)}); }
+            out.volumes.push_back({name, s});
+            return (int)out.volumes.size() - 1;
+        };
+        for (size_t k = 0; k < km["crashWalls"].size(); ++k) out.crashWalls.push_back({vol(km["crashWalls"][k][0].asString()), km["crashWalls"][k][1].asString()});
+        for (size_t k = 0; k < km["roundGates"].size(); ++k) {
+            RoundGate g; g.volume = vol(km["roundGates"][k][0].asString()); g.round = km["roundGates"][k][2].asInt(0);
+            for (size_t z = 0; z < out.zones.size(); ++z) if (out.zones[z].id == km["roundGates"][k][1].asString()) g.zone = (int)z;
+            out.roundGates.push_back(g);
+        }
+        if (km["window"].isObject()) {
+            const assets::Json& w = km["window"];
+            out.window = {vol(w["enable"].asString()), vol(w["volume"].asString()), w["wall"].asString(), w["damage"].asFloat(0)};
+        }
         for (int t = 0; t < kSvTypes; ++t)
             for (size_t k = 0; k < j["initialSorted"][(size_t)t].size(); ++k) out.initialSorted[(size_t)t].push_back(j["initialSorted"][(size_t)t][k].asString());
         out.ok = !out.waves.empty() && !out.enemies.empty() && !out.zones.empty();
@@ -148,6 +171,9 @@ void World::setupSurvival() {
     sv_.itemFactory.assign(svData_.generators.size(), -1);
     sv_.reofferTimer.assign(svData_.generators.size(), 0.0f);
     sv_.factoryWasAvailable.assign(svData_.generators.size(), 1);
+    sv_.crashDone.assign(svData_.crashWalls.size(), 0);
+    sv_.gateOn.assign(svData_.roundGates.size(), 0);
+    sv_.gateInside.assign(svData_.roundGates.size(), std::vector<uint8_t>(match_.players().size(), 0));
     for (size_t g = 0; g < svData_.generators.size(); ++g)
         for (const SurvivalData::Generator::Action& a : svData_.generators[g].actions)
             if (a.op == "unhide")
@@ -161,6 +187,50 @@ void World::setupSurvival() {
     sv_.phase = SurvivalState::Phase::PreGame;
     LOG_INFO("escalation: %s: %zu waves, %zu enemy entries, %zu zones, %zu horde slots (team %d vs players' team %d)", mapName_.c_str(),
              svData_.waves.size(), svData_.enemies.size(), nz, sv_.slots.size(), horde, svData_.coopTeam);
+}
+
+// Wall_Crashers (RE E2b §4, C): see SurvivalData::crashWalls / roundGates / window.
+void World::svTickKismet() {
+    const std::vector<MatchPlayer>& P = match_.players();
+    auto damageWall = [&](const std::string& name, float amount) {
+        for (Destructible* d : destructibles_) {   // physics.json names are object paths: match the actor name at the end
+            const std::string& n = d->name();
+            if (n.size() >= name.size() && n.compare(n.size() - name.size(), name.size(), name) == 0) { d->applyDamage(*this, amount); return true; }
+        }
+        return false;
+    };
+    auto anyInside = [&](int v, int who) {   // who: 0 any pawn, 1 players only, 2 horde only
+        if (v < 0) return false;
+        for (size_t q = 0; q < P.size(); ++q) {
+            const bool bot = P[q].kind == ParticipantKind::Bot;
+            if ((who == 1 && bot) || (who == 2 && !P[q].directorSpawned)) continue;
+            const Character* c = participantPawn((int)q);
+            if (c && svData_.volumes[(size_t)v].second.contains(c->position())) return true;
+        }
+        return false;
+    };
+    for (size_t k = 0; k < svData_.crashWalls.size(); ++k)   // SeqEvent_Touch bPlayerOnly false, once: CauseDamage 200
+        if (!sv_.crashDone[k] && anyInside(svData_.crashWalls[k].volume, 0)) {
+            sv_.crashDone[k] = 1;
+            const bool hit = damageWall(svData_.crashWalls[k].wall, 200.0f);
+            LOG_INFO("escalation: crash wall %s %s", svData_.crashWalls[k].wall.c_str(), hit ? "broken" : "NOT FOUND");
+        }
+    for (size_t k = 0; k < svData_.roundGates.size(); ++k) {   // SeqCond_Increment A == B at Round Begin -> the touch turns on
+        const SurvivalData::RoundGate& g = svData_.roundGates[k];
+        if (!sv_.gateOn[k] && sv_.roundBegins >= g.round) sv_.gateOn[k] = 1;
+        if (sv_.gateInside[k].size() < P.size()) sv_.gateInside[k].resize(P.size(), 0);
+        for (size_t q = 0; q < P.size(); ++q) {   // per pawn events: any Touched -> on, any UnTouched -> off
+            const Character* c = P[q].kind != ParticipantKind::Bot ? participantPawn((int)q) : nullptr;
+            const uint8_t in = c && g.volume >= 0 && svData_.volumes[(size_t)g.volume].second.contains(c->position()) ? 1 : 0;
+            if (sv_.gateOn[k] && in != sv_.gateInside[k][q]) svSetZoneActive(g.zone, in != 0);
+            sv_.gateInside[k][q] = in;
+        }
+    }
+    const SurvivalData::Window& w = svData_.window;
+    if (w.volume >= 0 && !sv_.windowDone) {
+        if (!sv_.windowArmed && anyInside(w.enable, 1)) sv_.windowArmed = true;   // a player arms the AI-only touch
+        if (sv_.windowArmed && anyInside(w.volume, 2)) { sv_.windowDone = true; damageWall(w.wall, w.damage); LOG_INFO("escalation: window %s smashed by the horde", w.wall.c_str()); }
+    }
 }
 
 float World::svZoneScore(int z, int t) const {
@@ -382,6 +452,7 @@ void World::tickSurvival(float dt) {
         sv_.power.resize(P.size(), 0.0f); sv_.nearGenerator.resize(P.size(), -1); sv_.drainFailed.resize(P.size(), 0);
         sv_.allowDrain.resize(P.size(), 0); sv_.prevInteract.resize(P.size(), 0); sv_.drainClock.resize(P.size(), 0.0f);
     }
+    svTickKismet();
     // Item generators (map Kismet per generator, PickupStatusChange Taken): Hide; ModifySurvivalGeneratorPower(-cost); a level drop
     // (1 -> 0) fires "New Power Level" again - the event fires on negative changes too - so its actions re-apply (UnHide + the volume
     // off); Delay 2 s -> the volume Turn On. After the first purchase the item thus stays out as a normal respawning factory [RE E2a
