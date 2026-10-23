@@ -1086,7 +1086,7 @@ private:
     float ppvLastTime_ = -1.0f;
     bool ppvApplied_ = false;
     void loadPpvFogs(const assets::Json& lighting, bool append = false);   // (append: a merged sublevel's volumes)
-    void addMaterials(const assets::Json& M);
+    void addMaterials(const assets::Json& M, const std::string& dir);
     void addLightingRecords(const assets::Json& L, const std::string& dir, bool primary);
     struct SublevelRT { std::string unit, dir; int bsp = -1, decal = -1; };
     std::vector<SublevelRT> sublevels_;           // (chapter loader) the merged units, in load order

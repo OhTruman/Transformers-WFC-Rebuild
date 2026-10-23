@@ -1427,7 +1427,13 @@ void Pipeline::runSettingsSelfTest() {
 // ------------------------------------------------------------------------- loading
 // (chapter loader, docs/handoff/RENDERING_CHAPTER_LOADER.md) a unit's materials_glsl.json entries: load() for the persistent
 // unit, loadSublevel() for merged ones (by name: a material already defined keeps its first definition)
-void Pipeline::addMaterials(const assets::Json& M) {
+void Pipeline::addMaterials(const assets::Json& M, const std::string& dir) {
+    // (texture paths: drive-absolute ones are relocated; unit-relative ones - the campaign layout, "tex/<file>" - are under
+    // the unit's own directory)
+    auto texPath = [&](const std::string& p) {
+        const bool rel = !p.empty() && p[0] != '/' && p[0] != '\\' && (p.size() < 2 || p[1] != ':');
+        return rel ? dir + "/" + p : relocateDataPath(p);
+    };
     for (const auto& kv : M.obj) {
         const assets::Json& e = kv.second;
         if (!e["glsl"].isString()) {      // compile error in build_materials: remembered for the draw-time warning
@@ -1449,11 +1455,11 @@ void Pipeline::addMaterials(const assets::Json& M) {
         const assets::Json& tx = info["textures"];
         for (size_t i = 0; i < tx.size(); ++i) {
             const assets::Json& t = tx[i];
-            s.files.push_back(relocateDataPath(t["file"].asString()));
+            s.files.push_back(texPath(t["file"].asString()));
             s.srgb.push_back(t["srgb"].asBool(true));
             s.cube.push_back(t["kind"].asString() == "cube");
             std::vector<std::string> fc;
-            for (size_t k = 0; k < t["faces"].size(); ++k) fc.push_back(relocateDataPath(t["faces"][k].asString()));
+            for (size_t k = 0; k < t["faces"].size(); ++k) fc.push_back(texPath(t["faces"][k].asString()));
             s.faces.push_back(fc);
             s.clampU.push_back(t["address_x"].asString() == "TA_Clamp");
             s.clampV.push_back(t["address_y"].asString() == "TA_Clamp");
@@ -1696,7 +1702,7 @@ bool Pipeline::load(const std::string& mapName) {
     assets::Json M, L;
     if (!assets::Json::parse(mj, M) || !assets::Json::parse(lj, L)) { LOG_ERROR("wfc: render data JSON parse failed"); return false; }
 
-    addMaterials(M);
+    addMaterials(M, dataDir_);
     // M6 Modern materials: the matc "pbr" bodies (tools/render/matc_pbr.py) - <map>/materials_pbr.json, else
     // WFC_PBR_DIR/<map>/; only with HD textures on and the Modern setting (or WFC_MODERN=1)
     pbr_.clear(); modernActive_ = false;
@@ -9953,7 +9959,7 @@ bool Pipeline::loadSublevel(const std::string& unit) {
         return false;
     }
     const size_t mats0 = mats_.size(), lights0 = lights_.size(), lm0 = lightmaps_.size(), fx0 = fxInstances_.size();
-    addMaterials(M);
+    addMaterials(M, dir);
     addLightingRecords(L, dir, false);
     yieldLoad();
     loadMovers(dir + "/movers.json");
