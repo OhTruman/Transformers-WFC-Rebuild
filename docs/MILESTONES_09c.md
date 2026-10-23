@@ -3718,3 +3718,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Forfeit (Gameplay-gated; my reruns next build window), f99ef748 JIP frontend glue (+ patch staged). overlay_20261023e frozen
   (= d + Seed v3). Card: Systems' async-step diagnosis (4 arms) -> Rendering x34gi + x35remnant -> Frontend campaign capture ->
   two-exe JIP check. Campaign render data: D5_OME 5 / 6 sublevels compile, BASE_m traced; A1 next.
+2026-10-23 03:35 MERGED a9c01bfd Frontend glue (JIP + Smoke / Water rows; all harnesses pass incl. LATESEATTEST 20 / 20), 0567e54a seed
+  fix: the frontend-booted A/B divergence was GameFlow drawing the seed from random_device and ignoring WFC_SEED (Systems' 4
+  arms; not smoke, not async step, not intent) -> every frontend match-frame A/B before it was never same-seed. Experimental on
+  309c450c: ESC PASS (Remnant 3 waves), UdpSession 5 profiles + late join PASS (6,001 ticks identical). Third NAVQ seed: keep
+  overlay e; Streets stucks 1.31 -> 1.80 per bot-min to AssetTools (not a blocker). c3d4cdf1 build_materials VS_MAPS.
