@@ -3674,3 +3674,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 02:13 #1 with the parse cache: warm revisits 103-184 ms (from 300); Rendering cuts 59e339fd. Smoke: the per-draw light cull
   masked every flash for sprite groups (zero bounds at the origin) -> fixed rt2 8ac67dbf; reference = level ambient only.
   Card -> Rendering x32smoke 02:22 (Frontend's 1.5-min look shares the window, one exe at a time by direct coordination).
+2026-10-23 02:14 Vote-row look PASS (Frontend): rows under the preview, own vote marked, "Finding 1 more player". Next Frontend commit: public
+  autostart at 2 / 45 s + no host start in voting lobbies, Escalation GameOverMessage, directorSpawned filter, XP for public.
