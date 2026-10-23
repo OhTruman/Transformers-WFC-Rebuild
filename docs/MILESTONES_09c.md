@@ -3661,3 +3661,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   on 762526b6 + the Frontend's vote fixes. MERGED effecacc Escalation E1 (survival director; ESCTEST 19 / 19; versus SIMHASH
   identical) -> RE review. MERGED 33d73f78 #1 load times (warm revisits ~0.3 s). Vote rows: one layout bug left (Frontend).
   RE end-of-match check merged (4 small diffs routed). Campaign HD: covered by pack D (10-texture confirm run). Card -> Rendering 02:11.
+2026-10-23 02:10 MERGED 7404e98e vote lobby fixes (rows under the preview, no Veto, "Finding n more players", focus; host's real member id) +
+  718efdee the flow test's team / member-id checks (16 / 16). Frontend next: public auto-start >= 2 / 45 s + hidden Start,
+  Escalation EndGameStats + directorSpawned filter, XP for public, join in progress.
