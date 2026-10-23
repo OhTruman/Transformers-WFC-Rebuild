@@ -1,0 +1,108 @@
+diff -ru a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-23 08:28:17.748310200 -0500
++++ b/src/game/World.cpp	2026-10-23 08:29:12.349924400 -0500
+@@ -4614,6 +4614,13 @@
+                           sv_.weaponPicks[i].available;
+         r.setActorHidden(svData_.weaponPickups[i].actor, !live);
+     }
++    // (Escalation / campaign) the dropped weapons: the weapon's pickup mesh where it lies (Rendering spins / tilts / settles it)
++    for (const SurvivalState::Drop& d : sv_.drops) {
++        if (!d.w.def) continue;
++        const std::string g = svDropMesh(d.w.def->id);
++        if (!g.empty()) r.drawDroppedPickup(g, core::Vec3{d.pos.x * 100.0f, d.pos.z * 100.0f, d.pos.y * 100.0f}, d.life,
++                                            std::strstr(d.w.def->id, "Kamikaze") != nullptr);
++    }
+     // [integration 09c] The effect keys are built once per factory (rebuilt only when the factory set changes): building
+     // "<actor>|custom" / "|highlight" per factory per frame was ~12 % of main-thread allocations at 10 v 10 (Systems' ALLOCPROF).
+     if (pickupFxKeys_.size() != pickupFactories_.size()
+diff -ru a/src/render/Renderer.h b/src/render/Renderer.h
+--- a/src/render/Renderer.h	2026-10-23 08:28:17.634921900 -0500
++++ b/src/render/Renderer.h	2026-10-23 08:29:12.344404400 -0500
+@@ -500,6 +500,12 @@
+     // Gameplay-authoritative visibility of an authored map actor (world.glb actor name, e.g. "InterpActor_6165").
+     // Authored bHidden actors start hidden; Kismet-driven state (SeqAct_ToggleHidden by game rule) is pushed here.
+     virtual void setActorHidden(const std::string& actor, bool hidden) { (void)actor; (void)hidden; }
++    // A dropped weapon this frame (Escalation / campaign: TnDroppedPickupWeapon, RE PICKUP_IDLE_MOTION_RE.md): its pickup mesh
++    // (content-relative glTF), where it lies (UE; the renderer settles it on the floor below), its remaining life (s, from
++    // 120: the spin phase), mines (KamikazeMines: no tilt, scale 1.2). Drawn tilted 16.48 deg, spinning 54.93 deg/s.
++    virtual void drawDroppedPickup(const std::string& gltf, const core::Vec3& posUE, float lifeLeft, bool mines) {
++        (void)gltf; (void)posUE; (void)lifeLeft; (void)mines;
++    }
+     // Gameplay-authoritative pose of an authored map actor moved by a campaign matinee (an InterpActor: world.glb actor name), UE
+     // units / rotator degrees (pitch, yaw, roll), absolute. Actors never sent keep their authored pose. [Gameplay; Rendering implements]
+     virtual void setMapActorTransform(const std::string& actor, const core::Vec3& posUE, const core::Vec3& rotUEdeg) { (void)actor; (void)posUE; (void)rotUEdeg; }
+diff -ru a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
+--- a/src/render/gl/GLRenderer.cpp	2026-10-23 08:28:17.662516000 -0500
++++ b/src/render/gl/GLRenderer.cpp	2026-10-23 08:29:12.345912500 -0500
+@@ -1299,6 +1299,9 @@
+         return out;
+     }
+     void setActorHidden(const std::string& actor, bool hidden) override { wfc_.setActorHidden(actor, hidden); }
++    void drawDroppedPickup(const std::string& gltf, const core::Vec3& posUE, float lifeLeft, bool mines) override {
++        if (wfc_.active()) wfc_.queueDroppedPickup(gltf, posUE, lifeLeft, mines);
++    }
+     void setMapEffectActive(const std::string& what, bool active) override { wfc_.setMapEffectActive(what, active); }
+     void setMapEffectState(const std::string& k, bool a, bool h) override { wfc_.setMapEffectState(k, a, h); }
+     void setActiveGameRules(const std::vector<std::string>& r) override { wfc_.setActiveGameRules(r); }
+diff -ru a/src/render/gl/WfcMapFx.cpp b/src/render/gl/WfcMapFx.cpp
+--- a/src/render/gl/WfcMapFx.cpp	2026-10-23 08:28:17.717705100 -0500
++++ b/src/render/gl/WfcMapFx.cpp	2026-10-23 08:29:12.347915100 -0500
+@@ -1782,6 +1782,39 @@
+             }
+         }
+     }
++    // dropped weapons (RE PICKUP_IDLE_MOTION_RE.md 2: TnDroppedPickupWeapon): the weapon's pickup mesh on the floor, tilted by
++    // SpawnOffsetAngle (pitch 3000) and PickupScale (KamikazeMines: none, 1.2), PHYS_Rotating at Yaw 10000 (54.93 deg/s) from its
++    // landing; the Defragger materialize / fade-out at LifeSpan - 2 s as a scale envelope (below)
++    for (const DropRT& d : dropQueue_) {
++        if (d.lifeLeft <= 0.0f || d.gltf.empty()) continue;
++        auto it = dropMeshes_.find(d.gltf);
++        if (it == dropMeshes_.end()) {
++            PickupMeshRT pm;
++            pm.gltf = d.gltf;
++            std::string obj = d.gltf.substr(0, d.gltf.rfind('.'));            // "WEP_X_p/WEP_X_SKEL.gltf" -> "WEP_X_p.WEP_X_SKEL"
++            std::replace(obj.begin(), obj.end(), '/', '.');
++            pm.mesh = obj;
++            ensurePickupMesh(pm);
++            it = dropMeshes_.emplace(d.gltf, pm.meshId >= 0 ? pm.meshId : -2).first;
++        }
++        if (it->second < 0) continue;
++        float z = d.pos[2];
++        float zHit = 0.0f;
++        if (groundBelowUE(d.pos[0], d.pos[1], d.pos[2] + 50.0f, zHit) && d.pos[2] - zHit < 400.0f) z = zHit;   // (on the floor)
++        const float yaw = (120.0f - d.lifeLeft) * 10000.0f;                    // UU: Yaw 10000 / s since it landed
++        float rows[3][3];
++        rotRows(d.mines ? 0.0f : 3000.0f, yaw, 0.0f, rows);
++        // (the Defragger materialize on landing / fade-out at LifeSpan - 2 s, approximated by a scale envelope: the static
++        // path has no Defrag material swap - in over 1 s, out over the last 2 s)
++        const float age = 120.0f - d.lifeLeft;
++        const float env = std::min(std::min(std::max(age, 0.0f), 1.0f), std::min(std::max(d.lifeLeft * 0.5f, 0.0f), 1.0f));
++        const float k = (d.mines ? 1.2f : 1.0f) * env * env * (3.0f - 2.0f * env);
++        if (k <= 1e-3f) continue;
++        for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) rows[r][c] *= k;
++        const float t[3] = {d.pos[0], d.pos[1], z};
++        draw(it->second, ueRowsToGltf(rows, t));
++    }
++    dropQueue_.clear();
+     sec(1);
+     // particles
+     core::Vec3 camR{camView_.m[0], camView_.m[4], camView_.m[8]};
+diff -ru a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h	2026-10-23 08:28:17.690612800 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-23 08:29:12.346917800 -0500
+@@ -1520,6 +1520,15 @@
+     std::map<std::string, float> pickupSpin_;         // factory (lower) -> accumulated yaw (UU) while available
+     std::vector<PickupMeshRT> pickupMeshes_;
+     void ensurePickupMesh(PickupMeshRT& pm);   // the pickup factory mesh, loaded on demand / at the warm-up
++    struct DropRT { std::string gltf; float pos[3] = {0, 0, 0}; float lifeLeft = 0.0f; bool mines = false; };
++    std::vector<DropRT> dropQueue_;                   // this frame's dropped weapons (drawn after the factories, then cleared)
++    std::map<std::string, int> dropMeshes_;           // glTF -> mesh id (-2: failed)
++public:
++    void queueDroppedPickup(const std::string& gltf, const core::Vec3& posUE, float lifeLeft, bool mines) {
++        DropRT d; d.gltf = gltf; d.pos[0] = posUE.x; d.pos[1] = posUE.y; d.pos[2] = posUE.z; d.lifeLeft = lifeLeft; d.mines = mines;
++        dropQueue_.push_back(d);
++    }
++private:
+     std::set<std::string> pickupMeshHidden_;
+     float pickupYaw(const std::string& ownerLower) const;
+     bool pickupRuleBlocked(const std::string& ownerLower) const;
