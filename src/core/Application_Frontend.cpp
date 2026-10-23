@@ -1374,6 +1374,8 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     for (game::MatchMode mm : {game::MatchMode::DM, game::MatchMode::TDM, game::MatchMode::CTF, game::MatchMode::KOTH,
                                game::MatchMode::EXT, game::MatchMode::DOM})
         if (m.modeTag == game::gameModeName(mm)) { world_.setMatchMode(mm); modeOk = true; }
+    // [Frontend C6] campaign chapters (SOLO / CP / CCP): the TDM map state + TnCampaignGame, as Gameplay's MatchLaunch::fromURL
+    if (m.modeTag == "SOLO" || m.modeTag == "CP" || m.modeTag == "CCP") { world_.setMatchMode(game::MatchMode::TDM); modeOk = true; }
     if (!modeOk) { LOG_WARN("FLOW match mode %s is not supported by Gameplay", m.modeTag.c_str()); return false; }
     LOG_INFO("FLOW loading match world: map dir %s, mode %s", m.map->runtimeDir.c_str(), m.modeTag.c_str());
     double t0 = nowSeconds();
@@ -1712,9 +1714,22 @@ void Application::routeMatchToFrontend(float dt) {
             frontend::FlowTrace::emit("match.return", {});
             flow.returnToGameLobby();                           // MatchOver + 15 s -> ReturnToGameLobby (RE F4 / F6)
             break;
+        // [Frontend C6] the campaign events (Gameplay GAMEPLAY_CAMPAIGN_BOOT): MISSION FAILED, the profile's checkpoint and
+        // mission progress (RE CAMPAIGN_RUNTIME_EVENTS_RE)
+        case game::MatchEvent::Type::CampaignGameOver:
+            if (e.value == 14) flow.campaignGameOver();         // SendGameOverEvent, 1 s after the death
+            break;
+        case game::MatchEvent::Type::CheckpointReached:        // text = the checkpoint actor, value = its DisplayOrder (-1: not a menu one)
+            flow.campaignCheckpointReached(flow.currentMatch().mapId, e.value);
+            break;
+        case game::MatchEvent::Type::MissionComplete:          // text = the chapter, value = MapId
+            flow.campaignMissionComplete(e.value, flow.profile().campaign.difficulty);
+            break;
         default: break;
         }
     }
+    // [Frontend C6] Restart From Last Checkpoint: until Gameplay's in-place RestartFromActiveCheckpoint, relaunch at the active checkpoint
+    if (flow.takeCampaignRestartRequest()) flow.campaignRelaunchAt(pf.hud.cpCheckpoint);
     // RUNTIME-EVENTS: timer, once per change of GRI.RemainingTime while the match runs
     if (pf.matchState == (int)game::Match::State::InProgress && pf.remainingTime != lastLoggedRemaining_) {
         lastLoggedRemaining_ = pf.remainingTime;
