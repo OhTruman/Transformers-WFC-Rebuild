@@ -1289,6 +1289,7 @@ public:
     struct FxLod {
         std::string material, meshGltf;
         bool overrideMaterial = false, localSpace = false, rectangle = false;
+        bool killOnDeactivate = false, killOnCompleted = false;   // (ParticleModuleRequired bKillOnDeactivate / bKillOnCompleted)
         int typeData = 0;                 // 0 sprite, 1 mesh, 2 Trail2, 3 Beam2
         int maxBeams = 0;                 // Beam2 MaxBeamCount (0 = no cap)
         int taperMethod = 0, interpPoints = 0;   // Beam2: PEBTM_None / Full / Partial; InterpolationPoints

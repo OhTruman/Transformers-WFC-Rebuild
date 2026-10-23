@@ -215,6 +215,8 @@ bool Pipeline::loadMapFx(const std::string& path) {
                 for (size_t b = 0; b < bl.size(); ++b)
                     lod.bursts.push_back({bl[b]["Count"].asInt(0), bl[b]["CountLow"].asInt(0), bl[b]["Time"].asFloat(0)});
                 lod.localSpace = rq["use_local_space"].asBool(false);
+                lod.killOnDeactivate = rq["kill_on_deactivate"].asBool(false);
+                lod.killOnCompleted = rq["kill_on_completed"].asBool(false);
                 lod.rectangle = rq["screen_alignment"].asString() == "PSA_Rectangle";
                 lod.velocityAligned = rq["screen_alignment"].asString() == "PSA_Velocity";
                 {
@@ -615,6 +617,9 @@ void Pipeline::tickMapFx(float dt) {
             if (!em.renderable || !in.attached) continue;
             const FxLod& L = em.lods[(size_t)std::min<int>(lodIdx, (int)em.lods.size() - 1)];
             rt.lod = std::min<int>(lodIdx, (int)em.lods.size() - 1);
+            // (playtest 2026-10-23 #9) UE3 bKillOnDeactivate: a deactivated component's emitter loses its live particles at once
+            // (hover_plane_FX's immortal mesh particles otherwise stayed until the 30 s guard)
+            if (!in.active && L.killOnDeactivate && (!rt.parts.empty() || !rt.trail.empty())) { rt.parts.clear(); rt.trail.clear(); }
             if (L.typeData == 2) {
                 // M44 Trail2 [PARTIAL]: the ribbon follows the source's recent path (UE3 links the trail particles
                 // spawned at the moving source); points live for the longest particle lifetime (min 0.25 s)
@@ -824,7 +829,14 @@ void Pipeline::tickMapFx(float dt) {
                     rt.time = std::fmod(rt.time, L.duration);
                     ++rt.loop;
                     rt.burstFired.clear();
-                } else { rt.done = true; continue; }
+                } else {
+                    rt.done = true;
+                    // (UE3 bKillOnCompleted: native semantics pending RE - a forced kill at completion would cut the tails of every
+                    // flagged short-duration effect; WFC_FXKILLCOMPLETED=1 tests it)
+                    static const bool killCompleted = std::getenv("WFC_FXKILLCOMPLETED") != nullptr;
+                    if (killCompleted && L.killOnCompleted) { rt.parts.clear(); rt.trail.clear(); }
+                    continue;
+                }
             }
             float efrac = rt.time / L.duration;   // (BurstList.Time: a fraction of the duration)
             // spawn-time distributions: the emitter time in SECONDS within the loop (RE, native spawn runner 0x8303E288 passes
