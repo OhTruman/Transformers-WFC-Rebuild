@@ -3600,3 +3600,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   it sent; the flow test compares both MatchLaunch teams). Retest = another two-window slot after the fix.
 2026-10-23 01:33 CAMPAIGN_LIGHTING_RE merged (campaign-only: toggleable / movable lights, light functions, Matinee light tracks, per-actor MIC
   clones, dynamic PP volumes) -> Rendering's campaign lighting runtime list. RE -> campaign-only gameplay systems inventory.
+2026-10-23 01:35 MERGED e33a2c85 #12 bot skill as data (bot_skill.json; aim errors 21 / 11 / 5.5 / 1.2 deg; 25-50 m hit rates ~17 / 31 / 50 %
+  vs targets 15 / 30 / 45; EXPECTED SIM CHANGE for bot aim = third sim-only diff for the final base). Playtest status: #2 #4 #5
+  #6 #8 #9 #11 #12 #14 #15 #16 #17 #18(B) fixed / closed; #3 fixed (visual pending); #1 profiled (fixes next); #7 unverified
+  (needs bots in the shot); #10 / #13 data done (Gameplay check); #18 (A) audit pending.
