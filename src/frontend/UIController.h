@@ -18,10 +18,11 @@ const char* uiEventName(int code);
 enum class UIState {
     NotInGame, FrontEnd, InLobby, WaitingOnGameStart, InGame, Spectating, Paused, PausedSpectating,
     WaitingOnNextRound, GameEnded,
+    CampaignGameOver,   // TnUIControllerCoop: UI event 14 -> CampaignGameOver_GFX "MISSION FAILED"
 };
 const char* uiStateName(UIState s);
 
-enum class UIControllerClass { Base, FrontEnd, PartyLobby, GameLobby, Multiplayer };
+enum class UIControllerClass { Base, FrontEnd, PartyLobby, GameLobby, Multiplayer, Coop };   // Coop: campaign SOLO / CP / CCP
 const char* uiControllerClassName(UIControllerClass c);
 
 class UIController {
@@ -48,7 +49,7 @@ public:
 
     // Authored movie defaults per subclass (RE 1.4 table).
     std::string frontEndUI() const, lobbyUI() const, inGameLobbyUI() const, gameStartUI() const, pauseUI() const,
-        spectatingUI() const, endGameUI() const;
+        spectatingUI() const, endGameUI() const, campaignGameOverUI() const;
     static const char* messageBoxUI() { return "UI_GFxShared_p.MessagePrompt_GFX_1"; }
 
 private:

@@ -1860,6 +1860,55 @@ static void testSmokeWaterRows() {
     std::remove("wfc_profile.ini");
 }
 
+static void testCampaignC6() {
+    // C6 (RE CAMPAIGN_RUNTIME_EVENTS_RE), with this test as the fake runtime (no chapter loads yet: a TDM match, campaign forced):
+    // the Coop UI controller (in-map trio select, no countdown screen); ClientReachedCheckpoint (an indexed checkpoint advances
+    // the profile, -1 does not); CampaignGameOver -> UI 14 -> MISSION FAILED; Restart From Last Checkpoint -> the restart request,
+    // the respawn closes the screen; ClientCompleteMission -> CompleteMission saved + back to the lobby (CP / SOLO).
+    std::remove("wfc_profile.ini");
+    FrontendRuntime rt;
+    if (!rt.init()) { check(false, "campaign.C6_runtime_events", "init"); return; }
+    GameFlow& f = rt.flow();
+    runUntil(rt, [&] { return f.frontEndStarted(); });
+    f.call("Online.OpenPartyLobby", {"GTS_TeamGame"});
+    runUntil(rt, [&] { return f.level() == LevelKind::PartyLobby && !f.loading().active; });
+    f.call("Online.EditGameMode", {"TDM"});
+    f.call("Online.PlayPrivateGame", {"TDM"});
+    runUntil(rt, [&] { return f.level() == LevelKind::GameLobby && !f.loading().active; });
+    f.call("Online.SetSelectedMapID", {"508"});
+    f.call("Online.SetSelectedMapID", {"508"});
+    f.call("Online.BeginLobbyExitCountdown", {});
+    runUntil(rt, [&] { return f.hasPendingMatch(); }, 60 * 20);
+    f.setCampaignForTest(true);
+    f.matchLoaded();
+    f.onUIEvent(3);
+    const std::string coopWhy = std::string(uiControllerClassName(f.ui().cls())) + "/" + uiStateName(f.ui().state()) + "/" + f.ui().openMovie() +
+                                "/" + levelKindName(f.level()) + "/" + (f.hasPendingMatch() ? "pending" : "-");
+    const bool coop = f.ui().cls() == UIControllerClass::Coop && f.ui().state() == UIState::WaitingOnGameStart &&
+                      f.ui().openMovie() == "UI_GFxCharacterSelect_p.CharacterSelect_GFX_1";
+    f.onUIEvent(5);
+    const bool inGame = f.ui().state() == UIState::InGame;
+    f.campaignCheckpointReached(101, -1);
+    const bool notIndexed = f.profile().campaign.checkpoint[5] == 0;
+    f.campaignCheckpointReached(101, 3);
+    const bool indexed = f.profile().campaign.checkpoint[5] == 3;
+    f.campaignGameOver();
+    const bool failed = f.ui().state() == UIState::CampaignGameOver && f.ui().openMovie() == "UI_GFxGameOver_p.CampaignGameOver_GFX_1";
+    f.call("Game.RestartPlayerFromLastCheckpoint", {});
+    const bool asked = f.takeCampaignRestartRequest() && !f.takeCampaignRestartRequest();
+    f.onUIEvent(5);   // the restart's respawn
+    const bool restarted = f.ui().state() == UIState::InGame && f.ui().openMovie().empty();
+    f.campaignMissionComplete(101, 1);
+    LocalProfile back; back.load();
+    const bool complete = back.campaign.complete[5] && back.campaign.available[6] && back.campaign.bestDifficulty[5] == 1 &&
+                          back.campaign.checkpoint[5] == 3;
+    const bool toLobby = runUntil(rt, [&] { if (f.wantsWorldUnload()) f.worldUnloaded(); return f.level() == LevelKind::GameLobby; }, 60 * 20);
+    check(coop && inGame && notIndexed && indexed && failed && asked && restarted && complete && toLobby, "campaign.C6_runtime_events",
+          std::to_string(coop) + std::to_string(inGame) + std::to_string(notIndexed) + std::to_string(indexed) + std::to_string(failed) +
+          std::to_string(asked) + std::to_string(restarted) + std::to_string(complete) + std::to_string(toLobby) + " " + coopWhy);
+    std::remove("wfc_profile.ini");
+}
+
 static void testLobbyFlowV2() {
     // LV1: Private Match hosts at once (offline: the same lobby with bots), with the profile's last mode (new profile: TDM)
     {
@@ -2176,6 +2225,7 @@ int main() {
     testCampaignC3();
     testCampaignC2C5();
     testSmokeWaterRows();
+    testCampaignC6();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);

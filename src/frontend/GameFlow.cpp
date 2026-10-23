@@ -124,6 +124,10 @@ void GameFlow::startLoadingMovie(const Url& url) {
         loading_.kind = "Map";
         std::string tag = url.option("GameModeTag");
         loading_.title = cat_->modeFriendlyName(tag);
+        if (resumeFaction_ >= 0) {   // a campaign restart: StartLoadFromCheckpointLoadingMovie(team) -> ResumeAutobot / ResumeDecepticon
+            loading_.title = cat_->localize("UIText", "LoadScreen", resumeFaction_ == 1 ? "ResumeDecepticon" : "ResumeAutobot");
+            resumeFaction_ = -1;
+        }
         const MapInfo* mi = cat_->mapById(mapId);
         std::string msg = cat_->localize("UIText", "LoadScreen", "LoadingMap");
         size_t p = msg.find("`m");
@@ -195,6 +199,7 @@ void GameFlow::tick(float dt) {
         }
     }
     if (level_ == LevelKind::GameLobby) gameLobbyTick(dt);
+    if (campaignReturnIn_ > 0.0f && (campaignReturnIn_ -= dt) <= 0.0f && level_ == LevelKind::Match) returnToGameLobby();   // CCP
     if (session_) onlineTick();
 }
 
@@ -399,6 +404,26 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     // The Solo menu's Resume Autobot / Resume Decepticon rows: a checkpoint save of that faction (index 0 / 1). The saves are
     // Gameplay's (C6); until they exist there is none, so the menu offers Mission Select only.
     if (fn == "Game.GetCheckpointFileStatus") return false;
+    // CampaignGameOver_GFX (host only; the movie confirmed "Load Checkpoint" first): Restart From Last Checkpoint -> Gameplay's
+    // RestartFromActiveCheckpoint in place; Restart Chapter -> reloadmap (the same launch without ?Checkpoint=).
+    if (fn == "Game.RestartPlayerFromLastCheckpoint") {
+        if (role_ == SessionRole::Member || level_ != LevelKind::Match) return {};
+        campaignRestart_ = true;
+        FlowTrace::emit("campaign.restart", {{"kind", "checkpoint"}});
+        return {};
+    }
+    if (fn == "Game.RestartChapter") {
+        if (role_ == SessionRole::Member || level_ != LevelKind::Match) return {};
+        std::string url = match_.url.toString();
+        const size_t c = url.find("?Checkpoint=");
+        if (c != std::string::npos) { const size_t e = url.find('?', c + 1); url.erase(c, e == std::string::npos ? std::string::npos : e - c); }
+        const MapInfo* mi = cat_->mapById(match_.mapId);
+        resumeFaction_ = mi ? mi->faction : 0;
+        match_.url = Url::parse(url);
+        FlowTrace::emit("campaign.restart", {{"kind", "chapter"}, {"url", url}});
+        travel(url, true);
+        return {};
+    }
     // FrontEnd_GFX Solo Campaign: CheckCheckpointSaves, answered by _global.ProceedToSoloPlay(AutobotCheckpointExists,
     // DecepticonCheckpointExists) -> the Solo menu (mc_menuSolo). No saves yet (C6): both absent, so the menu offers Mission
     // Select only [CONFIRMED AS, FrontEnd_GFX].
@@ -1323,6 +1348,34 @@ std::string GameFlow::buildLaunchUrl() const {
     return url;
 }
 
+void GameFlow::campaignCheckpointReached(int mapId, int index) {
+    // ClientReachedCheckpoint(CP, MapId, index): only the menu list's checkpoints have an index; -1 does not advance
+    if (index < 0) { FlowTrace::emit("campaign.checkpointReached", {{"mapId", std::to_string(mapId)}, {"index", "-1"}, {"profile", "unchanged"}}); return; }
+    profile_.campaign.reachedCheckpoint(mapId, index);
+    profile_.save();
+    FlowTrace::emit("campaign.checkpointReached", {{"mapId", std::to_string(mapId)}, {"index", std::to_string(index)}});
+}
+
+void GameFlow::campaignGameOver() {
+    FlowTrace::emit("campaign.gameOver", {{"state", uiStateName(ui_.state())}});
+    ui_.onUIEvent((int)UIEvent::CampaignGameOver);
+}
+
+void GameFlow::campaignMissionComplete(int mapId, int difficulty) {
+    // ClientCompleteMission(MapId, Difficulty) -> TnProfileSettings.CompleteMission + SaveProfileSettings; then EndGame("Complete")
+    // -> TnCoopGame.MissionComplete: achievement 35 (+36 in CCP); CCP -> EndGameStats, ReturnToGameLobby after 10 s; CP / SOLO
+    // -> ReturnToGameLobby at once. The lobby then preselects the next chapter (OnEnterLobbyFromMap).
+    profile_.campaign.completeMission(mapId, difficulty);
+    profile_.save();
+    const bool ccp = match_.modeTag == "CCP";
+    FlowTrace::emit("campaign.missionComplete", {{"mapId", std::to_string(mapId)}, {"difficulty", std::to_string(difficulty)},
+                                                 {"achievements", ccp ? "35,36" : "35"}});
+    if (ccp) {
+        ui_.onUIEvent((int)UIEvent::EndGame);
+        campaignReturnIn_ = 10.0f;
+    } else returnToGameLobby();
+}
+
 bool GameFlow::inCampaignTrio(const MapInfo& m, const std::string& characterName) {
     auto lower = [](std::string x) { for (char& ch : x) ch = (char)std::tolower((unsigned char)ch); return x; };
     const std::string n = lower(characterName);
@@ -1382,7 +1435,8 @@ void GameFlow::matchLoaded() {
     // player's pawn spawns (OnRespawn, event 5).
     selected_ = SelectedCharacter{};
     matchHasBegun_ = false;
-    setUIController(UIControllerClass::Multiplayer, !selected_.valid);
+    // TnCampaignGame -> TnUIControllerCoop (in-map trio select, MISSION FAILED); versus -> TnUIControllerMultiplayer
+    setUIController(campaign() ? UIControllerClass::Coop : UIControllerClass::Multiplayer, !selected_.valid);
     ui_.setGRIAvailable(true);
     // PlayerController.CanCloseLoadingMovie: the world is fully loaded before gameplay [HIGH].
     if (session_ && role_ != SessionRole::Offline) {   // online: the load gate holds the loading screen until all have loaded
