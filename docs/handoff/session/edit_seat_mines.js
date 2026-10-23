@@ -17,8 +17,8 @@ ed('src/game/World.h', [[
 ]]);
 ed('src/game/World.cpp', [
     ['    if (player != localPlayer_ && (id == "GuidedMissileStreak" || id == "MinePooperStreak")) return "";\n',
-     '    if (player != localPlayer_ && (id == "GuidedMissileStreak" || (id == "MinePooperStreak" && !(onlineSeats_ && seatHuman(player))))) return "";   // online: every seat\n'],
-    // The spawn: every seat with the buff online (by match player index), the local player offline.
+     '    if (player != localPlayer_ && (id == "GuidedMissileStreak" || (id == "MinePooperStreak" && !seatHuman(player)))) return "";   // every human seat (bots: not yet)\n'],
+    // The spawn: every human seat with the buff, by match player index (offline that is the local player only).
     ['    if (pc.minePooperRemain_ > 0.0f && !localDead_) {\n' +
      '        pc.minePooperRemain_ -= dt; pc.minePooperTimer_ -= dt;\n' +
      '        if (pc.minePooperTimer_ <= 0.0f) {\n' +
@@ -32,7 +32,7 @@ ed('src/game/World.cpp', [
      '            pc.minePooperTimer_ += 2.0f;\n' +
      '            const core::Vec3 f = core::forwardFromYawPitch(pc.yaw(), 0.0f), r = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));\n' +
      '            KamikazeMine m; m.pos = pc.actorLocation() + f * 4.0f + r * 1.0f; m.vel = {0, 0, 0};\n' +
-     '            m.owner = onlineSeats_ ? owner : -1;\n'],
+     '            m.owner = owner == localPlayer_ && !onlineSeats_ ? -1 : owner;   // -1 = the offline local player (the old path)\n'],
     ['                if (renderer_) { const core::Vec3 ff = f, uu{0, 1, 0}; mp.fx = fxStepSpawn("FX_KamikazeMine_p.FX.Trail_KamikazeMine_FX", m.pos, ff, uu, fxTeamOf(localPlayer_), false); }\n' +
      '            }\n' +
      '        }\n' +
@@ -42,8 +42,8 @@ ed('src/game/World.cpp', [
      '        }\n' +
      '    }\n' +
      '    };\n' +
-     '    if (onlineSeats_) { for (size_t q = 0; q < match_.players().size(); ++q) if (seatHuman((int)q)) if (Character* oc = participantPawnMutable((int)q)) pooper(*oc, (int)q); }\n' +
-     '    else if (!localDead_) pooper(pc, localPlayer_);\n'],
+     '    for (size_t q = 0; q < match_.players().size(); ++q)   // every human seat by match player index (offline: the local player only)\n' +
+     '        if (seatHuman((int)q)) if (Character* oc = participantPawnMutable((int)q)) pooper(*oc, (int)q);\n'],
     // The tick: owner-relative (online by match player index).
     ['        bool boom = false, gone = m.t >= 60.0f || m.health <= 0.0f || localDead_;   // LifeSpan 60; destroyed with the owner [PROV]\n',
      '        const int mo = m.owner >= 0 ? m.owner : localPlayer_;\n' +

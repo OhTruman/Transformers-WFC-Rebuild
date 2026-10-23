@@ -44,8 +44,8 @@ ed('src/game/World.cpp', [
      '        const SeatLock* sl = localPlayer_ >= 0 && (size_t)localPlayer_ < seatLocks_.size() ? &seatLocks_[(size_t)localPlayer_] : nullptr;\n' +
      '        locked_ = sl && sl->locked; lockTarget_ = sl ? sl->target : -1; lockCandidate_ = sl ? sl->candidate : -1; lockTimer_ = sl ? sl->timer : 0.0f;\n' +
      '    }\n'],
-    ['    bots_.clear(); smart_.clear(); anySmart_ = false; remoteIdle_.clear();\n',
-     '    bots_.clear(); smart_.clear(); anySmart_ = false; remoteIdle_.clear(); seatLocks_.clear();\n'],
+    ['    bots_.clear(); smart_.clear(); anySmart_ = false; remoteIdle_.clear();',
+     '    bots_.clear(); smart_.clear(); anySmart_ = false; remoteIdle_.clear(); seatLocks_.clear();'],
     ['void World::clearAllParticipants() {\n',
      'void World::tickSeatLock(int p, const Character& pc, const core::Vec3& eye, const core::Vec3& fwd, float dt) {\n' +
      '    if (seatLocks_.size() <= (size_t)p) seatLocks_.resize((size_t)p + 1);\n' +
@@ -91,10 +91,14 @@ ed('src/core/Application.cpp', [[
     '        [&](int q, game::MatchOpponent* T, game::RemoteCommand& cmd, const std::function<void()>& stepCmd, const std::function<void()>& aimAt) {\n' +
     '            const game::Character* me = world_.participantPawn(q);\n' +
     '            if (!me || !me->weapon().projHoming) { LOG_INFO("SESSIONTEST homing: held weapon %s", me && me->weapon().def ? me->weapon().def->id : "-"); return false; }\n' +
+    '            if (!me->weapon().lockRobots) {   // Thermo rockets lock onto vehicles only (authored): the target transforms first\n' +
+    '                T->pawn().beginTransform();\n' +
+    '                for (int i = 0; i < 150; ++i) { aimAt(); stepCmd(); }\n' +
+    '            }\n' +
     '            int lockedAt = -1;\n' +
     '            for (int i = 0; i < 180 && lockedAt < 0; ++i) { aimAt(); stepCmd(); if (world_.seatLockTarget(q) == T->matchPlayer()) lockedAt = i; }\n' +
     '            LOG_INFO("SESSIONTEST homing: lock on p%d after %d steps (LockOnTime %.2f s)", T->matchPlayer(), lockedAt, me->weapon().lockOnTime);\n' +
-    '            return lockedAt > 0;\n' +
+    '            return lockedAt >= 0;\n' +
     '        });\n' +
     '    // The online local seat through the wire path: two peers with the same seed and the same local command stream reach an equal state.\n'
 ]]);
