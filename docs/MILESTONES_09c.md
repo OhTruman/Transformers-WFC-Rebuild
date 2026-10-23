@@ -3881,3 +3881,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   sheets or card runs for small items; one smoke per batch; Experimental = one broad pass per big batch / package). Sent to
   all lanes. MERGED 9af9cbeb campaign trio pick + checklist, 514586e5 Escalation nav ON by default (Remnant has combat on
   overlay h) + the qa:die glue. Smoke stage 2 parked.
+2026-10-23 07:40 MERGED a90bea42 campaign RT calibration fix (the Omega blotches = a wrong sunless fit from the tracer counting the 9 km
+  SpaceDome as a wall; sky rule aligned with the runtime; D5 now a real sun fit k 0.137). A1's opening = the intro lift
+  (MoverPathNodes on the elevator): AssetTools exports mover-attached nav, Gameplay's BotNav rides a mover base.
