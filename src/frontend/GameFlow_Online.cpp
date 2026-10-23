@@ -54,6 +54,32 @@ bool GameFlow::isMuted(const SessionMemberId& m) const {
     return !m.fingerprint.empty() && std::find(v.begin(), v.end(), m.fingerprint) != v.end();
 }
 
+bool GameFlow::isBlocked(const SessionMemberId& m) const {
+    const auto& v = profile_.voice.blocked;
+    return !m.fingerprint.empty() && std::find(v.begin(), v.end(), m.fingerprint) != v.end();
+}
+
+bool GameFlow::showPlayerCard(const std::string& displayNameIn) {
+    std::string name = displayNameIn;
+    const size_t tag = name.find("  ");   // the row's name carries the platform tag (D11)
+    if (tag != std::string::npos) name.resize(tag);
+    for (const OnlineMember& m : onlineMembers_) {
+        if (m.info.displayName != name || m.info.id.fingerprint.empty()) continue;
+        cardMember_ = m.info.id.fingerprint;
+        Popup p;
+        p.title = name;
+        p.message = txt("$WfcPC.Online.PlayerCardDesc");
+        p.a = PopupButton{txt(isMuted(m.info.id) ? "$WfcPC.Online.PlayerCardUnmute" : "$WfcPC.Online.PlayerCardMute"), "cardMute", true};
+        p.x = PopupButton{txt(isBlocked(m.info.id) ? "$WfcPC.Online.PlayerCardUnblock" : "$WfcPC.Online.PlayerCardBlock"), "cardBlock", true};
+        p.b = PopupButton{txt("$UIText.ButtonHints.Back"), "", true};
+        p.showDefaultButtons = false;
+        showPopup(p);
+        FlowTrace::emit("online.playerCard", {{"member", cardMember_}, {"name", name}});
+        return true;
+    }
+    return false;
+}
+
 bool GameFlow::toggleMute(const std::string& displayNameIn) {
     // the row's name carries the platform tag (D11): match the member by the name before it
     std::string name = displayNameIn;
@@ -582,7 +608,7 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
             m.team = botRows() == BotRows::Teams ? pickOnlineTeam() : 255;
             m.connecting = !e.info.hasCharacter && e.info.characterSlot.empty();
             onlineMembers_.push_back(m);
-            if (isMuted(e.member)) session_->setMuted(e.member, true);   // a remembered mute (profile)
+            if (isMuted(e.member) || isBlocked(e.member)) session_->setMuted(e.member, true);   // a remembered mute / block (profile)
             FlowTrace::emit("online.memberJoined", {{"member", e.member.fingerprint}, {"name", e.info.displayName}, {"team", std::to_string(m.team)},
                                                     {"platform", e.info.platform == SessionPlatform::Web ? "Web" : "PC"}});
             applyBrowserCap("member joined");

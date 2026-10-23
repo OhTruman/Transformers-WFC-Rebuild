@@ -360,6 +360,11 @@ public:
     std::vector<LobbySettingRow> lobbySettingRows() const;
     int localHeadsetState() const;   // this player's HeadsetState: 0 voice off, 1 on, 2 transmitting (push-to-talk held)
     bool isMuted(const SessionMemberId& m) const;
+    bool isBlocked(const SessionMemberId& m) const;
+    // The Gamer Card button (A in PlayerList / GameLobby / PauseMenu / EndGameStats, X in InGameStats): on PC a player card -
+    // Mute / Unmute and Block / Unblock (PC addition, RE ONLINE_POSTMATCH_PARTY_VOICE_RE; the original opened the Xbox card).
+    bool showPlayerCard(const std::string& displayName);
+    std::string cardMember_;   // the player card's member (fingerprint)
     bool toggleMute(const std::string& displayName);   // the player row's action (the original Gamercard button)
     void setPushToTalkHeld(bool held);                 // the runtime samples the key; sent on change
     float micLevel() const { return session_ ? session_->micLevel() : 0.0f; }

@@ -123,10 +123,11 @@ bool LocalProfile::loadFrom(std::istream& f) {
             else if (k == "PushToTalkKey") voice.pttKey = v;
             else if (k == "Volume") voice.volume = std::clamp(std::atoi(v.c_str()), 0, 100);
             else if (k == "ProximityVolume") voice.proximityVolume = std::clamp(std::atoi(v.c_str()), 0, 100);
-            else if (k == "Muted") {
-                voice.muted.clear();
+            else if (k == "Muted" || k == "Blocked") {
+                std::vector<std::string>& list = k == "Muted" ? voice.muted : voice.blocked;
+                list.clear();
                 std::stringstream ss(v);
-                for (std::string item; std::getline(ss, item, ',');) if (!item.empty()) voice.muted.push_back(item);
+                for (std::string item; std::getline(ss, item, ',');) if (!item.empty()) list.push_back(item);
             }
         } else if (section == "[Lobby]") {
             if (k == "LastMode") lobbyLastMode = v;
@@ -229,6 +230,11 @@ void LocalProfile::save() const {
           << "\nPushToTalkKey=" << voice.pttKey << "\nVolume=" << voice.volume << "\nProximityVolume=" << voice.proximityVolume << "\nMuted=";
         for (size_t i = 0; i < voice.muted.size(); ++i) f << (i ? "," : "") << voice.muted[i];
         f << "\n";
+        if (!voice.blocked.empty()) {
+            f << "Blocked=";
+            for (size_t i = 0; i < voice.blocked.size(); ++i) f << (i ? "," : "") << voice.blocked[i];
+            f << "\n";
+        }
     }
     if (onlineFirstRunShown || !lobbyService.empty()) {   // only when set (offline profiles unchanged)
         f << "\n[Online]\n";

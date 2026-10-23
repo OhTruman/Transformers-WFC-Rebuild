@@ -1419,15 +1419,29 @@ static void testOnlineVoice() {
     ds.poll();
     const std::string talking = ds.call("ReadCollectionValue", {"<CurrentGame:Players>", "PlayerName", "1"}).s;
     const std::string hs = ds.call("ReadCollectionValue", {"<CurrentGame:Players>", "HeadsetState", "1"}).s;
-    const bool muteCall = r.f().call("Online.ShowGamerCardUI", {"Alpha  PC"}).b && r.fake->last("setMuted") &&
-                          r.fake->last("setMuted")->arg == "WFC-AAAA-AAAA-1,1" && r.f().profile().voice.muted.size() == 1;
+    // the Gamer Card button opens the PC player card (Mute / Block, RE ONLINE_POSTMATCH_PARTY_VOICE_RE); A mutes
+    const bool card = r.f().call("Online.ShowGamerCardUI", {"Alpha  PC"}).b && r.f().popup().open && r.f().popup().title == "Alpha";
+    r.f().popupButton('A');
+    const bool muteCall = card && r.fake->last("setMuted") && r.fake->last("setMuted")->arg == "WFC-AAAA-AAAA-1,1" &&
+                          r.f().profile().voice.muted.size() == 1;
     ds.poll();
     const std::string mutedName = ds.call("ReadCollectionValue", {"<CurrentGame:Players>", "PlayerName", "1"}).s;
     const std::string mutedHs = ds.call("ReadCollectionValue", {"<CurrentGame:Players>", "HeadsetState", "1"}).s;
     r.f().call("Online.ShowGamerCardUI", {"Alpha  PC"});
-    check(talking == "Alpha  PC  Near" && hs == "2" && muteCall && mutedName == "Alpha  PC" && mutedHs == "1" &&
-          r.fake->last("setMuted")->arg == "WFC-AAAA-AAAA-1,0" && r.f().profile().voice.muted.empty(), "online.V3_headset_near_mute",
-          talking + " / " + hs + " / " + mutedName + " / " + mutedHs);
+    r.f().popupButton('A');   // Unmute
+    const bool unmuted = r.fake->last("setMuted")->arg == "WFC-AAAA-AAAA-1,0" && r.f().profile().voice.muted.empty();
+    r.f().call("Online.ShowGamerCardUI", {"Alpha  PC"});
+    r.f().popupButton('X');   // Block: muted, remembered on this PC (a local list, no server report)
+    LocalProfile saved; saved.load();
+    const bool blocked = r.fake->last("setMuted")->arg == "WFC-AAAA-AAAA-1,1" && saved.voice.blocked.size() == 1 &&
+                         saved.voice.blocked[0] == "WFC-AAAA-AAAA-1";
+    r.f().call("Online.ShowGamerCardUI", {"Alpha  PC"});
+    r.f().popupButton('X');   // Unblock
+    const bool unblocked = r.fake->last("setMuted")->arg == "WFC-AAAA-AAAA-1,0" && r.f().profile().voice.blocked.empty();
+    check(talking == "Alpha  PC  Near" && hs == "2" && muteCall && mutedName == "Alpha  PC" && mutedHs == "1" && unmuted && blocked &&
+          unblocked, "online.V3_headset_near_mute",
+          talking + " / " + hs + " / " + mutedName + " / " + mutedHs + " / " + std::to_string(card) + std::to_string(unmuted) +
+          std::to_string(blocked) + std::to_string(unblocked));
 }
 
 static void testCampaignObjectivesManifest() {
@@ -1860,6 +1874,24 @@ static void testSmokeWaterRows() {
     std::remove("wfc_profile.ini");
 }
 
+static void testEscalationNoXp() {
+    // RE ESCALATION_WAVES_RE 5: TnGameReplicationInfoSurvival.CanGainXp is false - Escalation earns no XP (the end screen's bars
+    // show no gain); an offline versus match keeps the PC progression rule
+    std::remove("wfc_profile.ini");
+    FrontendRuntime rt;
+    if (!rt.init()) { check(false, "escalation.no_xp", "init"); return; }
+    GameFlow& f = rt.flow();
+    runUntil(rt, [&] { return f.frontEndStarted(); });
+    f.call("Online.OpenPartyLobby", {"GTS_TeamGame"});
+    runUntil(rt, [&] { return f.level() == LevelKind::PartyLobby && !f.loading().active; });
+    f.call("Online.EditGameMode", {"TDM"});
+    const bool versus = f.canGainXp();
+    f.call("Online.EditGameMode", {"SV"});
+    const bool escalation = f.canGainXp();
+    check(versus && !escalation, "escalation.no_xp", std::to_string(versus) + std::to_string(escalation));
+    std::remove("wfc_profile.ini");
+}
+
 static void testCampaignC6() {
     // C6 (RE CAMPAIGN_RUNTIME_EVENTS_RE), with this test as the fake runtime (no chapter loads yet: a TDM match, campaign forced):
     // the Coop UI controller (in-map trio select, no countdown screen); ClientReachedCheckpoint (an indexed checkpoint advances
@@ -2228,6 +2260,7 @@ int main() {
     testCampaignC2C5();
     testSmokeWaterRows();
     testCampaignC6();
+    testEscalationNoXp();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);

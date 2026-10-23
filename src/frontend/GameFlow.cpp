@@ -474,7 +474,7 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     if (fn == "Online.HostPrivateNow") { hostPrivateNow(); return {}; }   // lobby flow v2: Private Match
     if (fn == "Online.JoinGame") return onlineJoin(arg(0));   // PC EXTENSION: the Join Game prompt's code / address
     // The player row's A (the original "View Gamercard": the Live gamercard, where muting lived): online, Mute / Unmute
-    if (fn == "Online.ShowGamerCardUI" && session_ && role_ != SessionRole::Offline) return toggleMute(arg(0));
+    if (fn == "Online.ShowGamerCardUI" && session_ && role_ != SessionRole::Offline) return showPlayerCard(arg(0));
     if (fn == "Online.IsHost") return role_ != SessionRole::Member;   // offline: the local player hosts the private match
     if (fn == "Online.GetLoginStatus") return 2;   // PARTIAL: LS_LoggedIn; no online service
     if (fn == "Online.IsInPartyChatSession") return false;
@@ -1010,6 +1010,26 @@ void GameFlow::popupButton(char which) {
         FlowTrace::emit("online.join", {{"result", "cancelled"}});
     }
     if (btn.action == "pttCancel") endPttCapture("");
+    if ((btn.action == "cardMute" || btn.action == "cardBlock") && !cardMember_.empty()) {
+        auto toggle = [&](std::vector<std::string>& v) {
+            auto it = std::find(v.begin(), v.end(), cardMember_);
+            const bool on = it == v.end();
+            if (on) v.push_back(cardMember_); else v.erase(it);
+            return on;
+        };
+        SessionMemberId m; m.fingerprint = cardMember_;
+        if (btn.action == "cardMute") {
+            const bool muted = toggle(profile_.voice.muted);
+            if (session_) session_->setMuted(m, muted || isBlocked(m));
+            FlowTrace::emit("online.mute", {{"member", cardMember_}, {"muted", FlowTrace::boolean(muted)}, {"by", "player card"}});
+        } else {
+            const bool blocked = toggle(profile_.voice.blocked);
+            if (session_) session_->setMuted(m, blocked || isMuted(m));
+            FlowTrace::emit("online.block", {{"member", cardMember_}, {"blocked", FlowTrace::boolean(blocked)}, {"scope", "local list (no server report)"}});
+        }
+        profile_.save();
+        cardMember_.clear();
+    }
     if (btn.action == "cancelSearch" && session_ && onlinePending_ == OnlinePending::Searching) {   // CancelSearchMessage
         session_->cancelSearch();
         showPopup([this] { Popup p; p.title = txt("$UIText.MessagePrompts.SearchForGameTitle"); p.message = txt("$UIText.MessagePrompts.CancelSearchMessage");
@@ -1387,6 +1407,7 @@ bool GameFlow::canGainXp() const {
     // ORIGINAL: CanGainXp = !IsPrivateGame() [RE VERSUS_END_OF_MATCH_CHECK]. Online: public games (Quick Match playlists, the
     // voting lobby) earn XP, private ones do not (D8). PC ADAPTATION offline: private matches with bots earn progression;
     // WFC_ORIGINAL_XP_RULE=1 keeps the original rule.
+    if (lobby_.gameModeTag == "SV") return false;   // Escalation: no XP (CanGainXp false) [RE]
     const bool publicGame = lobby_.playlistId >= 0 || vote_.round > 0;
     if (role_ != SessionRole::Offline) return publicGame;
     return !std::getenv("WFC_ORIGINAL_XP_RULE") || publicGame;

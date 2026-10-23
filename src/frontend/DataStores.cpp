@@ -246,7 +246,7 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
             const std::string nm = (m.info.displayName.empty() ? std::string("Player") : m.info.displayName) + "  " +
                                    (m.info.platform == SessionPlatform::Web ? cat_.localizeKey("$WfcPC.Online.PlatformWeb") : pcTag);
             const GameFlow::VoiceState vs = flow_.voiceStateOf(m.info.id);
-            const int hs = flow_.isMuted(m.info.id) ? std::min(vs.headsetState, 1) : vs.headsetState;
+            const int hs = flow_.isMuted(m.info.id) || flow_.isBlocked(m.info.id) ? std::min(vs.headsetState, 1) : vs.headsetState;
             headset = std::to_string(hs);
             return hs == 2 && vs.via == 2 ? nm + "  " + cat_.localizeKey("$WfcPC.Voice.VoiceNearTag") : nm;
         };
