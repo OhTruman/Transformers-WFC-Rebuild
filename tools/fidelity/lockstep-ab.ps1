@@ -23,10 +23,13 @@ $ErrorActionPreference = "Continue"
 New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
 $Arms = @($Arms | ForEach-Object { "$_" -split ';;' } | Where-Object { $_.Trim() })
 $levels = @{ "501" = "MP_IAC_Seed_Base_m"; "502" = "MP_IAC_Berth_Base_m"; "503" = "MP_UND_Complex_BASE_m"; "504" = "MP_IAC_Rust_BASE_m"
-             "507" = "MP_ORB_Debris_BASE_m"; "508" = "MP_IAC_Streets_Base_m"; "509" = "MP_KON_Molten_Base_m"; "510" = "MP_UND_Gorge_BASE_m" }
+             "507" = "MP_ORB_Debris_BASE_m"; "508" = "MP_IAC_Streets_Base_m"; "509" = "MP_KON_Molten_Base_m"; "510" = "MP_UND_Gorge_BASE_m"
+             "505" = "MP_ESC_BrokenHope_BASE_m"; "506" = "MP_ESC_Remnant_BASE_m" }   # 505 / 506: Escalation-only maps - booted in ESC (below)
 $lvl = $levels["$Map"]; if (-not $lvl) { throw "unknown map $Map" }
 $res = New-WfcResults; function Res($id, $status, $note, $owner = "") { Add-WfcResult $res "lockstep.$id" $status $null $note $owner }
 $url = "{0}?GameModeTag=TDM?BotsAutobot={1}?BotsDecepticon={2}?BotDifficulty=1?ExtendedPlayers=1?PointsToWin=9999?TimeLimit=3600" -f $lvl, ($Bots - 1), $Bots
+# (final gate, 2026-10-23) the Escalation-only maps run their own mode: the horde director, the human + friendly bots; -Bots sets the friendlies
+if ("$Map" -in "505", "506") { $url = "{0}?GameModeTag=ESC?BotsFriendly={1}" -f $lvl, [Math]::Min(4, [Math]::Max(0, $Bots - 1)) }
 $sfRe = 'interval ([\d.]+) ms: render ([\d.]+) \(world ([-\d.]+), chars ([-\d.]+), fx ([-\d.]+), transl ([-\d.]+), post ([-\d.]+)\), outside ([-\d.]+); gpu ([\d.]+) \(world ([-\d.]+), chars ([-\d.]+), fx ([-\d.]+), transl ([-\d.]+), post ([-\d.]+)(?:; [^)]*)?\); draws (\d+) \(dyn (\d+), fx (\d+)\), program binds (\d+)'
 function Pct($a, $p) { if (-not $a.Count) { return [double]::NaN }; $s = @($a | Sort-Object); return $s[[Math]::Min($s.Count - 1, [int][Math]::Floor($p * $s.Count))] }
 function Mean($a) { if (-not $a.Count) { return [double]::NaN }; return ($a | Measure-Object -Average).Average }
