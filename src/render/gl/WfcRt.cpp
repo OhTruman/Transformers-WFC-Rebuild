@@ -1261,6 +1261,27 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                     float* q = fr.volColors[fr.volLightN]; q[0] = lc.x; q[1] = lc.y; q[2] = lc.z; q[3] = L.falloff;
                     ++fr.volLightN;
                 }
+                // (Smoke stage 2) last frame's smoke blobs: the 16 that cover the most of the view (radius / distance)
+                fr.smokeBlobN = 0;
+                if (!smokeVolAcc_.empty()) {
+                    std::vector<std::pair<float, size_t>> rank;
+                    for (size_t i = 0; i < smokeVolAcc_.size(); ++i) {
+                        const auto& b = smokeVolAcc_[i];
+                        const float d = core::length(core::Vec3{b[0], b[1], b[2]} - camPos_);
+                        if (d > 80.0f + b[3]) continue;
+                        rank.push_back({-b[3] / std::max(d, 1.0f), i});
+                    }
+                    std::sort(rank.begin(), rank.end());
+                    for (const auto& rk : rank) {
+                        if (fr.smokeBlobN >= 16) break;
+                        const auto& b = smokeVolAcc_[rk.second];
+                        float* p = fr.smokeBlobs[2 * fr.smokeBlobN];
+                        p[0] = b[0]; p[1] = b[1]; p[2] = b[2]; p[3] = b[3];
+                        p[4] = b[4]; p[5] = time_ * 0.35f; p[6] = 0.0f; p[7] = 0.0f;   // (density, the ripple's rise (m))
+                        ++fr.smokeBlobN;
+                    }
+                }
+                smokeVolAcc_.clear();
                 rtVolFrame_ = frameNo_;
             }
         }

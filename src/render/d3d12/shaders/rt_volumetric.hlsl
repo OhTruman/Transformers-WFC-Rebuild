@@ -17,7 +17,7 @@ cbuffer Frame : register(b0) {
     float4x4 InvViewProj;
     float4 ToSun;          // xyz towards the sun, w 1 = a sun
     float4 Size;           // render width, height, frame index, the lamp core radius (m)
-    float4 Params;         // 0, 0, instance mask, the cap on the integrated in-scatter (per channel; 0 = none)
+    float4 Params;         // the smoke blob count (Smoke stage 2), 0, instance mask, the cap on the integrated in-scatter (per channel; 0 = none)
     float4 VSun;           // the sun's linear colour x brightness (rgb), the sun phase anisotropy g (w)
     float4 VFog;           // density (1 / m) below the fog height, height falloff (1 / m above it), fog height (m), haze (1 / m)
     float4 VMisc;          // max distance (m), slices, tiles x, tiles y
@@ -55,7 +55,23 @@ float density(float3 x) {
     // (round 3: the haze follows the authored fog's height falloff too - a constant haze over 120 m of corridor was the
     // grey veil on Streets' match frames)
     const float above = max(x.y - VFog.z, 0.0);
-    return (VFog.x + VFog.w) * exp(-above * VFog.y);
+    float sig = (VFog.x + VFog.w) * exp(-above * VFog.y);
+    // (Smoke stage 2, Enhanced smoke in Realistic: the frame's smoke plumes as density blobs - ring + 28: centre (m) + radius,
+    // density (1 / m) + the rise phase (m); a smooth (1 - q)^2 core broken up by a drifting two-octave ripple, so the plume
+    // catches the sun's shafts and the lamps' halos where the sprites alone are flat cards. Params.x = 0: none)
+    const uint nb = (uint)Params.x, b0 = (uint)Extra.z + 28;
+    [loop] for (uint k = 0; k < 16; ++k) {
+        if (k >= nb) break;
+        const float4 B = ShadowLights[b0 + 2 * k], D = ShadowLights[b0 + 2 * k + 1];
+        const float3 d = x - B.xyz;
+        const float q = dot(d, d) / max(B.w * B.w, 1e-4);
+        if (q >= 1.0) continue;
+        const float3 u = (x - float3(0.0, D.y, 0.0)) / max(B.w, 0.25);
+        const float n = 0.55 + 0.3 * sin(dot(u, float3(4.1, 3.3, 2.7)) + 1.3) * sin(dot(u, float3(-2.9, 4.7, 3.1)))
+                      + 0.15 * sin(dot(u, float3(9.3, -7.1, 8.3)));
+        sig += D.x * (1.0 - q) * (1.0 - q) * saturate(n);
+    }
+    return sig;
 }
 float hg(float c, float g) { return (1.0 - g * g) / (12.566371 * pow(max(1.0 + g * g - 2.0 * g * c, 1e-4), 1.5)); }
 

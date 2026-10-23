@@ -1009,6 +1009,9 @@ private:
     std::unordered_map<std::string, int> spriteSmokeProg_;
     bool smokeBuild_ = false;
     core::Vec3 smokeCenter_{0, 0, 0};
+    // (Smoke stage 2, Realistic) the frame's Enhanced smoke batches as froxel density blobs: centre (m), radius (m), density
+    // (1 / m) - filled by the sprite draws, handed to the next RT frame's volumetric pass (WfcRt.cpp) and cleared there
+    std::vector<std::array<float, 5>> smokeVolAcc_;
     core::Vec3 smokeRef_{-1, -1, -1};
     int smokeRefMode_ = -1;
     static bool isSmokeMaterial(const std::string& material);

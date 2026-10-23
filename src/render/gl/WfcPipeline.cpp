@@ -8972,6 +8972,20 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
         core::Vec3 c{0, 0, 0};
         for (size_t i = 0; i < n; ++i) c = c + (sp[i].c[0] + sp[i].c[2]) * 0.5f;
         smokeCenter_ = c * (1.0f / (float)n);
+        // (Smoke stage 2, Realistic only: the batch as a density blob for the froxel volume - its extent, and an optical depth
+        // across it of K x the sprites' mean opacity; WFC_SMOKEVOL = K, 0 off)
+        static const float volK = std::getenv("WFC_SMOKEVOL") ? (float)std::atof(std::getenv("WFC_SMOKEVOL")) : 0.6f;
+        if (rtMode_ == 2 && volK > 0.0f && smokeVolAcc_.size() < 256) {
+            float r = 0.0f, a = 0.0f;
+            for (size_t i = 0; i < n; ++i) {
+                const core::Vec3 m = (sp[i].c[0] + sp[i].c[2]) * 0.5f;
+                r = std::max(r, core::length(m - smokeCenter_) + 0.5f * core::length(sp[i].c[2] - sp[i].c[0]));
+                a += std::min(std::max(sp[i].color[3], 0.0f), 1.0f);
+            }
+            a /= (float)n;
+            if (r > 0.1f && a > 0.01f)
+                smokeVolAcc_.push_back({smokeCenter_.x, smokeCenter_.y, smokeCenter_.z, r, volK * a / r});
+        }
     }
     if (!spriteVao_) {
         GenVertexArrays(1, &spriteVao_);

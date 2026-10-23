@@ -49,6 +49,7 @@ struct RtFrame {
     float volSun[4] = {0, 0, 0, 0.6f}, volFog[4] = {0, 0, 0, 0}, volMisc[2] = {150.0f, 24.0f}, volAmb[3] = {0, 0, 0};
     float volLampK = 1.0f;   // (v2) the lamp halos' strength
     float volTransK = 1.0f, volHistory = 0.9f, volLampCore = 2.0f, volCap = 0.0f;   // (froxels) the transient lights' strength; the history weight
+    float smokeBlobs[32][4] = {}; int smokeBlobN = 0;   // (Smoke stage 2, Realistic) per plume: centre (m) + radius (m), density (1 / m)
     float volLights[4][4] = {}, volColors[4][4] = {}; int volLightN = 0;   // (v3) the halo lamps: in view, by coverage x brightness   // (diagnostics) write the denoiser's tile buffers to rt_dump_tiles.bin
     // (item 2) up to 4 point / spot lights shadowed per pixel (xyz position, w radius): RtTargets::lightVis RGBA = each
     // one's visibility - on dynamic pixels from everything, on world pixels from the characters only
