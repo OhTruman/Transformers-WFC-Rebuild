@@ -3753,3 +3753,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   leave arms PASS on ae9bbb6e (bot takes the slot at one tick; humans-only 1v1 Forfeit at 1.51 s). RE: per-chapter campaign
   pass complete (no chapter-specific open rows). FMV track rule was already on the head (M07; WFC_LANGUAGE, not a profile
   setting). OPEN QUESTION for the user: a Language row in Settings (INT / FRA)?
+2026-10-23 04:12 Rendering verdicts: smoke stage 1 FAIL by eye (11 / 221 frames hold smoke; ~3 levels difference); Enhanced water not
+  user-ready (Fresnel ~3 % at play angles). DECISION: both rows dev-only; x39tune next (tuned contrast / puff shape / flow,
+  SSR x2.5 + Fresnel floor); if still flat -> stage 2 froxel plumes, Enhanced smoke Realistic-only. x37: same-moment arms OK.
