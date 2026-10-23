@@ -93,6 +93,39 @@ At matinee end, each sound track's audio component:
   cause is a cross-level actor reference cleared at save (H).
 - **Rebuild:** treat them as no-ops. Don't try to bind them by name.
 
+## 9. AnimControl native slot playback (C, added 2026-10-23)
+Path: track → `Actor.SetAnimPosition / SetAnimWeights` (script) → `USkeletalMeshMatineeAnimator` → for **every AnimNodeSlot whose
+NodeName == SlotName** in the animator's slot list (gathered at BeginAnimControl by IsA(AnimNodeSlot), 0x82D7D688) →
+AnimNodeSlot vtable +0x1D8 / +0x1DC.
+- The animator execs are 0x82C86B38 / 0x82CAD1F0 → 0x82D74860 / 0x82D74900.
+- AnimNodeSlot's vtable is 0x820AA180, read from its constructor 0x827A3198.
+
+**`MAT_SetAnimPosition(ChannelIndex, AnimSeqName, Position, bFireNotifies, bLooping)` (0x82E6F2F8):**
+- target child = **Children[ChannelIndex + 1]** (child 0 is the normal anim-tree source); it must be an AnimNodeSequence, else
+  nothing happens;
+- if its AnimSeqName differs → `SetAnim(name)` (seq vtable +0x180), and the child's additive flag is copied from the new
+  AnimSequence;
+- `bLooping` is written onto the sequence node;
+- **`SetPosition(Position, bFireNotifies)`** (vtable +0x184), then a slot-child refresh (0x82E7A5E0).
+- There's **no play rate, blend time or end handling here.** The track supplies the absolute position every frame. Looping /
+  clamping of that position is the track's job (§10), and the node only holds the bLooping flag.
+
+**`MAT_SetAnimWeights(SlotInfo)` (0x82E3B658):**
+- 1 child → source weight 1.
+- Otherwise, **from the last channel down to channel 0**:
+  `w_i = clamp(ChannelWeights[i], 0, 1)` (0 if absent); `child[i+1].Weight = (1 − Σ already assigned) · w_i`.
+  The source child gets `1 − Σ`.
+- **Higher channels take priority.** Weights apply instantly with no internal blending. The fade in / out is entirely the track's
+  weight curve (FloatTrack), evaluated as in §1.
+- Skipped for slots with flag +0xC4 bit 31 set (H: a "don't let matinee drive weights" flag).
+
+## 10. Move RelativeToInitial (C for operands, H for order)
+- In 0x82C010B8, the IMF_RelativeToInitial branch loads **InitialTM from the track instance +0x50** and the **BaseTM** (identity, or
+  the Base actor's transform) as the 4 row vectors. The product is VMX128 code Ghidra can't decode.
+- The register setup (BaseTM rows loaded whole, InitialTM rows splatted) is the shape of `VectorMatrixMultiply(Result, InitialTM,
+  BaseTM)` = **InitialTM × BaseTM** (row-vector convention), which matches stock UE3.
+- The final actor transform is then **KeyTM(t) × RefTM** (H stock).
+
 ## 8. Still HIGH / open
 - AnimControl native slot playback (SkeletalMeshMatineeAnimator SetAnimPosition / SetAnimWeights): not traced.
   The script path is C (RUNTIME §4.1).
