@@ -1,0 +1,557 @@
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index a978deb0..33436c9a 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -215,6 +215,7 @@ bool Application::init() {
+     if (std::getenv("WFC_CHAOS")) { runChaosTest(); return false; }            // measurements only
+     if (std::getenv("WFC_TDMTEST")) { runTdmSessionTest(); return false; }     // measurements only
+     if (std::getenv("WFC_LATESEATTEST")) { runLateSeatTest(); return false; }   // join in progress (dormant seats)
++    if (std::getenv("WFC_KISMETTEST")) { runKismetTest(); return false; }      // campaign Kismet VM (no map)
+     if (std::getenv("WFC_ESCTEST")) { runEscalationTest(); return false; }     // Escalation E1 director (WFC_MAP=MP_ESC_BrokenHope)
+     if (std::getenv("WFC_CAMSYNC")) { runCameraSyncTest(); return false; }     // measurements only
+     if (std::getenv("WFC_MODEPLAYTEST")) { runModePlayTest(); return false; }  // measurements only
+diff --git a/src/core/Application.h b/src/core/Application.h
+index 9629261c..18843cdb 100644
+--- a/src/core/Application.h
++++ b/src/core/Application.h
+@@ -110,6 +110,7 @@ private:
+     void runChaosTest();
+     void runTdmSessionTest();
+     void runLateSeatTest();     // WFC_LATESEATTEST (Application_LateSeatTest.cpp)
++    void runKismetTest();       // WFC_KISMETTEST (Application_KismetTest.cpp)
+     void runEscalationTest();   // WFC_ESCTEST (Application_EscTest.cpp)
+     void runCameraSyncTest();
+     void runModePlayTest();
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index ad32ed1e..d8fffe51 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -624,7 +624,7 @@ bool Application::wantsFrontendBoot() {
+     for (const char* v : {"WFC_SMOKE_FRAMES", "WFC_AIDUEL", "WFC_SHOTLIST", "WFC_GAMEMODE", "WFC_MAP", "WFC_PICKUPTEST", "WFC_TRAVERSE",
+                           "WFC_MAPTRAVERSE", "WFC_LOCKSTEP", "WFC_DEBUGCAM", "WFC_STARTVEHICLE",
+                           // [integration M05] Gameplay / Rendering harnesses written against the direct boot
+-                          "WFC_XFORMTEST", "WFC_MATCHTEST", "WFC_CAMTEST", "WFC_CHAOS", "WFC_TDMTEST", "WFC_ESCTEST", "WFC_LATESEATTEST", "WFC_MATCH",
++                          "WFC_XFORMTEST", "WFC_MATCHTEST", "WFC_CAMTEST", "WFC_CHAOS", "WFC_TDMTEST", "WFC_ESCTEST", "WFC_KISMETTEST", "WFC_LATESEATTEST", "WFC_MATCH",
+                           "WFC_MATCH_URL", "WFC_RELOADTEST", "WFC_CAMSYNC", "WFC_MODEPLAYTEST", "WFC_FRONTENDSCENE",
+                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
+                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
+diff --git a/src/core/Application_KismetTest.cpp b/src/core/Application_KismetTest.cpp
+new file mode 100644
+index 00000000..f95d015d
+--- /dev/null
++++ b/src/core/Application_KismetTest.cpp
+@@ -0,0 +1,126 @@
++// WFC_KISMETTEST (headless, no map): the campaign Kismet VM (game/Kismet.h). (1) Synthetic graphs for the stock op semantics: Delay
++// timing / Stop / Pause, Gate AutoCloseCount, RemoteEvent fan-out, an event's MaxTriggerCount, SeqCond_Increment, a sub-sequence
++// input. (2) D5_OME's exported graph (AssetTools next_map/D5_OME_kismet.json) started from its first checkpoint with a stub host:
++// it loads, the start runs (Checkpoint_4578 set by PreGameplaySetup), 120 s of ticks run with no impulse-loop cap hit. One SUMMARY.
++#include "core/Application.h"
++#include "core/Log.h"
++#include "game/Kismet.h"
++
++#include <cmath>
++#include <cstdlib>
++#include <fstream>
++#include <sstream>
++
++// The AssetTools manifests (WFC_MANIFESTS, else the dev tree): as ChassisDef.cpp's manifestRoot().
++static std::string kismetManifestRoot() {
++    if (const char* e = std::getenv("WFC_MANIFESTS")) return e;
++    return "F:/Transformers Rebuild/AssetTools/manifests";
++}
++
++namespace core {
++
++void Application::runKismetTest() {
++    int checks = 0, fails = 0;
++    auto check = [&](bool ok, const char* what) { ++checks; if (!ok) ++fails; LOG_INFO("KISMETTEST %s %s", ok ? "PASS" : "FAIL", what); };
++    auto parse = [](const std::string& s) { assets::Json j; assets::Json::parse(s, j); return j; };
++    // A synthetic level: ops as the exporter writes them (object / class / authored / inputs / outputs / variables / incoming).
++    auto graph = [&](const std::string& objects) { return parse("{\"levels\":{\"L\":[" + objects + "]}}"); };
++    struct Recorder : game::KismetVM::Host {
++        std::vector<std::pair<float, std::string>> hits;
++        bool activate(game::KismetVM& vm, int op, int) override { hits.push_back({vm.time(), vm.op(op).path}); return true; }
++    };
++    const float dt = 1.0f / 60.0f;
++    {   // Delay: Start -> Finished after Duration; Stop -> Aborted; Pause holds the timer
++        game::KismetVM vm; Recorder r; vm.setHost(&r);
++        vm.load(graph(
++            "{\"object\":\"S.E\",\"class\":\"SeqEvent_RemoteEvent\",\"authored\":{\"EventName\":\"go\"},\"inputs\":[],\"outputs\":{\"Out\":[{\"op\":\"S.D\",\"input_index\":0}]},\"variables\":{},\"incoming\":[]},"
++            "{\"object\":\"S.D\",\"class\":\"SeqAct_Delay\",\"authored\":{\"Duration\":0.5},\"inputs\":[\"Start\",\"Stop\",\"Pause\"],\"outputs\":{\"Finished\":[{\"op\":\"S.F\",\"input_index\":0}],\"Aborted\":[{\"op\":\"S.A\",\"input_index\":0}]},\"variables\":{},\"incoming\":[{}]},"
++            "{\"object\":\"S.F\",\"class\":\"X_Finished\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{},\"variables\":{},\"incoming\":[{}]},"
++            "{\"object\":\"S.A\",\"class\":\"X_Aborted\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{},\"variables\":{},\"incoming\":[{}]}"));
++        vm.remoteEvent("go");
++        for (int k = 0; k < 60; ++k) vm.tick(dt);
++        check(r.hits.size() == 1 && r.hits[0].second == "S.F" && std::fabs(r.hits[0].first - 0.5f) < 0.02f, "Delay 0.5 s: Finished at 0.5 s");
++        r.hits.clear(); vm.remoteEvent("go");
++        for (int k = 0; k < 6; ++k) vm.tick(dt);
++        vm.impulse(vm.find("S.D"), 1); vm.tick(dt);
++        check(r.hits.size() == 1 && r.hits[0].second == "S.A", "Delay Stop: Aborted, no Finished");
++    }
++    {   // Gate AutoCloseCount 1: one pass, then closed until Open
++        game::KismetVM vm; Recorder r; vm.setHost(&r);
++        vm.load(graph(
++            "{\"object\":\"S.G\",\"class\":\"SeqAct_Gate\",\"authored\":{\"AutoCloseCount\":1},\"inputs\":[\"In\",\"Open\",\"Close\",\"Toggle\"],\"outputs\":{\"Out\":[{\"op\":\"S.O\",\"input_index\":0}]},\"variables\":{},\"incoming\":[]},"
++            "{\"object\":\"S.O\",\"class\":\"X_Out\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{},\"variables\":{},\"incoming\":[{}]}"));
++        const int g = vm.find("S.G");
++        vm.impulse(g, 0); vm.impulse(g, 0); vm.tick(dt);
++        vm.impulse(g, 1); vm.impulse(g, 0); vm.tick(dt);
++        check(r.hits.size() == 2, "Gate AutoCloseCount 1: passes once, closes, Open re-opens");
++    }
++    {   // RemoteEvent fan-out to two listeners; a base event (MaxTriggerCount 1) fires once; RemoteEvents are unlimited
++        game::KismetVM vm; Recorder r; vm.setHost(&r);
++        vm.load(graph(
++            "{\"object\":\"S.R1\",\"class\":\"SeqEvent_RemoteEvent\",\"authored\":{\"EventName\":\"x\"},\"inputs\":[],\"outputs\":{\"Out\":[{\"op\":\"S.A\",\"input_index\":0}]},\"variables\":{},\"incoming\":[]},"
++            "{\"object\":\"S.R2\",\"class\":\"SeqEvent_RemoteEvent\",\"authored\":{\"EventName\":\"x\"},\"inputs\":[],\"outputs\":{\"Out\":[{\"op\":\"S.B\",\"input_index\":0}]},\"variables\":{},\"incoming\":[]},"
++            "{\"object\":\"S.T\",\"class\":\"SeqEvent_Touch\",\"authored\":{},\"inputs\":[],\"outputs\":{\"Out\":[{\"op\":\"S.C\",\"input_index\":0}]},\"variables\":{},\"incoming\":[]},"
++            "{\"object\":\"S.A\",\"class\":\"X\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{},\"variables\":{},\"incoming\":[{}]},"
++            "{\"object\":\"S.B\",\"class\":\"X\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{},\"variables\":{},\"incoming\":[{}]},"
++            "{\"object\":\"S.C\",\"class\":\"X\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{},\"variables\":{},\"incoming\":[{}]}"));
++        vm.remoteEvent("x"); vm.remoteEvent("x");
++        vm.fireEvent(vm.find("S.T")); vm.fireEvent(vm.find("S.T"));
++        vm.tick(dt);
++        check(r.hits.size() == 5, "RemoteEvent fans out to every listener, unlimited; a base event fires once (MaxTriggerCount 1)");
++    }
++    {   // SeqCond_Increment A += 1 vs B; a link into a sub-sequence fires its SequenceActivated
++        game::KismetVM vm; Recorder r; vm.setHost(&r);
++        vm.load(graph(
++            "{\"object\":\"S.VA\",\"class\":\"SeqVar_Int\",\"authored\":{\"IntValue\":0},\"inputs\":[],\"outputs\":{},\"variables\":{},\"incoming\":[]},"
++            "{\"object\":\"S.VB\",\"class\":\"SeqVar_Int\",\"authored\":{\"IntValue\":2},\"inputs\":[],\"outputs\":{},\"variables\":{},\"incoming\":[]},"
++            "{\"object\":\"S.I\",\"class\":\"SeqCond_Increment\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{\"A == B\":[{\"op\":\"S.Sub\",\"input_index\":0}]},\"variables\":{\"A\":[{\"variable\":\"S.VA\"}],\"B\":[{\"variable\":\"S.VB\"}]},\"incoming\":[]},"
++            "{\"object\":\"S.Sub\",\"class\":\"Sequence\",\"authored\":{},\"inputs\":[],\"outputs\":{},\"variables\":{},\"incoming\":[{}]},"
++            "{\"object\":\"S.Sub.In\",\"class\":\"SeqEvent_SequenceActivated\",\"authored\":{\"InputLabel\":\"In\"},\"inputs\":[],\"outputs\":{\"Out\":[{\"op\":\"S.Sub.X\",\"input_index\":0}]},\"variables\":{},\"incoming\":[]},"
++            "{\"object\":\"S.Sub.X\",\"class\":\"X\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{},\"variables\":{},\"incoming\":[{}]}"));
++        const int i = vm.find("S.I");
++        vm.impulse(i, 0); vm.tick(dt);
++        check(r.hits.empty(), "Increment: A 1 < B 2, no A == B");
++        vm.impulse(i, 0); vm.tick(dt);
++        check(r.hits.size() == 1 && r.hits[0].second == "S.Sub.X", "Increment: A 2 == B 2 fires into the sub-sequence's SequenceActivated");
++    }
++    {   // D5_OME's exported graph
++        std::ifstream f(kismetManifestRoot() + "/next_map/D5_OME_kismet.json", std::ios::binary);
++        std::stringstream ss; ss << f.rdbuf();
++        assets::Json j;
++        const bool ok = f.good() && assets::Json::parse(ss.str(), j);
++        game::KismetVM vm;
++        struct Stub : game::KismetVM::Host {
++            std::vector<std::string> checkpoints; int conversations = 0, held = 0;
++            bool activate(game::KismetVM& vm, int op, int input) override {
++                const std::string& c = vm.op(op).cls;
++                if (c == "SeqAct_SetActiveCheckpoint") { checkpoints.push_back(vm.objectOf(op, "Checkpoint")); vm.output(op, "Out"); return true; }
++                // Latent classes (RE KH timing summary) are held by the stub (no outputs), so the test does not invent completions:
++                if (c == "SeqAct_Interp" || c == "SeqAct_TnPawnFactory" || c == "SeqAct_MoviePlayer" || c == "TnSeqAct_MissionComplete" ||
++                    c == "SeqAct_TnAiMoveToActor" || c == "SeqAct_SetStreamingState" || c == "SeqAct_TnForceIntoForm") { ++held; return true; }
++                if (c == "SeqAct_Conversation" && input == 0) { ++conversations; vm.op(op).latent = true; vm.op(op).timer = 0.5f; vm.output(op, "Played"); return true; }
++                return false;
++            }
++            void updateLatent(game::KismetVM& vm, int op, float dt) override {
++                game::KismetVM::Op& o = vm.op(op);
++                if (o.cls == "SeqAct_Conversation" && (o.timer -= dt) <= 0.0f) vm.finishLatent(op, "Finished");
++            }
++        } stub;
++        vm.setHost(&stub);
++        check(ok && vm.load(j) && vm.opCount() > 800, "D5_OME graph loads (ops and links from the flat per-level lists)");
++        vm.begin("Checkpoint_4578");
++        bool cp = false; for (const std::string& c : stub.checkpoints) cp = cp || c.find("Checkpoint_4578") != std::string::npos;
++        check(cp, "D5 start at Checkpoint_4578: PreGameplaySetup sets it active");
++        for (int k = 0; k < 120 * 60; ++k) vm.tick(dt);
++        int total = 0; for (const auto& a : vm.activations) total += a.second;
++        check(vm.queueCapHits == 0 && total > 0, "120 s of D5 ticks with no impulse-loop cap hit");
++        std::string unhandled;
++        for (const auto& d : vm.defaulted) unhandled += " " + d.first + "x" + std::to_string(d.second);
++        LOG_INFO("KISMETTEST D5: %zu ops, %d activations, %zu classes, conversations %d, checkpoints set %zu; host-unhandled (generic Out):%s",
++                 vm.opCount(), total, vm.activations.size(), stub.conversations, stub.checkpoints.size(), unhandled.c_str());
++    }
++    LOG_INFO("KISMETTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
++    exitCode_ = fails ? 1 : 0;
++}
++
++} // namespace core
+diff --git a/src/game/Kismet.cpp b/src/game/Kismet.cpp
+new file mode 100644
+index 00000000..d54977af
+--- /dev/null
++++ b/src/game/Kismet.cpp
+@@ -0,0 +1,277 @@
++// Campaign Kismet runtime - see Kismet.h. Stock op semantics follow UE3 (Engine.SeqAct_Delay / Gate / Switch / RandomSwitch /
++// SeqCond_*, SeqAct_ActivateRemoteEvent) [H: the stock bodies are not decoded for this game, RE CAMPAIGN_KISMET_CLASSES_RE §2].
++#include "game/Kismet.h"
++#include "core/Log.h"
++
++#include <algorithm>
++
++namespace game {
++
++static std::string parentOf(const std::string& path) {
++    const size_t k = path.find_last_of('.');
++    return k == std::string::npos ? std::string() : path.substr(0, k);
++}
++static bool endsWith(const std::string& s, const std::string& t) { return s.size() >= t.size() && s.compare(s.size() - t.size(), t.size(), t) == 0; }
++
++bool KismetVM::load(const assets::Json& root) {
++    ops_.clear(); vars_.clear(); byPath_.clear(); varByPath_.clear(); queue_.clear(); time_ = 0.0f;
++    const assets::Json& levels = root["levels"];
++    if (!levels.isObject()) return false;
++    // Pass 1: variables and ops by path.
++    for (const auto& lv : levels.obj)
++        for (const assets::Json& o : lv.second.arr) {
++            const std::string cls = o["class"].asString(), path = o["object"].asString();
++            if (cls.rfind("SeqVar_", 0) == 0 || cls.rfind("TnSeqVar_", 0) == 0) {
++                Var v; v.path = path; v.cls = cls;
++                const assets::Json& a = o["authored"];
++                v.i = a["IntValue"].asInt(0); v.f = a["FloatValue"].asFloat(0.0f); v.b = a["bValue"].asInt(0) != 0 || a["bValue"].asBool(false);
++                v.s = a["StrValue"].asString(); v.obj = a["ObjValue"].asString(); v.findName = a["FindVarName"].asString(); v.varName = a["VarName"].asString();
++                varByPath_[path] = (int)vars_.size();
++                vars_.push_back(v);
++                continue;
++            }
++            Op op; op.path = path; op.cls = cls; op.seq = parentOf(path); op.authored = o["authored"];
++            for (size_t k = 0; k < o["inputs"].size(); ++k) op.inputs.push_back(o["inputs"][k].asString());
++            op.hasIncoming = o["incoming"].size() > 0;
++            byPath_[path] = (int)ops_.size();
++            ops_.push_back(op);
++        }
++    // Pass 2: links (outputs -> op inputs) and variable links; SeqVar_Named targets by VarName (all levels).
++    for (const auto& lv : levels.obj)
++        for (const assets::Json& o : lv.second.arr) {
++            const int i = find(o["object"].asString());
++            if (i < 0) continue;
++            Op& op = ops_[(size_t)i];
++            for (const auto& out : o["outputs"].obj) {
++                std::vector<Link> ls;
++                for (const assets::Json& l : out.second.arr) { const int t = find(l["op"].asString()); if (t >= 0) ls.push_back({t, l["input_index"].asInt(0)}); }
++                op.outputs.push_back({out.first, ls});
++            }
++            for (const auto& vl : o["variables"].obj) {
++                std::vector<int> vs;
++                for (const assets::Json& v : vl.second.arr) { auto it = varByPath_.find(v["variable"].asString()); if (it != varByPath_.end()) vs.push_back(it->second); }
++                op.vars.push_back({vl.first, vs});
++            }
++            op.gateOpen = op.authored["bOpen"].asBool(true);
++        }
++    for (Var& v : vars_)
++        if (v.cls == "SeqVar_Named" && !v.findName.empty())
++            for (size_t k = 0; k < vars_.size(); ++k) if (vars_[k].varName == v.findName && vars_[k].cls != "SeqVar_Named") { v.named = (int)k; break; }
++    return !ops_.empty();
++}
++
++const KismetVM::Var* KismetVM::resolve(int i) const {
++    if (i < 0 || (size_t)i >= vars_.size()) return nullptr;
++    const Var& v = vars_[(size_t)i];
++    return v.named >= 0 ? &vars_[(size_t)v.named] : &v;
++}
++
++std::vector<int> KismetVM::varLink(int op, const std::string& link) const {
++    for (const auto& v : ops_[(size_t)op].vars) if (v.first == link) return v.second;
++    return {};
++}
++int KismetVM::intOf(int op, const std::string& link, int def) const {
++    for (int i : varLink(op, link)) if (const Var* v = resolve(i)) return v->i;
++    return ops_[(size_t)op].authored[link].asInt(def);
++}
++float KismetVM::floatOf(int op, const std::string& link, float def) const {
++    for (int i : varLink(op, link)) if (const Var* v = resolve(i)) return v->cls == "SeqVar_Int" ? (float)v->i : v->f;
++    return ops_[(size_t)op].authored[link].asFloat(def);
++}
++std::string KismetVM::objectOf(int op, const std::string& link) const {
++    for (int i : varLink(op, link)) if (const Var* v = resolve(i)) if (!v->obj.empty()) return v->obj;
++    return {};
++}
++
++void KismetVM::impulse(int op, int input) { if (op >= 0) queue_.push_back({op, input}); }
++
++void KismetVM::output(int op, const std::string& name) {
++    for (const auto& o : ops_[(size_t)op].outputs)
++        if (o.first == name) for (const Link& l : o.second) queue_.push_back(l);
++}
++
++// SequenceEvent.CheckActivate [H, UE3]: enabled, MaxTriggerCount (0 = unlimited; the base default 1, RemoteEvent / Console /
++// SequenceActivated 0), ReTriggerDelay (default 0 here [H: RE asked]).
++bool KismetVM::fireEvent(int i, const std::string& outName) {
++    Op& e = ops_[(size_t)i];
++    if (!e.enabled) return false;
++    const bool unlimitedClass = e.cls == "SeqEvent_RemoteEvent" || e.cls == "SeqEvent_Console" || e.cls == "SeqEvent_SequenceActivated";
++    const int maxCount = e.authored["MaxTriggerCount"].isNumber() ? e.authored["MaxTriggerCount"].asInt(1) : (unlimitedClass ? 0 : 1);
++    if (maxCount > 0 && e.triggerCount >= maxCount) return false;
++    const float delay = e.authored["ReTriggerDelay"].asFloat(0.0f);
++    if (e.triggerCount > 0 && time_ - e.lastTrigger < delay) return false;
++    ++e.triggerCount; e.lastTrigger = time_;
++    ++activations[e.cls];
++    if (log) LOG_INFO("KISMET t %.2f event %s %s", time_, e.cls.c_str(), e.path.c_str());
++    output(i, outName);
++    return true;
++}
++
++int KismetVM::fireEvents(const std::string& cls, const std::function<bool(const Op&)>& filter) {
++    int n = 0;
++    for (size_t i = 0; i < ops_.size(); ++i)
++        if (ops_[i].cls == cls && (!filter || filter(ops_[i]))) n += fireEvent((int)i) ? 1 : 0;
++    return n;
++}
++
++int KismetVM::remoteEvent(const std::string& name) {
++    return fireEvents("SeqEvent_RemoteEvent", [&](const Op& o) { return o.authored["EventName"].asString() == name; });
++}
++int KismetVM::consoleEvent(const std::string& name) {
++    return fireEvents("SeqEvent_Console", [&](const Op& o) { return o.authored["ConsoleEventName"].asString() == name; });
++}
++
++void KismetVM::begin(const std::string& checkpoint) {
++    auto bound = [&](const Op& o) {
++        const std::string org = o.authored["Originator"].asString();
++        return org.empty() || org.find("Checkpoint") == std::string::npos || (!checkpoint.empty() && endsWith(org, checkpoint));
++    };
++    fireEvents("SeqEvent_PreGameplaySetup", bound);
++    run();
++    fireEvents("SeqEvent_SequenceActivated", [](const Op& o) { return !o.hasIncoming; });
++    run();
++    fireEvents("SeqEvent_GameplayStarted", bound);
++    run();
++}
++
++// Stock UE3 ops [H].
++bool KismetVM::builtin(int i, int input) {
++    Op& o = ops_[(size_t)i];
++    const std::string& c = o.cls;
++    if (c == "SeqAct_Delay") {   // Start / Stop / Pause; Finished at 0, Aborted on Stop
++        if (input == 0) { o.timer = floatOf(i, "Duration", o.authored["Duration"].asFloat(1.0f)); o.latent = true; o.paused = false; }
++        else if (input == 1) { if (o.latent) { o.latent = false; output(i, "Aborted"); } }
++        else if (input == 2) o.paused = !o.paused;
++        return true;
++    }
++    if (c == "SeqAct_Gate") {   // In / Open / Close / Toggle; AutoCloseCount closes after that many passes
++        if (input == 0 && o.gateOpen) {
++            output(i, "Out");
++            const int ac = o.authored["AutoCloseCount"].asInt(0);
++            if (ac > 0 && ++o.gateCount >= ac) { o.gateOpen = false; o.gateCount = 0; }
++        } else if (input == 1) o.gateOpen = true;
++        else if (input == 2) o.gateOpen = false;
++        else if (input == 3) o.gateOpen = !o.gateOpen;
++        return true;
++    }
++    if (c == "SeqAct_ActivateRemoteEvent") { remoteEvent(o.authored["EventName"].asString()); output(i, "Out"); return true; }
++    if (c == "SeqAct_RandomSwitch" || c == "SeqAct_Switch") {
++        const int n = std::max(1, o.authored["LinkCount"].asInt((int)o.outputs.size()));
++        if (o.linkDisabled.size() != (size_t)n) o.linkDisabled.assign((size_t)n, 0);
++        const bool autoDisable = o.authored["bAutoDisableLinks"].asBool(false);
++        const bool looping = o.authored["bLooping"].asBool(false);
++        int pick = -1;
++        if (c == "SeqAct_RandomSwitch") {
++            std::vector<int> open;
++            for (int k = 0; k < n; ++k) if (!o.linkDisabled[(size_t)k]) open.push_back(k);
++            if (open.empty() && looping) { o.linkDisabled.assign((size_t)n, 0); for (int k = 0; k < n; ++k) open.push_back(k); }
++            if (!open.empty()) pick = open[(size_t)randInt((int)open.size())];
++        } else {   // SeqAct_Switch: the "Index" variable (1-based; default 1), IncrementAmount after firing, bLooping wraps
++            std::vector<int> idx = varLink(i, "Index");
++            int at = idx.empty() ? o.timer > 0.0f ? (int)o.timer : 1 : (resolve(idx[0]) ? resolve(idx[0])->i : 1);
++            if (at >= 1 && at <= n && !o.linkDisabled[(size_t)at - 1]) pick = at - 1;
++            const int inc = o.authored["IncrementAmount"].asInt(o.authored["bIncrement"].asBool(false) ? 1 : 0);
++            if (inc) {
++                at += inc;
++                if (at > n) at = looping ? 1 : n + 1;
++                if (!idx.empty()) { if (Var* v = var(idx[0])) v->i = at; } else o.timer = (float)at;
++            }
++        }
++        if (pick >= 0) {
++            output(i, "Link " + std::to_string(pick + 1));
++            if (autoDisable || c == "SeqAct_RandomSwitch") o.linkDisabled[(size_t)pick] = autoDisable || looping ? 1 : 0;
++        }
++        return true;
++    }
++    if (c == "SeqCond_Increment" || c == "SeqCond_CompareInt" || c == "SeqCond_CompareFloat") {
++        float a, b;
++        if (c == "SeqCond_Increment") {
++            std::vector<int> av = varLink(i, "A");
++            const int amt = o.authored["IncrementAmount"].asInt(1);
++            if (!av.empty()) if (Var* v = var(vars_[(size_t)av[0]].named >= 0 ? vars_[(size_t)av[0]].named : av[0])) v->i += amt;
++            a = (float)intOf(i, "A", o.authored["ValueA"].asInt(0)); b = (float)intOf(i, "B", o.authored["ValueB"].asInt(0));
++        } else if (c == "SeqCond_CompareInt") { a = (float)intOf(i, "A", o.authored["ValueA"].asInt(0)); b = (float)intOf(i, "B", o.authored["ValueB"].asInt(0)); }
++        else { a = floatOf(i, "A", o.authored["ValueA"].asFloat(0)); b = floatOf(i, "B", o.authored["ValueB"].asFloat(0)); }
++        if (a <= b) output(i, "A <= B");
++        if (a > b) output(i, "A > B");
++        if (a == b) output(i, "A == B");
++        if (a < b) output(i, "A < B");
++        if (a >= b) output(i, "A >= B");
++        return true;
++    }
++    if (c == "SeqCond_CompareBool") {
++        bool v = false; for (int k : varLink(i, "Bool")) if (const Var* x = resolve(k)) v = x->b;
++        output(i, v ? "True" : "False");
++        return true;
++    }
++    if (c == "SeqAct_SetInt" || c == "SeqAct_SetBool" || c == "SeqAct_SetFloat" || c == "SeqAct_SetString" || c == "SeqAct_SetObject") {
++        for (int k : varLink(i, "Target")) {
++            Var* t = var(vars_[(size_t)k].named >= 0 ? vars_[(size_t)k].named : k);
++            if (!t) continue;
++            if (c == "SeqAct_SetInt") t->i = intOf(i, "Value", o.authored["DefaultValue"].asInt(0));
++            else if (c == "SeqAct_SetFloat") t->f = floatOf(i, "Value", o.authored["DefaultValue"].asFloat(0));
++            else if (c == "SeqAct_SetBool") { bool v = o.authored["DefaultValue"].asBool(false); for (int q : varLink(i, "Value")) if (const Var* x = resolve(q)) v = x->b; t->b = v; }
++            else if (c == "SeqAct_SetString") { std::string v = o.authored["DefaultValue"].asString(); for (int q : varLink(i, "Value")) if (const Var* x = resolve(q)) v = x->s; t->s = v; }
++            else t->obj = objectOf(i, "Value");
++        }
++        output(i, "Out");
++        return true;
++    }
++    if (c == "SeqAct_FinishSequence") {   // the enclosing Sequence's output (RE asked how its outputs link)
++        const int seq = find(o.seq);
++        if (seq >= 0) output(seq, o.authored["OutputLabel"].asString());
++        return true;
++    }
++    if (c == "Sequence") {   // a parent's link into a sub-sequence: input k -> its k-th SequenceActivated [H: RE asked]
++        int k = 0;
++        for (size_t q = 0; q < ops_.size(); ++q)
++            if (ops_[q].cls == "SeqEvent_SequenceActivated" && ops_[q].seq == o.path) { if (k++ == input) { fireEvent((int)q); break; } }
++        return true;
++    }
++    if (c == "SeqAct_MutualExclusion") {   // RE WFC §69 (C): Enter takes the lock (or waits, FIFO); Exit releases -> Exited, the next waiter enters
++        const int id = intOf(i, "OwnerID", 0);
++        if (input == 0) {
++            if (o.owner < 0) { o.owner = id; output(i, "Entered"); }
++            else if (o.owner != id && std::find(o.waiting.begin(), o.waiting.end(), id) == o.waiting.end()) o.waiting.push_back(id);
++        } else if (input == 1) {
++            if (o.owner == id) {
++                o.owner = -1; output(i, "Exited");
++                if (!o.waiting.empty()) { o.owner = o.waiting.front(); o.waiting.erase(o.waiting.begin()); output(i, "Entered"); }
++            } else o.waiting.erase(std::remove(o.waiting.begin(), o.waiting.end(), id), o.waiting.end());
++        }
++        return true;
++    }
++    if (c == "SeqAct_Log" || c == "SeqAct_DrawText") { output(i, "Out"); return true; }
++    return false;
++}
++
++void KismetVM::run() {
++    int guard = 0;
++    while (!queue_.empty()) {
++        if (++guard > 20000) { ++queueCapHits; LOG_WARN("KISMET: impulse loop cap at t %.2f (%zu queued)", time_, queue_.size()); queue_.clear(); break; }
++        const Link l = queue_.front(); queue_.pop_front();
++        Op& o = ops_[(size_t)l.op];
++        ++activations[o.cls];
++        if (log) LOG_INFO("KISMET t %.2f %s [%d] %s", time_, o.cls.c_str(), l.input, o.path.c_str());
++        if (builtin(l.op, l.input)) continue;
++        if (o.cls.find("SeqEvent") != std::string::npos) { output(l.op, "Out"); continue; }   // an event's input (Toggle on events: host)
++        if (host_ && host_->activate(*this, l.op, l.input)) continue;
++        ++defaulted[o.cls];
++        if (!o.outputs.empty()) output(l.op, o.outputs.front().first);   // the generic In -> Out
++    }
++}
++
++void KismetVM::tick(float dt) {
++    time_ += dt;
++    run();   // anything queued between ticks (host events)
++    for (size_t i = 0; i < ops_.size(); ++i) {   // latent updates [H: before new activations of this tick]
++        Op& o = ops_[i];
++        if (!o.latent) continue;
++        if (o.cls == "SeqAct_Delay") {
++            if (!o.paused && (o.timer -= dt) <= 0.0f) { o.latent = false; output((int)i, "Finished"); }
++        } else if (host_) host_->updateLatent(*this, (int)i, dt);
++    }
++    run();
++}
++
++} // namespace game
+diff --git a/src/game/Kismet.h b/src/game/Kismet.h
+new file mode 100644
+index 00000000..5f1c4e1e
+--- /dev/null
++++ b/src/game/Kismet.h
+@@ -0,0 +1,99 @@
++#pragma once
++// Campaign Kismet runtime (the sequence VM over AssetTools' next_map/<chapter>_kismet.json: authored graph CONFIRMED; the VM core is
++// stock UE3 semantics [H] until RE confirms the per-tick loop and the trigger defaults). Ops, links and variables load from the flat
++// per-level object lists; sequence nesting is the dotted path. Stock ops (Delay, Gate, RemoteEvent, Switch, RandomSwitch, the
++// compare / increment conditions, Set*) run here; every other op class goes to the Host (gameplay: checkpoints, pawn factories, AI
++// moves, conversations, matinee, ...). An op neither handles fires its first output (the generic In -> Out default, RE WFC "Batch 2").
++#include "assets/Json.h"
++
++#include <cstdint>
++#include <deque>
++#include <functional>
++#include <map>
++#include <string>
++#include <vector>
++
++namespace game {
++
++class KismetVM {
++public:
++    struct Link { int op = -1; int input = 0; };
++    struct Var {
++        std::string path, cls;
++        int i = 0; float f = 0.0f; bool b = false; std::string s, obj, findName;   // SeqVar_Int / Float / Bool / String / Object / Named
++        int named = -1;                                                         // SeqVar_Named: the var it resolved to (by VarName)
++        std::string varName;                                                    // the var's own VarName (Named targets)
++    };
++    struct Op {
++        std::string path, cls, seq;            // seq: the enclosing sequence's path
++        assets::Json authored;
++        std::vector<std::string> inputs;
++        std::vector<std::pair<std::string, std::vector<Link>>> outputs;
++        std::vector<std::pair<std::string, std::vector<int>>> vars;   // variable link name -> var indices
++        bool hasIncoming = false;
++        // runtime
++        int triggerCount = 0; float lastTrigger = -1.0e9f; bool enabled = true;
++        bool latent = false, paused = false; float timer = 0.0f;
++        bool gateOpen = true; int gateCount = 0;
++        std::vector<uint8_t> linkDisabled;    // Switch / RandomSwitch auto-disabled links
++        int owner = -1;                       // MutualExclusion: the lock holder (OwnerID) and the FIFO wait list
++        std::vector<int> waiting;
++    };
++    struct Host {
++        virtual ~Host() = default;
++        // A non-stock op's input fired: return true when the host took it (it fires outputs with vm.output, now or later; a latent op
++        // stays latent until it does); false -> the generic default (the first output).
++        virtual bool activate(KismetVM& vm, int op, int input) = 0;
++        virtual void updateLatent(KismetVM& vm, int op, float dt) { (void)vm; (void)op; (void)dt; }
++    };
++
++    bool load(const assets::Json& root);       // every level of the chapter
++    void setHost(Host* h) { host_ = h; }
++    size_t opCount() const { return ops_.size(); }
++    Op& op(int i) { return ops_[(size_t)i]; }
++    const Op& op(int i) const { return ops_[(size_t)i]; }
++    int find(const std::string& path) const { auto it = byPath_.find(path); return it == byPath_.end() ? -1 : it->second; }
++
++    // Firing. impulse: queue an op's input; output: an op's named output (its linked inputs queued); events honour bEnabled,
++    // MaxTriggerCount and ReTriggerDelay.
++    void impulse(int op, int input);
++    void output(int op, const std::string& name);
++    bool fireEvent(int op, const std::string& outName = "Out");
++    int fireEvents(const std::string& cls, const std::function<bool(const Op&)>& filter = {});
++    int remoteEvent(const std::string& eventName);    // every SeqEvent_RemoteEvent with that EventName
++    int consoleEvent(const std::string& name);        // SeqEvent_Console ConsoleEventName
++    // Level start [H order]: PreGameplaySetup, the startup SequenceActivated events, then GameplayStarted - the Originator-bound ones
++    // only for the active checkpoint (its path suffix), the unbound ones always.
++    void begin(const std::string& checkpoint);
++    void tick(float dt);
++    float time() const { return time_; }
++    void finishLatent(int op, const std::string& outName) { ops_[(size_t)op].latent = false; output(op, outName); }
++
++    // Variables.
++    std::vector<int> varLink(int op, const std::string& link) const;
++    Var* var(int i) { return i >= 0 && (size_t)i < vars_.size() ? &vars_[(size_t)i] : nullptr; }
++    int intOf(int op, const std::string& link, int def) const;
++    float floatOf(int op, const std::string& link, float def) const;
++    std::string objectOf(int op, const std::string& link) const;   // the first object value (SeqVar_Object ObjValue / Named target)
++
++    // Diagnostics.
++    std::map<std::string, int> activations;   // per op class
++    std::map<std::string, int> defaulted;     // classes nobody handled (generic first output)
++    int queueCapHits = 0;
++    bool log = false;
++
++private:
++    std::vector<Op> ops_;
++    std::vector<Var> vars_;
++    std::map<std::string, int> byPath_, varByPath_;
++    std::deque<Link> queue_;
++    Host* host_ = nullptr;
++    float time_ = 0.0f;
++    uint32_t rng_ = 0x4b15e7u;
++    int randInt(int n) { rng_ = rng_ * 1664525u + 1013904223u; return n > 0 ? (int)((rng_ >> 8) % (uint32_t)n) : 0; }
++    const Var* resolve(int i) const;
++    bool builtin(int op, int input);
++    void run();
++};
++
++} // namespace game
