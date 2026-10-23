@@ -1,0 +1,11628 @@
+{
+ "A1_IAC_Base_m": {
+  "map_id": 96,
+  "initial_state": null,
+  "states": {
+   "AntiAirBalcony": [
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts0_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts0_Art_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ]
+   ],
+   "Armory": [
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Armory_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoPlaza_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoPlaza_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoPlaza_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoFoyer_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ],
+    [
+     "A1_IAC_ArmoryTrans_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoTransform_Design_m",
+     true
+    ]
+   ],
+   "BalconyDemo": [
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Art_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts0_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ]
+   ],
+   "Courtyard": [
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Elevator_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Elevator_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_IntroVista_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_IntroVista_Vig_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Trans_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Trans_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ]
+   ],
+   "DecoCommandRoom": [
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoEnd_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoEnd_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ]
+   ],
+   "DecoInterior": [
+    [
+     "A1_IAC_DecoInt_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoFoyer_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoFoyer_Art_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoInt_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ]
+   ],
+   "DecoPlaza": [
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoPlaza_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoPlaza_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoFoyer_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoFoyer_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoPlaza_Vig_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ],
+    [
+     "A1_IAC_ArmoryTrans_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoTransform_Design_m",
+     true
+    ]
+   ],
+   "DecoToCommandRoom": [
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoInt_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoEnd_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoEnd_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoInt_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ]
+   ],
+   "Everything": [
+    [
+     "A1_IAC_Strts0_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts0_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Terminal1_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Terminal1_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY2_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY2_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Thumper_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts1_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts1_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Thumper_Cine_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_SideAlley_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_SideAlley_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_HalfPipe_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY3_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY3_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoPlaza_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoPlaza_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Elevator_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Elevator_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_IntroVista_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_IntroVista_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Trans_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Trans_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoInt_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoInt_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoFoyer_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoFoyer_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_HalfPipe_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts1_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoPlaza_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_SideAlley_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_SideAlleyTrans_Art_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Terminal1_Shared_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_CommandCenter_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Armory_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoEnd_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY2_Trans_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY2_End_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoEnd_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Thumper1_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts0_End_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_ArmoryTrans_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoTransform_Design_m",
+     true
+    ]
+   ],
+   "HalfPipe": [
+    [
+     "A1_IAC_HalfPipe_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Terminal1_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_HalfPipe_Vig_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Terminal1_Shared_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Terminal1_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts0_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ]
+   ],
+   "Highway2": [
+    [
+     "A1_IAC_HGHWY2_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY2_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY2_Trans_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts1_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY2_End_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts1_Design_m",
+     true
+    ]
+   ],
+   "Highway2Transition": [
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY2_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY2_End_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts1_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts1_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY2_Art_m",
+     true
+    ]
+   ],
+   "Highway3": [
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY3_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY3_Design_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Armory_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoPlaza_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoPlaza_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ],
+    [
+     "A1_IAC_ArmoryTrans_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoTransform_Design_m",
+     true
+    ]
+   ],
+   "InsideHalfPipeTerminal": [
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Thumper_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Terminal1_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Terminal1_Shared_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Terminal1_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_HalfPipe_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_Thumper1_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ]
+   ],
+   "Interior1": [
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Trans_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Trans_Design_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts0_Art_m",
+     true
+    ]
+   ],
+   "LevelStart": [
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Elevator_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Elevator_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_IntroVista_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_IntroVista_Vig_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_CommandCenter_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ]
+   ],
+   "SideAlley": [
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_SideAlley_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_SideAlley_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_SideAlley_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_SideAlleyTrans_Art_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY3_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY3_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ],
+    [
+     "A1_IAC_DecoTransform_Design_m",
+     false
+    ]
+   ],
+   "Streets0": [
+    [
+     "A1_IAC_Strts0_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts0_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_HalfPipe_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_HalfPipe_Vig_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Terminal1_Shared_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts0_End_Art_m",
+     true
+    ]
+   ],
+   "Thumper": [
+    [
+     "A1_IAC_Thumper_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY2_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY2_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Thumper_Cine_m",
+     true
+    ],
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Terminal1_Shared_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY2_Trans_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts1_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_Thumper1_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ]
+   ],
+   "ThumperTransition": [
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Thumper_Cine_m",
+     true
+    ],
+    [
+     "A1_IAC_Thumper_Art_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_HalfPipe_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_Terminal1_Shared_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Thumper1_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ]
+   ],
+   "TransitionToInterior1": [
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Trans_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Trans_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Intr1_Vig_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts0_Art_m",
+     true
+    ]
+   ],
+   "WreckedStreets": [
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_SideAlleyTrans_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts1_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts1_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts1_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_SideAlley_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ]
+   ],
+   "WreckedTransition": [
+    [
+     "A1_IAC_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_Global_Art_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY2_End_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts1_Design_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts1_Vig_m",
+     true
+    ],
+    [
+     "A1_IAC_Strts1_Art_m",
+     true
+    ],
+    [
+     "A1_IAC_Music_m",
+     true
+    ],
+    [
+     "A1_IAC_HGHWY2_Design_m",
+     true
+    ]
+   ]
+  },
+  "checkpoints_in_display_order": [
+   {
+    "checkpoint": "Checkpoint_14845",
+    "display_order": 0,
+    "state": "LevelStart",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_275",
+    "display_order": 10,
+    "state": "Courtyard",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_849",
+    "display_order": 11,
+    "state": "Courtyard",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_2903",
+    "display_order": 20,
+    "state": "TransitionToInterior1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 1
+   },
+   {
+    "checkpoint": "Checkpoint_6262",
+    "display_order": 30,
+    "state": "Interior1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_9333",
+    "display_order": 34,
+    "state": "BalconyDemo",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_5749",
+    "display_order": 35,
+    "state": "AntiAirBalcony",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_14608",
+    "display_order": 40,
+    "state": "Streets0",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 2
+   },
+   {
+    "checkpoint": "Checkpoint_4883",
+    "display_order": 50,
+    "state": "HalfPipe",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12936",
+    "display_order": 55,
+    "state": "InsideHalfPipeTerminal",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 3
+   },
+   {
+    "checkpoint": "Checkpoint_6011",
+    "display_order": 60,
+    "state": "ThumperTransition",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 4
+   },
+   {
+    "checkpoint": "Checkpoint_2925",
+    "display_order": 70,
+    "state": "Thumper",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_7604",
+    "display_order": 80,
+    "state": "Highway2",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 5
+   },
+   {
+    "checkpoint": "Checkpoint_13436",
+    "display_order": 81,
+    "state": "Highway2Transition",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_924",
+    "display_order": 90,
+    "state": "WreckedStreets",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12931",
+    "display_order": 100,
+    "state": "WreckedStreets",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_15925",
+    "display_order": 110,
+    "state": "SideAlley",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 6
+   },
+   {
+    "checkpoint": "Checkpoint_8366",
+    "display_order": 120,
+    "state": "SideAlley",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_9225",
+    "display_order": 121,
+    "state": "Highway3",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_10311",
+    "display_order": 130,
+    "state": "Armory",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 7
+   },
+   {
+    "checkpoint": "Checkpoint_11090",
+    "display_order": 140,
+    "state": "DecoInterior",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_7810",
+    "display_order": 150,
+    "state": "DecoToCommandRoom",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 8
+   },
+   {
+    "checkpoint": "Checkpoint_1311",
+    "display_order": 151,
+    "state": "DecoToCommandRoom",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_502",
+    "display_order": 152,
+    "state": "DecoToCommandRoom",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_5470",
+    "display_order": 152,
+    "state": "DecoToCommandRoom",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_3544",
+    "display_order": 160,
+    "state": "DecoCommandRoom",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 9
+   }
+  ],
+  "menu_checkpoints": [
+   {
+    "id": "A1_CP01",
+    "path": ""
+   },
+   {
+    "id": "A1_CP03",
+    "path": "A1_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_2903"
+   },
+   {
+    "id": "A1_CP06",
+    "path": "A1_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_14608"
+   },
+   {
+    "id": "A1_CP08",
+    "path": "A1_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_12936"
+   },
+   {
+    "id": "A1_CP09",
+    "path": "A1_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_6011"
+   },
+   {
+    "id": "A1_CP11",
+    "path": "A1_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_7604"
+   },
+   {
+    "id": "A1_CP14",
+    "path": "A1_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_15925"
+   },
+   {
+    "id": "A1_CP17",
+    "path": "A1_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_10311"
+   },
+   {
+    "id": "A1_CP19",
+    "path": "A1_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_7810"
+   },
+   {
+    "id": "A1_CP20",
+    "path": "A1_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_3544"
+   }
+  ],
+  "set_streaming_ops": [
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_1058",
+    "state": "Courtyard"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_11924",
+    "state": "Interior1"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_14198",
+    "state": "DecoInterior"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_14206",
+    "state": "DecoToCommandRoom"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_14385",
+    "state": "Highway2"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_14965",
+    "state": "Streets0"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_15946",
+    "state": "Armory"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_2410",
+    "state": "WreckedStreets"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_3605",
+    "state": "AntiAirBalcony"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_4849",
+    "state": "Thumper"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_5263",
+    "state": "TransitionToInterior1"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_6383",
+    "state": "InsideHalfPipeTerminal"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_6554",
+    "state": "Highway2Transition"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_6572",
+    "state": "HalfPipe"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_6951",
+    "state": "ThumperTransition"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_7115",
+    "state": "Highway3"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_7144",
+    "state": "DecoCommandRoom"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_7280",
+    "state": "DecoPlaza"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_7561",
+    "state": "SideAlley"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_930",
+    "state": "WreckedTransition"
+   }
+  ]
+ },
+ "A2_KON_Base_m": {
+  "map_id": 97,
+  "initial_state": null,
+  "states": {
+   "Air_Raid": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_AirRaid_Art_m",
+     true
+    ],
+    [
+     "A2_KON_AirRaid_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Command_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Command_Design_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_Jailbreak_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_Jailbreak_Design_m",
+     false
+    ],
+    [
+     "A2_KON_Jailbreak_Art_m",
+     false
+    ]
+   ],
+   "AirRaid_Trans": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_AirRaid_Trans_Art_m",
+     true
+    ],
+    [
+     "A2_KON_AirRaid_Trans_Design_m",
+     true
+    ],
+    [
+     "A2_KON_AirRaid_Trans_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_AirRaid_Art_m",
+     true
+    ],
+    [
+     "A2_KON_AirRaid_Design_m",
+     true
+    ]
+   ],
+   "Bucket_Ride_1": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_Courtyard2_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Courtyard2_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Megatron_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Megatron_Design_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ]
+   ],
+   "Collapsing_Floors": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_DRIVE3_ART_m",
+     true
+    ],
+    [
+     "A2_KON_DRIVE3_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Soundwave_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Soundwave_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Soundwave_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_DRIVE3_CINE_m",
+     true
+    ]
+   ],
+   "CollapsingFloors_Trans": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_DRIVE3_Trans_Art_m",
+     true
+    ],
+    [
+     "A2_KON_DRIVE3_Trans_Design_m",
+     true
+    ],
+    [
+     "A2_KON_DRIVE3_ART_m",
+     true
+    ],
+    [
+     "A2_KON_DRIVE3_Design_m",
+     true
+    ],
+    [
+     "A2_KON_DRIVE3_CINE_m",
+     true
+    ]
+   ],
+   "Command": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_Command_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Command_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons2_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Jailbreak_Design_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_Jailbreak_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_Jailbreak_Art_m",
+     true
+    ]
+   ],
+   "Courtyard": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_Courtyard_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Courtyard_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Courtyard2_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Courtyard2_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Courtyard_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ]
+   ],
+   "Dungeons": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons2_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons2_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons2_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ]
+   ],
+   "Dungeons2": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons2_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons2_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons2_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ]
+   ],
+   "Guard_Room": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_GuardRoom_Art_m",
+     true
+    ],
+    [
+     "A2_KON_GuardRoom_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Courtyard_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Courtyard_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Courtyard_Vig_m",
+     true
+    ]
+   ],
+   "Guard_Room_Trans": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_Vents_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Vents_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Vents_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_GuardRoom_Art_m",
+     true
+    ],
+    [
+     "A2_KON_GuardRoom_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Courtyard_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Courtyard_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Courtyard_Vig_m",
+     true
+    ]
+   ],
+   "Hangar": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_Hangar_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Hangar_Design_m",
+     true
+    ],
+    [
+     "A2_KON_WallCrawler_Art_m",
+     true
+    ],
+    [
+     "A2_KON_WallCrawler_Design_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_Jailbreak_Vig_m",
+     true
+    ]
+   ],
+   "Intro_Entrance": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_IntroEntrance_Art_m",
+     true
+    ],
+    [
+     "A2_KON_IntroEntrance_Design_m",
+     true
+    ],
+    [
+     "A2_KON_IntroPits_Art_m",
+     true
+    ],
+    [
+     "A2_KON_IntroPits_Design_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_IntroEntrance_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_IntroPits_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_IntroWalk_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_IntroFinal_Art_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ]
+   ],
+   "Intro_Final": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_Vents_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Vents_Design_m",
+     true
+    ],
+    [
+     "A2_KON_IntroWalk_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_Vents_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_IntroFinal_Art_m",
+     true
+    ],
+    [
+     "A2_KON_IntroPits_Design_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_GuardRoom_Art_m",
+     true
+    ],
+    [
+     "A2_KON_GuardRoom_Design_m",
+     true
+    ]
+   ],
+   "Intro_Pits": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_IntroPits_Art_m",
+     true
+    ],
+    [
+     "A2_KON_IntroPits_Design_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_IntroPits_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_IntroWalk_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_IntroFinal_Art_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ]
+   ],
+   "Jailbreak": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons2_Art_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_Hangar_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Hangar_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Jailbreak_Design_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_Jailbreak_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_Jailbreak_Art_m",
+     true
+    ]
+   ],
+   "Megatron_End": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_Megatron_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Megatron_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons_Vig_m",
+     true
+    ]
+   ],
+   "Megatron_Face": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_Megatron_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Megatron_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons_Art_m",
+     false
+    ]
+   ],
+   "Sewers": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons2_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons2_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons2_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_AirRaid_Trans_Art_m",
+     true
+    ],
+    [
+     "A2_KON_AirRaid_Trans_Design_m",
+     true
+    ],
+    [
+     "A2_KON_AirRaid_Trans_Vig_m",
+     true
+    ]
+   ],
+   "Sewers_Trans": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons2_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons2_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Dungeons2_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_AirRaid_Trans_Art_m",
+     true
+    ],
+    [
+     "A2_KON_AirRaid_Trans_Design_m",
+     true
+    ],
+    [
+     "A2_KON_AirRaid_Trans_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_AirRaid_Art_m",
+     true
+    ],
+    [
+     "A2_KON_AirRaid_Design_m",
+     true
+    ]
+   ],
+   "Soundwave": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_Soundwave_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Soundwave_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_Soundwave_Design_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ]
+   ],
+   "Start_State": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_City_Art_m",
+     true
+    ],
+    [
+     "A2_KON_IntroEntrance_Art_m",
+     true
+    ],
+    [
+     "A2_KON_IntroEntrance_Design_m",
+     true
+    ],
+    [
+     "A2_KON_City_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_IntroEntrance_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_City_Design_m",
+     true
+    ],
+    [
+     "A2_KON_IntroWalk_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_IntroPits_Design_m",
+     true
+    ],
+    [
+     "A2_KON_IntroPits_Art_m",
+     false
+    ],
+    [
+     "A2_KON_IntroPits_Vig_m",
+     true
+    ]
+   ],
+   "Vents": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_Vents_Art_m",
+     true
+    ],
+    [
+     "A2_KON_Vents_Design_m",
+     true
+    ],
+    [
+     "A2_KON_Vents_Vig_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_GuardRoom_Art_m",
+     true
+    ],
+    [
+     "A2_KON_GuardRoom_Design_m",
+     true
+    ]
+   ],
+   "Wall_Crawler": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_WallCrawler_Art_m",
+     true
+    ],
+    [
+     "A2_KON_WallCrawler_Design_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_DRIVE3_Trans_Art_m",
+     true
+    ],
+    [
+     "A2_KON_DRIVE3_Trans_Design_m",
+     true
+    ],
+    [
+     "A2_KON_DRIVE3_ART_m",
+     true
+    ],
+    [
+     "A2_KON_DRIVE3_Design_m",
+     true
+    ],
+    [
+     "A2_KON_DRIVE3_CINE_m",
+     true
+    ]
+   ],
+   "Wallcrawl_Trans": [
+    [
+     "A2_KON_AUDIO_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A2_KON_MUSIC_m",
+     true
+    ],
+    [
+     "A2_KON_SKYDOME_ART_m",
+     true
+    ],
+    [
+     "A2_KON_WallCrawler_Art_m",
+     true
+    ],
+    [
+     "A2_KON_WallCrawler_Design_m",
+     true
+    ],
+    [
+     "A2_KON_DRIVE3_Trans_Art_m",
+     true
+    ],
+    [
+     "A2_KON_DRIVE3_Trans_Design_m",
+     true
+    ],
+    [
+     "A2_KON_DRIVE3_ART_m",
+     false
+    ],
+    [
+     "A2_KON_DRIVE3_Design_m",
+     false
+    ],
+    [
+     "A2_KON_DRIVE3_CINE_m",
+     false
+    ]
+   ]
+  },
+  "checkpoints_in_display_order": [
+   {
+    "checkpoint": "Checkpoint_14298",
+    "display_order": 10,
+    "state": "Start_State",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_14787",
+    "display_order": 20,
+    "state": "Intro_Final",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_13078",
+    "display_order": 30,
+    "state": "Vents",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12590",
+    "display_order": 40,
+    "state": "Guard_Room",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_10061",
+    "display_order": 50,
+    "state": "Guard_Room",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 1
+   },
+   {
+    "checkpoint": "Checkpoint_630",
+    "display_order": 60,
+    "state": "Courtyard",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_16306",
+    "display_order": 70,
+    "state": "Bucket_Ride_1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12478",
+    "display_order": 80,
+    "state": "Bucket_Ride_1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_6959",
+    "display_order": 90,
+    "state": "Megatron_Face",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 2
+   },
+   {
+    "checkpoint": "Checkpoint_97",
+    "display_order": 91,
+    "state": "Megatron_Face",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_4165",
+    "display_order": 100,
+    "state": "Megatron_Face",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12781",
+    "display_order": 110,
+    "state": "Megatron_Face",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_3655",
+    "display_order": 120,
+    "state": "Dungeons",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_14847",
+    "display_order": 130,
+    "state": "Dungeons2",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 3
+   },
+   {
+    "checkpoint": "Checkpoint_8774",
+    "display_order": 140,
+    "state": "Dungeons2",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_5075",
+    "display_order": 150,
+    "state": "Dungeons2",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12546",
+    "display_order": 160,
+    "state": "Sewers_Trans",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_14296",
+    "display_order": 170,
+    "state": "AirRaid_Trans",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_3720",
+    "display_order": 180,
+    "state": "Air_Raid",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 4
+   },
+   {
+    "checkpoint": "Checkpoint_335",
+    "display_order": 190,
+    "state": "Air_Raid",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_9255",
+    "display_order": 200,
+    "state": "Air_Raid",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_10034",
+    "display_order": 210,
+    "state": "Air_Raid",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_10446",
+    "display_order": 220,
+    "state": "Command",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 5
+   },
+   {
+    "checkpoint": "Checkpoint_9206",
+    "display_order": 230,
+    "state": "Jailbreak",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12564",
+    "display_order": 240,
+    "state": "Hangar",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 6
+   },
+   {
+    "checkpoint": "Checkpoint_15662",
+    "display_order": 250,
+    "state": "Hangar",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_4608",
+    "display_order": 260,
+    "state": "Wallcrawl_Trans",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 7
+   },
+   {
+    "checkpoint": "Checkpoint_13759",
+    "display_order": 270,
+    "state": "CollapsingFloors_Trans",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 8
+   },
+   {
+    "checkpoint": "Checkpoint_14505",
+    "display_order": 280,
+    "state": "Collapsing_Floors",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_16185",
+    "display_order": 290,
+    "state": "Collapsing_Floors",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_4994",
+    "display_order": 300,
+    "state": "Collapsing_Floors",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_13725",
+    "display_order": 310,
+    "state": "Collapsing_Floors",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 9
+   },
+   {
+    "checkpoint": "Checkpoint_3719",
+    "display_order": 320,
+    "state": "Soundwave",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_7570",
+    "display_order": 330,
+    "state": "Soundwave",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   }
+  ],
+  "menu_checkpoints": [
+   {
+    "id": "A2_CP01",
+    "path": ""
+   },
+   {
+    "id": "A2_CP02",
+    "path": "A2_KON_Base_m.TheWorld.PersistentLevel.Checkpoint_10061"
+   },
+   {
+    "id": "A2_CP03",
+    "path": "A2_KON_Base_m.TheWorld.PersistentLevel.Checkpoint_6959"
+   },
+   {
+    "id": "A2_CP04",
+    "path": "A2_KON_Base_m.TheWorld.PersistentLevel.Checkpoint_14847"
+   },
+   {
+    "id": "A2_CP05",
+    "path": "A2_KON_Base_m.TheWorld.PersistentLevel.Checkpoint_3720"
+   },
+   {
+    "id": "A2_CP06",
+    "path": "A2_KON_Base_m.TheWorld.PersistentLevel.Checkpoint_10446"
+   },
+   {
+    "id": "A2_CP07",
+    "path": "A2_KON_Base_m.TheWorld.PersistentLevel.Checkpoint_12564"
+   },
+   {
+    "id": "A2_CP08",
+    "path": "A2_KON_Base_m.TheWorld.PersistentLevel.Checkpoint_4608"
+   },
+   {
+    "id": "A2_CP09",
+    "path": "A2_KON_Base_m.TheWorld.PersistentLevel.Checkpoint_13759"
+   },
+   {
+    "id": "A2_CP10",
+    "path": "A2_KON_Base_m.TheWorld.PersistentLevel.Checkpoint_13725"
+   }
+  ],
+  "set_streaming_ops": [
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_10667",
+    "state": "Intro_Pits"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_10809",
+    "state": "Command"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_10930",
+    "state": "Dungeons2"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_11806",
+    "state": "Courtyard"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_12433",
+    "state": "Dungeons"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_13588",
+    "state": "Guard_Room_Trans"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_13907",
+    "state": "Sewers"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_1605",
+    "state": "CollapsingFloors_Trans"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_1652",
+    "state": "Wall_Crawler"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_1832",
+    "state": "Sewers_Trans"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_3209",
+    "state": "AirRaid_Trans"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_3266",
+    "state": "Jailbreak"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_3310",
+    "state": "Wallcrawl_Trans"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_3468",
+    "state": "Intro_Final"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_3849",
+    "state": "Air_Raid"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_4269",
+    "state": "Megatron_End"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_4295",
+    "state": "Hangar"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_5186",
+    "state": "Vents"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_7429",
+    "state": "Bucket_Ride_1"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_7905",
+    "state": "Soundwave"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_8142",
+    "state": "Collapsing_Floors"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_8435",
+    "state": "Guard_Room"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_8671",
+    "state": "Intro_Entrance"
+   },
+   {
+    "op": "Main_Sequence.Streaming.SeqAct_SetStreamingState_9182",
+    "state": "Megatron_Face"
+   }
+  ]
+ },
+ "A3_COR_Base_m": {
+  "map_id": 98,
+  "initial_state": null,
+  "states": {
+   "Core_Exterior": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_CoreExt_Art_m",
+     true
+    ],
+    [
+     "A3_COR_CoreExt_Design_m",
+     true
+    ],
+    [
+     "A3_COR_CoreInt_Art_m",
+     true
+    ],
+    [
+     "A3_COR_CoreInt_Design_m",
+     true
+    ],
+    [
+     "A3_COR_CoreInt_Cine_m",
+     true
+    ],
+    [
+     "A3_COR_Core_Trans_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ],
+    [
+     "A3_COR_CoreExt_Vig_m",
+     true
+    ]
+   ],
+   "Core_Interior": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_CoreInt_Art_m",
+     true
+    ],
+    [
+     "A3_COR_CoreInt_Design_m",
+     true
+    ],
+    [
+     "A3_COR_CoreInt_Cine_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ]
+   ],
+   "Core_Trans": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_Core_Trans_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Core_Trans_Design_m",
+     true
+    ],
+    [
+     "A3_COR_CoreExt_Art_m",
+     true
+    ],
+    [
+     "A3_COR_CoreExt_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ],
+    [
+     "A3_COR_CoreExt_Vig_m",
+     true
+    ]
+   ],
+   "Initial": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaFacility_Art_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaFacility_Design_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaSupreme_m",
+     false
+    ],
+    [
+     "A3_COR_Intro_Cine_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaGate_Art_m",
+     false
+    ],
+    [
+     "A3_COR_OmegaFacility_Cine_m",
+     false
+    ]
+   ],
+   "Omega_Facility": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaGate_Art_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaFacility_Art_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaFacility_Design_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaSupreme_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaFacility_Cine_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ]
+   ],
+   "Omega_Gate": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaGate_Design_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaGate_Art_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaSupreme_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaGate_Cine_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaGateArt2_m",
+     true
+    ]
+   ],
+   "Omega_Gate_Design": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaGate_Design_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaGate_Art_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaFacility_Art_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaFacility_Design_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaSupreme_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaFacility_Cine_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaGateArt2_m",
+     true
+    ]
+   ],
+   "Routing_1": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_Routing1_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Routing1_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2Global_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing_2_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ]
+   ],
+   "Routing_2": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2B_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2B_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2Global_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing_2_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ]
+   ],
+   "Routing_2B": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2B_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2B_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2C_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2Global_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2C_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing_2_Design_m",
+     true
+    ]
+   ],
+   "Routing_2C": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2C_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3_Cine_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2Global_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2C_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3B_ART_m",
+     false
+    ]
+   ],
+   "Routing_Intro": [
+    [
+     "A3_COR_Routing1_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing1_Design_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaGate_Art_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaGate_Design_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaTunnel_Art_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaTunnel_Design_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaSupreme_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaGateArt2_m",
+     true
+    ]
+   ],
+   "Routing_Slug_Intro": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3_Cine_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3B_ART_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3B_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2Global_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2C_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing2C_Design_m",
+     true
+    ]
+   ],
+   "Routing_Slug_Post_Intro_Cine": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3B_ART_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3B_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ]
+   ],
+   "Routing_Slug_Ride": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3B_ART_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3C_ART_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3B_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3C_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ]
+   ],
+   "Routing_Slug_Ride_2": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3C_ART_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3C_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3C_DesignPart2_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3C_ArtPart2_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ]
+   ],
+   "Routing_Slug_Ride_2_Part_2": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3C_DesignPart2_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3C_DesignPart3_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3C_ArtPart2_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3C_ArtPart3_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ]
+   ],
+   "Routing_Slug_Ride_2_Part_3": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3D_ART_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3C_DesignPart3_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3D_Cine_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3C_ArtPart3_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3D_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ]
+   ],
+   "Routing_Slug_Ride_Finale": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3D_ART_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3D_Cine_m",
+     true
+    ],
+    [
+     "A3_COR_Routing3D_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ],
+    [
+     "A3_COR_Core_Trans_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Core_Trans_Design_m",
+     true
+    ]
+   ],
+   "Routing_Trans": [
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaGate_Design_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaGate_Art_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaSupreme_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaGate_Cine_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaTunnel_Art_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaTunnel_Design_m",
+     true
+    ],
+    [
+     "A3_COR_OmegaGateArt2_m",
+     true
+    ]
+   ],
+   "Split_Paths": [
+    [
+     "A3_COR_Caves_Split_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Caves_Split_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A3_COR_Core_Trans_Art_m",
+     true
+    ],
+    [
+     "A3_COR_Core_Trans_Design_m",
+     true
+    ],
+    [
+     "A3_COR_Music_m",
+     true
+    ],
+    [
+     "A3_COR_Caves_Split_Vig_m",
+     true
+    ]
+   ]
+  },
+  "checkpoints_in_display_order": [
+   {
+    "checkpoint": "Checkpoint_7284",
+    "display_order": 5,
+    "state": "Initial",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_9984",
+    "display_order": 10,
+    "state": "Omega_Facility",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_13978",
+    "display_order": 12,
+    "state": "Omega_Gate_Design",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_2440",
+    "display_order": 12,
+    "state": "Omega_Gate_Design",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_14670",
+    "display_order": 15,
+    "state": "Omega_Gate_Design",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_8819",
+    "display_order": 19,
+    "state": "Omega_Gate_Design",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 1
+   },
+   {
+    "checkpoint": "Checkpoint_2064",
+    "display_order": 20,
+    "state": "Omega_Gate",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_1846",
+    "display_order": 21,
+    "state": "Omega_Gate",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_2215",
+    "display_order": 22,
+    "state": "Omega_Gate",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_14641",
+    "display_order": 23,
+    "state": "Omega_Gate",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_8311",
+    "display_order": 24,
+    "state": "Routing_Trans",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 2
+   },
+   {
+    "checkpoint": "Checkpoint_2950",
+    "display_order": 25,
+    "state": "Routing_Trans",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 3
+   },
+   {
+    "checkpoint": "Checkpoint_15224",
+    "display_order": 26,
+    "state": "Routing_1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 4
+   },
+   {
+    "checkpoint": "Checkpoint_595",
+    "display_order": 27,
+    "state": "Routing_2C",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_5972",
+    "display_order": 28,
+    "state": "Routing_Slug_Intro",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 5
+   },
+   {
+    "checkpoint": "Checkpoint_13434",
+    "display_order": 29,
+    "state": "Routing_Slug_Ride_2",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12378",
+    "display_order": 30,
+    "state": "Routing_Slug_Ride_2",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_7387",
+    "display_order": 31,
+    "state": "Routing_Slug_Ride_2_Part_3",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_9534",
+    "display_order": 32,
+    "state": "Routing_Slug_Ride_Finale",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_6694",
+    "display_order": 90,
+    "state": "Split_Paths",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 6
+   },
+   {
+    "checkpoint": "Checkpoint_12713",
+    "display_order": 100,
+    "state": "Split_Paths",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 7
+   },
+   {
+    "checkpoint": "Checkpoint_5803",
+    "display_order": 180,
+    "state": "Core_Trans",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12843",
+    "display_order": 190,
+    "state": "Core_Exterior",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 8
+   },
+   {
+    "checkpoint": "Checkpoint_2102",
+    "display_order": 200,
+    "state": "Core_Interior",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 9
+   },
+   {
+    "checkpoint": "Checkpoint_11673",
+    "display_order": 210,
+    "state": "Core_Interior",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   }
+  ],
+  "menu_checkpoints": [
+   {
+    "id": "A3_CP01",
+    "path": ""
+   },
+   {
+    "id": "A3_CP03",
+    "path": "A3_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_8819"
+   },
+   {
+    "id": "A3_CP05",
+    "path": "A3_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_8311"
+   },
+   {
+    "id": "A3_CP06",
+    "path": "A3_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_2950"
+   },
+   {
+    "id": "A3_CP07",
+    "path": "A3_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_15224"
+   },
+   {
+    "id": "A3_CP09",
+    "path": "A3_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_5972"
+   },
+   {
+    "id": "A3_CP11",
+    "path": "A3_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_6694"
+   },
+   {
+    "id": "A3_CP12",
+    "path": "A3_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_12713"
+   },
+   {
+    "id": "A3_CP14",
+    "path": "A3_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_12843"
+   },
+   {
+    "id": "A3_CP15",
+    "path": "A3_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_2102"
+   }
+  ],
+  "set_streaming_ops": [
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_10298",
+    "state": "Routing_Slug_Ride_Finale"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_11208",
+    "state": "Omega_Facility"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_11737",
+    "state": "Routing_Slug_Ride_2_Part_3"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_1174",
+    "state": "Routing_Slug_Ride_2_Part_2"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_11951",
+    "state": "Core_Trans"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_13325",
+    "state": "Routing_2C"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_15333",
+    "state": "Routing_2B"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_2135",
+    "state": "Routing_Intro"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_2608",
+    "state": "Omega_Gate"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_3003",
+    "state": "Omega_Gate_Design"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_315",
+    "state": "Routing_Slug_Ride"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_3887",
+    "state": "Routing_Trans"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_4576",
+    "state": "Routing_Slug_Intro"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_4777",
+    "state": "Split_Paths"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_6051",
+    "state": "Routing_Slug_Post_Intro_Cine"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_6057",
+    "state": "Routing_1"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_7728",
+    "state": "Routing_2"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_7761",
+    "state": "Core_Interior"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_8015",
+    "state": "Core_Exterior"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_9012",
+    "state": "Routing_Slug_Ride_2"
+   }
+  ]
+ },
+ "A4_ORB_Base_m": {
+  "map_id": 99,
+  "initial_state": null,
+  "states": {
+   "CQC_MiniCommandRoom": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_RelayCmdRoom_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_RelayCmdRoom_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_CommandRoomCQC_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_Relay2_Tunnel_ART_m",
+     true
+    ]
+   ],
+   "Falling_Trypticon": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_FallingTryp_CINE_m",
+     true
+    ],
+    [
+     "A4_ORB_FallingTryp_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_FallingTryp_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ]
+   ],
+   "Flying2": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Track2_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2Station_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_TrypFlyingIntro_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2_Vig_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2Start_DSN_m",
+     true
+    ]
+   ],
+   "Flying2CheckpointStart": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_TrypFlyingIntro_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2Station_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2_Vig_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Track2_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_NerveCenter_CINE_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2Start_DSN_m",
+     true
+    ]
+   ],
+   "Flying2Start": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_NerveCenter_CINE_m",
+     true
+    ],
+    [
+     "A4_ORB_Track2_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2_Vig_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2Station_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_TrypFlyingIntro_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2Start_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_NerveCenter_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_NerveCenter_ART_m",
+     true
+    ]
+   ],
+   "Flying2WithTrypIntro": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_TrypFlyingIntro_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_TrypFlyingIntro_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2Station_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2_Vig_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2Start_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Track2_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2_DSN_m",
+     true
+    ]
+   ],
+   "LevelStart": [
+    [
+     "A4_ORB_DebrisIntro_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_IntroCave_Art_m",
+     false
+    ],
+    [
+     "A4_ORB_IntroCave_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_PreRelay1_DSN_m",
+     false
+    ],
+    [
+     "A4_ORB_CineIntro_m",
+     true
+    ],
+    [
+     "A4_ORB_Intro_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_Track1_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_PreRelay1_ART_m",
+     false
+    ],
+    [
+     "A4_ORB_DebrisIntro_DSN_m",
+     true
+    ]
+   ],
+   "LevelStart_NoCine": [
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Intro_VIG_m",
+     true
+    ],
+    [
+     "A4_ORB_DebrisIntro_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_DebrisIntro_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_IntroCave_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_IntroCave_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_PreRelay1_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_PreRelay1_DSN_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_Track1_Global_Art_m",
+     true
+    ]
+   ],
+   "Megatron_CommandRoom": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_RelayCmdRoom_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_Relay2_Tunnel_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_RelayCmdRoom_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_Relay2_Tunnel_DSN_m",
+     true
+    ]
+   ],
+   "NerveRoom": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_NerveCenter_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_NerveCenter_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_Track2_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_TrypFlyingIntro_Art_m",
+     false
+    ],
+    [
+     "A4_ORB_Flying2_Vig_m",
+     false
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_NerveCenter_CINE_m",
+     true
+    ],
+    [
+     "A4_ORB_Flying2_Art_m",
+     false
+    ],
+    [
+     "A4_ORB_Flying2Start_DSN_m",
+     false
+    ]
+   ],
+   "PostCavePreRelay": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_PreRelay1_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_PreRelay1_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_Relay1Int_DSN_m",
+     false
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_Track1_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_RelayIntro_CINE_m",
+     true
+    ],
+    [
+     "A4_ORB_Relay1Int_Art_m",
+     false
+    ]
+   ],
+   "Relay1Interior": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Relay1Int_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Relay1Int_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_RelayCmdRoom_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_RelayIntro_CINE_m",
+     true
+    ],
+    [
+     "A4_ORB_RelayCmdRoom_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_CommandRoomCQC_DSN_m",
+     true
+    ]
+   ],
+   "Relay2_FlyingTunnel": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_RelayCmdRoom_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_RelayCmdRoom_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_Relay2_Tunnel_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_Relay2_Tunnel_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_HoloRoom_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_Relay2Int_DSN_m",
+     true
+    ]
+   ],
+   "RelayInteriorPart2": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Relay2Int_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Relay2Int_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_NerveCenter_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_NerveCenter_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_Relay2Int_VIG_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_HoloRoom_ART_m",
+     true
+    ]
+   ],
+   "TransitionToRelay1": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Track1_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_PreRelay1_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_PreRelay1_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_RelayIntro_CINE_m",
+     true
+    ],
+    [
+     "A4_ORB_Relay1Int_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Relay1Int_DSN_m",
+     true
+    ]
+   ],
+   "TrypIntroWithVisibleAmmoRoom": [
+    [
+     "A4_ORB_Track2_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_TrypFlyingIntro_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_TrypFlyingIntro_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_AmmoRoom_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_AmmoRoom_DSN_m",
+     true
+    ]
+   ],
+   "TrypticonCogRoom": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_FallingTryp_CINE_m",
+     true
+    ],
+    [
+     "A4_ORB_FallingTryp_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_FallingTryp_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_CogRoom_CINE_m",
+     true
+    ],
+    [
+     "A4_ORB_CogRoom_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_CogRoom_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_CogRoom_VIG_m",
+     true
+    ],
+    [
+     "A4_ORB_CogRoomVol_DSN_m",
+     false
+    ]
+   ],
+   "TrypticonCogRoomExit": [
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_CogRoom_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_CogRoom_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_CogRoom_CINE_m",
+     true
+    ],
+    [
+     "A4_ORB_CogRoom_VIG_m",
+     true
+    ],
+    [
+     "A4_ORB_CogRoomVol_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_FallingTryp_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_FallingTryp_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_FallingTryp_CINE_m",
+     true
+    ]
+   ],
+   "TrypticonFlyingIntro": [
+    [
+     "A4_ORB_Track2_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_TrypFlyingIntro_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_TrypFlyingIntro_DSN_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_AmmoRoom_ART_m",
+     false
+    ],
+    [
+     "A4_ORB_AmmoRoom_DSN_m",
+     false
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ]
+   ],
+   "TrypticonInterior": [
+    [
+     "A4_ORB_AmmoRoom_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Audio_m",
+     true
+    ],
+    [
+     "A4_ORB_Music_m",
+     true
+    ],
+    [
+     "A4_ORB_Global_Art_m",
+     true
+    ],
+    [
+     "A4_ORB_AmmoRoom_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_CogRoom_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_CogRoom_CINE_m",
+     true
+    ],
+    [
+     "A4_ORB_CogRoom_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_FallingTryp_ART_m",
+     true
+    ],
+    [
+     "A4_ORB_FallingTryp_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_FallingTryp_CINE_m",
+     true
+    ],
+    [
+     "A4_ORB_TrypFlyingIntro_DSN_m",
+     true
+    ],
+    [
+     "A4_ORB_CogRoom_VIG_m",
+     true
+    ],
+    [
+     "A4_ORB_CogRoomVol_DSN_m",
+     false
+    ]
+   ]
+  },
+  "checkpoints_in_display_order": [
+   {
+    "checkpoint": "Checkpoint_3142",
+    "display_order": 10,
+    "state": "LevelStart_NoCine",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_15222"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_14819",
+    "display_order": 20,
+    "state": "PostCavePreRelay",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_10293"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_14441",
+    "display_order": 22,
+    "state": "PostCavePreRelay",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_10293"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_11178",
+    "display_order": 30,
+    "state": "Relay1Interior",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_1318"
+    ],
+    "menu_index": 1
+   },
+   {
+    "checkpoint": "Checkpoint_15180",
+    "display_order": 40,
+    "state": "Relay1Interior",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_1318"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_13852",
+    "display_order": 50,
+    "state": "Relay1Interior",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_1318"
+    ],
+    "menu_index": 2
+   },
+   {
+    "checkpoint": "Checkpoint_15190",
+    "display_order": 60,
+    "state": "CQC_MiniCommandRoom",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_1318"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12093",
+    "display_order": 70,
+    "state": "Megatron_CommandRoom",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_4677"
+    ],
+    "menu_index": 3
+   },
+   {
+    "checkpoint": "Checkpoint_6277",
+    "display_order": 80,
+    "state": "Megatron_CommandRoom",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_15740"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_7845",
+    "display_order": 90,
+    "state": "Megatron_CommandRoom",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_15740"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_14410",
+    "display_order": 100,
+    "state": "Relay2_FlyingTunnel",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_8280"
+    ],
+    "menu_index": 4
+   },
+   {
+    "checkpoint": "Checkpoint_15077",
+    "display_order": 105,
+    "state": "RelayInteriorPart2",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_14521"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_412",
+    "display_order": 108,
+    "state": "RelayInteriorPart2",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_13772"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_1984",
+    "display_order": 110,
+    "state": "NerveRoom",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_13772"
+    ],
+    "menu_index": 5
+   },
+   {
+    "checkpoint": "Checkpoint_6511",
+    "display_order": 118,
+    "state": "NerveRoom",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_13772"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_2146",
+    "display_order": 120,
+    "state": "NerveRoom",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_13772"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12706",
+    "display_order": 130,
+    "state": "Flying2CheckpointStart",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_15835"
+    ],
+    "menu_index": 6
+   },
+   {
+    "checkpoint": "Checkpoint_9282",
+    "display_order": 135,
+    "state": "Flying2WithTrypIntro",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_15835"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_7574",
+    "display_order": 150,
+    "state": "TrypticonFlyingIntro",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_7611",
+     "TnStartingFormOverrideCheckpointAction_78"
+    ],
+    "menu_index": 7
+   },
+   {
+    "checkpoint": "Checkpoint_7205",
+    "display_order": 160,
+    "state": "TrypIntroWithVisibleAmmoRoom",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_7611"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_5259",
+    "display_order": 170,
+    "state": "TrypticonInterior",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_7611",
+     "TnStartingFormOverrideCheckpointAction_78"
+    ],
+    "menu_index": 8
+   },
+   {
+    "checkpoint": "Checkpoint_7493",
+    "display_order": 180,
+    "state": "TrypticonCogRoom",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_7611",
+     "TnStartingFormOverrideCheckpointAction_78"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_13047",
+    "display_order": 190,
+    "state": "Falling_Trypticon",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_8498"
+    ],
+    "menu_index": 9
+   }
+  ],
+  "menu_checkpoints": [
+   {
+    "id": "A4_CP02",
+    "path": ""
+   },
+   {
+    "id": "A4_CP03",
+    "path": "A4_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_11178"
+   },
+   {
+    "id": "A4_CP05",
+    "path": "A4_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_13852"
+   },
+   {
+    "id": "A4_CP07",
+    "path": "A4_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_12093"
+   },
+   {
+    "id": "A4_CP08",
+    "path": "A4_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_14410"
+   },
+   {
+    "id": "A4_CP09",
+    "path": "A4_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_1984"
+   },
+   {
+    "id": "A4_CP11",
+    "path": "A4_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_12706"
+   },
+   {
+    "id": "A4_CP14",
+    "path": "A4_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_7574"
+   },
+   {
+    "id": "A4_CP16",
+    "path": "A4_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_5259"
+   },
+   {
+    "id": "A4_CP18",
+    "path": "A4_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_13047"
+   }
+  ],
+  "set_streaming_ops": [
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_10286",
+    "state": "RelayInteriorPart2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_10440",
+    "state": "Falling_Trypticon"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_10577",
+    "state": "Flying2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_10742",
+    "state": "Megatron_CommandRoom"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_11747",
+    "state": "TrypticonCogRoom"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_12057",
+    "state": "Relay1Interior"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_12963",
+    "state": "Flying2Start"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_14029",
+    "state": "CQC_MiniCommandRoom"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_14163",
+    "state": "Flying2WithTrypIntro"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_14338",
+    "state": "TrypIntroWithVisibleAmmoRoom"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_164",
+    "state": "TrypticonInterior"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_2621",
+    "state": "TrypticonFlyingIntro"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_3540",
+    "state": "NerveRoom"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_6008",
+    "state": "LevelStart_NoCine"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_6512",
+    "state": "TransitionToRelay1"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_7844",
+    "state": "TrypticonCogRoomExit"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_8008",
+    "state": "Relay2_FlyingTunnel"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints_Streaming.SeqAct_SetStreamingState_9694",
+    "state": "PostCavePreRelay"
+   }
+  ]
+ },
+ "A5_TRY_Base_m": {
+  "map_id": 100,
+  "initial_state": null,
+  "states": {
+   "CraterLower": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A5_TRY_DSN_m",
+     true
+    ],
+    [
+     "A5_TRY_Audio_m",
+     true
+    ],
+    [
+     "A5_TRY_FX_m",
+     true
+    ],
+    [
+     "A5_TRY_Background_ART_m",
+     true
+    ],
+    [
+     "A5_TRY_Outro_CINE_m",
+     true
+    ],
+    [
+     "A5_TRY_CraterLower_ART_m",
+     true
+    ],
+    [
+     "A5_TRY_CraterTop_ART_m",
+     true
+    ],
+    [
+     "A5_TRY_Crater_ART_m",
+     true
+    ]
+   ],
+   "CraterTop": [
+    [
+     "A5_TRY_DSN_m",
+     true
+    ],
+    [
+     "A5_TRY_FX_m",
+     true
+    ],
+    [
+     "A5_TRY_Audio_m",
+     true
+    ],
+    [
+     "A5_TRY_Background_ART_m",
+     true
+    ],
+    [
+     "A5_TRY_CraterTop_ART_m",
+     true
+    ],
+    [
+     "A5_TRY_Crater_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ]
+   ],
+   "Impact": [
+    [
+     "A5_TRY_DSN_m",
+     true
+    ],
+    [
+     "A5_TRY_FX_m",
+     true
+    ],
+    [
+     "A5_TRY_Audio_m",
+     true
+    ],
+    [
+     "A5_TRY_Impact_ART_m",
+     true
+    ],
+    [
+     "A5_TRY_Background_ART_m",
+     true
+    ],
+    [
+     "A5_TRY_Vig_m",
+     true
+    ],
+    [
+     "A5_TRY_CraterTop_ART_m",
+     true
+    ],
+    [
+     "A5_TRY_StreetsEnd_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "A5_TRY_Crater_ART_m",
+     true
+    ],
+    [
+     "A5_TRY_Intro_CINE_m",
+     true
+    ]
+   ],
+   "Streets": [
+    [
+     "A5_TRY_DSN_m",
+     true
+    ],
+    [
+     "A5_TRY_FX_m",
+     true
+    ],
+    [
+     "A5_TRY_Audio_m",
+     true
+    ],
+    [
+     "A5_TRY_Streets_ART_m",
+     true
+    ],
+    [
+     "A5_TRY_Impact_ART_m",
+     true
+    ],
+    [
+     "A5_TRY_Background_ART_m",
+     true
+    ],
+    [
+     "A5_TRY_Intro_CINE_m",
+     true
+    ],
+    [
+     "A5_TRY_Vig_m",
+     true
+    ],
+    [
+     "A5_TRY_CraterTop_ART_m",
+     true
+    ],
+    [
+     "A5_TRY_StreetsEnd_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ]
+   ]
+  },
+  "checkpoints_in_display_order": [
+   {
+    "checkpoint": "Checkpoint_1032",
+    "display_order": 1,
+    "state": "Streets",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_3422",
+    "display_order": 2,
+    "state": "CraterLower",
+    "aux_spawns": 4,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_946",
+    "display_order": 3,
+    "state": "CraterLower",
+    "aux_spawns": 4,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_3120",
+    "display_order": 4,
+    "state": "CraterLower",
+    "aux_spawns": 4,
+    "actions": [],
+    "menu_index": 1
+   }
+  ],
+  "menu_checkpoints": [
+   {
+    "id": "A5_CP01",
+    "path": ""
+   },
+   {
+    "id": "A5_CP02",
+    "path": "A5_TRY_Base_m.TheWorld.PersistentLevel.Checkpoint_3120"
+   }
+  ],
+  "set_streaming_ops": [
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_15936",
+    "state": "Impact"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_5775",
+    "state": "CraterTop"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_6803",
+    "state": "CraterLower"
+   }
+  ]
+ },
+ "D1_ORB_Base_m": {
+  "map_id": 101,
+  "initial_state": null,
+  "states": {
+   "DarkEnergon_Only": [
+    [
+     "D1_ORB_DarkEnergon_VIG_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_DarkEnergon_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_DarkEnergon_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_DarkEnergon_CINE_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ]
+   ],
+   "Level_Started": [
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_GLB_Doors_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1_VIG_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1B_VIG_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1B_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1B_DGN_m",
+     true
+    ]
+   ],
+   "Load_Assembly1": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Vent1_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Vent1_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Assmebly1_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Assmebly1_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_Assmebly_VIG_m",
+     true
+    ]
+   ],
+   "Load_Assembly2": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Assmebly1_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Assmebly1_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Assmebly2_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Assmebly2_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_Vent1_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Assmebly_VIG_m",
+     true
+    ]
+   ],
+   "Load_Crash1B": [
+    [
+     "D1_ORB_Crash1B_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_GLB_Doors_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1B_DGN_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1_VIG_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1B_VIG_m",
+     true
+    ]
+   ],
+   "Load_Crash2": [
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_GLB_Doors_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1B_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1B_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1B_VIG_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2_VIG_m",
+     true
+    ]
+   ],
+   "Load_Crash2B": [
+    [
+     "D1_ORB_Crash2_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2B_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2B_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_GLB_Doors_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2_VIG_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2A_VIG_m",
+     true
+    ]
+   ],
+   "Load_Crash2C": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_GLB_Doors_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2B_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2C_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2B_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_CrashHack_DGN",
+     true
+    ],
+    [
+     "D1_ORB_Crash2A_VIG_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2_VIG_m",
+     true
+    ]
+   ],
+   "Load_DarkEnergon": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_DarkEnergon_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_DarkEnergon_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_DETrans_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_DETrans_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_DarkEnergon_CINE_m",
+     true
+    ],
+    [
+     "D1_ORB_Cybertron_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_DarkEnergon_VIG_m",
+     true
+    ],
+    [
+     "D1_ORB_StationExterior2_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_HalfMoon_ART_m",
+     true
+    ]
+   ],
+   "Load_DataCenter": [
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_GLB_Doors_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Space_VIG_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2B_CINE_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_VIG_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2E_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_CrashHack_DGN",
+     true
+    ]
+   ],
+   "Load_DataCenter2": [
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter2_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_VIG_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_CINE_m",
+     true
+    ]
+   ],
+   "Load_DataCenter2b": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter2_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter2b_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_CINE_m",
+     true
+    ]
+   ],
+   "Load_DataCenter3": [
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter3_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter2b_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ]
+   ],
+   "Load_Exterior1": [
+    [
+     "D1_ORB_Exterior1_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Exterior1_DGN_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_ScienceLabs_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_ScienceLabs_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_StationExterior_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_ScienceLabs_CINE_m",
+     true
+    ],
+    [
+     "D1_ORB_Cybertron_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Exterior2_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_StationExterior2_ART_m",
+     true
+    ]
+   ],
+   "Load_ExteriorTrans": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_DETrans_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_DETrans_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_StationExterior_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Cybertron_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Exterior3_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Exterior2_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Exterior2_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Exterior1_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_StationExterior2_ART_m",
+     true
+    ]
+   ],
+   "Load_ScienceLabs": [
+    [
+     "D1_ORB_Assmebly2_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_ScienceLabs_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Assmebly2_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_ScienceLabs_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_StationExterior_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_ScienceLabs_CINE_m",
+     true
+    ],
+    [
+     "D1_ORB_Cybertron_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Assmebly1_DGN_m",
+     true
+    ]
+   ],
+   "Load_Vent1": [
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Vent1_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Vent1_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter3_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ]
+   ],
+   "Load_VentChkPt": [
+    [
+     "D1_ORB_Vent1_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Vent1_DGN_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter3_ART_m",
+     true
+    ]
+   ],
+   "Unload_Assembly1": [
+    [
+     "D1_ORB_Assmebly2_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Assmebly2_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_Assmebly1_DGN_m",
+     true
+    ]
+   ],
+   "Unload_Crash2": [
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_GLB_Doors_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2B_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2B_DGN_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2A_VIG_m",
+     true
+    ]
+   ],
+   "Unload_Crash2B": [
+    [
+     "D1_ORB_Space_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_GLB_Doors_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2C_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2B_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2D_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_CrashHack_DGN",
+     true
+    ],
+    [
+     "D1_ORB_Crash2A_VIG_m",
+     true
+    ]
+   ],
+   "Unload_Crash2C": [
+    [
+     "D1_ORB_Space_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_GLB_Doors_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2B_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2D_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2B_VIG_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2E_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_CrashHack_DGN",
+     true
+    ],
+    [
+     "D1_ORB_Crash2A_VIG_m",
+     true
+    ]
+   ],
+   "Unload_Crash2E": [
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_GLB_Doors_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_VIG_m",
+     true
+    ]
+   ],
+   "Unload_Crashsite": [
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1B_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1B_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_GLB_Doors_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash1B_VIG_m",
+     true
+    ]
+   ],
+   "Unload_DataCenter": [
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter2_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_CINE_m",
+     true
+    ]
+   ],
+   "Unload_DataCenter2": [
+    [
+     "D1_ORB_DataCenter2b_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ]
+   ],
+   "Unload_DataCenter2b": [
+    [
+     "D1_ORB_DataCenter3_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_DataCenter_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ]
+   ],
+   "Unload_DataCenter3": [
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Vent1_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Vent1_DGN_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ]
+   ],
+   "Unlodad_Crash1B": [
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_GLB_Doors_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2_DGN_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2_VIG_m",
+     true
+    ]
+   ],
+   "Unlodad_Crash2D": [
+    [
+     "D1_ORB_Space_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_GLB_Doors_m",
+     true
+    ],
+    [
+     "D1_ORB_Audio_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2E_ART_m",
+     true
+    ],
+    [
+     "D1_ORB_Music_m",
+     true
+    ],
+    [
+     "D1_ORB_Crash2B_VIG_m",
+     true
+    ],
+    [
+     "D1_ORB_CrashHack_DGN",
+     true
+    ]
+   ]
+  },
+  "checkpoints_in_display_order": [
+   {
+    "checkpoint": "Checkpoint_3654",
+    "display_order": 1,
+    "state": "Level_Started",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_5199",
+    "display_order": 2,
+    "state": "Load_Crash1B",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 1
+   },
+   {
+    "checkpoint": "Checkpoint_14581",
+    "display_order": 3,
+    "state": "Load_Crash2",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_286",
+    "display_order": 4,
+    "state": "Load_Crash2B",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 2
+   },
+   {
+    "checkpoint": "Checkpoint_6570",
+    "display_order": 5,
+    "state": "Load_Crash2C",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 3
+   },
+   {
+    "checkpoint": "Checkpoint_3729",
+    "display_order": 6,
+    "state": "Unload_Crash2C",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_7331",
+    "display_order": 7,
+    "state": "Load_DataCenter",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 4
+   },
+   {
+    "checkpoint": "Checkpoint_10706",
+    "display_order": 8,
+    "state": "Load_DataCenter2",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_14955",
+    "display_order": 9,
+    "state": "Unload_DataCenter",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 5
+   },
+   {
+    "checkpoint": "Checkpoint_11671",
+    "display_order": 10,
+    "state": "Load_DataCenter3",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_9659",
+    "display_order": 11,
+    "state": "Load_DataCenter3",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12437",
+    "display_order": 12,
+    "state": "Load_VentChkPt",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 6
+   },
+   {
+    "checkpoint": "Checkpoint_2354",
+    "display_order": 13,
+    "state": "Load_Assembly1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12647",
+    "display_order": 14,
+    "state": "Unload_Assembly1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_15174",
+    "display_order": 15,
+    "state": "Load_Exterior1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 7
+   },
+   {
+    "checkpoint": "Checkpoint_15255",
+    "display_order": 16,
+    "state": "Load_Exterior1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_4405",
+    "display_order": 17,
+    "state": "Load_Exterior1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 8
+   },
+   {
+    "checkpoint": "Checkpoint_16131",
+    "display_order": 18,
+    "state": "Load_ExteriorTrans",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12827",
+    "display_order": 19,
+    "state": "Load_DarkEnergon",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 9
+   },
+   {
+    "checkpoint": "Checkpoint_847",
+    "display_order": 20,
+    "state": "Load_DarkEnergon",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_3247",
+    "display_order": 21,
+    "state": "DarkEnergon_Only",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   }
+  ],
+  "menu_checkpoints": [
+   {
+    "id": "D1_CP01",
+    "path": ""
+   },
+   {
+    "id": "D1_CP02",
+    "path": "D1_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_5199"
+   },
+   {
+    "id": "D1_CP03",
+    "path": "D1_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_286"
+   },
+   {
+    "id": "D1_CP04",
+    "path": "D1_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_6570"
+   },
+   {
+    "id": "D1_CP05",
+    "path": "D1_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_7331"
+   },
+   {
+    "id": "D1_CP07",
+    "path": "D1_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_14955"
+   },
+   {
+    "id": "D1_CP08",
+    "path": "D1_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_12437"
+   },
+   {
+    "id": "D1_CP09",
+    "path": "D1_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_15174"
+   },
+   {
+    "id": "D1_CP10",
+    "path": "D1_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_4405"
+   },
+   {
+    "id": "D1_CP11",
+    "path": "D1_ORB_Base_m.TheWorld.PersistentLevel.Checkpoint_12827"
+   }
+  ],
+  "set_streaming_ops": [
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_10398",
+    "state": "Load_ExteriorTrans"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_11523",
+    "state": "Unload_Crash2B"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_12293",
+    "state": "Load_DarkEnergon"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_12791",
+    "state": "Load_Crash2"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_1289",
+    "state": "Load_DataCenter"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_13330",
+    "state": "Load_ScienceLabs"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_13368",
+    "state": "Unload_Crash2E"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_1385",
+    "state": "Unlodad_Crash2D"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_14460",
+    "state": "Load_DataCenter2b"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_14786",
+    "state": "DarkEnergon_Only"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_15278",
+    "state": "Load_DataCenter2"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_15699",
+    "state": "Load_Exterior1"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_16348",
+    "state": "Unload_DataCenter"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_378",
+    "state": "Load_Crash2C"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_3805",
+    "state": "Load_Crash2B"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_626",
+    "state": "Load_DataCenter3"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_6499",
+    "state": "Load_Assembly2"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_6533",
+    "state": "Unload_Crash2C"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_8042",
+    "state": "Load_Vent1"
+   },
+   {
+    "op": "Main_Sequence.Streaming.Set_States.SeqAct_SetStreamingState_9980",
+    "state": "Load_Assembly1"
+   }
+  ]
+ },
+ "D2_COR_Base_m": {
+  "map_id": 102,
+  "initial_state": null,
+  "states": {
+   "cave": [
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_Art_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_Design_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_DesignB_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_ArtB_m",
+     true
+    ]
+   ],
+   "Cave2": [
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_Design2_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_Design2B_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_Art2B_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_Art2_m",
+     true
+    ]
+   ],
+   "Cave2B": [
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_Design2B_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_Art2B_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_Art2C_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_01_VIG_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_01_ART_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_01_Design_m",
+     true
+    ]
+   ],
+   "CaveB": [
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_DesignB_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_Design2_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_ArtB_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_Art2_m",
+     true
+    ]
+   ],
+   "Chamber": [
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Chamber_Art_m",
+     true
+    ],
+    [
+     "D2_COR_Chamber_Design_m",
+     true
+    ],
+    [
+     "D2_COR_Shaft_01_Art_m",
+     true
+    ],
+    [
+     "D2_COR_Shaft_01_Design_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ]
+   ],
+   "Cloaker_Room": [
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_02_ART_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_02_Design_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_03_ART_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_03_Design_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ]
+   ],
+   "Gorge1": [
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_01_ART_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_02_ART_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_01_Design_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_02_Design_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_1B_Art_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_1B_Design_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_01_VIG_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_02_VIG_m",
+     true
+    ]
+   ],
+   "Gorge2": [
+    [
+     "D2_COR_Gorge_03_Design_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_03_ART_m",
+     true
+    ],
+    [
+     "D2_COR_TNL1_Art_m",
+     true
+    ],
+    [
+     "D2_COR_TNL1_Design_m",
+     true
+    ],
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ]
+   ],
+   "Gorge_Intro": [
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_IntroGorge_ART_m",
+     true
+    ],
+    [
+     "D2_COR_IntroGorge_Design_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_Art_m",
+     true
+    ],
+    [
+     "D2_COR_Cave_Design_m",
+     true
+    ],
+    [
+     "D2_COR_IntroGorge_VIG_m",
+     true
+    ]
+   ],
+   "GorgeInterior": [
+    [
+     "D2_COR_Gorge_02_ART_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_03_ART_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_02_Design_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_03_Design_m",
+     true
+    ],
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_1B_Design_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_1B_Art_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ],
+    [
+     "D2_COR_Gorge_02_VIG_m",
+     true
+    ]
+   ],
+   "Guard_Station": [
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_TNL3_Art_m",
+     true
+    ],
+    [
+     "D2_COR_TNL3_Design_m",
+     true
+    ],
+    [
+     "D2_COR_TrioBss_Art_m",
+     true
+    ],
+    [
+     "D2_COR_TrioBss_Design_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ]
+   ],
+   "Machine_Room": [
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_TNLMR_Art_m",
+     true
+    ],
+    [
+     "D2_COR_TNLMR_Design_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ],
+    [
+     "D2_COR_TNL2_Art_m",
+     true
+    ],
+    [
+     "D2_COR_TNL2_Design_m",
+     true
+    ]
+   ],
+   "Shaft_01": [
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Shaft_01_Art_m",
+     true
+    ],
+    [
+     "D2_COR_Shaft_01_Design_m",
+     true
+    ],
+    [
+     "D2_COR_Surface_Art_m",
+     true
+    ],
+    [
+     "D2_COR_Surface_Design_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ]
+   ],
+   "Surface": [
+    [
+     "D2_COR_Surface_Art_m",
+     true
+    ],
+    [
+     "D2_COR_Surface_Design_m",
+     true
+    ],
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ]
+   ],
+   "TrioBoss": [
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_TrioBss_Design_m",
+     true
+    ],
+    [
+     "D2_COR_TrioBss_Art_m",
+     true
+    ],
+    [
+     "D2_COR_TNL4_Art_m",
+     true
+    ],
+    [
+     "D2_COR_TNL4_Design_m",
+     true
+    ],
+    [
+     "D2_COR_Chamber_Art_m",
+     true
+    ],
+    [
+     "D2_COR_Chamber_Design_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ]
+   ],
+   "Tunnel_1": [
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_TNL1_Art_m",
+     true
+    ],
+    [
+     "D2_COR_TNL1_Design_m",
+     true
+    ],
+    [
+     "D2_COR_TNLMR_Art_m",
+     true
+    ],
+    [
+     "D2_COR_TNLMR_Design_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ]
+   ],
+   "Tunnel_2": [
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_TNL2_Art_m",
+     true
+    ],
+    [
+     "D2_COR_TNL2_Design_m",
+     true
+    ],
+    [
+     "D2_COR_TNL3_Art_m",
+     true
+    ],
+    [
+     "D2_COR_TNL3_Design_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ]
+   ],
+   "Tunnel_4": [
+    [
+     "D2_COR_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_TNL4_Art_m",
+     true
+    ],
+    [
+     "D2_COR_TNL4_Design_m",
+     true
+    ],
+    [
+     "D2_COR_Chamber_Art_m",
+     true
+    ],
+    [
+     "D2_COR_Chamber_Design_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D2_COR_Music_m",
+     true
+    ]
+   ]
+  },
+  "checkpoints_in_display_order": [
+   {
+    "checkpoint": "Checkpoint_323",
+    "display_order": 1,
+    "state": "Gorge_Intro",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_15027"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_15023",
+    "display_order": 11,
+    "state": "CaveB",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_6618"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_2012",
+    "display_order": 11,
+    "state": "cave",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_2360"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_2459",
+    "display_order": 12,
+    "state": "Cave2",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_10149"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_4885",
+    "display_order": 13,
+    "state": "Cave2",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_10149"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_1674",
+    "display_order": 14,
+    "state": "Cave2B",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_13535"
+    ],
+    "menu_index": 1
+   },
+   {
+    "checkpoint": "Checkpoint_10136",
+    "display_order": 20,
+    "state": "Gorge1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 2
+   },
+   {
+    "checkpoint": "Checkpoint_11675",
+    "display_order": 21,
+    "state": "Gorge1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_6057",
+    "display_order": 22,
+    "state": "Gorge1",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_4022"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12135",
+    "display_order": 30,
+    "state": "Gorge1",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_4512"
+    ],
+    "menu_index": 3
+   },
+   {
+    "checkpoint": "Checkpoint_3329",
+    "display_order": 40,
+    "state": "Cloaker_Room",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_2913"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_14113",
+    "display_order": 50,
+    "state": "Gorge2",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_13470"
+    ],
+    "menu_index": 4
+   },
+   {
+    "checkpoint": "Checkpoint_2399",
+    "display_order": 60,
+    "state": "Tunnel_1",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_459"
+    ],
+    "menu_index": 5
+   },
+   {
+    "checkpoint": "Checkpoint_14098",
+    "display_order": 70,
+    "state": "Machine_Room",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_265"
+    ],
+    "menu_index": 6
+   },
+   {
+    "checkpoint": "Checkpoint_5660",
+    "display_order": 75,
+    "state": "Machine_Room",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_12835"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_11709",
+    "display_order": 80,
+    "state": "Tunnel_2",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_4745"
+    ],
+    "menu_index": 7
+   },
+   {
+    "checkpoint": "Checkpoint_6463",
+    "display_order": 90,
+    "state": "Tunnel_2",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_13866"
+    ],
+    "menu_index": 8
+   },
+   {
+    "checkpoint": "Checkpoint_13504",
+    "display_order": 100,
+    "state": "TrioBoss",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_7146"
+    ],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_8567",
+    "display_order": 110,
+    "state": "Chamber",
+    "aux_spawns": 2,
+    "actions": [
+     "TnStartingFormOverrideCheckpointAction_11829"
+    ],
+    "menu_index": 9
+   },
+   {
+    "checkpoint": "Checkpoint_14292",
+    "display_order": 119,
+    "state": "Chamber",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_14650",
+    "display_order": 120,
+    "state": "Chamber",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_13005",
+    "display_order": 130,
+    "state": "Surface",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   }
+  ],
+  "menu_checkpoints": [
+   {
+    "id": "D2_CP02",
+    "path": ""
+   },
+   {
+    "id": "D2_CP06",
+    "path": "D2_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_1674"
+   },
+   {
+    "id": "D2_CP07",
+    "path": "D2_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_10136"
+   },
+   {
+    "id": "D2_CP08",
+    "path": "D2_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_12135"
+   },
+   {
+    "id": "D2_CP10",
+    "path": "D2_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_14113"
+   },
+   {
+    "id": "D2_CP11",
+    "path": "D2_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_2399"
+   },
+   {
+    "id": "D2_CP12",
+    "path": "D2_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_14098"
+   },
+   {
+    "id": "D2_CP13",
+    "path": "D2_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_11709"
+   },
+   {
+    "id": "D2_CP14",
+    "path": "D2_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_6463"
+   },
+   {
+    "id": "D2_CP16",
+    "path": "D2_COR_Base_m.TheWorld.PersistentLevel.Checkpoint_8567"
+   }
+  ],
+  "set_streaming_ops": [
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_10117",
+    "state": "Gorge1"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_11017",
+    "state": "Cave2B"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_11030",
+    "state": "Tunnel_1"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_11041",
+    "state": "CaveB"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_11653",
+    "state": "Shaft_01"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_13400",
+    "state": "cave"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_1524",
+    "state": "Surface"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_15779",
+    "state": "Chamber"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_1787",
+    "state": "Machine_Room"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_1998",
+    "state": "Tunnel_2"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_2323",
+    "state": "GorgeInterior"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_4335",
+    "state": "Cloaker_Room"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_5621",
+    "state": "Cave2"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_7607",
+    "state": "TrioBoss"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_7853",
+    "state": "Tunnel_4"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_8304",
+    "state": "Guard_Station"
+   },
+   {
+    "op": "Main_Sequence.SeqAct_SetStreamingState_9449",
+    "state": "Gorge2"
+   }
+  ]
+ },
+ "D3A_IAC_Base_m": {
+  "map_id": 103,
+  "initial_state": null,
+  "states": {
+   "Alley1": [
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Alley1_ART",
+     true
+    ],
+    [
+     "D3A_IAC_Alley1_DESIGN",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Alley1_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive2_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive2_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_VIG_m",
+     true
+    ]
+   ],
+   "Alley2": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Alley1_ART",
+     true
+    ],
+    [
+     "D3A_IAC_Alley1_DESIGN",
+     true
+    ],
+    [
+     "D3A_IAC_Alley1_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_DESIGN_m",
+     true
+    ]
+   ],
+   "City1a": [
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_CINE_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_ART_m",
+     true
+    ]
+   ],
+   "City1b": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_CINE_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_DESIGN_m",
+     false
+    ],
+    [
+     "D3A_IAC_City2B_VIG_m",
+     true
+    ]
+   ],
+   "City1c": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_CINE_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2B_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2B_DESIGN_m",
+     true
+    ]
+   ],
+   "City2a": [
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_CINE_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2B_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2B_DESIGN_m",
+     true
+    ]
+   ],
+   "City2b": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2B_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2B_DESIGN_m",
+     true
+    ]
+   ],
+   "City3": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_CINE_m",
+     true
+    ]
+   ],
+   "City4": [
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_CINE_m",
+     true
+    ]
+   ],
+   "City5": [
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_CINE_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_CINE_m",
+     true
+    ]
+   ],
+   "City5a": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vaults_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vaults_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_CINE_m",
+     true
+    ]
+   ],
+   "City6": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vaults_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vaults_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ]
+   ],
+   "CityTrans": [
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Alley1_DESIGN",
+     true
+    ],
+    [
+     "D3A_IAC_Alley1_ART",
+     true
+    ],
+    [
+     "D3A_IAC_Alley1_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_CINE_m",
+     true
+    ]
+   ],
+   "CourtNew": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtNew_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtNew_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Court_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtVista_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ]
+   ],
+   "CourtNew2": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtNew_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtNew_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtTrans_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Court_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtVista_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtTrans_VIG_m",
+     true
+    ]
+   ],
+   "CourtTrans": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Planet1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Planet1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtTrans_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtTrans_VIG_m",
+     true
+    ]
+   ],
+   "Drive1": [
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vent_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vent_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_DriveTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_DriveTrans_DESIGN_m",
+     true
+    ]
+   ],
+   "Drive2": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_DriveTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_DriveTrans_DESIGN_m",
+     true
+    ]
+   ],
+   "Drive2b": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_DriveTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_DriveTrans_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive2_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive2_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_VIG_m",
+     true
+    ]
+   ],
+   "Everything": [
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Planet1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Planet1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Court_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vent_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vent_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Sentinel_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Sentinel_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Alley1_DESIGN",
+     true
+    ],
+    [
+     "D3A_IAC_Alley1_ART",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Alley1_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vaults_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vaults_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Court_CINE_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtNew_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtTrans_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtNew_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_Planet1_CINE_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtVista_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtTrans_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_City1_CINE_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_CINE_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_CINE_m",
+     true
+    ],
+    [
+     "D3A_IAC_DriveTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_DriveTrans_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive2_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive2_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2B_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2B_DESIGN_m",
+     true
+    ]
+   ],
+   "Planetarium1A": [
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Planet1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Planet1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtTrans_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Planet1_CINE_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtTrans_VIG_m",
+     true
+    ]
+   ],
+   "Planetarium1B": [
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Planet1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Planet1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vent_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vent_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_Planet1_CINE_m",
+     true
+    ]
+   ],
+   "Start": [
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_Court_CINE_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtNew_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtNew_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtTrans_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Court_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_CourtVista_ART_m",
+     true
+    ]
+   ],
+   "Vault": [
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vaults_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vaults_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_City2_VIG_m",
+     true
+    ],
+    [
+     "D3A_IAC_CityTank_DESIGN_m",
+     true
+    ]
+   ],
+   "Vault2": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vaults_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vaults_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Sentinel_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Sentinel_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ]
+   ],
+   "Vent": [
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Planet1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vent_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vent_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Planet1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_Planet1_CINE_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_VIG_m",
+     true
+    ]
+   ],
+   "Vent2": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vent_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vent_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_Drive1_VIG_m",
+     true
+    ]
+   ],
+   "Zeta_Prime": [
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Sentinel_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Sentinel_DESIGN_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vaults_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_Vaults_ART_m",
+     true
+    ]
+   ],
+   "Zeta_Prime2": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3A_IAC_AUDIO_m",
+     true
+    ],
+    [
+     "D3A_IAC_Shared_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Sentinel_ART_m",
+     true
+    ],
+    [
+     "D3A_IAC_Sentinel_DESIGN_m",
+     true
+    ],
+    [
+     "D3A_IAC_MUSIC_m",
+     true
+    ]
+   ]
+  },
+  "checkpoints_in_display_order": [
+   {
+    "checkpoint": "Checkpoint_622",
+    "display_order": 0,
+    "state": "Start",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_1299",
+    "display_order": 1,
+    "state": "Start",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_366",
+    "display_order": 2,
+    "state": "CourtNew2",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_3438",
+    "display_order": 3,
+    "state": "CourtNew2",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_7358",
+    "display_order": 4,
+    "state": "CourtTrans",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 1
+   },
+   {
+    "checkpoint": "Checkpoint_2387",
+    "display_order": 5,
+    "state": "Planetarium1A",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_5818",
+    "display_order": 6,
+    "state": "Planetarium1B",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 2
+   },
+   {
+    "checkpoint": "Checkpoint_15464",
+    "display_order": 7,
+    "state": "Planetarium1B",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_15843",
+    "display_order": 8,
+    "state": "Vent",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 3
+   },
+   {
+    "checkpoint": "Checkpoint_8320",
+    "display_order": 9,
+    "state": "Drive1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_10853",
+    "display_order": 10,
+    "state": "Drive2",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_14784",
+    "display_order": 11,
+    "state": "Drive2b",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12258",
+    "display_order": 12,
+    "state": "Alley1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 4
+   },
+   {
+    "checkpoint": "Checkpoint_1010",
+    "display_order": 13,
+    "state": "Alley2",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_15380",
+    "display_order": 14,
+    "state": "CityTrans",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_14337",
+    "display_order": 15,
+    "state": "City1a",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 5
+   },
+   {
+    "checkpoint": "Checkpoint_9045",
+    "display_order": 16,
+    "state": "City2b",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 6
+   },
+   {
+    "checkpoint": "Checkpoint_14579",
+    "display_order": 17,
+    "state": "City2b",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_12356",
+    "display_order": 18,
+    "state": "City3",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 7
+   },
+   {
+    "checkpoint": "Checkpoint_14728",
+    "display_order": 19,
+    "state": "City4",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_1726",
+    "display_order": 20,
+    "state": "City4",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_6319",
+    "display_order": 21,
+    "state": "City5",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 8
+   },
+   {
+    "checkpoint": "Checkpoint_8804",
+    "display_order": 22,
+    "state": "City5a",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_10865",
+    "display_order": 23,
+    "state": "Vault",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 9
+   },
+   {
+    "checkpoint": "Checkpoint_15791",
+    "display_order": 24,
+    "state": "Vault2",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_1588",
+    "display_order": 25,
+    "state": "Zeta_Prime",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_14964",
+    "display_order": 26,
+    "state": "Zeta_Prime",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_10254",
+    "display_order": 27,
+    "state": "Zeta_Prime",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   }
+  ],
+  "menu_checkpoints": [
+   {
+    "id": "D3_CP01",
+    "path": ""
+   },
+   {
+    "id": "D3_CP03",
+    "path": "D3A_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_7358"
+   },
+   {
+    "id": "D3_CP05",
+    "path": "D3A_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_5818"
+   },
+   {
+    "id": "D3_CP06",
+    "path": "D3A_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_15843"
+   },
+   {
+    "id": "D3_CP08",
+    "path": "D3A_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_12258"
+   },
+   {
+    "id": "D3_CP11",
+    "path": "D3A_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_14337"
+   },
+   {
+    "id": "D3_CP12",
+    "path": "D3A_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_9045"
+   },
+   {
+    "id": "D3_CP13",
+    "path": "D3A_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_12356"
+   },
+   {
+    "id": "D3_CP14",
+    "path": "D3A_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_6319"
+   },
+   {
+    "id": "D3_CP15",
+    "path": "D3A_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_10865"
+   }
+  ],
+  "set_streaming_ops": [
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_10780",
+    "state": "CourtNew2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_11423",
+    "state": "CourtTrans"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_11444",
+    "state": "Alley2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_12071",
+    "state": "Alley1"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_12503",
+    "state": "Planetarium1B"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_14003",
+    "state": "City2b"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_14106",
+    "state": "City6"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_15031",
+    "state": "City1b"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_15732",
+    "state": "City2b"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_15754",
+    "state": "City5"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_15968",
+    "state": "Vault2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_15987",
+    "state": "Start"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_1644",
+    "state": "CityTrans"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_1725",
+    "state": "City2a"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_1884",
+    "state": "City1c"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_2397",
+    "state": "City4"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_2421",
+    "state": "City6"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_2638",
+    "state": "Planetarium1A"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_2826",
+    "state": "Alley2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_2960",
+    "state": "City4"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_3179",
+    "state": "CourtNew2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_3439",
+    "state": "Zeta_Prime"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_346",
+    "state": "Vent"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_3610",
+    "state": "Planetarium1B"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_3895",
+    "state": "Vault2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_4427",
+    "state": "CityTrans"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_468",
+    "state": "CourtNew"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_5063",
+    "state": "City3"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_5693",
+    "state": "Zeta_Prime2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_5858",
+    "state": "CourtNew2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_5923",
+    "state": "Zeta_Prime2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_6285",
+    "state": "City5"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_6401",
+    "state": "Drive2b"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_6492",
+    "state": "Drive1"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_6580",
+    "state": "Start"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_704",
+    "state": "Alley1"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_7465",
+    "state": "City1a"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_8048",
+    "state": "Vent2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_8460",
+    "state": "Drive2b"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_8746",
+    "state": "Planetarium1A"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_8780",
+    "state": "Drive2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_9290",
+    "state": "Zeta_Prime2"
+   }
+  ]
+ },
+ "D3B_IAC_Base_m": {
+  "map_id": 104,
+  "initial_state": null,
+  "states": {
+   "BalconyA": [
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_Balcony_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Balcony_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_Balcony_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ]
+   ],
+   "BalconyB": [
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_Balcony_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Balcony_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_LevelOutro_CINE_m",
+     true
+    ],
+    [
+     "D3B_IAC_Balcony_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ]
+   ],
+   "BottomIntA": [
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomInt_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomInt_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLedge_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLedge_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLedge_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomInt_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ]
+   ],
+   "BottomIntB": [
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomInt_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomInt_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift1_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomInt_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ]
+   ],
+   "BottomIntC": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomInt_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomInt_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomInt_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift1_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1_DSN_m",
+     false
+    ],
+    [
+     "D3B_IAC_Lift1_VIG_m",
+     false
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ]
+   ],
+   "BottomLift2": [
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeStation2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeStation2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift2_VIG_m",
+     true
+    ]
+   ],
+   "BridgeStation1": [
+    [
+     "D3B_IAC_BridgeStation1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_TunnelDrop_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_TunnelDrop_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeStation1_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BS1Exterior_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BS2Exterior_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BL2Exterior_ART_m",
+     true
+    ]
+   ],
+   "BridgeStation2": [
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTube_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTube_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeStation2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeStation2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BL2Exterior_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BS1Exterior_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTrans_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTrans_DSN_m",
+     true
+    ]
+   ],
+   "BridgeTrans": [
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeStation1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeStation1_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTrans_ART_m",
+     false
+    ],
+    [
+     "D3B_IAC_BridgeTrans_DSN_m",
+     false
+    ],
+    [
+     "D3B_IAC_BridgeTube_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTube_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BS1Exterior_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BS2Exterior_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BL2Exterior_ART_m",
+     true
+    ]
+   ],
+   "BridgeTubeA": [
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTube_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTube_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeStation1_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeStation1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTrans_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTrans_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BS1Exterior_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BS2Exterior_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BL2Exterior_ART_m",
+     true
+    ]
+   ],
+   "BridgeTubeB": [
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTube_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTube_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeStation2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTrans_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTrans_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeStation2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BS1Exterior_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BL2Exterior_ART_m",
+     true
+    ]
+   ],
+   "Default": [
+    [
+     "D3B_IAC_BottomLedge_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomInt_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Balcony_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLedge_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomInt_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift1_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt1_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTube_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTube_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_TunnelDrop_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_TunnelDrop_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeStation1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeStation1_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Balcony_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeStation2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeStation2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleDome_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleDome_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTrans_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BridgeTrans_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLedge_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomInt_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_LedgeDrive_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_LedgeDrive_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_CINE_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleDome_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_LevelIntro_CINE_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_LevelOutro_CINE_m",
+     true
+    ],
+    [
+     "D3B_IAC_Balcony_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt1_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1B_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1B_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BS1Exterior_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BS2Exterior_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift2_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_BL2Exterior_ART_m",
+     true
+    ]
+   ],
+   "IntroCine": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_LevelIntro_CINE_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLedge_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLedge_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLedge_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ]
+   ],
+   "LedgeDrive": [
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt1_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_LedgeDrive_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_LedgeDrive_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_CINE_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt1_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ]
+   ],
+   "LedgeJump": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt1_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt1_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1B_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1B_DSN_m",
+     true
+    ]
+   ],
+   "LevelStart": [
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLedge_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLedge_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLedge_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ]
+   ],
+   "Lift1a": [
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift1_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomInt_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ]
+   ],
+   "Lift1b": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1B_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift1B_DSN_m",
+     true
+    ]
+   ],
+   "Lift2": [
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Lift2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_Balcony_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_Balcony_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_Balcony_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_BottomLift2_VIG_m",
+     true
+    ]
+   ],
+   "MiddleDome": [
+    [
+     "D3B_IAC_MiddleInt2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_TunnelDrop_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_TunnelDrop_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleDome_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleDome_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleDome_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ]
+   ],
+   "MiddleInt1": [
+    [
+     "D3B_IAC_MiddleInt1_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt1_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt1_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_LedgeDrive_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_LedgeDrive_DSN_m",
+     true
+    ]
+   ],
+   "MiddleInt2a": [
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_LedgeDrive_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_LedgeDrive_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_CINE_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleDome_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleDome_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleDome_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ]
+   ],
+   "MiddleInt2b": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleDome_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleDome_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleDome_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_TunnelDrop_ART_m",
+     false
+    ],
+    [
+     "D3B_IAC_TunnelDrop_DSN_m",
+     false
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ]
+   ],
+   "TunnelDrop": [
+    [
+     "D3B_IAC_TunnelDrop_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_TunnelDrop_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleDome_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleDome_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleDome_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ]
+   ],
+   "TunnelDrop2": [
+    [
+     "GLB_Audio_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_DSN_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_AUD_m",
+     true
+    ],
+    [
+     "D3B_IAC_GLB_VIG_m",
+     true
+    ],
+    [
+     "D3B_IAC_Music_m",
+     true
+    ],
+    [
+     "D3B_IAC_MiddleInt2_Chasm_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_TunnelDrop_ART_m",
+     true
+    ],
+    [
+     "D3B_IAC_TunnelDrop_DSN_m",
+     true
+    ]
+   ]
+  },
+  "checkpoints_in_display_order": [
+   {
+    "checkpoint": "Checkpoint_9435",
+    "display_order": 0,
+    "state": "IntroCine",
+    "aux_spawns": 3,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_3142",
+    "display_order": 1,
+    "state": "LevelStart",
+    "aux_spawns": 3,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_2557",
+    "display_order": 2,
+    "state": "BottomIntA",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_2704",
+    "display_order": 3,
+    "state": "BottomIntB",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 1
+   },
+   {
+    "checkpoint": "Checkpoint_15777",
+    "display_order": 4,
+    "state": "Lift1a",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_11601",
+    "display_order": 5,
+    "state": "Lift1a",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 2
+   },
+   {
+    "checkpoint": "Checkpoint_12608",
+    "display_order": 6,
+    "state": "LedgeJump",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_13123",
+    "display_order": 7,
+    "state": "LedgeJump",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_3923",
+    "display_order": 8,
+    "state": "LedgeJump",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 3
+   },
+   {
+    "checkpoint": "Checkpoint_2745",
+    "display_order": 9,
+    "state": "MiddleInt1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_3692",
+    "display_order": 10,
+    "state": "LedgeDrive",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_16096",
+    "display_order": 11,
+    "state": "MiddleInt2a",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 4
+   },
+   {
+    "checkpoint": "Checkpoint_3776",
+    "display_order": 12,
+    "state": "MiddleInt2b",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_10731",
+    "display_order": 13,
+    "state": "MiddleDome",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_13683",
+    "display_order": 14,
+    "state": "TunnelDrop2",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 5
+   },
+   {
+    "checkpoint": "Checkpoint_9422",
+    "display_order": 15,
+    "state": "BridgeStation1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_15525",
+    "display_order": 16,
+    "state": "BridgeStation1",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_11398",
+    "display_order": 17,
+    "state": "BridgeTrans",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 6
+   },
+   {
+    "checkpoint": "Checkpoint_7207",
+    "display_order": 18,
+    "state": "BridgeTrans",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_4961",
+    "display_order": 19,
+    "state": "BridgeTubeA",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 7
+   },
+   {
+    "checkpoint": "Checkpoint_14518",
+    "display_order": 20,
+    "state": "BridgeStation2",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 8
+   },
+   {
+    "checkpoint": "Checkpoint_787",
+    "display_order": 21,
+    "state": "Lift2",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_11715",
+    "display_order": 22,
+    "state": "BalconyA",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_15514",
+    "display_order": 23,
+    "state": "BalconyB",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 9
+   },
+   {
+    "checkpoint": "Checkpoint_10456",
+    "display_order": 24,
+    "state": "BalconyB",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_2785",
+    "display_order": 25,
+    "state": "BalconyB",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   }
+  ],
+  "menu_checkpoints": [
+   {
+    "id": "D4_CP01",
+    "path": ""
+   },
+   {
+    "id": "D4_CP04",
+    "path": "D3B_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_2704"
+   },
+   {
+    "id": "D4_CP06",
+    "path": "D3B_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_11601"
+   },
+   {
+    "id": "D4_CP08",
+    "path": "D3B_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_3923"
+   },
+   {
+    "id": "D4_CP10",
+    "path": "D3B_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_16096"
+   },
+   {
+    "id": "D4_CP12",
+    "path": "D3B_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_13683"
+   },
+   {
+    "id": "D4_CP14",
+    "path": "D3B_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_11398"
+   },
+   {
+    "id": "D4_CP15",
+    "path": "D3B_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_4961"
+   },
+   {
+    "id": "D4_CP16",
+    "path": "D3B_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_14518"
+   },
+   {
+    "id": "D4_CP19",
+    "path": "D3B_IAC_Base_m.TheWorld.PersistentLevel.Checkpoint_15514"
+   }
+  ],
+  "set_streaming_ops": [
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_10747",
+    "state": "BottomIntA"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_11066",
+    "state": "BridgeStation2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_11342",
+    "state": "MiddleInt2b"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_11783",
+    "state": "BridgeStation1"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_12852",
+    "state": "Lift2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_13960",
+    "state": "TunnelDrop"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_14034",
+    "state": "BridgeTubeA"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_14409",
+    "state": "LedgeJump"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_1451",
+    "state": "BalconyB"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_14750",
+    "state": "BalconyB"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_154",
+    "state": "BottomIntC"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_15924",
+    "state": "Lift1b"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_16320",
+    "state": "Lift1a"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_1756",
+    "state": "LedgeDrive"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_2458",
+    "state": "BalconyA"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_3117",
+    "state": "Lift1a"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_3292",
+    "state": "MiddleDome"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_3878",
+    "state": "BridgeTubeA"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_434",
+    "state": "LedgeJump"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_4708",
+    "state": "BridgeStation1"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_4906",
+    "state": "MiddleInt2b"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_5509",
+    "state": "MiddleInt1"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_6078",
+    "state": "BalconyB"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_650",
+    "state": "BottomIntB"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_7253",
+    "state": "LedgeJump"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_7308",
+    "state": "LevelStart"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_7748",
+    "state": "IntroCine"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_8184",
+    "state": "TunnelDrop2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_8222",
+    "state": "MiddleInt2a"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_8397",
+    "state": "BridgeStation1"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_8796",
+    "state": "BridgeTubeB"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_8876",
+    "state": "BridgeStation1"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_9434",
+    "state": "BridgeTrans"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_9926",
+    "state": "BottomLift2"
+   },
+   {
+    "op": "Main_Sequence.Checkpoints.SeqAct_SetStreamingState_9954",
+    "state": "LedgeDrive"
+   }
+  ]
+ },
+ "D5_OME_BASE_m": {
+  "map_id": 105,
+  "initial_state": null,
+  "states": {
+   "Arena": [
+    [
+     "D5_OME_GLB_ART_m",
+     true
+    ],
+    [
+     "D5_OME_GLB_AUD_m",
+     true
+    ],
+    [
+     "D5_OME_Music_m",
+     true
+    ],
+    [
+     "D5_OME_ART_m",
+     true
+    ],
+    [
+     "D5_OME_DSN_m",
+     true
+    ],
+    [
+     "D5_OME_CINE_LevelIntro_m",
+     true
+    ],
+    [
+     "D5_OME_CINE_Outro_m",
+     true
+    ],
+    [
+     "D5_OME_AUDIO_m",
+     true
+    ]
+   ]
+  },
+  "checkpoints_in_display_order": [
+   {
+    "checkpoint": "Checkpoint_4578",
+    "display_order": 1,
+    "state": "Arena",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": null
+   },
+   {
+    "checkpoint": "Checkpoint_10917",
+    "display_order": 2,
+    "state": "Arena",
+    "aux_spawns": 2,
+    "actions": [],
+    "menu_index": 1
+   }
+  ],
+  "menu_checkpoints": [
+   {
+    "id": "D5_CP01",
+    "path": ""
+   },
+   {
+    "id": "D5_CP02",
+    "path": "D5_OME_BASE_m.TheWorld.PersistentLevel.Checkpoint_10917"
+   }
+  ],
+  "set_streaming_ops": []
+ }
+}
