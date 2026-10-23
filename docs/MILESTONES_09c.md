@@ -4010,3 +4010,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   FX, AssetTools' lanes, then the final gate + run + refresh.sh.
 2026-10-23 10:33 MERGED ac9dafcb Escalation ability meter = the resource (Frontend). Frontend DONE for the build. Pending for the cut:
   Gameplay FINAL_BASE_ITEMS, Rendering shard FX, AssetTools lanes (A3 / D1 running).
+2026-10-23 10:36 MERGED 3476b84c Escalation loot shards drawn (Rendering; last render item). Rendering + Frontend DONE for the build.
+  Pending for the cut: Gameplay FINAL_BASE_ITEMS, AssetTools lanes.
