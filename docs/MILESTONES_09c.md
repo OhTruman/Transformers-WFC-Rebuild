@@ -3645,3 +3645,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   HostOpened carries the host id). Rendering #1 step B (rt2 07dc418f): frontend-scene textures survive release in an LRU pool
   (600, WFC_TEXPOOLMAX); with the world.glb cache + AnimSet prefetch a revisited menu re-uploads only mesh buffers; runtime
   check in their next relay (x28match 5 min + x30fe 3 min).
+2026-10-23 01:59 Frontend CARD FREE: #7 PASS (25 px rows, 9 listed) and #2 PASS at runtime (qa:die -> respawn -> timer gone; death under
+  pause -> Quit with no movie). Vote rows show live tallies with 3 layout / text defects (fixing). Card -> Rendering 02:00
+  (smoke match arms + #1 menu run) -> Frontend exit retest on 2528df5e.
