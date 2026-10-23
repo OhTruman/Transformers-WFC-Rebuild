@@ -131,6 +131,12 @@ bool LocalProfile::loadFrom(std::istream& f) {
             }
         } else if (section == "[Lobby]") {
             if (k == "LastMode") lobbyLastMode = v;
+        } else if (section == "[RecentPlayers]") {
+            if (k == "Player") {   // fingerprint|lastSeen|name
+                const size_t a = v.find('|'), b = a == std::string::npos ? a : v.find('|', a + 1);
+                if (b != std::string::npos && recentPlayers.size() < 50)
+                    recentPlayers.push_back({v.substr(0, a), v.substr(b + 1), std::atoll(v.substr(a + 1, b - a - 1).c_str())});
+            }
         } else if (section == "[Online]") {
             if (k == "FirstRunShown") onlineFirstRunShown = v == "1";
             else if (k == "LobbyService") lobbyService = v;
@@ -241,6 +247,10 @@ void LocalProfile::save() const {
         if (onlineFirstRunShown) f << "FirstRunShown=1\n";
         if (!lobbyService.empty()) f << "LobbyService=" << lobbyService << "\n";
     }
+    if (!recentPlayers.empty()) {
+        f << "\n[RecentPlayers]\n";
+        for (const RecentPlayer& r : recentPlayers) f << "Player=" << r.fingerprint << "|" << r.lastSeen << "|" << r.name << "\n";
+    }
     if (!lobbyLastMode.empty()) f << "\n[Lobby]\nLastMode=" << lobbyLastMode << "\n";   // only once a mode was chosen   // only when set (offline profiles unchanged)
     if (!campaign.isDefault()) {   // only once the campaign changed something (versus profiles unchanged)
         auto list = [&](const auto* a, int n) { for (int i = 0; i < n; ++i) f << (i ? "," : "") << (int)a[i]; f << "\n"; };
@@ -281,6 +291,14 @@ void LocalProfile::Campaign::reachedCheckpoint(int mapId, int index_) {
     if (i < 0) return;
     checkpoint[i] = std::max(checkpoint[i], index_);
     resumeMap[i < 5 ? 0 : 1] = -1;
+}
+
+void LocalProfile::noteRecentPlayer(const std::string& fingerprint, const std::string& name, long long now) {
+    if (fingerprint.empty()) return;
+    recentPlayers.erase(std::remove_if(recentPlayers.begin(), recentPlayers.end(), [&](const RecentPlayer& r) { return r.fingerprint == fingerprint; }),
+                        recentPlayers.end());
+    recentPlayers.insert(recentPlayers.begin(), RecentPlayer{fingerprint, name, now});
+    if (recentPlayers.size() > 50) recentPlayers.resize(50);
 }
 
 int LocalProfile::Campaign::nextAvailableChapter(int mapId) const {

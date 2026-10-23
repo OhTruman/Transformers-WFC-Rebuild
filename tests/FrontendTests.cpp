@@ -1880,6 +1880,47 @@ static void testSmokeWaterRows() {
     std::remove("wfc_profile.ini");
 }
 
+static void testFriendsInvites() {
+    // I1 / I2 (ONLINE_MP_PHASE2_FLOWS, D13 / D15): a member met online becomes a Friends List row (recent players, profile);
+    // Send Invite posts the game code (mailbox) and marks the row; an invite to us pops "`p wants to play" and fills
+    // FriendMessages; Join joins by its code; OnlineStatus makes the row "Online".
+    using T = SessionEvent::Type;
+    SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD-4H"; o.address = "192.168.1.20:7777";
+    OnlineRig r({after("host", o)});
+    const bool host = r.ok && hostLobby(r);
+    r.fake->inject(memberEv("WFC-AAAA-AAAA-1", "Alpha", true));
+    r.frames(2);
+    DataStores& ds = r.rt->dataStores();
+    const bool row = ds.call("GetCollectionRowCount", {"<OnlinePlayerData:Friends>"}).n == 1 &&
+                     ds.call("ReadCollectionValue", {"<OnlinePlayerData:Friends>", "NickName", "0"}).s == "Alpha" &&
+                     r.f().profile().recentPlayers.size() == 1;
+    r.f().call("Online.SendGameInvite", {"Alpha"});
+    const FakeSession::Call* si = r.fake->last("sendInvite");
+    ds.poll();
+    const bool sent = si && si->arg == "WFC-AAAA-AAAA-1,WFC-7QK2-M9TD-4H" && r.f().popup().open &&
+                      ds.call("ReadCollectionBoolValue", {"<OnlinePlayerData:Friends>", "bHaveInvited", "0"}).b;
+    r.f().popupButton('A');
+    SessionEvent os = ev(T::OnlineStatus); os.online = {"WFC-AAAA-AAAA-1"};
+    r.fake->inject(os);
+    r.frames(2);
+    ds.poll();
+    const bool online = ds.call("ReadCollectionValue", {"<OnlinePlayerData:Friends>", "PresenceInfo", "0"}).s == "Online";
+    SessionEvent iv = ev(T::InviteReceived); iv.member.fingerprint = "WFC-BBBB-BBBB-2"; iv.info.displayName = "Bravo"; iv.joinCode = "WFC-9ZZZ-8YYY-7X";
+    r.fake->inject(iv);
+    r.frames(2);
+    ds.poll();
+    const bool received = r.f().popup().open && r.f().popup().message == "Bravo wants to play" &&
+                          ds.call("GetCollectionRowCount", {"<OnlinePlayerData:FriendMessages>"}).n == 1 &&
+                          ds.call("ReadCollectionValue", {"<OnlinePlayerData:FriendMessages>", "SendingPlayerNick", "0"}).s == "Bravo";
+    r.f().popupButton('A');   // Join
+    const FakeSession::Call* jc = r.fake->last("join");
+    const bool joined = jc && jc->arg == "WFC-9ZZZ-8YYY-7X" && r.f().gameInvites().empty();
+    check(host && row && sent && online && received && joined, "online.I1_I2_friends_invites",
+          std::to_string(host) + std::to_string(row) + std::to_string(sent) + std::to_string(online) + std::to_string(received) + std::to_string(joined) +
+          " si=" + (si ? si->arg : std::string("-")) + " pop=" + std::to_string(r.f().popup().open) + " pres=" +
+          ds.call("ReadCollectionValue", {"<OnlinePlayerData:Friends>", "PresenceInfo", "0"}).s);
+}
+
 static void testCampaignCoopLobby() {
     // CO1: Cooperative (FrontEnd_GFX -> Online.OpenPartyLobby GTS_CampaignGame) -> CP -> the hosted campaign lobby; a second human
     // joins; the host picks D5 and starts: the launch record carries GameModeTag=CP, the chapter, the difficulty
@@ -2272,6 +2313,7 @@ static void testLaunchRecordAndIdleKick() {
 }
 
 int main() {
+    setEnv("WFC_NOCLIPBOARD", "1");   // invite tests must not overwrite the desktop clipboard
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
     bool ok = c.load(Catalog::defaultManifestRoot(), Catalog::defaultExtractedRoot(), vs + "/Maps");
@@ -2316,6 +2358,7 @@ int main() {
     testCampaignC6();
     testEscalationNoXp();
     testCampaignCoopLobby();
+    testFriendsInvites();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);

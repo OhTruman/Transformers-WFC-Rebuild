@@ -19,6 +19,7 @@
 #include <memory>
 #include <random>
 #include <algorithm>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -315,6 +316,13 @@ public:
     static const char* sessionRoleName(SessionRole r) { return r == SessionRole::Host ? "Host" : r == SessionRole::Member ? "Member" : "Offline"; }
     double onlineTime() const { return clock_; }   // the frontend-update time the session's timeouts count
     const std::string& joinCode() const { return joinCode_; }        // host: shown in the lobby's join panel
+    // I1 / I2 (ONLINE_MP_PHASE2_FLOWS, D13 / D15): the Friends List = recent players; invites by code (clipboard always, plus
+    // Systems' invite mailbox when both players are present on the lobby service).
+    struct GameInvite { std::string fingerprint, name, code; };
+    const std::vector<GameInvite>& gameInvites() const { return invites_; }
+    bool friendOnline(const std::string& fp) const { return friendsOnline_.count(fp) > 0; }
+    bool haveInvited(const std::string& fp) const { return invitedHere_.count(fp) > 0; }
+    std::string takeClipboardRequest() { std::string s; s.swap(clipboardRequest_); return s; }
     const std::string& joinAddress() const { return joinAddress_; }
     bool matchInProgressForMember() const { return role_ == SessionRole::Member && memberLobby_.matchRunning; }
     // The other humans in the online lobby (host: from MemberJoined / MemberLeft; member: the host's published list minus
@@ -524,7 +532,14 @@ private:
     bool campaignRestart_ = false;     // the host chose Restart From Last Checkpoint (the Application hands it to Gameplay)
     float campaignReturnIn_ = 0.0f;    // CCP: MissionCompleteCountdown 10 s of EndGameStats, then ReturnToGameLobby
     int resumeFaction_ = -1;
-    CheckpointSave resumePending_;     // Game.LoadSavedCheckpoint: launch this save once the campaign lobby is up           // the next match load shows ResumeAutobot / ResumeDecepticon (a restart)
+    CheckpointSave resumePending_;
+    std::vector<GameInvite> invites_;
+    std::set<std::string> friendsOnline_, invitedHere_;
+    std::string invitedForCode_, clipboardRequest_, lastJoinTarget_;
+    double onlineQueryAt_ = -1e9;
+    BridgeValue sendGameInvite(const std::string& nick);
+    BridgeValue joinFriendGame(const std::string& nick);
+    void noteRecentPlayer(const SessionMemberId& id, const std::string& name);     // Game.LoadSavedCheckpoint: launch this save once the campaign lobby is up           // the next match load shows ResumeAutobot / ResumeDecepticon (a restart)
     CampaignObjectives objectives_;
     bool pendingMatch_ = false, unloadWorld_ = false, quit_ = false;
 

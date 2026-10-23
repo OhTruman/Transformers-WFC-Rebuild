@@ -6,6 +6,7 @@
 #include "frontend/FlowTrace.h"
 #include "core/Config.h"
 #include "core/Log.h"
+#include "platform/Clipboard.h"
 #include "platform/UiBindings.h"
 #include "platform/Keyboard.h"
 
@@ -1554,6 +1555,11 @@ void FrontendRuntime::updateOnlineVoice() {
             if (!name.empty()) flow_.endPttCapture(name);
         }
     } else pttCaptureArmed_ = false;
+    {   // I2: the invite code to the clipboard (the flow stays platform-free)
+        const std::string clip = flow_.takeClipboardRequest();
+        if (!clip.empty() && !std::getenv("WFC_NOCLIPBOARD"))   // TEST ONLY switch: the test binary leaves the desktop clipboard alone
+            FlowTrace::emit("online.inviteClipboard", {{"ok", FlowTrace::boolean(platform::setClipboardText(clip))}});
+    }
     const bool online = flow_.online() && flow_.sessionRole() != GameFlow::SessionRole::Offline;
     if (online != voiceUiOverride_) {   // the player row's A: "Mute / Block" (the PC player card) while in an online session
         voiceUiOverride_ = online;

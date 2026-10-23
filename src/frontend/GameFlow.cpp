@@ -475,6 +475,13 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     if (fn == "Online.JoinGame") return onlineJoin(arg(0));   // PC EXTENSION: the Join Game prompt's code / address
     // The player row's A (the original "View Gamercard": the Live gamercard, where muting lived): online, the PC player card
     if (fn == "Online.ShowGamerCardUI" && session_ && role_ != SessionRole::Offline) return showPlayerCard(arg(0));
+    // OnlineFriendsMenu_GFX (by NickName): Send Invite, Join (an invite's game), clear an invite
+    if (fn == "Online.SendGameInvite") return sendGameInvite(arg(0));
+    if (fn == "Online.JoinFriendGame") return joinFriendGame(arg(0));
+    if (fn == "Online.ClearGameInvite") {
+        invites_.erase(std::remove_if(invites_.begin(), invites_.end(), [&](const GameInvite& i) { return i.name == arg(0); }), invites_.end());
+        return {};
+    }
     if (fn == "Online.IsHost") return role_ != SessionRole::Member;   // offline: the local player hosts the private match
     if (fn == "Online.GetLoginStatus") return 2;   // PARTIAL: LS_LoggedIn; no online service
     if (fn == "Online.IsInPartyChatSession") return false;
@@ -1014,6 +1021,7 @@ void GameFlow::popupButton(char which) {
         FlowTrace::emit("online.join", {{"result", "cancelled"}});
     }
     if (btn.action == "pttCancel") endPttCapture("");
+    if (btn.action.rfind("inviteJoin:", 0) == 0) joinFriendGame(btn.action.substr(11));
     if ((btn.action == "cardMute" || btn.action == "cardBlock") && !cardMember_.empty()) {
         auto toggle = [&](std::vector<std::string>& v) {
             auto it = std::find(v.begin(), v.end(), cardMember_);
