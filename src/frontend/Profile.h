@@ -124,8 +124,10 @@ public:
         std::string pttKey = "V";
         int volume = 70, proximityVolume = 70;
         std::vector<std::string> muted;
+        std::vector<std::string> blocked;   // PC addition: the player card's Block (always muted; a local list, no server report)
         bool isDefault() const {
-            return mode == 1 && audience == 3 && device.empty() && pttKey == "V" && volume == 70 && proximityVolume == 70 && muted.empty();
+            return mode == 1 && audience == 3 && device.empty() && pttKey == "V" && volume == 70 && proximityVolume == 70 && muted.empty() &&
+                   blocked.empty();
         }
     };
     Voice voice;
