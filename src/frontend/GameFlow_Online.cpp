@@ -654,7 +654,8 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
         FlowTrace::emit("online.loadGate", {{"state", "all loaded"}, {"startTick", std::to_string(e.value)}});
         closeLoadingMovie();   // the match countdown (MatchAutoStartCountdown, in sim ticks) follows on every peer
         break;
-    case T::PeerDropped: {   // a human left (quit, timeout, kick, load timeout): its slot becomes a bot
+    case T::PeerDropped: {   // a human left (quit, timeout, kick, load timeout): its slot becomes a bot (D16) - in the sim through the
+        // lockstep driver's SeatLeave at the host-agreed tick (Systems 2c6cc2b3); the frontend only shows it
         auto it = std::find_if(onlineMembers_.begin(), onlineMembers_.end(), [&](const OnlineMember& m) { return m.info.id == e.member; });
         const std::string name = it != onlineMembers_.end() && !it->info.displayName.empty() ? it->info.displayName : std::string("Player");
         if (it != onlineMembers_.end()) onlineMembers_.erase(it);
@@ -666,11 +667,8 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
                 if (at != std::string::npos) line.replace(at, 2, name);
                 pendingGameMessages_.push_back(line);
             }
-            SessionSlotSwap sw;
-            sw.to = SessionSlotSwap::To::Bot;
-            sw.member = e.member;   // Gameplay maps the member to its match player (World::applySlotSwap)
-            sw.atTick = e.value;    // the session's agreed tick in World::simTick units (0 = the next tick)
-            pendingSwaps_.push_back(sw);
+            // No SlotSwap from here any more: PeerDropped's tick is 0 ("the next tick") and every peer is at another tick, so the
+            // swap landed on different ticks and desynced them (Integration decision 2026-10-23).
         }
         static const char* const kWhy[] = {"left", "timeout", "kicked", "load timeout"};
         FlowTrace::emit("online.peerDropped", {{"member", e.member.fingerprint}, {"name", name}, {"why", kWhy[(int)e.leaveReason]},

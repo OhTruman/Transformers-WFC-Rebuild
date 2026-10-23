@@ -423,6 +423,10 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
         FlowTrace::emit("online.memberIgnored", {{"fn", fn}, {"mapId", arg(0)}});
         return {};
     }
+    if (fn == "Online.SetSelectedMapID" && arg(0).empty()) {   // CampaignSelect's back path with no enabled chapter: no map
+        FlowTrace::emit("gamelobby.mapIgnored", {{"why", "empty map id"}});
+        return {};
+    }
     if (fn == "Online.SetSelectedMapID") {
         // -> TnGameLobbyGame.HostRequestMapID -> GRI.HostRequestMapID (ignored unless MapSelectionMethod 1).
         if (level_ == LevelKind::GameLobby && lobby_.mapSelectionMethod == 1) {
