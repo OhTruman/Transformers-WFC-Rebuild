@@ -98,6 +98,9 @@ private:
     frontend::LevelKind lastLevel_ = frontend::LevelKind::None;
     static bool isUiControllerMovie(const std::string& movie);
     GfxMovie* openMovieNamed(const std::string& movie);
+    void syncPauseChooseCharacter(gfx::Player& p, frontend::GameFlow& flow);
+    void scrollSettingsSubMenu(gfx::Player& p, const platform::InputFrame& in);
+    bool pauseChooseTraced_ = false;
     const uint8_t* video_ = nullptr;
     int videoW_ = 0, videoH_ = 0;
     uint64_t videoSerial_ = 0;
