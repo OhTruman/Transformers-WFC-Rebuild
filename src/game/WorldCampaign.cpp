@@ -301,6 +301,7 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
     if (cpToggleDestructible(vm, op, input)) return true;
     if (cpTransformWorldProp(vm, op, input)) return true;   // doors / pods
     if (cpSentryOpActivate(vm, op, input)) return true;     // sentry force target / dormant
+    if (cpHideOpActivate(vm, op, input)) return true;       // SeqAct_ToggleHidden / SeqAct_Destroy on world actors
     if (cpOmegaActivate(vm, op, input)) return true;      // SetOmegaStage / CorruptOmegaBattery
     if (c == "SeqAct_TnPawnFactory") return cpPawnFactoryActivate(vm, op, input);
     if (cpInterpActivate(vm, op, input)) return true;   // SeqAct_Interp: Matinee

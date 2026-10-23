@@ -290,6 +290,7 @@ bool World::cpActorPos(const std::string& path, core::Vec3& out) const {
 
 void World::cpLoadActors() {
     cp_.actorPos.clear();
+    cp_.actorHidden.clear(); cp_.actorDestroyed.clear();
     bool actorsFile = false;
     for (const char* file : {"navigation.json", "actors.json"}) {
         assets::Json j;
@@ -301,9 +302,15 @@ void World::cpLoadActors() {
             const std::string name = afterDot(n.has("object") ? n["object"].asString() : n["node"].asString());
             const assets::Json& L = n["location_gltf"];
             if (!name.empty() && L.size() >= 3) cp_.actorPos[name] = core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
+            if (!name.empty() && n["props"]["bHidden"].asBool(false)) cp_.actorHidden[name] = true;   // the authored start visibility (Toggle's base)
         }
     }
     LOG_INFO("campaign: %zu actor locations (navigation.json%s)", cp_.actorPos.size(), actorsFile ? " + actors.json" : "");
+    // the authored bHidden: the renderer's actor nodes start visible, so the hidden ones are hidden here (the flag is by actor name and
+    // survives streaming; ToggleHidden / Destroy flip the same flag)
+    int hid = 0;
+    if (renderer_) for (const auto& kv : cp_.actorHidden) if (kv.second) { renderer_->setActorHidden(kv.first, true); ++hid; }
+    LOG_INFO("campaign: %zu actors authored hidden (%d sent)", cp_.actorHidden.size(), hid);
 }
 
 // The match players an op's link names: TnSeqVar_Buddy (BuddyIndex k = the k-th squad member, 1-based; none = every member), a pawn
@@ -1027,6 +1034,60 @@ void World::cpTickMines(float dt) {
             if (F.liveSentries.empty() && std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Killed") != F.outputs.end()) cp_.vm.output(F.op, "All Pawns Killed");
         }
     }
+}
+
+} // namespace game
+
+namespace game {
+
+// ---- SeqAct_ToggleHidden (Hide 0 / UnHide 1 / Toggle 2) and SeqAct_Destroy on world actors (A1: 272 / 169 ops) ----
+// The target actors' visibility goes to the renderer (setActorHidden; the authored bHidden from actors.json is the start state, which
+// the renderer already applies); a transforming actor also stops drawing through TransformingActors. Destroy = hidden for good, plus
+// collision off for a mover / a transforming actor, a destructible removed, a sentry ("sentry:<i>") killed. Pawn targets stay
+// untouched (PROV). Render-side only except those collision changes.
+bool World::cpHideOpActivate(KismetVM& vm, int op, int input) {
+    const KismetVM::Op& o = vm.op(op);
+    const bool destroy = o.cls == "SeqAct_Destroy";
+    if (!destroy && o.cls != "SeqAct_ToggleHidden") return false;
+    int n = 0;
+    for (int v : vm.varLink(op, "Target")) {
+        const KismetVM::Var* var = vm.var(v);
+        if (var && var->named >= 0) var = vm.var(var->named);
+        if (!var || var->obj.empty() || var->obj.rfind("pawn:", 0) == 0) continue;
+        if (var->obj.rfind("sentry:", 0) == 0) {   // a spawned sentry: destroyed (its factory outputs fire on its next tick)
+            const int si = std::atoi(var->obj.c_str() + 7);
+            if (destroy && si >= 0 && (size_t)si < cp_.sentries.size()) {
+                CampaignSentry& s = cp_.sentries[(size_t)si];
+                if (!s.dead && s.des >= 0) cpRemoveDestructible(s.des);
+                ++n;
+            }
+            continue;
+        }
+        if (var->obj.rfind("des:", 0) == 0) { if (destroy) cpRemoveDestructible(std::atoi(var->obj.c_str() + 4)); ++n; continue; }
+        const std::string name = afterDot(var->obj);
+        auto hs = cp_.actorHidden.find(name);
+        const bool was = hs != cp_.actorHidden.end() && hs->second;
+        const bool hidden = destroy ? true : input == 0 ? true : input == 1 ? false : !was;
+        if (destroy && hs != cp_.actorHidden.end() && hs->second && cp_.actorDestroyed.count(name)) continue;
+        cp_.actorHidden[name] = hidden;
+        if (destroy) cp_.actorDestroyed.insert(name);
+        else if (cp_.actorDestroyed.count(name)) continue;   // a destroyed actor stays gone
+        if (renderer_) renderer_->setActorHidden(name, hidden);
+        const int ti = transforming_.find(name);
+        if (ti >= 0) { transforming_.setShown((size_t)ti, !hidden); if (destroy) transforming_.setCollide((size_t)ti, false); }
+        if (destroy) {
+            for (CampaignMover& m : cpMovers_) if (m.name == name) {
+                if (m.pawnSet >= 0) collision_.setDynamicEnabled(m.pawnSet, false);
+                if (m.floorSet >= 0) collision_.setDynamicEnabled(m.floorSet, false);
+            }
+            for (size_t i = 0; i < cp_.destructibles.size(); ++i) if (cp_.destructibles[i].name == name) cpRemoveDestructible((int)i);
+        }
+        ++n;
+    }
+    static const bool klog = std::getenv("WFC_KISMETLOG") != nullptr;
+    if (klog) LOG_INFO("campaign: %s %s: %d actors", afterDot(o.path).c_str(), destroy ? "Destroy" : input == 0 ? "Hide" : input == 1 ? "UnHide" : "Toggle", n);
+    if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
+    return true;
 }
 
 } // namespace game

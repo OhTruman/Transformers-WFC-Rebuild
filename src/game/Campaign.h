@@ -190,6 +190,8 @@ struct CampaignState {
     struct MineFactory { float damage = 200.0f, radius = 12.8f, health = 30.0f, fuse = 10.0f, speed = 20.0f; std::vector<core::Vec3> points; };
     std::map<std::string, MineFactory> mineFactories;   // factory action path -> its authored mine values + spawn points
     std::vector<CampaignMine> mines;
+    std::map<std::string, bool> actorHidden;   // world actor -> hidden (authored bHidden, then ToggleHidden / Destroy)
+    std::set<std::string> actorDestroyed;      // SeqAct_Destroy'd world actors (they stay hidden)
     std::vector<std::pair<int, std::vector<int>>> transformOps;   // TnSeqAct_TransformWorldProp waiting for Finished: op, actors
     bool transformMoved = false;               // a matinee moved a transforming actor (nav blocks re-applied at rest)
     std::map<int, std::string> shootAt;        // SeqAct_TnAiShootAtActor: AI player -> its forced fire target

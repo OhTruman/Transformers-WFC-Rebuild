@@ -1486,6 +1486,7 @@ private:
     void cpLoadMineDefs();
     bool cpMineFactoryActivate(KismetVM& vm, int op, int input, CampaignFactory& F);
     void cpTickMines(float dt);
+    bool cpHideOpActivate(KismetVM& vm, int op, int input);
     bool cpShootAtPoint(int player, core::Vec3& out) const;
     bool cpAuxSpawn(const std::string& actor, int k, core::Vec3& out);
     void cpDrawDestructibles(render::IRenderer& r) const;
