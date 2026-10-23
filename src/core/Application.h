@@ -37,6 +37,7 @@ private:
     static bool netMatchRequested();
     void runVoiceFrameTest();   // [Systems] WFC_VOICEFRAMETEST: the voice framer on synthetic input (no device)
     void runUdpSessionTest();   // [Systems] WFC_UDPSESSIONTEST: two UdpSessions in this process over loopback UDP (host / join / lobby / start / load gate / leave)
+    void runUdpSessionMatch();  // [Systems] WFC_UDPHOST / WFC_UDPJOIN: a headless lockstep match through UdpSession + NetMatchDriver (identity rows)
     void runOnlineFlowTest();   // [Frontend] WFC_ONLINEFLOWTEST: two frontend flows, each on a real UdpSession, over loopback UDP
     int exitCode_ = -1;        // [Systems] set by the headless / net runs (main returns it when init stops); -1 = the default
 public:

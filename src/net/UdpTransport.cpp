@@ -182,6 +182,11 @@ public:
         socklen_t ml = sizeof me;
         getsockname(sock_, (sockaddr*)&me, &ml);
         std::string ip = "127.0.0.1";
+        if (me.sin_addr.s_addr != 0) {   // bound to one address (e.g. loopback in harness runs): that one is what peers reach
+            char b[INET_ADDRSTRLEN] = {0};
+            inet_ntop(AF_INET, &me.sin_addr, b, sizeof b);
+            return std::string(b) + ":" + std::to_string(ntohs(me.sin_port));
+        }
         Socket probe = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if (probe != kBad) {
             sockaddr_in dst{};

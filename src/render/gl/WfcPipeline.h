@@ -1367,6 +1367,7 @@ private:
         int id = 0; bool transient = false;   // runtime spawned (spawnFx), released when finished / at unload
         bool hasTarget = false; float target[3] = {0, 0, 0};
         float idleTime = 0.0f;                // runtime instance: seconds since it stopped spawning (guard release)
+        float age = 0.0f;                     // [Systems diag] seconds since spawn (WFC_FXLIVELOG)
         long poolSeq = 0;                     // > 0: an EmitterPool effect, in spawn order
         float prevT[3] = {0, 0, 0}, vel[3] = {0, 0, 0}; bool havePrevT = false;   // the instance's velocity (UU/s, VelocityInheritParent)
         // [Systems] ParticleSystemComponent.SecondsBeforeInactive (FxInactive.inc; 0 = never): unrendered longer than this

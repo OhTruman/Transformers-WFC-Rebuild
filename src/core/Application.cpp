@@ -140,7 +140,10 @@ bool Application::init() {
         if (frontend_->init()) {
             // [Systems, online phase 2] the real online session, unless a dev FakeSession is set (WFC_FAKESESSION) or WFC_NOSESSION=1.
             if (!frontend_->flow().online() && !std::getenv("WFC_NOSESSION")) {
-                auto s = std::make_unique<net::UdpSession>();
+                net::UdpSession::Options so;   // harness / lane runs: WFC_NET_BINDIP=127.0.0.1 (no firewall prompt), WFC_NET_INTERNET=0 (no UPnP / STUN)
+                if (const char* bi = std::getenv("WFC_NET_BINDIP")) so.bindIp = bi;
+                if (const char* ni = std::getenv("WFC_NET_INTERNET")) so.internet = std::strcmp(ni, "0") != 0;
+                auto s = std::make_unique<net::UdpSession>(so);
                 udpSession_ = s.get();
                 frontend_->flow().setSession(std::move(s));
                 LOG_INFO("online: UdpSession set (LAN / direct IP / internet code; listening only after Host / Join)");

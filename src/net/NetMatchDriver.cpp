@@ -86,7 +86,7 @@ NetMatchDriver::NetMatchDriver(game::World& world, INetTransport& transport, aud
     : impl_(std::make_unique<Impl>(world, transport, cfg)) {
     Lockstep::Config lc;
     lc.seats = cfg.seats; lc.self = cfg.self; lc.delay = cfg.delay; lc.hashEvery = cfg.hashEvery;
-    lc.peerTimeoutS = cfg.peerTimeoutS; lc.launchHash = cfg.launchHash;
+    lc.peerTimeoutS = cfg.peerTimeoutS; lc.launchHash = cfg.launchHash; lc.logPath = cfg.logPath;
     impl_->ls = std::make_unique<Lockstep>(transport, lc);
     if (!cfg.recordPath.empty()) {
         impl_->rec = std::fopen(cfg.recordPath.c_str(), "wb");

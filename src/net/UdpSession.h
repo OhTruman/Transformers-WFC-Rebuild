@@ -42,6 +42,7 @@ public:
         std::string stunServer = "stun.l.google.com:19302";   // "" = no STUN query
         double discoverTimeoutS = 4.0;   // HostOpened waits at most this long for the public endpoint
         std::string discoverAddr = "255.255.255.255";   // LAN discovery broadcast (tests: 127.0.0.1)
+        int memberPort = 0;              // a member's UDP port (0 = any; harnesses fix it so netshim can sit between the peers)
     };
     UdpSession();
     explicit UdpSession(const Options& o);
@@ -179,6 +180,7 @@ private:
     bool pushToTalk_ = false;
     std::map<std::string, bool> muted_;
     std::vector<frontend::SessionEvent> out_;
+    std::vector<std::pair<int, std::vector<uint8_t>>> unseated_;   // host messages before our JOIN_OK (handled once seated)
 };
 
 }  // namespace net

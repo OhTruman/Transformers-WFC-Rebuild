@@ -1190,8 +1190,35 @@ void Pipeline::tickMapFx(float frameDt) {
     for (FxInstance& in : fxInstances_)
         if (in.transient && (!in.active || std::all_of(in.emitters.begin(), in.emitters.end(), [](const FxEmitterRT& e) { return e.done; })))
             in.idleTime += dt;
+    // [Systems diag, WFC_FXLIVELOG] every 2 s: each runtime instance alive longer than 5 s (system, age, active, idle, live particles
+    // per emitter, emitters done); and every release with its age (playtest 2026-10-23 #5 death smoke / #9 boost trails).
+    static const bool liveLog = std::getenv("WFC_FXLIVELOG") != nullptr;
+    if (liveLog) {
+        static float acc = 0.0f;
+        for (FxInstance& in : fxInstances_) if (in.transient) in.age += dt;
+        acc += dt;
+        if (acc >= 2.0f) {
+            acc = 0.0f;
+            for (const FxInstance& in : fxInstances_) {
+                if (!in.transient || in.age < 5.0f) continue;
+                std::string parts;
+                size_t total = 0;
+                for (size_t e = 0; e < in.emitters.size(); ++e) {
+                    total += in.emitters[e].parts.size();
+                    if (!in.emitters[e].parts.empty()) parts += " e" + std::to_string(e) + "=" + std::to_string(in.emitters[e].parts.size()) + (in.emitters[e].done ? "d" : "");
+                }
+                LOG_INFO("FXLIVE %s id %d age %.1f active %d idle %.1f parts %zu%s", in.system.c_str(), in.id, in.age, in.active ? 1 : 0, in.idleTime, total, parts.c_str());
+            }
+        }
+    }
     fxInstances_.erase(std::remove_if(fxInstances_.begin(), fxInstances_.end(), [](const FxInstance& in) {
         if (!in.transient) return false;
+        static const bool liveLogR = std::getenv("WFC_FXLIVELOG") != nullptr;
+        if (liveLogR && in.age >= 5.0f) {
+            bool gone = in.idleTime > 30.0f;
+            if (!gone) { gone = true; for (const FxEmitterRT& rt : in.emitters) if (!rt.parts.empty() || (in.active && !rt.done)) gone = false; }
+            if (gone) LOG_INFO("FXLIVE released %s id %d age %.1f idle %.1f%s", in.system.c_str(), in.id, in.age, in.idleTime, in.idleTime > 30.0f ? " (30 s guard)" : "");
+        }
         if (in.idleTime > 30.0f) {
             static std::set<std::string> warned;
             if (warned.insert(in.system).second) LOG_WARN("fx guard: %s released with live particles after 30 s idle", in.system.c_str());

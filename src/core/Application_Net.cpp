@@ -66,9 +66,10 @@ uint64_t fnv(uint64_t h, const void* p, size_t n) {
 
 namespace core {
 
-bool Application::netMatchRequested() { return std::getenv("WFC_NET_SLOT") != nullptr; }
+bool Application::netMatchRequested() { return std::getenv("WFC_NET_SLOT") || std::getenv("WFC_UDPHOST") || std::getenv("WFC_UDPJOIN"); }
 
 void Application::runNetMatch() {
+    if (std::getenv("WFC_UDPHOST") || std::getenv("WFC_UDPJOIN")) { runUdpSessionMatch(); return; }
     auto env = [](const char* k, long d) { const char* v = std::getenv(k); return v ? std::atol(v) : d; };
     const int self = (int)env("WFC_NET_SLOT", 0), seats = (int)env("WFC_NET_SEATS", 2);
     const char* bind = std::getenv("WFC_NET_BIND");
@@ -408,6 +409,128 @@ void Application::tickNetDriver(double realDt) {
         if (udpSession_) udpSession_->matchEnded();
         LOG_INFO("online: the lockstep driver ended (status %d%s)", st, over ? ", the match ended" : "");
     }
+}
+
+// WFC_UDPHOST=<port> / WFC_UDPJOIN=<host:port> (+ WFC_UDPSEATS=N, default 2; WFC_UDPBIND=<member port>; WFC_MATCH_URL; WFC_NET_SEED;
+// WFC_NET_LOG; WFC_MATCH_SECONDS; WFC_NET_HASH_EVERY): a lockstep match through the real online path - the host's UdpSession waits
+// for N - 1 members, publishes the lobby (every human slot), sends the launch record (URL + seed + roster) and starts; every peer
+// launches the same match from the record (humans in match-seat order, the runNetMatch selections), reports loaded, waits for
+// AllLoaded, then NetMatchDriver steps it (real-time pacing) until WFC_MATCH_SECONDS of match time. Exit codes as runNetMatch:
+// 0 ended, 3 desync, 4 timeout / peers missing, 5 host lost, 6 launch mismatch, 7 setup. Headless with WFC_NULLRENDER; netshim can
+// sit between (the host binds its port, members WFC_UDPBIND; each side is given the shim's port as the other's address).
+void Application::runUdpSessionMatch() {
+    using frontend::SessionEvent;
+    using T = SessionEvent::Type;
+    auto env = [](const char* k, long d) { const char* v = std::getenv(k); return v ? std::atol(v) : d; };
+    const char* hostPort = std::getenv("WFC_UDPHOST");
+    const char* joinAddr = std::getenv("WFC_UDPJOIN");
+    const char* url = std::getenv("WFC_MATCH_URL");
+    const int seats = (int)env("WFC_UDPSEATS", 2);
+    if (!url || seats < 2) { LOG_ERROR("UDPMATCH: WFC_MATCH_URL and WFC_UDPSEATS >= 2 are needed"); exitCode_ = 7; return; }
+    net::UdpSession::Options o;
+    o.internet = false; o.bindIp = std::getenv("WFC_UDPBINDIP") ? std::getenv("WFC_UDPBINDIP") : "127.0.0.1";   // loopback by default: no firewall prompt
+    if (hostPort) o.hostPort = std::atoi(hostPort);
+    o.memberPort = (int)env("WFC_UDPBIND", 0);
+    net::UdpSession s(o);
+    frontend::SessionMemberInfo mi;
+    mi.displayName = hostPort ? "UdpHost" : "UdpMember";
+    mi.hasCharacter = true; mi.characterSlot = "Soldier";
+    s.setMemberInfo(mi);
+    const auto t0 = std::chrono::steady_clock::now();
+    auto now = [&t0] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
+    std::vector<SessionEvent> ev;
+    auto pump = [&](double forS, const std::function<bool()>& until) {
+        const double end = now() + forS;
+        while (now() < end) {
+            for (auto& e : s.poll(now())) { LOG_INFO("UDPMATCH <- %s", frontend::sessionEventName(e.type)); ev.push_back(e); }
+            if (until && until()) return true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return false;
+    };
+    auto has = [&ev](T t) { return std::any_of(ev.begin(), ev.end(), [t](const SessionEvent& e) { return e.type == t; }); };
+    const uint32_t seed = (uint32_t)env("WFC_NET_SEED", 0x5eed0001);
+    std::vector<frontend::SessionMemberId> members;
+    if (hostPort) {
+        s.host(frontend::SessionHostSettings{});
+        if (!pump(5.0, [&] { return has(T::HostOpened); })) { LOG_ERROR("UDPMATCH: the host did not open"); exitCode_ = 7; return; }
+        pump(120.0, [&] {
+            members.clear();
+            for (const SessionEvent& e : ev) if (e.type == T::MemberJoined && std::find(members.begin(), members.end(), e.member) == members.end()) members.push_back(e.member);
+            return (int)members.size() >= seats - 1;
+        });
+        if ((int)members.size() < seats - 1) { LOG_ERROR("UDPMATCH: %zu of %d members joined", members.size(), seats - 1); exitCode_ = 4; return; }
+        frontend::SessionLobby lobby;
+        lobby.gameModeTag = "TDM";
+        frontend::SessionSlot me; me.kind = frontend::SessionSlot::Kind::Human; me.member = s.selfId(); me.team = 0;
+        lobby.slots.push_back(me);
+        for (size_t i = 0; i < members.size(); ++i) {
+            frontend::SessionSlot sl; sl.kind = frontend::SessionSlot::Kind::Human; sl.member = members[i]; sl.team = (int)((i + 1) % 2);
+            lobby.slots.push_back(sl);
+        }
+        s.publishLobby(lobby);
+        pump(0.5, nullptr);
+        s.setLaunch(url, seed, lobby);
+        s.requestStart();
+    } else if (joinAddr) {
+        s.join(joinAddr);
+        if (!pump(60.0, [&] { return has(T::CountdownStarted) || has(T::JoinFailed) || has(T::HostLost); }) || !has(T::CountdownStarted)) {
+            LOG_ERROR("UDPMATCH: no launch from the host (joined %d)", has(T::Joined) ? 1 : 0); exitCode_ = 4; return;
+        }
+    }
+    if (!s.matchReady()) { LOG_ERROR("UDPMATCH: the session roster is not ready"); exitCode_ = 7; return; }
+    const std::string launchUrl = s.launchUrl().empty() ? std::string(url) : s.launchUrl();
+    game::MatchLaunch L;
+    if (!game::MatchLaunch::fromURL(launchUrl, L)) { LOG_ERROR("UDPMATCH: bad launch URL %s", launchUrl.c_str()); exitCode_ = 7; return; }
+    L.seed = s.launchSeed() ? s.launchSeed() : seed;
+    const int n = s.matchSeats(), self = s.matchSelf();
+    L.localTeam = self % 2;
+    game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+    for (int i = 0; i < n; ++i) {
+        game::RemoteSeat r; r.name = "Seat" + std::to_string(i); r.team = i % 2; r.member = s.matchMember(i).fingerprint;
+        r.selected = true; r.selection = cs;
+        L.humans.push_back(r);
+    }
+    L.localSeat = self; L.online = true;
+    world_.launchMatch(L);
+    if (world_.localMatchPlayer() != self) { LOG_ERROR("UDPMATCH: local seat %d is match player %d", self, world_.localMatchPlayer()); exitCode_ = 6; return; }
+    s.reportLoaded(1, 2);
+    if (!pump(60.0, [&] { return has(T::AllLoaded) || has(T::HostLost) || has(T::ConnectionLost); }) || !has(T::AllLoaded)) {
+        LOG_ERROR("UDPMATCH: the load gate did not open"); exitCode_ = 4; return;
+    }
+    uint64_t lh = 1469598103934665603ULL;
+    lh = fnv(lh, launchUrl.data(), launchUrl.size()); lh = fnv(lh, &L.seed, sizeof L.seed); lh = fnv(lh, &n, sizeof n);
+    const char* build = __DATE__ " " __TIME__;
+    lh = fnv(lh, build, std::strlen(build));
+    net::NetMatchDriver::Config c;
+    c.seats = n; c.self = self; c.launchHash = lh; c.delay = (int)env("WFC_NET_DELAY", 0); c.hashEvery = (int)env("WFC_NET_HASH_EVERY", 60);
+    c.peerTimeoutS = (double)env("WFC_NET_TIMEOUT_S", 10);
+    if (const char* lp = std::getenv("WFC_NET_LOG")) c.logPath = lp;
+    if (const char* rp = std::getenv("WFC_NET_RECORD")) c.recordPath = rp;
+    c.voice = false;
+    c.step = [this](float dt) { world_.tick(dt); gameMode_.tick(world_, dt); };
+    c.onSelection = [this](int seat, const game::CharacterSelection& sel, uint32_t atTick) { queueSelection(world_, seat, sel, atTick); };
+    net::NetMatchDriver drv(world_, *s.matchTransport(), nullptr, c);
+    const float matchSeconds = (float)std::atof(std::getenv("WFC_MATCH_SECONDS") ? std::getenv("WFC_MATCH_SECONDS") : "60");
+    auto last = std::chrono::steady_clock::now();
+    bool started = false, reachedEnd = false, hostLostEarly = false;
+    long steps = 0;
+    while (!drv.finished()) {
+        for (auto& e : s.poll(now())) { LOG_INFO("UDPMATCH <- %s (in match)", frontend::sessionEventName(e.type)); ev.push_back(e); }
+        const auto t = std::chrono::steady_clock::now();
+        const double dt = std::chrono::duration<double>(t - last).count();
+        last = t;
+        steps += drv.frame(dt);
+        const bool inProgress = world_.matchActive() && world_.match().state() == game::Match::State::InProgress;
+        if (inProgress) started = true;
+        if ((started && !inProgress) || (inProgress && world_.match().elapsedTime() >= matchSeconds)) { reachedEnd = true; break; }
+        if (inProgress && world_.match().elapsedTime() >= matchSeconds - 1.0f) reachedEnd = true;   // the host's normal end may race its leave
+        if (has(T::HostLost) || has(T::ConnectionLost)) { hostLostEarly = !reachedEnd; break; }
+        std::this_thread::sleep_for(std::chrono::microseconds(500));
+    }
+    const int st = drv.status();
+    LOG_INFO("UDPMATCH done: %ld steps, seat %d of %d, status %d, D %d, rtt %.1f ms", steps, self, n, st, drv.delay(), drv.rttMs());
+    exitCode_ = st != 0 ? st : (hostLostEarly ? (has(T::HostLost) ? 5 : 4) : 0);   // the host leaving at the normal end = 0
 }
 
 // WFC_UDPSESSIONTEST (no device, no window, loopback only - 127.0.0.1 binds, so no firewall prompt): two net::UdpSessions in this

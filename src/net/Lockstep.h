@@ -124,7 +124,7 @@ private:
     double leadRollMs_ = 0.0;
     uint32_t nextStep_ = 1;           // the next tick this peer steps
     int leadFrom(int seat) const;
-    double lastSendMs_ = 0.0, stallMs_ = 0.0, stallTotalMs_ = 0.0;
+    double lastSendMs_ = 0.0, stallMs_ = 0.0, stallTotalMs_ = 0.0, logT0_ = 0.0;
     Status status_ = Status::Running;
     std::string statusText_;
     FILE* log_ = nullptr;

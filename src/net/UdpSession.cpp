@@ -307,7 +307,7 @@ void UdpSession::join(const std::string& target) {
     if (letters.size() == 6 && target.find('.') == std::string::npos && !decodeTargets(target, cands)) {   // a lobby service code
         if (serviceAddr_.empty()) { SessionEvent e; e.type = SessionEvent::Type::JoinFailed; e.joinFailure = SessionJoinFailure::Invalid; emit(e); return; }
         std::string err;
-        t_ = createUdpTransport(255, opt_.bindIp + ":0", {}, err);
+        t_ = createUdpTransport(255, opt_.bindIp + ":" + std::to_string(opt_.memberPort), {}, err);
         if (!t_) { SessionEvent e; e.type = SessionEvent::Type::JoinFailed; e.joinFailure = SessionJoinFailure::Timeout; emit(e); return; }
         joinCandidates_.clear(); joining_ = true; joinStart_ = now_; lastJoinSend_ = -1e9; joinTarget_.clear();
         peers_.clear(); matchToSession_.clear(); matchSelf_ = -1; view_.reset(); matchRunning_ = false;
@@ -323,7 +323,7 @@ void UdpSession::join(const std::string& target) {
     joinCandidates_ = cands;
     const std::string addr = cands[0];
     std::string err;
-    t_ = createUdpTransport(255, opt_.bindIp + ":0", {}, err);
+    t_ = createUdpTransport(255, opt_.bindIp + ":" + std::to_string(opt_.memberPort), {}, err);
     if (!t_) {
         SessionEvent e; e.type = SessionEvent::Type::JoinFailed; e.joinFailure = SessionJoinFailure::Timeout; emit(e);
         return;
@@ -352,13 +352,14 @@ void UdpSession::leave() {
 }
 
 void UdpSession::endSession() {
+    unseated_.clear();
     if (disc_ && disc_->result.mapped) {
         const PortMapResult m = disc_->result;
         const int port = disc_->port;
         std::thread([m, port] { upnpUnmapUdp(m, port); }).detach();
     }
     disc_.reset(); hostPending_ = false;
-    t_.reset(); view_.reset();
+    t_.reset();   // the match view stays (a NetMatchDriver may still hold it: its calls become no-ops without the socket)
     role_ = Role::Offline; joining_ = false; held_ = false; matchRunning_ = false;
     peers_.clear(); matchToSession_.clear(); matchSelf_ = -1;
 }
@@ -445,7 +446,7 @@ void UdpSession::requestStart() {
     const SessionLobby& r = launchRoster_.slots.empty() ? lobby_ : launchRoster_;
     for (const SessionSlot& s : r.slots) {
         if (s.kind != SessionSlot::Kind::Human) continue;
-        const int seat = seatOf(s.member);
+        const int seat = s.member.fingerprint.empty() ? 0 : seatOf(s.member);   // "" = the host itself (the flow's MatchLaunch.self convention)
         if (seat >= 0) matchToSession_.push_back(seat);
         else LOG_WARN("session: roster member %s is not in the session - left out of the match", s.member.fingerprint.c_str());
     }
@@ -589,6 +590,9 @@ void UdpSession::handleStranger(const std::string& from, const std::vector<uint8
             Peer& h = peers_[0];
             h.address = joinTarget_; h.lastHeard = now_;
             LOG_INFO("session: seated as %d by the host at %s", seat, joinTarget_.c_str());
+            std::vector<std::pair<int, std::vector<uint8_t>>> held;
+            held.swap(unseated_);
+            for (const auto& h : held) handleSeated(h.first, h.second);
         }
     } else if (d[0] == kJoinFail && joining_ && std::find(joinCandidates_.begin(), joinCandidates_.end(), from) != joinCandidates_.end()) {
         joining_ = false;
@@ -598,6 +602,12 @@ void UdpSession::handleStranger(const std::string& from, const std::vector<uint8
 }
 
 void UdpSession::handleSeated(int seat, const std::vector<uint8_t>& d) {
+    // A member not yet seated (its JOIN_OK lost: one out-of-band datagram) keeps the host's messages until JOIN_OK names its seat -
+    // completing the join on the LOBBY alone left it without a seat (no place in the launch roster).
+    if (role_ != Role::Host && t_ && t_->self() == 255) {
+        if (unseated_.size() < 64) unseated_.push_back({seat, d});
+        return;
+    }
     R r(d);
     switch (d[0]) {
     case kLobby:
@@ -702,7 +712,7 @@ void UdpSession::handleSeated(int seat, const std::vector<uint8_t>& d) {
         }
         break;
     case kReturn:
-        if (role_ == Role::Member && seat == 0) { matchRunning_ = false; held_ = false; view_.reset(); matchToSession_.clear(); matchSelf_ = -1; }
+        if (role_ == Role::Member && seat == 0) { matchRunning_ = false; held_ = false; matchToSession_.clear(); matchSelf_ = -1; }   // the view stays while a driver may hold it
         break;
     default: break;
     }

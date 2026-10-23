@@ -75,7 +75,8 @@ Lockstep::Lockstep(INetTransport& t, const Config& c) : t_(t), cfg_(c) {
     delay_ = cfg_.delay > 0 ? cfg_.delay : 4;   // auto starts at 4 and follows the RTT
     if (!cfg_.logPath.empty()) {
         log_ = std::fopen(cfg_.logPath.c_str(), "w");
-        if (log_) std::fprintf(log_, "tick,simhash,bundlehash,stall_ms,bytes_in,bytes_out,rtt_ms\n");
+        if (log_) std::fprintf(log_, "tick,simhash,bundlehash,stall_ms,bytes_in,bytes_out,rtt_ms,wall_ms,delay\n");   // wall_ms: since the log opened
+        logT0_ = nowMs();
     }
     std::vector<uint8_t> b; put8(b, kHello); put8(b, (uint8_t)cfg_.self); put64(b, cfg_.launchHash);
     for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) t_.sendReliable(s, b.data(), b.size());
@@ -389,8 +390,8 @@ void Lockstep::stepped(uint32_t tick, uint64_t stateHash) {
     if (nowMs() - leadRollMs_ >= 1000.0) { leadRollMs_ = nowMs(); leadPrev_ = leadCur_; std::fill(leadCur_.begin(), leadCur_.end(), kNoLead); }
     if (log_) {
         const NetStats st = t_.stats();
-        std::fprintf(log_, "%u,%016llx,%016llx,%.2f,%llu,%llu,%.1f\n", tick, (unsigned long long)stateHash, (unsigned long long)bundleHash(tick),
-                     stallMs_, (unsigned long long)st.bytesReceived, (unsigned long long)st.bytesSent, st.rttMs);
+        std::fprintf(log_, "%u,%016llx,%016llx,%.2f,%llu,%llu,%.1f,%.1f,%d\n", tick, (unsigned long long)stateHash, (unsigned long long)bundleHash(tick),
+                     stallMs_, (unsigned long long)st.bytesReceived, (unsigned long long)st.bytesSent, st.rttMs, nowMs() - logT0_, delay_);
     }
     stallMs_ = 0.0;
 }
