@@ -3806,3 +3806,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   1514, woke 1529, live 1559, in sync to the end). Remaining: no spawn: the joiner's Choose Character was stamped for tick 1
   before its seat woke (Systems: hold + restamp at activation) and the flow treated it as pre-match (Frontend). Then the
   internal package. RE: Kismet VM review K1-K6 (to Gameplay); horde armour / backpack rules C.
+2026-10-23 06:34 MERGED 30a1b7d7 Escalation nav behind WFC_ESCNAV (default = 7272c4ac behaviour) + horde awareness; the Frontend's
+  late-launch-begun fix; late pick hold (pt9's no-spawn, both halves in); member-to-member relay (wire v4); chapter loader
+  stage 1 (+ WFC_CHAPTER_VIEW); RE squad AI (AI buddies never revive; solo human never downed). x43: the plume path is
+  broken (no ship; blob log fixed). Card: Frontend pt9 (spawn expected) -> Rendering x43 + x44chapterview (~4 min).
