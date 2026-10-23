@@ -9,6 +9,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <sstream>
+#include <fstream>
 #include <cstdlib>
 #include <cstring>
 
@@ -136,11 +138,42 @@ bool SurvivalData::load(const std::string& map, SurvivalData& out) {
 }
 
 // The horde: one participant per enemy entry x MaxCount (the most that entry can have alive), spawned only by the director.
+// The Escalation nav file / blockers path (AssetTools manifests; WFC_MANIFESTS overrides, as the other manifest readers).
+static std::string svManifest(const std::string& map, const char* file) {
+    const char* mr = std::getenv("WFC_MANIFESTS");
+    return std::string(mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests") + "/maps/" + map + "/" + file;
+}
+
 void World::setupSurvival() {
+    const bool hadEscNav = sv_.escNav;
     sv_ = SurvivalState{};
-    if (!match_.settings().survival) return;
+    if (!match_.settings().survival) {
+        if (hadEscNav) { botNavTried_ = false; ensureBotNav(); LOG_INFO("escalation: the versus nav is back for %s", mapName_.c_str()); }
+        return;
+    }
     if (!SurvivalData::load(mapName_, svData_)) { LOG_ERROR("escalation: no Escalation data for %s", mapName_.c_str()); return; }
     ensureBotNav();
+    {   // E2b part 3: the original NavigationCell mesh and its gating [AssetTools from escalation_navmesh.json + the generators' Kismet]
+        BotNav esc;
+        if (esc.load(svManifest(mapName_, "bot_nav_escalation.json"))) {
+            botNav_ = std::move(esc);
+            sv_.escNav = true;
+            std::ifstream f(svManifest(mapName_, "escalation_nav_blockers.json"), std::ios::binary);
+            std::stringstream ss; ss << f.rdbuf();
+            assets::Json b;
+            if (f.good() && assets::Json::parse(ss.str(), b)) {
+                for (size_t k = 0; k < b["blocked_at_start"].size(); ++k) { botNav_.setBlocked(b["blocked_at_start"][k].asInt(-1), true); ++sv_.navBlockedAtStart; }
+                for (const auto& g : b["opened_by_generator"].obj) {
+                    std::vector<int> cells;
+                    for (size_t k = 0; k < g.second.size(); ++k) cells.push_back(g.second[k].asInt(-1));
+                    sv_.generatorCells.push_back({g.first, cells});
+                }
+            }
+            botNav_.recomputePieces();
+            LOG_INFO("escalation: nav %s: %zu cells, %d blocked at start, %zu generators open cells", "bot_nav_escalation.json", botNav_.cells().size(),
+                     sv_.navBlockedAtStart, sv_.generatorCells.size());
+        } else LOG_WARN("escalation: no bot_nav_escalation.json for %s - the versus nav (PROV)", mapName_.c_str());
+    }
     const int horde = svData_.coopTeam == 0 ? 1 : 0;
     int n = 0;
     for (const SurvivalData::Enemy& e : svData_.enemies) n += std::max(0, e.maxCount);
@@ -542,7 +575,12 @@ void World::svFireGenerator(int gi, bool levelDrop) {
         }
         ok ? ++done : ++pending;
     }
-    if (doors && botNav_.valid()) { transforming_.applyNavBlocks(botNav_); botNav_.recomputePieces(); }   // an opened doorway opens the nav
+    if (sv_.escNav) {   // the original's gating: this generator's SeqAct_Toggle Turn On NavigationCells
+        bool opened = false;
+        for (const auto& gc : sv_.generatorCells)
+            if (gc.first == "TnSurvivalGenerator_" + g.id) { for (int c : gc.second) botNav_.setBlocked(c, false); opened = true; }
+        if (opened) botNav_.recomputePieces();
+    } else if (doors && botNav_.valid()) { transforming_.applyNavBlocks(botNav_); botNav_.recomputePieces(); }   // versus nav: door boxes
     if (!levelDrop) ++sv_.purchases;
     LOG_INFO("escalation: generator %s (%s, %d) %s: %d actions applied, %d not built yet (E2b)", g.id.c_str(), g.nameKey.c_str(), g.cost,
              levelDrop ? "level drop (Taken)" : "bought", done, pending);
@@ -593,7 +631,13 @@ bool World::svSpawn(int slot) {
         // robin), logged; no on-nav point in the zone -> the try is spent.
         const SurvivalData::Zone* pz = &zone;   // the zone whose point is used (PROV stand-in below)
         if (botNav_.valid() && (size_t)idx < zone.spawnPoints.size()) {
-            auto onNav = [&](const SurvivalData::Zone& zz, int k) { const auto& q = zz.spawnPoints[(size_t)k]; return botNav_.findCell(core::Vec3{q[0], q[1], q[2]}, 2.0f) >= 0; };
+            // reachable = on a cell of the main connected piece (the Escalation nav still loads as several pieces: AssetTools asked for
+            // its drop links; a perch outside the main piece would strand the horde)
+            auto onNav = [&](const SurvivalData::Zone& zz, int k) {
+                const auto& q = zz.spawnPoints[(size_t)k];
+                const int c = botNav_.findCell(core::Vec3{q[0], q[1], q[2]}, 2.0f);
+                return c >= 0 && botNav_.pieceOf(c) == botNav_.mainPieceId();
+            };
             if (!onNav(zone, idx)) {
                 int sub = -1;
                 for (int k = 1; k < (int)zone.spawnPoints.size() && sub < 0; ++k) if (onNav(zone, (idx + k) % (int)zone.spawnPoints.size())) sub = (idx + k) % (int)zone.spawnPoints.size();
@@ -613,7 +657,7 @@ bool World::svSpawn(int slot) {
                     if (bz < 0) { LOG_INFO("escalation: PROV spawn point zone %s #%d is off the bot nav and no active zone has an on-nav point: the try is spent", zone.id.c_str(), idx); continue; }
                     pz = &svData_.zones[(size_t)bz]; idx = bk; how = "zone " + pz->id + " #" + std::to_string(bk) + " (nearest on-nav point) stands in";
                 }
-                LOG_INFO("escalation: PROV spawn point zone %s is off the bot nav: %s", zone.id.c_str(), how.c_str());
+                LOG_INFO("escalation: PROV spawn point zone %s is not nav-reachable: %s", zone.id.c_str(), how.c_str());
             }
         }
         core::Vec3 at; float yaw = 0.0f;
