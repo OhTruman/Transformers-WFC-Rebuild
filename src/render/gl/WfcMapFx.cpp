@@ -1322,29 +1322,38 @@ void Pipeline::loadMapProps(const std::string& indexPath) {
     std::string txt = readFile(indexPath);
     assets::Json J;
     if (txt.empty() || !assets::Json::parse(txt, J)) return;
-    const assets::Json& PV = J["pickup_factory_visuals"];
-    for (size_t i = 0; i < PV.size(); ++i) {
-        const assets::Json& e = PV[i];
-        std::string gl = e["gltf"].asString();
-        if (gl.rfind("content/", 0) != 0 || e["ue_matrix"].size() < 4) continue;
-        if (e["kind"].asString().find("mesh particle") != std::string::npos) continue;   // drawn by its FX emitter
-        PickupMeshRT pm;
-        std::string a = e["actor"].asString();
-        pm.owner = a.substr(a.rfind('.') + 1);
-        std::transform(pm.owner.begin(), pm.owner.end(), pm.owner.begin(), ::tolower);
-        pm.gltf = gl.substr(8);
-        pm.mesh = e["mesh"].asString();
-        const assets::Json& U = e["ue_matrix"];
-        for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) pm.R[r][c] = U[(size_t)r][(size_t)c].asFloat();
-        for (int c = 0; c < 3; ++c) pm.T[c] = U[3][(size_t)c].asFloat();
-        const assets::Json& ct = e["component_transform"]["Translation"];       // pickup mesh offset (actor space)
-        if (ct.isObject()) {
-            float o[3] = {ct["X"].asFloat(), ct["Y"].asFloat(), ct["Z"].asFloat()};
-            for (int c = 0; c < 3; ++c) pm.off[c] = o[c];
+    auto addVisuals = [&](const assets::Json& PV, bool startHidden) {
+        for (size_t i = 0; i < PV.size(); ++i) {
+            const assets::Json& e = PV[i];
+            std::string gl = e["gltf"].asString();
+            if (gl.rfind("content/", 0) != 0 || e["ue_matrix"].size() < 4) continue;
+            if (e["kind"].asString().find("mesh particle") != std::string::npos) continue;   // drawn by its FX emitter
+            PickupMeshRT pm;
+            std::string a = e["actor"].asString();
+            pm.owner = a.substr(a.rfind('.') + 1);
+            std::transform(pm.owner.begin(), pm.owner.end(), pm.owner.begin(), ::tolower);
+            pm.gltf = gl.substr(8);
+            pm.mesh = e["mesh"].asString();
+            const assets::Json& U = e["ue_matrix"];
+            for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) pm.R[r][c] = U[(size_t)r][(size_t)c].asFloat();
+            for (int c = 0; c < 3; ++c) pm.T[c] = U[3][(size_t)c].asFloat();
+            const assets::Json& ct = e["component_transform"]["Translation"];       // pickup mesh offset (actor space)
+            if (ct.isObject()) {
+                float o[3] = {ct["X"].asFloat(), ct["Y"].asFloat(), ct["Z"].asFloat()};
+                for (int c = 0; c < 3; ++c) pm.off[c] = o[c];
+            }
+            pm.yawRate = e["rotation_rate"]["Yaw"].asFloat(0.0f);
+            pm.cullDistance = e["CullDistance"].asFloat(0.0f);
+            if (startHidden) pickupMeshHidden_.insert(pm.owner);   // (the game unhides what is there to take)
+            pickupMeshes_.push_back(pm);
         }
-        pm.yawRate = e["rotation_rate"]["Yaw"].asFloat(0.0f);
-        pm.cullDistance = e["CullDistance"].asFloat(0.0f);
-        pickupMeshes_.push_back(pm);
+    };
+    addVisuals(J["pickup_factory_visuals"], false);
+    {   // (Escalation) the weapon factories, beside the shipped runtime index: <render data>/render_index_extra.json
+        // (tools/render/build_render_index.py); the game hides each through setActorHidden while not bought / taken
+        assets::Json X;
+        const std::string xt = readFile(dataDir_ + "/render_index_extra.json");
+        if (!xt.empty() && assets::Json::parse(xt, X)) addVisuals(X["pickup_factory_visuals"], true);   // (hidden until the game says: versus modes on these maps have none)
     }
     // destructible state mesh -> authored StaticMeshComponent (cooked HmStaticMeshDestructionEffect.MeshComponents,
     // written by build_map_fx.py): the lightmap join key of each state mesh
