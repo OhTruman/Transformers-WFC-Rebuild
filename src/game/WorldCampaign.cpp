@@ -302,6 +302,7 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
     if (cpTransformWorldProp(vm, op, input)) return true;   // doors / pods
     if (cpSentryOpActivate(vm, op, input)) return true;     // sentry force target / dormant
     if (cpHideOpActivate(vm, op, input)) return true;       // SeqAct_ToggleHidden / SeqAct_Destroy on world actors
+    if (cpTeleportActivate(vm, op, input)) return true;     // SeqAct_Teleport
     if (cpOmegaActivate(vm, op, input)) return true;      // SetOmegaStage / CorruptOmegaBattery
     if (c == "SeqAct_TnPawnFactory") return cpPawnFactoryActivate(vm, op, input);
     if (cpInterpActivate(vm, op, input)) return true;   // SeqAct_Interp: Matinee
@@ -431,6 +432,8 @@ void World::cpRequestMovie(int op, const std::string& movieName) {
     if (cp_.movieOp >= 0 && cp_.movieOp != op) cp_.vm.finishLatent(cp_.movieOp, "Stopped");
     cp_.movie = m; cp_.movieOp = op; cp_.movieStop = false; ++cp_.movieSerial;
     LOG_INFO("campaign: movie %s (request %d)", m.c_str(), cp_.movieSerial);
+    // headless (no movie playback): the movie ends at once, so Kismet waiting on its Stopped (D3B's intro switch) goes on
+    if (std::getenv("WFC_NULLRENDER")) campaignMovieEnded(cp_.movieSerial);
 }
 
 void World::campaignMovieEnded(int serial) {

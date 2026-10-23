@@ -5497,6 +5497,12 @@ void World::loadHazards() {
         const assets::Json& v = list[i];
         HazardVolume h;
         h.actor = v["actor"].asString();
+        {   // campaign: the unit the volume belongs to
+            const std::string o = v["object"].asString();
+            const size_t k = o.find(".TheWorld");
+            h.unit = k == std::string::npos ? std::string() : o.substr(0, k);
+            if (h.unit.size() > 2 && h.unit.compare(h.unit.size() - 2, 2, "_m") == 0) h.unit.resize(h.unit.size() - 2);
+        }
         h.damageType = v["DamageType"].asString();
         h.damagePerSec = v["DamagePerSec"].asFloat(0.0f);
         h.painInterval = v["PainInterval"].isNumber() ? v["PainInterval"].asFloat() : 1.0f;
@@ -5523,6 +5529,8 @@ void World::loadHazards() {
 
 int World::hazardAt(const core::Vec3& p) const {
     for (size_t i = 0; i < hazards_.size(); ++i) {
+        const std::string& u = hazards_[i].unit;   // campaign: only while its unit is loaded (streaming)
+        if (campaignMap_ && !u.empty() && u != cpChapter_.persistentDir && !cpUnitLoaded_.count(u)) continue;
         bool in = !hazards_[i].planes.empty();
         for (const HazardVolume::Plane& pl : hazards_[i].planes) if (core::dot(pl.n, p) > pl.w) { in = false; break; }
         if (in) return (int)i;

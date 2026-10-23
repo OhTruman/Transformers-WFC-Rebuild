@@ -86,3 +86,16 @@ campaign-only, so the versus / Escalation same-match of 07 / 08 is unchanged.
 
 The renderer-side matching itself stays at package 6 in the base. The sim is unaffected, since hides are render-only. Apply it after
 09. Verified: the 01–10 chain applies to a fresh af4d0731 and matches the tested tree over every patched path.
+
+## 11: campaign teleport, character vars, hazards by unit (b315e585 + HIDE_PATHS -> 35ace85b + GAMEPLAY_CAMPAIGN_TELEPORT)
+
+`11_campaign_teleport_hazards.patch`: the same paths, from the 10 tree to 35ace85b + GAMEPLAY_CAMPAIGN_TELEPORT (a7fedd94). It covers:
+- SeqAct_Teleport + TnSeqVar_Character;
+- campaign hazard volumes only while their unit is loaded;
+- headless movie requests ending at once.
+Apply it after 10.
+
+Verified:
+- the 01–11 chain applies to a fresh af4d0731 and matches the tested tree over every patched path;
+- headless against the 35ace85b + TELEPORT build, the SIMHASH stream is identical at every step: Streets TDM 4,201, Remnant ESC 1,675,
+  A1 campaign 60 s 3,749.

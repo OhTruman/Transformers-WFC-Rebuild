@@ -565,6 +565,7 @@ public:
     // per second and damage type. Stock UE3 PhysicsVolume pain: on entry (bEntryPain) and every PainInterval while
     // touching, DamagePerSec * PainInterval [HIGH: stock defaults PainInterval 1, bEntryPain true].
     struct HazardVolume { std::string actor, damageType; float damagePerSec = 0, painInterval = 1.0f; bool entryPain = true;
+                          std::string unit;   // campaign: its level's unit (object path prefix without _m); active only while loaded
                           core::Vec3 centroid{0, 0, 0};
                           struct Plane { core::Vec3 n; float w; };
                           std::vector<Plane> planes; };   // outward normal n, offset w (inside: n.p <= w)
@@ -1487,6 +1488,8 @@ private:
     bool cpMineFactoryActivate(KismetVM& vm, int op, int input, CampaignFactory& F);
     void cpTickMines(float dt);
     bool cpHideOpActivate(KismetVM& vm, int op, int input);
+    std::vector<int> cpCharacterTargets(const std::string& robodef);
+    bool cpTeleportActivate(KismetVM& vm, int op, int input);
     bool cpShootAtPoint(int player, core::Vec3& out) const;
     bool cpAuxSpawn(const std::string& actor, int k, core::Vec3& out);
     void cpDrawDestructibles(render::IRenderer& r) const;
