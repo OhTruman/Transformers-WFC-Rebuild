@@ -17,7 +17,7 @@ the launch record. Texts: the original's where one exists, **[PC text]** otherwi
 ### 1.1 Party lobby (Multiplayer) - the entry
 | row | label (original text) | what it does now |
 |---|---|---|
-| Find Match | `$UIText.Lobby.FindMatch` | public matches (section 4): Quick Match / Browse Games |
+| Find Match | `$UIText.Lobby.FindMatch` | public matches (section 4): Quick Match into a voting lobby |
 | Private Match | `$UIText.Lobby.HostPrivateMatch` | **hosts at once**: straight into the game lobby with the last-used Game Settings (2) |
 | Join Game | `$UIText.OnlineFriends.JoinGame` (phase 1 row) | the code / address prompt -> the host's game lobby as a member |
 | Create a Character / Teletran I / Friends List | original | unchanged |
@@ -33,7 +33,7 @@ private match also loses its mode-list / options pre-screens; the settings live 
   characters -> balance -> "Waiting for host to start game").
 - Start Game: the original gate (D4) and countdown; the launch record goes to every member (ONLINE_MP_ARCHITECTURE 10.3).
 
-### 1.3 Game lobby - a member (joined by code, Browse or Quick Match)
+### 1.3 Game lobby - a member (joined by code or Quick Match)
 - Menu: **Create a Character**, Teletran I, Friends List. No Start Game, no Select Map, no Game Settings (`Online.IsHost`
   false: the same rows the member view already greys out / hides).
 - The same member list, voice and status line; the map preview follows the host.
@@ -85,37 +85,51 @@ The original Select Map row and its map vote / host choice, unchanged; members s
 
 ---
 
-## 4. Public matches (Systems' central lobby service)
+## 4. Public matches: Quick Match into a voting lobby (user decision 2026-10-22; updated 2026-10-23)
 The original (RE ONLINE_PUBLIC_MATCH_RE.md, fc12ceb) had **no server browser**: public play was Quick Match by playlist (TDM 1,
 the default; DM 2, CTF 3, KOTH 4, EXT 5, DOM 7). It ran a party size check, then an invisible search (mode + playlist + region,
 up to 50 results), then asked each host in order for a party reservation ("Reserving space in game `i of `n"). The first
 acceptance joins; if none accepts, it hosts ("Creating lobby..."). A strict NAT can't host: it re-searches, and shows
-"Unable to Host" after 2 failures. **Browse Games is therefore a PC addition**, asked for by the user ("a lobby list").
+"Unable to Host" after 2 failures. **The user decided: no server list on PC either** - Browse Games is dropped.
 
-Find Match opens a small menu:
-- **Quick Match** (`$UIText.MainMenu.QuickMatch`): choose a mode (the original playlist list), then `SearchForGameTitle` /
-  `SearchingMessage` "Finding Game / Searching..."; the service returns the best open public lobby for that mode
-  ("Reserving space in game `i of `n" while trying several, the original `ReservingMessage`); if none, the player hosts a new
-  public lobby for that playlist ("Creating lobby..."). Cancel -> `CancelSearchMessage` "Cancelling...".
-- **Browse Games** **[PC text]**: a list of open public lobbies - host name, mode, map, players n / max, ping, PC / Web -
-  newest / best first, Refresh, Join. Joining = the member lobby (1.3). An empty list: **[PC text]** "No public games
-  found." with Quick Match offered.
-- Public lobby rules (the original's, RE fc12ceb): Rotate map with veto; the 45 s countdown starts by itself at 4 players;
-  teams by snake draft (sorted by score if anyone has scored, else by level; a random first team, then alternating, capped
-  per team); Kick Idle Players defaults On; the playlist fixes the mode and limits.
+Find Match = **Quick Match** (`$UIText.MainMenu.QuickMatch`, the original playlist list):
+- Choose a mode -> `SearchForGameTitle` / `SearchingMessage` "Finding Game / Searching..." -> the best-ping open public game for
+  that playlist: a lobby still gathering, or a match in progress with an open seat ("Reserving space in game `i of `n" while
+  trying several, the original `ReservingMessage`). None -> the player hosts a new public lobby for that playlist
+  ("Creating lobby..."). Cancel -> `CancelSearchMessage` "Cancelling...". **Built: step 5a, 2656b9c7.**
 - **Join in progress is allowed in public games** (bAllowJoinInProgress; answers ONLINE_MP_FLOWS R1). A reservation is
   accepted only while the smaller team stays within the cap and the teams differ by at most 1; a party gets that team, a solo
   joiner the smaller team on arrival. The joiner spawns at once, mid-match, with the current score and clock. Private games
   keep D6 (joiners wait in the lobby) until the user says otherwise.
-- Without a lobby service (Systems): findGames answers from a LAN broadcast; GameList.serviceReachable = false shows
-  **[PC text]** "Public matches need the lobby service. LAN games only." and Quick Match searches LAN, then hosts a
-  public-on-LAN lobby. Entries carry `lan`. Service codes are 6 letters; the join prompt takes them too.
+- Without a lobby service (Systems): Quick Match searches the LAN, then hosts a public-on-LAN lobby; over the internet the
+  Online settings say a lobby service is needed (Lobby Service row; blank = LAN + codes only).
 
-ISession additions (for Systems' service; FakeSession scripts them now):
+### 4.1 The public lobby and its map vote (Halo Reach style, PC ADAPTATION of the original veto)
+The original public lobby rotated the playlist's maps with a veto (Online.SubmitMapVeto). The user chose a Reach-style vote
+instead:
+- **Options:** when the public lobby opens, the host draws **3 options** from the playlist's map rotation (no repeats, not the
+  map just played), plus **"None of these"** in the first round only.
+- **Shown in the lobby menu** (all players, host and members alike): one row per option, the map's name and its live tally -
+  "Streets  -  3", "Rust  -  1", "Gorge  -  0", "None of these  -  0"; the row of the player's own vote is marked (the
+  original selected-row look). Accept on a row = vote / change the vote. The map preview follows the leading option.
+- **Who votes:** every human in the lobby, one vote each, changeable until the vote closes; bots do not vote. Joiners vote on
+  arrival.
+- **"None of these":** if it has a strict majority of the votes cast when the vote closes in round 1 (or when every human has
+  voted for it), the host draws 3 new options (excluding the shown ones), votes reset, round 2 has no "None of these".
+- **Closing:** the vote closes when the public lobby's countdown (the original 45 s, started by itself at 4 players) reaches
+  10 s; the winner = the most votes; a tie or no votes = a random pick among the tied (host's seed). The winner is announced
+  ("Next map: Streets") and loads at the countdown's end. The playlist fixes the mode.
+- **Private matches** keep the host's Select Map (2.3); no vote.
+
+Session fields (Systems adds them; FakeSession scripts them in the tests):
+- `SessionMemberInfo.mapVote` - the member's choice: option index 0..2, 3 = None of these, -1 = no vote;
+- `SessionLobby.voteMaps` (map ids of the options), `voteCounts` (one per option + None), `voteRound` (1 / 2), `voteOpen`,
+  `voteWinner` (map id once closed, else -1). The host tallies from the members' info and publishes them in LobbyState.
+
+ISession additions in use (FakeSession / UdpSession):
 - `SessionHostSettings.isPublic` + `playlist` (host a public lobby the service lists);
-- `findGames(query)` -> `GameList{entries: host, mode, map, players, maxPlayers, ping, platform, code, lan; serviceReachable}`;
 - `quickMatch(playlist)` -> `SearchProgress{tried, of}` ... then `Joined` (found) or `HostOpened{public}` (none: hosting);
-  `cancelSearch()`.
+  `cancelSearch()`; `findGames` stays for LAN discovery only (no list on screen).
 
 ---
 
@@ -134,7 +148,8 @@ ISession additions (for Systems' service; FakeSession scripts them now):
    rows of 2.2, live writes, locked during the countdown.
 3. Game Mode changes in the lobby (in place between team modes; re-created to / from Deathmatch, members follow).
 4. Member menu = Create a Character / Teletran I / Friends List only.
-5. Find Match -> Quick Match / Browse Games on the new ISession calls (FakeSession results); the search / reserve popups.
+5. Find Match -> Quick Match on the new ISession calls (5a, built); the voting public lobby (5b, section 4.1).
 6. Tests (FakeSession): LV1 Private Match -> lobby with last settings; LV2 Game Settings rows + live publish; LV3 mode change
    team -> team in place and team -> DM re-created with members following; LV4 member menu has no host rows; LV5 Quick Match
-   found / none -> host public; LV6 Browse list + join; LV7 offline private match = the same lobby with bots.
+   found / none -> host public; LV6 the map vote (options, tallies, None of these re-roll, winner at the countdown); LV7 offline
+   private match = the same lobby with bots.
