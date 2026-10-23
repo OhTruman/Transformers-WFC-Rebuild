@@ -234,6 +234,7 @@ struct HudGameState {
     int svWave = 0; int svNextWaveTime = -1; bool svGameOver = false;
     // Campaign: the game over shown (UI event 14 -> CampaignGameOver_GFX), MissionComplete, the active checkpoint actor.
     bool cpActive = false, cpGameOver = false, cpMissionComplete = false; std::string cpCheckpoint;
+    bool cpCinematic = false;   // SeqAct_ToggleCinematicMode on: the HUD hides
     int svPower = 0; std::string svGeneratorName; int svGeneratorNeeded = -1;
     bool svDowned = false; float svDownedHealth = 0.0f; bool svReviveTarget = false; float svReviveProgress = -1.0f;
     // TDM player tags (TnObjectiveMarkerTypeTransformerVersus): hidden for self and the dead; allies labelled,
@@ -1442,6 +1443,17 @@ private:
     bool cpForceIntoForm(KismetVM& vm, int op);
     void cpTickForms();
     void cpLoadTouches();
+    int cpSpawnDestructible(const std::string& blueprint, const std::string& name, const core::Vec3& at, float yawDeg);   // WorldCampaignDestructibles.cpp
+    void cpDesBounds(int i);
+    void cpDesTransition(int i, size_t piece, int to);
+    void cpDamageDes(int i, float amount, int instigator, const std::string& type);
+    int cpDesRayHit(const core::Vec3& o, const core::Vec3& dir, float range, float& t) const;
+    void cpRadiusDes(const core::Vec3& at, float damage, float radius, int instigator, const std::string& type);
+    void cpTickDestructibles(float dt);
+    void cpDrawDestructibles(render::IRenderer& r) const;
+    void cpBindDesEvents(int i);
+    void cpLoadPlacedDestructibles();
+    std::map<std::string, CampaignMeshAsset> cpDesMeshes_;   // destructible state meshes (by content glTF)
     void cpTickTouches();
     MatchLaunch cpLaunch_;                        // the campaign launch (Restart From Last Checkpoint)
     void cpCollectMovers();                       // WorldCampaignMatinee.cpp
@@ -1454,6 +1466,7 @@ private:
     void cpTickMatinees(float dt);
     void cpMatineeApply(CampaignState::Interp& in, float from, float to);
     void cpMatineeEnd(CampaignState::Interp& in);
+    void cpFlushCinematicView();
     std::vector<CampaignMover> cpMovers_;         // the chapter's InterpActors (kept across launches: loaded with the map)
     void cpLoadActors();
     bool cpActorPos(const std::string& path, core::Vec3& out) const;

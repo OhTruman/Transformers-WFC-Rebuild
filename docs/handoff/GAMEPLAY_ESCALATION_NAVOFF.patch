@@ -1,0 +1,60 @@
+diff --git a/src/core/Application_EscTest.cpp b/src/core/Application_EscTest.cpp
+index 26c49273..925d05cb 100644
+--- a/src/core/Application_EscTest.cpp
++++ b/src/core/Application_EscTest.cpp
+@@ -128,13 +128,13 @@ void Application::runEscalationTest() {
+     m.playerMutable(ally->matchPlayer()).team = D.coopTeam;
+     check(m.players()[(size_t)me].team == 0, "the player is on BrokenHope's co-op team (Autobots)");
+     check(D.weaponPickups.size() == 17, "17 weapon pickup factories (hidden until bought)");
+-    const bool escNavOn = !(std::getenv("WFC_ESCNAV") && std::atoi(std::getenv("WFC_ESCNAV")) == 0);
++    const bool escNavOn = std::getenv("WFC_ESCNAV") && std::atoi(std::getenv("WFC_ESCNAV")) != 0;
+     if (escNavOn) {
+         size_t original = 0; for (const auto& c : world_.botNav().cells()) original += !c.versusOnly;   // v3: + merged versus cells after them
+         check(S.escNav && original == 469 && S.navBlockedAtStart == 32 && S.generatorCells.size() == 12,
+-              "the Escalation nav (default): 469 original NavigationCells, 32 blocked at start, 12 generators open cells");
++              "the Escalation nav (WFC_ESCNAV=1): 469 original NavigationCells, 32 blocked at start, 12 generators open cells");
+     }
+-    else check(!S.escNav, "WFC_ESCNAV=0: the versus nav");
++    else check(!S.escNav, "the versus nav by default (the Escalation nav with WFC_ESCNAV=1)");
+     check(D.enemies[0].chassis == "ESC_Spider" && D.enemies[0].health == 20.0f && D.waves[9].decreaseTaken == 0 && D.waves[13].increaseDealt == 0,
+           "the horde table: Spider body ESC_Spider 20 HP; wave 10 DecreaseDamageTaken L0, wave 14 IncreaseDamage L0");
+     run(15.5f);
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index 8b5cb840..7d3362cf 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -898,7 +898,7 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
+                     static const bool noSuicide = std::getenv("WFC_NOSTRANDSUICIDE") != nullptr;   // regression A/B against older builds
+                     // The Escalation horde never suicides (the original's AI does not; the unstick is a versus-bot PC adaptation).
+                     if (nowS - b.noWaySince >= 30.0f && !noSuicide && !match_.players()[(size_t)b.player].directorSpawned) {
+-                        if (cpSquadMember(b.player)) b.cpRecover = true; else b.suicideWish = true;   // the campaign squad: moved back, no suicide
++                        if (cpSquadMember(b.player)) b.cpRecover = true; else if (!sv_.escNav) b.suicideWish = true;   // (the Escalation cell nav: no suicide)   // the campaign squad: moved back, no suicide
+                     }
+                 }
+                 LOG_INFO("bots: p%d stranded off the mesh at t %.2f at (%.1f %.1f %.1f): %s", b.player, match_.matchTime(), pos.x, pos.y, pos.z,
+@@ -1286,7 +1286,7 @@ void World::botOffMeshWatch(BotBrain& b, const Character& pc, float dt) {
+         static const bool noSuicide = std::getenv("WFC_NOSTRANDSUICIDE") != nullptr;
+         b.offMeshRun += dt;
+         if (b.offMeshRun >= 30.0f && !noSuicide && !b.suicideWish && cpSquadMember(b.player)) b.cpRecover = true;   // the campaign squad: moved back
+-        else if (b.offMeshRun >= 30.0f && !noSuicide && !b.suicideWish && !match_.players()[(size_t)b.player].directorSpawned) {
++        else if (b.offMeshRun >= 30.0f && !noSuicide && !b.suicideWish && !match_.players()[(size_t)b.player].directorSpawned && !sv_.escNav) {
+             const core::Vec3 p = pc.position(), e = b.omEntryPos;
+             LOG_INFO("bots: p%d stranded 30 s off the mesh with a path at t %.2f at (%.1f %.1f %.1f)", b.player, now, p.x, p.y, p.z);
+             LOG_INFO("bots: p%d off-mesh entry (%s): t %.2f at (%.1f %.1f %.1f), life %.1f s, vel y %.1f, %.1f s after %s form, %.1f s after damage; "
+diff --git a/src/game/WorldSurvival.cpp b/src/game/WorldSurvival.cpp
+index e390362f..5ec3cdf4 100644
+--- a/src/game/WorldSurvival.cpp
++++ b/src/game/WorldSurvival.cpp
+@@ -157,9 +157,9 @@ void World::setupSurvival() {
+     if (!SurvivalData::load(mapName_, svData_)) { LOG_ERROR("escalation: no Escalation data for %s", mapName_.c_str()); return; }
+     ensureBotNav();
+     // E2b part 3: the original NavigationCell mesh and its gating [AssetTools from escalation_navmesh.json + the generators' Kismet].
+-    // On by default since nav v3 (floor-lowered cells, typed links) + overlay h passed both maps' soaks (Integration 2026-10-23);
+-    // WFC_ESCNAV=0 (DEV / TEST) = the versus nav + the door-box blocking + the PROV spawn stand-in.
+-    static const bool escNavOn = !(std::getenv("WFC_ESCNAV") && std::atoi(std::getenv("WFC_ESCNAV")) == 0);
++    // Opt-in again (WFC_ESCNAV=1; Integration 2026-10-23 after Experimental's broad pass: Remnant 0 horde kills, team bots stranded on it);
++    // default = the versus nav + the door-box blocking + the PROV spawn stand-in (the known-good 4-7 kills).
++    static const bool escNavOn = std::getenv("WFC_ESCNAV") && std::atoi(std::getenv("WFC_ESCNAV")) != 0;
+     if (escNavOn) {
+         BotNav esc;
+         if (esc.load(svManifest(mapName_, "bot_nav_escalation.json"))) {

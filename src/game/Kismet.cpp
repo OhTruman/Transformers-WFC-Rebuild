@@ -156,7 +156,17 @@ void KismetVM::begin(const std::string& checkpoint, bool restart) {
     if (!restart) { fireEvents("SeqEvent_PreGameplaySetup", bound); run(); }
     fireEvents("SeqEvent_SequenceActivated", [](const Op& o) { return endsWith(o.seq, ".PersistentLevel.Main_Sequence") || o.seq == "Main_Sequence"; });
     run();
-    fireEvents("SeqEvent_GameplayStarted", bound);   // queued: runs with the first normal tick [C]
+    // A chapter start (no launch CP): the pre-gameplay pass made a checkpoint active (A1: Checkpoint_14845, D5: 4578), and that
+    // checkpoint's bound GameplayStarted fires (A1 GameplayStarted_7189 -> LevelBegin) [C data, RE A1_OPENING; PROV rule].
+    const std::string gsCp = checkpoint.empty() ? activeCheckpoint : checkpoint;
+    fireEvents("SeqEvent_GameplayStarted", [&](const Op& o) {
+        const std::string org = o.authored["Originator"].asString();
+        bool fire;
+        if (org.find("Checkpoint") != std::string::npos) fire = !gsCp.empty() && endsWith(org, gsCp);
+        else fire = checkpoint.empty() || o.authored["bFireForAllCheckpoints"].asBool(false);
+        if (fire) ops_[(size_t)find(o.path)].triggerCount = 0;
+        return fire;
+    });   // queued: runs with the first normal tick [C]
 }
 
 // Stock UE3 ops [H].
@@ -198,7 +208,7 @@ bool KismetVM::builtin(int i, int input) {
             std::vector<int> idx = varLink(i, "Index");
             int at = idx.empty() ? o.timer > 0.0f ? (int)o.timer : 1 : (resolve(idx[0]) ? resolve(idx[0])->i : 1);
             if (at >= 1 && at <= n && !o.linkDisabled[(size_t)at - 1]) pick = at - 1;
-            const int inc = o.authored["IncrementAmount"].asInt(o.authored["bIncrement"].asBool(false) ? 1 : 0);
+            const int inc = o.authored["IncrementAmount"].asInt(1);   // Engine.Default__SeqAct_Switch IncrementAmount 1 [C, RE]
             if (inc) {
                 at += inc;
                 if (at > n) at = looping ? 1 : n + 1;

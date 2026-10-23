@@ -240,6 +240,7 @@ void World::setupCampaign(const MatchLaunch& l) {
         cpLoadActors();
         cpLoadMatinees();
         cpLoadTouches();
+        cpLoadPlacedDestructibles();
         cpBindMoverNav();   // (the nav is loaded by addBots above)
         {   // the start's streaming state: the launch checkpoint's, else WorldInfo.InitialStreamingState
             const CampaignChapter::Checkpoint* lc = cpChapter_.checkpoint(cp_.checkpoint);
@@ -289,6 +290,12 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
     }
     if (c == "SeqAct_TnPawnFactory") return cpPawnFactoryActivate(vm, op, input);
     if (cpInterpActivate(vm, op, input)) return true;   // SeqAct_Interp: Matinee
+    if (c == "SeqAct_ToggleCinematicMode") {   // Enable / Disable / Toggle: the local player's input and HUD [H CDO: HUD off, movement / turning / input off]
+        cp_.cinematicMode = input == 0 ? true : input == 1 ? false : !cp_.cinematicMode;
+        LOG_INFO("campaign: cinematic mode %s (%s)", cp_.cinematicMode ? "on" : "off", o.path.substr(o.path.find_last_of('.') + 1).c_str());
+        if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
+        return true;
+    }
     if (cpAiOpActivate(vm, op, input)) return true;   // MoveToActor / SetMoveToObjective / UseInteract
     if (c == "SeqAct_Conversation" && input == 0) { o.latent = true; o.timer = 3.0f; vm.output(op, "Played"); return true; }
     if (c == "SeqAct_MoviePlayer") {   // [Systems] Play: the full-screen movie, latent until its end (Stopped); Stop: ends it early
@@ -456,6 +463,7 @@ void World::tickCampaign(float dt) {
     cpTickMatinees(dt);
     cpTickForms();
     if (!cp_.gameOver) cpTickTouches();
+    cpTickDestructibles(dt);
     // TnCampaignGame.Killed: a human killed by anything but DmgType_Suicided -> CampaignGameOver (solo: never downed).
     const auto& kh = match_.killHistory();
     for (; cp_.killsSeen < kh.size(); ++cp_.killsSeen) {

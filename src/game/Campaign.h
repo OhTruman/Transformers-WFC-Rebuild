@@ -7,6 +7,7 @@
 // bot_nav.json once delivered) and manifests/next_map/<CH>_kismet.json. Owned and ticked by World (WorldCampaign.cpp).
 #include "core/Math.h"
 #include "game/Kismet.h"
+#include "render/Mesh.h"
 
 #include <map>
 #include <set>
@@ -56,6 +57,19 @@ struct CampaignMover {
     core::Vec3 navOffset{0, 0, 0};  // the offset those cells were last moved to
 };
 
+// A campaign destructible (an HmDestructible blueprint instance): its pieces' current states, health and timers, its hit box.
+struct CampaignDestructible {
+    struct State { int handle = 0; std::string name, mesh; float health = 0.0f, autoTime = 0.0f; std::vector<std::pair<int, std::string>> links; };
+    struct Piece { std::string name; std::vector<State> states; int cur = 0; float health = 0.0f, timer = 0.0f; State* state(); };
+    std::string name;
+    core::Vec3 pos{0, 0, 0}, lo{0, 0, 0}, hi{0, 0, 0};
+    float yawDeg = 0.0f;
+    std::vector<Piece> pieces;
+    int lastHitter = -1;
+    std::vector<int> events;   // its Kismet notification events (op indices)
+};
+struct CampaignMeshAsset { bool ok = false; render::MeshData mesh; render::MeshHandle handle = -1; };
+
 struct CampaignFactory {
     std::string action, cls, aicd, chassis, spawnedVar, note;
     int op = -1, team = 0, count = 1, pending = 0, spawned = 0;
@@ -88,8 +102,9 @@ struct CampaignState {
     std::map<int, Objective> objectives;      // step 4: Kismet AI objectives per match player (MoveToActor / SetMoveToObjective)
     std::map<std::string, core::Vec3> actorPos;   // actor name -> location (navigation.json, actors.json)
     std::vector<CampaignMatinee> matinees;    // step 5: Matinee
-    struct Interp { int matinee = -1, op = -1; std::string action; float rate = 1.0f, dir = 1.0f, pos = 0.0f; bool looping = false, rewindOnPlay = false, playing = false; };
+    struct Interp { int matinee = -1, op = -1; std::string action; float rate = 1.0f, dir = 1.0f, pos = 0.0f; bool looping = false, rewindOnPlay = false, playing = false; bool viewing = false; float lastFade = 0.0f; };
     std::vector<Interp> interps;              // one per SeqAct_Interp op
+    bool viewOn = false;                      // the CinematicView sent active
     int cineOp = -1, cineViewOp = -1;         // the op driving the local camera / the CinematicView
     std::string cineCamGroup;
     struct FormOp { int op = -1; bool vehicle = false; std::vector<int> targets; };
@@ -97,6 +112,8 @@ struct CampaignState {
     struct Touch { int op = -1; bool playerOnly = true, cylinder = false; std::vector<std::vector<core::Vec3>> polys; core::Vec3 lo{0, 0, 0}, hi{0, 0, 0}, center{0, 0, 0};
                    float radius = 0.0f, halfHeight = 0.0f; std::set<int> inside; };
     std::vector<Touch> touches;               // step 8: SeqEvent_Touch
+    std::vector<CampaignDestructible> destructibles;   // step 9
+    bool cinematicMode = false;               // SeqAct_ToggleCinematicMode: the local player's input + HUD off
     std::map<std::string, std::vector<int>> bodyPools;   // step 6: AI participants per body (shared by the factories)
     std::string streamingState;
     std::map<std::string, bool> unitVisible;

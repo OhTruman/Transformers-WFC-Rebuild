@@ -772,7 +772,7 @@ void World::buildGraybox() {
 
 void World::handleInput(const platform::InputFrame& in, float dt) {
     struct ProfScope { double t0 = profNowMs(); ~ProfScope() { const double ms = profNowMs() - t0; if (spawnProf() && ms > 8.0) LOG_INFO("SPAWNPROF World::handleInput %.1f ms", ms); } } profScope;
-    player_.controller().handleInput(in, dt);   // Dash (Shift) is latched by PlayerController
+    player_.controller().handleInput(cp_.active && cp_.cinematicMode ? platform::InputFrame{} : in, dt);   // Dash (Shift) is latched by PlayerController; campaign cinematic mode: no input
     if (in.wasPressed(platform::Button::DebugNextStart)) teleportToStart(startCursor_ + 1);   // test spawn cycling
     if (in.wasPressed(platform::Button::DebugPrevStart)) teleportToStart(startCursor_ - 1);
 }
@@ -851,7 +851,10 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
     { float ts; if (sentryRayHit(origin, dir, range, ts) && ts < targetDist) { targetDist = ts; hitTarget = nullptr; hitDes = nullptr; hitOpp = nullptr; damageSentry(w.damageAt(ts), localPlayer_, w.damageType ? w.damageType : ""); } }
     bool hitBarrier = false;
     { float th; if (barrierRayHit(origin, dir, range, th) && th <= targetDist + 0.05f) { targetDist = th; hitBarrier = true; hitTarget = nullptr; hitDes = nullptr; hitOpp = nullptr; } }
-    float dist = (hitTarget || hitDes || hitOpp || hitBarrier) ? targetDist : bestDist;
+    int cpHit = -1;   // campaign destructibles (in front of any closer hit)
+    if (cp_.active) { float tc; const int ci = cpDesRayHit(origin, dir, range, tc); if (ci >= 0 && tc < targetDist) { targetDist = tc; cpHit = ci; hitTarget = nullptr; hitDes = nullptr; hitOpp = nullptr; hitBarrier = false; } }
+    if (cpHit >= 0) cpDamageDes(cpHit, w.damageAt(targetDist), localPlayer_, w.damageType ? w.damageType : "");
+    float dist = (hitTarget || hitDes || hitOpp || hitBarrier || cpHit >= 0) ? targetDist : bestDist;
     if (hitBarrier) damageBarrier(w.damageAt(dist), w.damageType ? w.damageType : "");
     if (hitOpp) { noteHitDir(dir); applyMatchDamage(hitOpp->matchPlayer(), localPlayer_, w.damageAt(dist), false, w.damageType); }   // InstantHitDamage, falloff, the weapon's InstantHitDamageTypes[0]
     core::Vec3 hitPoint = origin + dir * dist;
@@ -4317,6 +4320,7 @@ HudGameState World::hudState() const {
         }
         h.tags.push_back(t);
     }
+    h.cpCinematic = cp_.active && cp_.cinematicMode;
     h.cpActive = cp_.active; h.cpGameOver = cp_.gameOverSent; h.cpMissionComplete = cp_.missionComplete; h.cpCheckpoint = cp_.checkpoint;
     if (sv_.phase != SurvivalState::Phase::Off) {
         h.svWave = std::max(1, sv_.displayWave + 1);
@@ -4814,6 +4818,7 @@ void World::draw(render::IRenderer& r) const {
     // covered the translucent barrier grid: user playtest 2026-10-14) and before the effects below (meshes and particle
     // fallbacks, drawn immediately too). One flush per frame: nothing is queued after it.
     r.flushQueuedCharacters();
+    if (cp_.active) cpDrawDestructibles(r);   // campaign destructibles
     for (const BarrierState& bs : barriers_) if (bs.alive && !bs.mesh.positions.empty()) r.drawDynamicMesh(bs.mesh, bs.world, core::Vec3{1, 1, 1});   // TnBarrierSpawnable mesh
     for (const Sentry& se : sentries_)
         if (se.alive && !se.mesh.positions.empty())
@@ -5572,6 +5577,7 @@ bool World::radiusVisible(const core::Vec3& origin, const core::Vec3& victimLoca
 void World::radiusDamage(const core::Vec3& at, float damage, float radius, int instigator, const std::string& type) {
     struct RadiusFlag { bool& f; bool was; ~RadiusFlag() { f = was; } } radiusFlag{svRadiusHit_, svRadiusHit_};
     svRadiusHit_ = true;
+    if (cp_.active) cpRadiusDes(at, damage, radius, instigator, type);   // campaign destructibles
     if (anySmart_) { std::lock_guard<std::mutex> lk(smartBlastMutex_); smartBlasts_.push_back({at, instigator, 2, match_.matchTime()}); }
     // Actor.HurtRadius -> TakeRadiusDamage: Dist = max(|Location - origin| - collision radius, 0), scale = 1 - Dist / DamageRadius
     // (bFullDamage false) [HIGH stock UE3 Actor.TakeRadiusDamage]; teammates are filtered by applyMatchDamage (projectile

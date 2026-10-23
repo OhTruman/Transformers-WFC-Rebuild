@@ -157,9 +157,9 @@ void World::setupSurvival() {
     if (!SurvivalData::load(mapName_, svData_)) { LOG_ERROR("escalation: no Escalation data for %s", mapName_.c_str()); return; }
     ensureBotNav();
     // E2b part 3: the original NavigationCell mesh and its gating [AssetTools from escalation_navmesh.json + the generators' Kismet].
-    // On by default since nav v3 (floor-lowered cells, typed links) + overlay h passed both maps' soaks (Integration 2026-10-23);
-    // WFC_ESCNAV=0 (DEV / TEST) = the versus nav + the door-box blocking + the PROV spawn stand-in.
-    static const bool escNavOn = !(std::getenv("WFC_ESCNAV") && std::atoi(std::getenv("WFC_ESCNAV")) == 0);
+    // Opt-in again (WFC_ESCNAV=1; Integration 2026-10-23 after Experimental's broad pass: Remnant 0 horde kills, team bots stranded on it);
+    // default = the versus nav + the door-box blocking + the PROV spawn stand-in (the known-good 4-7 kills).
+    static const bool escNavOn = std::getenv("WFC_ESCNAV") && std::atoi(std::getenv("WFC_ESCNAV")) != 0;
     if (escNavOn) {
         BotNav esc;
         if (esc.load(svManifest(mapName_, "bot_nav_escalation.json"))) {
