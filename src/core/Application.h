@@ -104,6 +104,7 @@ private:
     void runCameraTest();
     void runChaosTest();
     void runTdmSessionTest();
+    void runEscalationTest();   // WFC_ESCTEST (Application_EscTest.cpp)
     void runCameraSyncTest();
     void runModePlayTest();
     void runWeaponTest();

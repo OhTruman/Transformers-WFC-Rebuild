@@ -52,6 +52,7 @@ struct MatchSettings {
     int maxPerTeam = 5;           // participants per team, human included
     int maxBotsPerTeam = 5;       // bots per team
     bool extendedSlots = false;
+    bool survival = false;        // Escalation (GameModeTag ESC): the director spawns the horde; TnRespawnHelperRoundEnd (no timer)
     static constexpr int kExtendedPerTeam = 32, kExtendedPlayers = 64;
     void applyExtendedSlots() { extendedSlots = true; maxPerTeam = kExtendedPerTeam; maxBotsPerTeam = kExtendedPerTeam; maxPlayers = kExtendedPlayers; }
     static MatchSettings forMode(const std::string& tag);   // authored defaults per TnOnlineGameSettings<tag>
@@ -119,6 +120,7 @@ struct MatchPlayer {
     // Killstreaks: PRI._CurrentKillStreak (+kills, reset by AddDeaths -> KillStreakEnded) and the controller's
     // AcquiredKillstreaks stack (UpdateKillstreakRewards: FindKillstreak(Specialty, count); cleared at ClientGameEnded).
     int currentKillStreak = 0;
+    bool directorSpawned = false;      // Escalation horde: spawned only by the director (never at the match start, never respawned)
     std::vector<std::string> acquiredKillstreaks;
 };
 
@@ -213,6 +215,13 @@ public:
     void setSquadAnchorScope(int s) { squadAnchorScope_ = s; }
     // Scope 3: the active cluster, plus any team start the host accepts as close to the squad (e.g. a short nav path to the anchor).
     void setSquadStartNear(std::function<bool(int start, const core::Vec3& anchor)> f) { squadStartNear_ = std::move(f); }
+    // Escalation: spawn p at a director-chosen point (a TnSurvivalSpawnPoint); the respawn helper of a survival game for p; the
+    // all-dead loss; the Match RNG for the director's picks (host-seeded online, so every peer draws alike).
+    void restartPlayerAt(int p, const core::Vec3& pos, float yaw);
+    void respawnPlayer(int p) { if (p >= 0 && (size_t)p < players_.size() && !players_[(size_t)p].alive) restartPlayer(p); }
+    void endSurvival(const std::string& reason) { endGame(-1, reason); }
+    int drawInt(int n) { return randomInt(n); }
+    float drawFloat() { rng_ = rng_ * 1664525u + 1013904223u; return (float)((rng_ >> 8) & 0xFFFFFFu) / 16777216.0f; }
     void requireCharacterSelection(int p) { if (p >= 0 && (size_t)p < players_.size()) players_[(size_t)p].hasSelectedCharacter = false; }
     void tick(float dt);
     // Rounds (CTF) and the attacking team (CTF: SingleFlagCTF; EXT: the bomb holder's team, set by the objective layer).
@@ -335,6 +344,8 @@ private:
     unsigned tombstoneSerial_ = 0;
     std::vector<Tombstone> tombstones_;
     unsigned rng_ = 0x1234ABCDu;
+    int forcedStart_ = -1;               // restartPlayerAt: the start restartPlayer takes instead of FindPlayerStart
+    std::vector<int> directorStart_;     // per player: its reusable "SurvivalSpawnPoint" start (team 254: never a FindPlayerStart pick)
     int randomInt(int n) { rng_ = rng_ * 1664525u + 1013904223u; return n > 0 ? (int)((rng_ >> 8) % (unsigned)n) : 0; }
 
     void startMatch();

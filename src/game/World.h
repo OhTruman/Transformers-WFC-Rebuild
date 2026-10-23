@@ -20,6 +20,7 @@
 #include "game/TransformingActors.h"
 #include "game/TransformingActorsDraw.h"
 #include "game/Match.h"
+#include "game/Survival.h"
 #include "game/ChassisDef.h"
 #include "game/MatchOpponent.h"
 #include "game/BotRoster.h"
@@ -222,6 +223,11 @@ struct HudGameState {
     // Scoreboard rows (InGameStats / EndGameStats PlayerList: PRI name, team, score, kills, deaths).
     struct Row { int player; std::string name; int team; int score, kills, deaths; float assists; bool alive, local; };
     std::vector<Row> scoreboard;
+    // Escalation (MP_ESCALATION_RE §8; 0 / -1 / false outside it): the wave (DisplayWave + 1), the PreGame / next-wave countdown (whole
+    // s), the game over (TnSurvivalGameOverMessage wave = svWave). E2: the local seat's power and the generator prompt; E4: downed / revive.
+    int svWave = 0; int svNextWaveTime = -1; bool svGameOver = false;
+    int svPower = 0; std::string svGeneratorName; int svGeneratorNeeded = -1;
+    bool svDowned = false; float svDownedHealth = 0.0f; bool svReviveTarget = false; float svReviveProgress = -1.0f;
     // TDM player tags (TnObjectiveMarkerTypeTransformerVersus): hidden for self and the dead; allies labelled,
     // enemy markers disabled by default (no TnBuffSeeEnemyObjectiveMarkers / HardLocked / Revenge buffs here).
     struct Tag { int player; std::string name; int team; bool ally; bool drawn; core::Vec3 pos; bool label = true; };
@@ -876,6 +882,9 @@ public:
     core::Vec3 lastDamageFrom_{0, 0, 0};
     // TEST / DIAGNOSTIC: a synthetic participant with its own Match player slot (see MatchOpponent.h).
     MatchOpponent* addMatchOpponent(const std::string& name, bool drawn);
+    // Escalation: the director state and the map's data (tests, HUD).
+    const SurvivalState& survival() const { return sv_; }
+    const SurvivalData& survivalData() const { return svData_; }
     // The map's transforming actors (Rendering: draw each actor's glb at matrix with its clip at t, unless hidden).
     const TransformingActors& transformingActors() const { return transforming_; }
     const CollisionWorld& pawnCollisionWorld() const { return collision_; }
@@ -1377,6 +1386,15 @@ private:
     bool matchActive_ = false, localDead_ = false;
     int localPlayer_ = -1;
     void tickMatch(float dt);
+    // Escalation (WorldSurvival.cpp): the horde slots + the spawn finder at launch; the director per step (after match_.tick).
+    void setupSurvival();
+    void tickSurvival(float dt);
+    float svZoneScore(int zone, int type) const;
+    void svSort(int type);
+    void svTouch(int zone, int sign);
+    bool svSpawn(int slot);
+    SurvivalData svData_;
+    SurvivalState sv_;
     std::vector<ColActor> colActors_;
     void syncMapPresentation(render::IRenderer& r) const;   // Gameplay world state -> renderer, each frame
     std::vector<StartPoint> starts_;

@@ -36,6 +36,10 @@ MatchSettings MatchSettings::forMode(const std::string& tag) {
     else if (tag == "EXT") { s.teamGame = true; s.goalScore = 3; s.timeLimit = 900; s.gameType = "TNGT_EXT"; s.teamScoreAmount = 0;
                              s.reportKills = false; s.reportPoints = false; s.objectiveIndividualScore = 10; }
     else if (tag == "KOTH") { s.teamGame = true; s.goalScore = 400; s.timeLimit = 900; s.gameType = "TNGT_KOTH"; s.teamScoreAmount = 0; s.reportKills = false; s.reportPoints = true; s.objectiveIndividualScore = 1; }
+    // ESC (Escalation, TnSurvivalGame): co-op against the horde, no score goal, no time limit, up to 4 players (the horde is ours
+    // to size: one participant per spawn-list entry x MaxCount) [CONF RE MP_ESCALATION_RE §1].
+    else if (tag == "ESC") { s.teamGame = true; s.goalScore = 0; s.timeLimit = 0; s.gameType = "TNGT_SV"; s.teamScoreAmount = 0;
+                             s.reportKills = false; s.reportPoints = false; s.survival = true; s.maxPlayers = 128; s.maxPerTeam = 128; s.maxBotsPerTeam = 128; }
     else { s.modeTag = "TDM"; s.teamGame = true; s.goalScore = 40; s.timeLimit = 900; s.gameType = "TNGT_TDM"; }
     return s;
 }
@@ -223,6 +227,7 @@ void Match::spawnAllInitial() {
     const bool stagger = players_.size() > 16;
     int k = 0;
     for (size_t i = 0; i < players_.size(); ++i) {
+        if (players_[i].directorSpawned) { players_[i].alive = false; players_[i].timeToRespawn = -1.0f; continue; }   // Escalation horde
         if (stagger && players_[i].kind == ParticipantKind::Bot) { players_[i].alive = false; players_[i].timeToRespawn = (float)(++k) / 60.0f; continue; }
         restartPlayer((int)i);
     }
@@ -335,7 +340,8 @@ void Match::killed(int killer, int victim, bool suicide, const std::string& dama
         if (s_.goalScore > 0 && score >= s_.goalScore) { endGame(killer, "Score"); }
     }
     // RespawnHelper.Died -> OnDeath: TimeToRespawn = ShouldInstantRespawn ? 0 : WaveRespawnTime (5 s).
-    if (state_ == State::InProgress) V.timeToRespawn = s_.waveRespawnTime;
+    // Survival: TnRespawnHelperRoundEnd - no timer; the director respawns the dead players at the wave end (the horde never).
+    if (state_ == State::InProgress) V.timeToRespawn = s_.survival ? -1.0f : s_.waveRespawnTime;
 }
 
 std::vector<KillFeedEntry> Match::killFeed() const {
@@ -453,6 +459,7 @@ void Match::endGame(int winnerPlayer, const std::string& reason) {
         }
         winnerPlayer = tie ? -1 : best;
     }
+    if (s_.survival) winner = -1;   // no win condition: AllDead ends it
     winnerTeam_ = winner;
     winnerPlayer_ = s_.teamGame ? -1 : winnerPlayer;
     endReason_ = reason;
@@ -505,7 +512,7 @@ void Match::restartPlayer(int p) {
         }
     }
     P.spawnError.clear();
-    int st = findPlayerStart(p);
+    int st = forcedStart_ >= 0 ? forcedStart_ : findPlayerStart(p);
     // Extended matches: no free point this step -> retry shortly instead of a placeless spawn (generated points normally cover it).
     if (st < 0 && s_.extendedSlots) { P.alive = false; P.timeToRespawn = 0.25f; return; }
     spawnAt_[(size_t)p] = st;
@@ -518,6 +525,21 @@ void Match::restartPlayer(int p) {
         LOG_INFO("MATCH respawn player=%d delay_s=%.2f reason=%s t=%.2f", p, matchTime_ - deathTime_[(size_t)p], roundRestarting_ ? "round" : "wave", matchTime_);
     P.spawnTime = matchTime_;
     emit(MatchEvent::Type::PlayerSpawned, p, st, st >= 0 ? starts_[(size_t)st].actor : std::string());
+}
+
+void Match::restartPlayerAt(int p, const core::Vec3& pos, float yaw) {
+    if (p < 0 || (size_t)p >= players_.size()) return;
+    if (directorStart_.size() < players_.size()) directorStart_.resize(players_.size(), -1);
+    int& si = directorStart_[(size_t)p];
+    if (si < 0 || (size_t)si >= starts_.size() || starts_[(size_t)si].actor != "SurvivalSpawnPoint") {
+        Start s; s.actor = "SurvivalSpawnPoint"; s.team = 254;
+        starts_.push_back(s);
+        si = (int)starts_.size() - 1;
+    }
+    starts_[(size_t)si].pos = pos; starts_[(size_t)si].yaw = yaw;
+    forcedStart_ = si;
+    restartPlayer(p);
+    forcedStart_ = -1;
 }
 
 void Match::setGeneratedStarts(const std::vector<Start>& extra) {

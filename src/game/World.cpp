@@ -3109,6 +3109,7 @@ bool World::launchMatch(const MatchLaunch& l) {
     bool known = false;
     for (MatchMode m : {MatchMode::DM, MatchMode::TDM, MatchMode::CTF, MatchMode::KOTH, MatchMode::EXT, MatchMode::DOM})
         if (l.modeTag == gameModeName(m)) { mode = m; known = true; }
+    if (l.modeTag == "ESC") { mode = MatchMode::TDM; known = true; }   // Escalation: the TDM map state (no versus objectives) + the director
     if (!known) { LOG_WARN("match: unknown mode %s", l.modeTag.c_str()); return false; }
     // All six versus modes run on the shared framework (CTF rounds / EXT bomb: Pass 22).
     matchMode_ = mode;
@@ -3129,7 +3130,9 @@ bool World::launchMatch(const MatchLaunch& l) {
         localSeatIntent_ = MoveIntent{}; localSeatPickup_ = false;
         core::simRandSeed(l.seed ? l.seed * 2654435761u + 1u : sd ? (uint32_t)std::strtoul(sd, nullptr, 10) * 2654435761u + 1u : 0x5eed2026u);
     }
-    startLocalMatch(l.settings, l.localTeam);   // [integration M08b] the lobby team
+    int svTeam = -1;   // Escalation: every player on the map's co-op team (CoopInfo faction)
+    if (l.settings.survival) { SurvivalData d; if (SurvivalData::load(canonicalMapName(l.map), d)) svTeam = d.coopTeam; }
+    startLocalMatch(l.settings, svTeam >= 0 ? svTeam : l.localTeam);   // [integration M08b] the lobby team
     // Real voices: the original's 96 (FmodAudioDevice MaxChannels) for its <= 10-player matches; the ExtendedPlayers extension
     // (up to 64 participants, ours) gets 128 so distant bots' sounds are not refused as often (63 bots, paced: Systems).
     if (audio_) audio_->setChannelLimit(l.settings.extendedSlots ? 128 : 96);
@@ -3143,11 +3146,12 @@ bool World::launchMatch(const MatchLaunch& l) {
             MatchPlayer& me = match_.playerMutable(localPlayer_);
             me.name = l.humans[(size_t)ls].name; me.sessionMember = l.humans[(size_t)ls].member;
             if (l.humans[(size_t)ls].selected) match_.selectCharacter(localPlayer_, l.humans[(size_t)ls].selection);   // as the remote seats
-            if (match_.settings().teamGame) me.team = l.humans[(size_t)ls].team;
+            if (match_.settings().teamGame) me.team = svTeam >= 0 ? svTeam : l.humans[(size_t)ls].team;
         }
         std::vector<int> order(l.humans.size(), -1);
         order[(size_t)ls] = localPlayer_;
-        for (size_t i = 0; i < l.humans.size(); ++i) if ((int)i != ls) order[i] = addRemoteParticipant(l.humans[i], true);
+        for (size_t i = 0; i < l.humans.size(); ++i)
+            if ((int)i != ls) { RemoteSeat h = l.humans[i]; if (svTeam >= 0) h.team = svTeam; order[i] = addRemoteParticipant(h, true); }
         match_.reorderPlayers(order);
         std::vector<int> newOf(order.size());
         for (size_t i = 0; i < order.size(); ++i) newOf[(size_t)order[i]] = (int)i;
@@ -3157,8 +3161,9 @@ bool World::launchMatch(const MatchLaunch& l) {
         remoteIdle_.assign(match_.players().size(), 0.0f);
         LOG_INFO("session: %zu humans in the host's seat order, this machine at seat %d", l.humans.size(), ls);
     } else
-        for (const RemoteSeat& r : l.remotes) addRemoteParticipant(r);   // online: the other peers' humans (before the bot fill counts them)
+        for (const RemoteSeat& r : l.remotes) { RemoteSeat h = r; if (svTeam >= 0) h.team = svTeam; addRemoteParticipant(h, svTeam >= 0); }   // online: the other peers' humans (before the bot fill counts them)
     const int nb = addBots(l.bots);
+    setupSurvival();   // Escalation: the horde slots (no-op otherwise)
     if (nb > 0) awards_.setXpScale(BotXpPolicy::scale(botDifficulty_));   // XP in bot matches by bot difficulty (user decision)
     evictUnusedAssets();
     LOG_INFO("match: launched %s %s (goal %d, time %d s, bots %d: friendly %d enemy %d %s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore,
@@ -4194,6 +4199,12 @@ HudGameState World::hudState() const {
         }
         h.tags.push_back(t);
     }
+    if (sv_.phase != SurvivalState::Phase::Off) {
+        h.svWave = std::max(1, sv_.displayWave + 1);
+        if (sv_.phase == SurvivalState::Phase::PreGame) h.svNextWaveTime = (int)std::ceil(std::max(0.0f, svData_.preGameTime - sv_.phaseTime));
+        else if (sv_.phase == SurvivalState::Phase::BetweenWaves) h.svNextWaveTime = (int)std::ceil(std::max(0.0f, svData_.timeBetweenWaves - sv_.phaseTime));
+        h.svGameOver = sv_.phase == SurvivalState::Phase::GameOver;
+    }
     return h;
 }
 
@@ -4218,6 +4229,7 @@ void World::tickMatch(float dt) {
     }
     for (MatchOpponent* o : opponents_) if (o->spawned()) match_.setPlayerLocation(o->matchPlayer(), o->position(), o->pawn().cylinderRadius(o->pawn().moveForm()));
     match_.tick(dt);
+    tickSurvival(dt);   // Escalation director (no-op otherwise)
     // Live objective rules (DOM nodes, KOTH zone) while InProgress: pawns -> captures / scores -> the match rules.
     if (match_.state() == Match::State::InProgress && !match_.betweenRounds()) {
         mapState_.setKillZ(killZ_);
