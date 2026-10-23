@@ -641,7 +641,7 @@ void World::svBackpackExplode(SurvivalState::Slot& s) {
 // E3b part 2: loot on a horde death [C, RE ESCALATION_HORDE_AI section 5 + the ESCALATION_WAVES correction]: the spawn-list row's
 // LootClassification - Soldier / CQC rows 4 TnAbilityResourcePickups, Brute / Titan 7, the boss Tank 12 plus a 50 % rare GatlingGun /
 // HeavyRocketTurret (1 : 1); GENERIC (the Jet row), SpiderDec, HoloBrute nothing; every kill +1, +1 for melee, +1 for an explosion
-// (+5 headshot: no headshot state yet, PROV). The pickups scatter around the body (PROV ring) and live 60 s (PROV).
+// (+5 headshot: no headshot state yet, PROV). The pickups scatter around the body (PROV ring), seek the nearest player and live 10 s.
 void World::svDropLoot(const KillFeedEntry& e) {
     for (const SurvivalState::Slot& s : sv_.slots) {
         if (s.player != e.victim) continue;
@@ -657,7 +657,7 @@ void World::svDropLoot(const KillFeedEntry& e) {
         const core::Vec3 at = match_.playerLocation(e.victim);
         for (int k = 0; k < n; ++k) {
             const float a = 6.2831853f * (float)k / (float)n;
-            SurvivalState::Loot l; l.pos = at + core::Vec3{std::cos(a) * 1.5f, 0.0f, std::sin(a) * 1.5f}; l.life = 60.0f;
+            SurvivalState::Loot l; l.pos = at + core::Vec3{std::cos(a) * 1.5f, 0.0f, std::sin(a) * 1.5f}; l.life = 10.0f;   // LifeSpan 10 s
             sv_.loot.push_back(l);
         }
         sv_.lootDropped += n;
@@ -1056,20 +1056,30 @@ void World::tickSurvival(float dt) {
                 s.hoverCooldown = 6.0f + 2.0f + match_.drawFloat();
             }
     }
-    // Loot: a player pawn touching a pickup (1.5 m) takes +3 ability resource; unclaimed pickups expire.
+    // Loot (TnAbilityResourceDroppedPickup) [C, AssetTools escalation_loot_pickup.json]: it seeks the nearest player within SeekRadius
+    // 15 m at SeekSpeed 25 m/s; a player pawn touching it (CollisionCylinder radius 1 m, height 2 m) takes AddedResource 3 (cap 100);
+    // unclaimed pickups go after LifeSpan 10 s.
+    if (sv_.abilityResource.size() < P.size()) sv_.abilityResource.resize(P.size(), 0.0f);
     for (size_t k = 0; k < sv_.loot.size();) {
         SurvivalState::Loot& l = sv_.loot[k];
         bool taken = false;
+        int seek = -1; float sd = 15.0f;
         for (size_t q = 0; q < P.size() && !taken; ++q) {
-            if (P[q].kind == ParticipantKind::Bot) continue;
+            if (P[q].kind == ParticipantKind::Bot || !P[q].alive) continue;
             const Character* c = participantPawn((int)q);
             if (!c) continue;
             const core::Vec3 d = c->position() - l.pos;
-            if (d.x * d.x + d.z * d.z < 1.5f * 1.5f && std::fabs(d.y) < 3.0f) {
-                if (sv_.abilityResource.size() < P.size()) sv_.abilityResource.resize(P.size(), 0.0f);
-                sv_.abilityResource[q] += 3.0f; ++sv_.lootTaken; taken = true;
-            }
+            const float hd = std::sqrt(d.x * d.x + d.z * d.z);
+            if (hd < 1.0f && d.y > -2.0f && d.y < 2.0f) {
+                sv_.abilityResource[q] = std::min(100.0f, sv_.abilityResource[q] + 3.0f); ++sv_.lootTaken; taken = true;
+            } else if (core::length(d) < sd) { sd = core::length(d); seek = (int)q; }
         }
+        if (!taken && seek >= 0)
+            if (const Character* c = participantPawn(seek)) {
+                const core::Vec3 d = c->position() - l.pos;
+                const float L = core::length(d), step = std::min(L, 25.0f * dt);
+                if (L > 1e-3f) l.pos = l.pos + d * (step / L);
+            }
         if (taken || (l.life -= dt) <= 0.0f) { l = sv_.loot.back(); sv_.loot.pop_back(); } else ++k;
     }
     for (SurvivalState::Slot& s : sv_.slots)   // E3b: the backpack's critical state explodes after 3.0 s (or with the extinguish anim's end: PROV 3 s)
