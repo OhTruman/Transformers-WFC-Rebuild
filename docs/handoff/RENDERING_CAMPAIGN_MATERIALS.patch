@@ -1,0 +1,109 @@
+diff -ruN a/tools/render/campaign_gap_retest.py b/tools/render/campaign_gap_retest.py
+--- a/tools/render/campaign_gap_retest.py	1969-12-31 18:00:00.000000000 -0600
++++ b/tools/render/campaign_gap_retest.py	2026-10-23 03:51:08.199151400 -0500
+@@ -0,0 +1,33 @@
++# Re-test the campaign materials AssetTools' dry run (work/matc_dryrun/<CH>.json) found not compiling, with Rendering's matc (rt2
++# tools/render), in the same chapter package sets. Usage: retest.py
++import json, os, sys, collections
++sys.dont_write_bytecode = True
++sys.path.insert(0, r"F:/Transformers Rebuild/Rebuild-Rendering/tools/render")
++import matc
++from ue3obj import Repo, COOKED
++AT = r"F:/Transformers Rebuild/AssetTools"
++D = AT + "/work/matc_dryrun"
++FALLBACK = ['TransGame.xxx', 'TR_AllShader_p.xxx', 'UI_GFxHud_p.xxx']
++class StubTex:
++    def __init__(self, repo): self.R = repo
++    def __call__(self, path):
++        if not path: return None
++        return {'object': path, 'file': None, 'class': self.R.cls(path), 'srgb': True, 'dry_run': True}
++cooked = {f.lower(): f for f in os.listdir(COOKED)}
++tot = collections.Counter(); out = {}
++for f in sorted(os.listdir(D)):
++    if not f.endswith(".json"): continue
++    ch = f[:-5]; r = json.load(open(os.path.join(D, f), encoding="utf-8"))
++    fails = [k for k, v in r["results"].items() if v["result"] != "clean" and not v["control"]]
++    if not fails: continue
++    R = Repo(r["packages"], fallback=FALLBACK); tr = StubTex(R)
++    for mp in fails:
++        try:
++            g, info = matc.MatCompiler(R, mp, tr).build(); err = None
++        except Exception as ex:
++            err = '%s: %s' % (type(ex).__name__, ex)
++        out[mp] = {"chapter": ch, "before": r["results"][mp]["result"], "error": err}
++        tot["ok" if err is None else "fail"] += 1
++        print(("OK  " if err is None else "ERR ") + ch, mp, "" if err is None else err[:160])
++json.dump(out, open(r"F:/Transformers Rebuild/Rebuild-Rendering/work/camp_mat/retest.json", "w"), indent=1)
++print(dict(tot))
+diff -ruN a/tools/render/hlslexpr.py b/tools/render/hlslexpr.py
+--- a/tools/render/hlslexpr.py	2026-10-23 03:51:08.080745900 -0500
++++ b/tools/render/hlslexpr.py	2026-10-23 03:51:08.207680700 -0500
+@@ -119,10 +119,16 @@
+ 
+     def fn(self, name, a):
+         same = ('saturate', 'abs', 'normalize', 'sqrt', 'frac', 'sin', 'cos', 'exp', 'exp2', 'log', 'log2',
+-                'floor', 'ceil', 'rsqrt', 'sign')
++                'floor', 'ceil', 'rsqrt', 'sign', 'acos', 'asin', 'atan', 'tan')
+         g = {'frac': 'fract', 'rsqrt': 'inversesqrt'}.get(name, name)
+         if name == 'saturate':
+             return 'clamp(%s, 0.0, 1.0)' % a[0][0], a[0][1]
++        # screen-space derivatives (RE CAMPAIGN_MATERIAL_GAPS B.3: Xenos getTextureGradients): D3D y grows downward, the GL
++        # framebuffer's upward - ddy is the negated dFdy
++        if name == 'ddx':
++            return 'dFdx(%s)' % a[0][0], a[0][1]
++        if name == 'ddy':
++            return '(-dFdy(%s))' % a[0][0], a[0][1]
+         if name in same:
+             return '%s(%s)' % (g, a[0][0]), a[0][1]
+         if name in ('dot',):
+diff -ruN a/tools/render/matc.py b/tools/render/matc.py
+--- a/tools/render/matc.py	2026-10-23 03:51:08.107838700 -0500
++++ b/tools/render/matc.py	2026-10-23 03:51:08.215206700 -0500
+@@ -89,7 +89,8 @@
+             o = self.R.obj(p) or {}
+             p = (o.get('Parent') or {}).get('ref')
+         self.chain = chain
+-        self.master = p if p and self.R.cls(p) == 'Material' else None
++        # (RE CAMPAIGN_MATERIAL_GAPS A.0: a DecalMaterial is an ordinary material graph - the decal part is its vertex factory)
++        self.master = p if p and self.R.cls(p) in ('Material', 'DecalMaterial') else None
+         if not self.master:
+             raise CompileError('no master material for %s' % inst_path)
+         for mic in reversed(chain):      # parent first; child overrides
+@@ -456,7 +457,7 @@
+         exc = cast(ex[0], ex[1], 1) if ex else glf(n.get('Exponent', 3.0))
+         return 'pow(max(1.0 - max(dot(%s, m.cameraVector), 0.0), 0.0), %s)' % (cast(nrm[0], nrm[1], 3), exc), 1
+ 
+-    VARYING = {'DynamicParameter', 'LensFlareRadialDistance', 'LensFlareSourceDistance', 'LensFlareIntensity', 'LensFlareOcclusion',
++    VARYING = {'Ddx', 'Ddy', 'If', 'DynamicParameter', 'LensFlareRadialDistance', 'LensFlareSourceDistance', 'LensFlareIntensity', 'LensFlareOcclusion',
+                'LensFlareRayDistance', 'VertexColor', 'TextureSample', 'TextureSampleParameter2D', 'TextureCoordinate',
+                'ScreenPosition', 'PixelDepth', 'SceneDepth', 'DestDepth', 'CameraVector', 'ReflectionVector',
+                'LightVector', 'WorldPosition', 'ParticleSubUV', 'TextureSampleParameterCube',
+@@ -528,6 +529,28 @@
+     def x_LensFlareIntensity(self, c, n, p, o):
+         self.uses.add('lensflare'); return 'm.lensFlareIntensity', 1
+ 
++    # MaterialExpressionIf (RE CAMPAIGN_MATERIAL_GAPS B.1, C: SETGT / SETGTE + CNDGTE): A >= B ? (A > B ? AGreaterThanB : AEqualsB)
++    # : ALessThanB, exact float comparisons (no equality epsilon)
++    def x_If(self, c, n, p, o):
++        a = self.input(c, n, 'A', ('0.0', 1)); b = self.input(c, n, 'B', ('0.0', 1))
++        g = self.input(c, n, 'AGreaterThanB', ('0.0', 1)); e = self.input(c, n, 'AEqualsB', ('0.0', 1))
++        l = self.input(c, n, 'ALessThanB', ('0.0', 1))
++        t = max(g[1], e[1], l[1])
++        av, bv = self.tmp(1, cast(a[0], a[1], 1)), self.tmp(1, cast(b[0], b[1], 1))
++        return '(%s >= %s ? (%s > %s ? %s : %s) : %s)' % (av, bv, av, bv, cast(g[0], g[1], t), cast(e[0], e[1], t),
++                                                           cast(l[0], l[1], t)), t
++
++    # screen-space derivatives (RE B.2 / B.3): D3D y grows downward, GL's framebuffer y upward -> Ddy = -dFdy
++    def x_Ddx(self, c, n, p, o):
++        v = self.input(c, n, 'Input', ('0.0', 1)); return 'dFdx(%s)' % v[0], v[1]
++
++    def x_Ddy(self, c, n, p, o):
++        v = self.input(c, n, 'Input', ('0.0', 1)); return '(-dFdy(%s))' % v[0], v[1]
++
++    # CameraWorldPosition (RE B.5): the camera's world position in UE units / axes
++    def x_CameraWorldPosition(self, c, n, p, o):
++        return '(uCamPos.xzy * 100.0)', 3
++
+     def x_ParticleSubUV(self, c, n, p, o):
+         # M67: the particle's two SubUV cells (m.uv0 = cell 1, m.subUV2.xy = cell 2) lerped by its interp
+         # (m.subUV2.z; 0 for non-blend methods and for non-sprite draws) [RE pass 5 s16: fill writes both cells + Interp]

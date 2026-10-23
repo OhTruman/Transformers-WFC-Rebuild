@@ -119,10 +119,16 @@ class P:
 
     def fn(self, name, a):
         same = ('saturate', 'abs', 'normalize', 'sqrt', 'frac', 'sin', 'cos', 'exp', 'exp2', 'log', 'log2',
-                'floor', 'ceil', 'rsqrt', 'sign')
+                'floor', 'ceil', 'rsqrt', 'sign', 'acos', 'asin', 'atan', 'tan')
         g = {'frac': 'fract', 'rsqrt': 'inversesqrt'}.get(name, name)
         if name == 'saturate':
             return 'clamp(%s, 0.0, 1.0)' % a[0][0], a[0][1]
+        # screen-space derivatives (RE CAMPAIGN_MATERIAL_GAPS B.3: Xenos getTextureGradients): D3D y grows downward, the GL
+        # framebuffer's upward - ddy is the negated dFdy
+        if name == 'ddx':
+            return 'dFdx(%s)' % a[0][0], a[0][1]
+        if name == 'ddy':
+            return '(-dFdy(%s))' % a[0][0], a[0][1]
         if name in same:
             return '%s(%s)' % (g, a[0][0]), a[0][1]
         if name in ('dot',):
