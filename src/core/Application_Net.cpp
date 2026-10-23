@@ -584,6 +584,7 @@ void Application::runUdpSessionTest() {
     pump(1.0, [&] { return has(hostEv, T::HostOpened); });
     const SessionEvent* ho = find(hostEv, T::HostOpened);
     check(ho && !ho->joinCode.empty(), "HostOpened with a LAN code");
+    check(ho && ho->member == hostS.selfId() && !ho->member.fingerprint.empty(), "HostOpened carries the host's own member id");
     if (ho) {
         std::string back;
         check(net::UdpSession::decodeTarget(ho->joinCode, back) && back == ho->address, "the LAN code decodes to the host address");
@@ -597,13 +598,14 @@ void Application::runUdpSessionTest() {
     check(mj && mj->member == memS.selfId() && mj->info.displayName == "MemberPC", "host: MemberJoined with the member's id and name");
     const SessionEvent* jd = find(memEv, T::Joined);
     check(jd && jd->member == memS.selfId(), "Joined carries the member's own id");
-    mi.hasCharacter = true; mi.characterSlot = "Soldier"; memS.setMemberInfo(mi);
+    mi.hasCharacter = true; mi.characterSlot = "Soldier"; mi.mapVote = 2; memS.setMemberInfo(mi);
     hostEv.clear();
     pump(3.0, [&] { const SessionEvent* e = find(hostEv, T::MemberJoined); return e && e->info.hasCharacter; });
-    { const SessionEvent* e = find(hostEv, T::MemberJoined); check(e && e->info.characterSlot == "Soldier", "host: the member's updated info (MemberJoined again)"); }
+    { const SessionEvent* e = find(hostEv, T::MemberJoined); check(e && e->info.characterSlot == "Soldier" && e->info.mapVote == 2, "host: the member's updated info incl. its map vote (MemberJoined again)"); }
 
     frontend::SessionLobby lobby;
     lobby.gameModeTag = "TDM"; lobby.mapId = 3; lobby.settings["PointsToWin"] = "1000";
+    lobby.voteMaps = {3, 5, 8}; lobby.voteCounts = {0, 1, 2, 0}; lobby.voteRound = 1; lobby.voteOpen = true; lobby.voteWinner = -1;
     frontend::SessionSlot s0; s0.kind = frontend::SessionSlot::Kind::Human; s0.member = hostS.selfId(); s0.team = 0;
     frontend::SessionSlot s1; s1.kind = frontend::SessionSlot::Kind::Human; s1.member = memS.selfId(); s1.team = 1;
     frontend::SessionSlot b; b.kind = frontend::SessionSlot::Kind::Bot; b.team = 0;
@@ -611,7 +613,9 @@ void Application::runUdpSessionTest() {
     hostS.publishLobby(lobby);
     pump(3.0, [&] { const SessionEvent* e = find(memEv, T::LobbyState); return e && e->lobby.slots.size() == 3; });   // the published one
     { const SessionEvent* e = find(memEv, T::LobbyState);
-      check(e && e->lobby.slots.size() == 3 && e->lobby.settings.count("PointsToWin") && e->lobby.mapId == 3, "member: LobbyState with the slots and settings"); }
+      check(e && e->lobby.slots.size() == 3 && e->lobby.settings.count("PointsToWin") && e->lobby.mapId == 3, "member: LobbyState with the slots and settings");
+      check(e && e->lobby.voteMaps == std::vector<int>({3, 5, 8}) && e->lobby.voteCounts == std::vector<int>({0, 1, 2, 0}) && e->lobby.voteRound == 1 &&
+            e->lobby.voteOpen && e->lobby.voteWinner == -1, "member: LobbyState carries the map vote (options, counts, round, open)"); }
 
     hostS.setLaunch("MP_IAC_Streets?GameModeTag=TDM?PointsToWin=1000", 77u, lobby);
     hostS.requestStart();

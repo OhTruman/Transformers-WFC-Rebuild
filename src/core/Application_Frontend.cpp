@@ -1201,6 +1201,10 @@ void Application::qaTick(const platform::InputFrame& in) {
 }
 
 void Application::shutdownFrontend() {
+    // [Systems] the net driver first: its Lockstep says bye through the session's match view, and the session is the frontend
+    // flow's (frontend_.reset() destroys it; the driver was destroyed after it in ~Application -> exit crash 0xc0000005, Frontend 01:42)
+    netDriver_.reset();
+    udpSession_ = nullptr;
     if (frontend_) { frontend_->setAudio(nullptr); frontend_->setSceneRenderer(nullptr); }
     g_scene.reset();
     g_frontendAudio.reset();

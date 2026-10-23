@@ -1,0 +1,110 @@
+diff -ruN a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+--- a/src/core/Application_Frontend.cpp	2026-10-23 01:57:13.060841400 -0500
++++ b/src/core/Application_Frontend.cpp	2026-10-23 01:57:13.076896100 -0500
+@@ -1168,6 +1168,10 @@
+ }
+ 
+ void Application::shutdownFrontend() {
++    // [Systems] the net driver first: its Lockstep says bye through the session's match view, and the session is the frontend
++    // flow's (frontend_.reset() destroys it; the driver was destroyed after it in ~Application -> exit crash 0xc0000005, Frontend 01:42)
++    netDriver_.reset();
++    udpSession_ = nullptr;
+     if (frontend_) { frontend_->setAudio(nullptr); frontend_->setSceneRenderer(nullptr); }
+     g_scene.reset();
+     g_frontendAudio.reset();
+diff -ruN a/src/core/Application_Net.cpp b/src/core/Application_Net.cpp
+--- a/src/core/Application_Net.cpp	2026-10-23 01:57:13.148140500 -0500
++++ b/src/core/Application_Net.cpp	2026-10-23 01:57:13.163192100 -0500
+@@ -584,6 +584,7 @@
+     pump(1.0, [&] { return has(hostEv, T::HostOpened); });
+     const SessionEvent* ho = find(hostEv, T::HostOpened);
+     check(ho && !ho->joinCode.empty(), "HostOpened with a LAN code");
++    check(ho && ho->member == hostS.selfId() && !ho->member.fingerprint.empty(), "HostOpened carries the host's own member id");
+     if (ho) {
+         std::string back;
+         check(net::UdpSession::decodeTarget(ho->joinCode, back) && back == ho->address, "the LAN code decodes to the host address");
+@@ -597,13 +598,14 @@
+     check(mj && mj->member == memS.selfId() && mj->info.displayName == "MemberPC", "host: MemberJoined with the member's id and name");
+     const SessionEvent* jd = find(memEv, T::Joined);
+     check(jd && jd->member == memS.selfId(), "Joined carries the member's own id");
+-    mi.hasCharacter = true; mi.characterSlot = "Soldier"; memS.setMemberInfo(mi);
++    mi.hasCharacter = true; mi.characterSlot = "Soldier"; mi.mapVote = 2; memS.setMemberInfo(mi);
+     hostEv.clear();
+     pump(3.0, [&] { const SessionEvent* e = find(hostEv, T::MemberJoined); return e && e->info.hasCharacter; });
+-    { const SessionEvent* e = find(hostEv, T::MemberJoined); check(e && e->info.characterSlot == "Soldier", "host: the member's updated info (MemberJoined again)"); }
++    { const SessionEvent* e = find(hostEv, T::MemberJoined); check(e && e->info.characterSlot == "Soldier" && e->info.mapVote == 2, "host: the member's updated info incl. its map vote (MemberJoined again)"); }
+ 
+     frontend::SessionLobby lobby;
+     lobby.gameModeTag = "TDM"; lobby.mapId = 3; lobby.settings["PointsToWin"] = "1000";
++    lobby.voteMaps = {3, 5, 8}; lobby.voteCounts = {0, 1, 2, 0}; lobby.voteRound = 1; lobby.voteOpen = true; lobby.voteWinner = -1;
+     frontend::SessionSlot s0; s0.kind = frontend::SessionSlot::Kind::Human; s0.member = hostS.selfId(); s0.team = 0;
+     frontend::SessionSlot s1; s1.kind = frontend::SessionSlot::Kind::Human; s1.member = memS.selfId(); s1.team = 1;
+     frontend::SessionSlot b; b.kind = frontend::SessionSlot::Kind::Bot; b.team = 0;
+@@ -611,7 +613,9 @@
+     hostS.publishLobby(lobby);
+     pump(3.0, [&] { const SessionEvent* e = find(memEv, T::LobbyState); return e && e->lobby.slots.size() == 3; });   // the published one
+     { const SessionEvent* e = find(memEv, T::LobbyState);
+-      check(e && e->lobby.slots.size() == 3 && e->lobby.settings.count("PointsToWin") && e->lobby.mapId == 3, "member: LobbyState with the slots and settings"); }
++      check(e && e->lobby.slots.size() == 3 && e->lobby.settings.count("PointsToWin") && e->lobby.mapId == 3, "member: LobbyState with the slots and settings");
++      check(e && e->lobby.voteMaps == std::vector<int>({3, 5, 8}) && e->lobby.voteCounts == std::vector<int>({0, 1, 2, 0}) && e->lobby.voteRound == 1 &&
++            e->lobby.voteOpen && e->lobby.voteWinner == -1, "member: LobbyState carries the map vote (options, counts, round, open)"); }
+ 
+     hostS.setLaunch("MP_IAC_Streets?GameModeTag=TDM?PointsToWin=1000", 77u, lobby);
+     hostS.requestStart();
+diff -ruN a/src/net/UdpSession.cpp b/src/net/UdpSession.cpp
+--- a/src/net/UdpSession.cpp	2026-10-23 01:57:12.972037100 -0500
++++ b/src/net/UdpSession.cpp	2026-10-23 01:57:12.987590200 -0500
+@@ -34,7 +34,7 @@
+ namespace {
+ 
+ using namespace frontend;
+-constexpr uint32_t kProtocol = 0x57464302;   // "WFC" v2 (online phase 2a)
++constexpr uint32_t kProtocol = 0x57464303;   // "WFC" v3 (the map vote fields appended to the member / lobby records)
+ enum : uint8_t {
+     kJoin = 0x50, kJoinOk = 0x51, kJoinFail = 0x52,
+     kLobby = 0x40, kPeers = 0x41, kInfo = 0x42, kLaunch = 0x43, kLoaded = 0x44, kPeerLoaded = 0x45, kAllLoaded = 0x46,
+@@ -64,6 +64,7 @@
+     void info(const SessionMemberInfo& m) {
+         str(m.id.fingerprint); str(m.displayName); u8((int)m.platform); i32(m.level); u8(m.hasCharacter ? 1 : 0); str(m.characterSlot);
+         str(m.iconicCharacter); strs(m.loadout); i32(m.teamRequest);
++        i32(m.mapVote);                                   // v3: the public lobby map vote, appended last (Frontend 5f19f40e)
+     }
+     void lobby(const SessionLobby& l) {
+         str(l.gameModeTag); u16((int)l.settings.size()); for (const auto& kv : l.settings) { str(kv.first); str(kv.second); }
+@@ -72,6 +73,9 @@
+         for (const SessionSlot& s : l.slots) { u8((int)s.kind); str(s.member.fingerprint); i32(s.team); u8(s.connecting ? 1 : 0); }
+         u16((int)l.members.size()); for (const SessionMemberInfo& m : l.members) info(m);
+         u8(l.matchRunning ? 1 : 0); u8(l.countingDown ? 1 : 0); i32(l.countdown);
++        u8((int)l.voteMaps.size()); for (int m : l.voteMaps) i32(m);       // v3: the map vote, appended last
++        u8((int)l.voteCounts.size()); for (int c : l.voteCounts) i32(c);
++        u8(l.voteRound); u8(l.voteOpen ? 1 : 0); i32(l.voteWinner);
+     }
+ };
+ struct R {
+@@ -89,6 +93,7 @@
+         SessionMemberInfo m;
+         m.id.fingerprint = str(); m.displayName = str(); m.platform = (SessionPlatform)u8(); m.level = i32(); m.hasCharacter = u8() != 0;
+         m.characterSlot = str(); m.iconicCharacter = str(); m.loadout = strs(); m.teamRequest = i32();
++        m.mapVote = i32();
+         return m;
+     }
+     SessionLobby lobby() {
+@@ -101,6 +106,9 @@
+         l.members.resize((size_t)u16());
+         for (SessionMemberInfo& m : l.members) m = info();
+         l.matchRunning = u8() != 0; l.countingDown = u8() != 0; l.countdown = i32();
++        l.voteMaps.resize((size_t)u8()); for (int& m : l.voteMaps) m = i32();
++        l.voteCounts.resize((size_t)u8()); for (int& c : l.voteCounts) c = i32();
++        l.voteRound = u8(); l.voteOpen = u8() != 0; l.voteWinner = i32();
+         return l;
+     }
+ };
+@@ -290,7 +298,7 @@
+     if (!hostPending_ || !t_) return;
+     if (!serviceAddr_.empty() && serviceCode_.empty() && now_ - hostStart_ < 1.5) return;   // the service code first (tickService registers)
+     hostPending_ = false;
+-    SessionEvent e; e.type = SessionEvent::Type::HostOpened;
++    SessionEvent e; e.type = SessionEvent::Type::HostOpened; e.member = self_.id;   // the host learns its own id (Frontend: its lobby slot)
+     e.address = t_->localAddress();
+     e.joinCode = !serviceCode_.empty() ? serviceCode_ : publicEp_.empty() ? lanCode(e.address) : internetCode(publicEp_, e.address);
+     LOG_INFO("session: hosting at %s, public %s (code %s), member id %s", e.address.c_str(), publicEp_.empty() ? "unknown (LAN only)" : publicEp_.c_str(),

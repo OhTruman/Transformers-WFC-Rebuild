@@ -34,7 +34,7 @@ namespace net {
 namespace {
 
 using namespace frontend;
-constexpr uint32_t kProtocol = 0x57464302;   // "WFC" v2 (online phase 2a)
+constexpr uint32_t kProtocol = 0x57464303;   // "WFC" v3 (the map vote fields appended to the member / lobby records)
 enum : uint8_t {
     kJoin = 0x50, kJoinOk = 0x51, kJoinFail = 0x52,
     kLobby = 0x40, kPeers = 0x41, kInfo = 0x42, kLaunch = 0x43, kLoaded = 0x44, kPeerLoaded = 0x45, kAllLoaded = 0x46,
@@ -64,6 +64,7 @@ struct W {
     void info(const SessionMemberInfo& m) {
         str(m.id.fingerprint); str(m.displayName); u8((int)m.platform); i32(m.level); u8(m.hasCharacter ? 1 : 0); str(m.characterSlot);
         str(m.iconicCharacter); strs(m.loadout); i32(m.teamRequest);
+        i32(m.mapVote);                                   // v3: the public lobby map vote, appended last (Frontend 5f19f40e)
     }
     void lobby(const SessionLobby& l) {
         str(l.gameModeTag); u16((int)l.settings.size()); for (const auto& kv : l.settings) { str(kv.first); str(kv.second); }
@@ -72,6 +73,9 @@ struct W {
         for (const SessionSlot& s : l.slots) { u8((int)s.kind); str(s.member.fingerprint); i32(s.team); u8(s.connecting ? 1 : 0); }
         u16((int)l.members.size()); for (const SessionMemberInfo& m : l.members) info(m);
         u8(l.matchRunning ? 1 : 0); u8(l.countingDown ? 1 : 0); i32(l.countdown);
+        u8((int)l.voteMaps.size()); for (int m : l.voteMaps) i32(m);       // v3: the map vote, appended last
+        u8((int)l.voteCounts.size()); for (int c : l.voteCounts) i32(c);
+        u8(l.voteRound); u8(l.voteOpen ? 1 : 0); i32(l.voteWinner);
     }
 };
 struct R {
@@ -89,6 +93,7 @@ struct R {
         SessionMemberInfo m;
         m.id.fingerprint = str(); m.displayName = str(); m.platform = (SessionPlatform)u8(); m.level = i32(); m.hasCharacter = u8() != 0;
         m.characterSlot = str(); m.iconicCharacter = str(); m.loadout = strs(); m.teamRequest = i32();
+        m.mapVote = i32();
         return m;
     }
     SessionLobby lobby() {
@@ -101,6 +106,9 @@ struct R {
         l.members.resize((size_t)u16());
         for (SessionMemberInfo& m : l.members) m = info();
         l.matchRunning = u8() != 0; l.countingDown = u8() != 0; l.countdown = i32();
+        l.voteMaps.resize((size_t)u8()); for (int& m : l.voteMaps) m = i32();
+        l.voteCounts.resize((size_t)u8()); for (int& c : l.voteCounts) c = i32();
+        l.voteRound = u8(); l.voteOpen = u8() != 0; l.voteWinner = i32();
         return l;
     }
 };
@@ -290,7 +298,7 @@ void UdpSession::finishHostOpened() {
     if (!hostPending_ || !t_) return;
     if (!serviceAddr_.empty() && serviceCode_.empty() && now_ - hostStart_ < 1.5) return;   // the service code first (tickService registers)
     hostPending_ = false;
-    SessionEvent e; e.type = SessionEvent::Type::HostOpened;
+    SessionEvent e; e.type = SessionEvent::Type::HostOpened; e.member = self_.id;   // the host learns its own id (Frontend: its lobby slot)
     e.address = t_->localAddress();
     e.joinCode = !serviceCode_.empty() ? serviceCode_ : publicEp_.empty() ? lanCode(e.address) : internetCode(publicEp_, e.address);
     LOG_INFO("session: hosting at %s, public %s (code %s), member id %s", e.address.c_str(), publicEp_.empty() ? "unknown (LAN only)" : publicEp_.c_str(),
