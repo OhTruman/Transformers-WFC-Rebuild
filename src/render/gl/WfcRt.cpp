@@ -1281,6 +1281,8 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                         ++fr.smokeBlobN;
                     }
                 }
+                if (frameNo_ % 300 == 0 && (fr.smokeBlobN > 0 || !smokeVolAcc_.empty()))
+                    LOG_INFO("wfc: smoke volume: %d of %zu blobs (frame %d)", fr.smokeBlobN, smokeVolAcc_.size(), (int)frameNo_);
                 smokeVolAcc_.clear();
                 rtVolFrame_ = frameNo_;
             }

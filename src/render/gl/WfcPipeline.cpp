@@ -1158,6 +1158,19 @@ std::string Pipeline::relocateDataPath(const std::string& path) const {
     k = low.rfind(kRender);
     const size_t sl = dataDir_.find_last_of("/\\");
     if (k != std::string::npos && sl != std::string::npos) return dataDir_.substr(0, sl + 1) + path.substr(k + kRender.size());
+    // (campaign units: AssetTools' .../campaign_render/<chapter>/<unit>[_m]/<file> -> <render root>/<unit>/<file> - the
+    // sublevel's own textures, e.g. its cubemap faces, written before the per-unit layout dropped the _m)
+    static const std::string kCampaign = "/campaign_render/";
+    k = low.rfind(kCampaign);
+    if (k != std::string::npos && sl != std::string::npos) {
+        const size_t u0 = low.find('/', k + kCampaign.size());            // after <chapter>/
+        const size_t u1 = u0 == std::string::npos ? u0 : low.find('/', u0 + 1);
+        if (u1 != std::string::npos) {
+            std::string unit = path.substr(u0 + 1, u1 - u0 - 1);
+            if (unit.size() > 2 && unit.compare(unit.size() - 2, 2, "_m") == 0) unit.resize(unit.size() - 2);
+            return dataDir_.substr(0, sl + 1) + unit + path.substr(u1);
+        }
+    }
     return path;
 }
 
@@ -10000,7 +10013,7 @@ bool Pipeline::loadSublevel(const std::string& unit) {
     sl.unit = unit; sl.dir = dir;
     {   // its BSP and static decals: extra world meshes, lit through the unit's per-component lightmap records
         MeshData bsp;
-        if (assets::loadGlb(dir + "/bsp.glb", bsp)) sl.bsp = upload(bsp);
+        if (platform::dataFileSize(dir + "/bsp.glb") >= 0 && assets::loadGlb(dir + "/bsp.glb", bsp)) sl.bsp = upload(bsp);   // (most units have no BSP: probed, not an error)
         MeshData dec;
         if (assets::loadGlb(dir + "/decals.glb", dec)) {
             sl.decal = upload(dec);
