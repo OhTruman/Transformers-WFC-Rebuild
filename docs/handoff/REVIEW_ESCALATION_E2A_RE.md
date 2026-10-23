@@ -77,3 +77,8 @@ after its RespawnTime (2.0 s). The generator returns to level 0 and is chargeabl
   cosmetic; ours flags the fail only for a holder. Note it for the audio pass.
 - **E4 reminder:** the original ignores the generator press while a revivable pawn is targeted (revive first). Add that when the
   downed state lands.
+
+
+**Correction (2026-10-23, REVIEW_ESCALATION_E2B1_RE §3):** the re-show happens only once per purchase. A second take at level 0
+runs CheckPower with CurrentPowerLevel 0: power clamps to 0 and there's no event, so the item stays hidden until it's bought again.
+So the cycle is a bought item plus one free respawn, not "out for good".

@@ -89,3 +89,37 @@ Three mechanisms in the sequence.
 - Its `HmDestructibleStateNotification` ("BOOM!") → the **PathNodes Turn On** (the horde's route opens).
 - **Net:** while a player stands in TV 8879, a horde pawn entering TV 13849 smashes the window and opens three path nodes.
   TV 8879 is also the wave-6 gate's touch volume (b).
+
+## 5. Follow-ups (2026-10-23)
+
+**5.1 TnDroppedPickupWeapon (C)**
+- **LifeSpan:** `PostBeginPlay` → `MultiplayerLifeSpan` **30 s** when the skill-data index is 0, else `CampaignLifeSpan` **120 s**.
+  **TnSurvivalGame.GetSkillDataIndex = 1, so Escalation drops last 120 s.**
+- **Taken by press only:** TnDroppedPickup CDO `bPickupWhenTouched = false`. The same `TakePickUp` path as factories: any
+  player's contextual press, subject to `CanPickupInventory`. The horde doesn't (no pickup goal; H).
+- **A weapon with no ammo is destroyed instead of dropped** (`TnWeapon.ShouldDestroyOnDrop`).
+
+**5.2 Carried heavies (C)**
+- **Ground speed × 0.75** while equipped (`GroundSpeedMultiplier` in both HeavyTurret_Rocket_SP and IonicDisplacer_SP data,
+  applied on WeaponEquipped, removed on put-down).
+- **Tossed on any switch away:** `WeaponPuttingDown.EndState` tosses a WeaponType 5 weapon. `TnInventoryManager.ChangedWeapon`
+  tosses any heavy that isn't current. `TnPawn.Transform` to vehicle form calls `DropHeavyWeapons`.
+- **Robot weapons stay in inventory.** The heavy isn't a slot (AddInventory re-types only primary / secondary). H: it's activated
+  as the current weapon on pickup (stock AddInventory activation; the robot weapon is put down, which keeps it).
+- **Ammo-based, not heat:** HeatMax 0 in the SP data; clip only (rocket 10, ion 300, no reserve).
+  - Empty → `ShouldDestroyOnDrop` = true, so when it's put down it's destroyed instead of dropped.
+  - H: an empty weapon triggers the stock switch-to-best, which puts the heavy down. The overheat-destroy path
+    (`Overheated.OverheatEndComplete` → DestroyActor for a non-AI heavy) only applies to heat-based data.
+
+**5.3 One press inside a generator volume with a pickup in reach (C mechanism, H priority)**
+- `TnPlayerControllerSurvival.PressXButton` / `PressKeyboardInteractKey` first calls the base handler (the contextual command:
+  pickup), then **always** `GeneratorInputHandler.OnPress`.
+- So **the same press arms draining** (unless a revivable pawn is targeted) **and runs the active contextual command**. If the
+  pickup command is the active one, it's taken too.
+- H: which contextual command is active when both the generator and the pickup commands are registered (ContextualCommander
+  priority; not traced).
+
+**5.4 SetPlayerDefaults in SV (C)**
+- `TnSurvivalGame.SetPlayerDefaults`: base defaults (the class loadout), then **remove the primary (type 1) and secondary
+  (type 2) weapons**, then `CreateInventory(TnWeaponAssaultRifle)` (with bDoNotActivate when in vehicle form).
+- **The grenade bag and the class abilities are untouched**: only the two typed weapons are removed.
