@@ -625,7 +625,8 @@ int Match::findPlayerStart(int p) {
     for (size_t i = 0; i < starts_.size(); ++i) {
         const Start& s = starts_[i];
         if (s.generated) continue;
-        bool ok = s_.teamGame ? (!s.ffa && s.team == P.team) : s.ffa;
+        // Survival: every TnTeamPlayerStart serves the players (Remnant's carry no team); never the director's horde points (team 254).
+        bool ok = s_.teamGame ? (!s.ffa && (s.team == P.team || (s_.survival && s.team != 254))) : s.ffa;
         if (ok && safe((int)i)) return (int)i;
     }
     // CUSTOM-GAME EXTENSION (33 participants): FFA maps author 10-27 FFA starts (MaxPlayers 10), so once they are all occupied any
