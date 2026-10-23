@@ -4066,3 +4066,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   dumps); A1 p60 shows the pod + lit floor (one dark wedge for Rendering's eye pass); esc_p05 unchanged (faithful). Shots
   Rebuild-Frontend/work/bins/final2/. Remaining before the cut: Experimental pre re-run, AssetTools chapters (~14:30),
   the user's reboot, then the timed gate.
+2026-10-23 11:57 EYE PASS on 903b2ab7: Off clean everywhere; A1 pod draws. One Realistic-only pre-existing defect: a character near the
+  camera drawn pure black (D5 Megatron; likely zero ambient from an unusable RT probe cell). DECISION: fix now (the gate
+  waits on the reboot anyway; headline mode): Rendering falls back to the bake's ambient; one D5 Realistic confirm shot.
