@@ -3615,3 +3615,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 01:38 Gorge pre-age capture INCONCLUSIVE (unlockstepped views, particle phase); the pre-age fix stands on RE + review; Systems owns a
   numeric proof (FXLIVELOG burst size on the catch-up tick). Smoke first look: tiny diff (no probe grid on Streets) -> Rendering
   fixes the reference source (computeEnv at player starts / nav points) before a sheet. CAMPAIGN_BOSSES_RE §A1 merged.
+2026-10-23 01:41 Systems CARD FREE: #5 PASS (jet death smoke 101 s -> 7.3 s; nothing older than 36 s); #9 closes with one head-exe FXLIVELOG
+  run in their next slot + the catch-up numbers. Card -> Frontend two-window retest 01:41 -> Rendering smoke -> Systems.
+  CAMPAIGN_BOSSES §A2 / §A3 merged.
