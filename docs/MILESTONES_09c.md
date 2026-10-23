@@ -3944,3 +3944,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 08:51 CAMPAIGN EYE PASS (Rendering): D5 PASS in Off (the original's grade) + Realistic (lamp highlights, contact shadows, no
   blotches); A1 render path works (47 units, calibration + post chain active); one Realistic-only cyan horizon line (fix
   pending); the A1 geometry pass rides the next milestone run after streaming-at-Started.
+2026-10-23 08:54 MERGED 4e23161e campaign load fix (loading screen between RT phases; decal grid built once: -15 s + 630 MB churn on A1).
+  Rendering -> real streaming (load / unload units at runtime, RT add / remove) on Gameplay's loadChapterUnits({unit})
+  at Started contract; cyan horizon line deferred to the next milestone run with play views.
