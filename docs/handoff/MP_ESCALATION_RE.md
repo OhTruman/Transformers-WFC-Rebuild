@@ -570,5 +570,5 @@ weapons, loot and chassis are Escalation-specific.
 
 **Corrections (2026-10-23, ESCALATION_HORDE_AI_RE):**
 - In Escalation the boss Tank spawns in **robot form, with no fuel cell** (its AICD has no StartingForm), so the §9.2 "phase 1" applies only to the campaign tank.
-- The Jet and CQC loot class is **SoldierDec** (4 ability resources), not GENERIC.
+- ~~The Jet loot class is SoldierDec~~: **withdrawn**. Loot uses the spawn-list entry's class: the Jet is GENERIC (nothing); CQC SoldierDec; HoloBrute SoldierAut (4). See ESCALATION_WAVES_RE.
 - JetStrafingRun only targets enemies in jet form.

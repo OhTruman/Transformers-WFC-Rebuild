@@ -203,3 +203,13 @@ The 15 Escalation templates are:
 
 ## Open
 - None of substance. Remaining H: the exact broken-armour collision.
+
+
+**⚠ Correction (2026-10-23, ESCALATION_WAVES_RE):** loot on a horde death uses the **spawn-list entry's** LootClassification
+(`TnSurvivalGame.GetLootClassificationFor` reads `SpawnList.Enemies[EnemyTypeIndex].LootClassification`), **not the AICD's**. So:
+- **Jet → GENERIC → no class drop** (§1 / §5's "SoldierDec" was wrong; the old MP_ESCALATION §7.3 was right).
+- **HoloBrute (Remnant) → SoldierAut → 4 pickups** (not "nothing").
+- Spider GENERIC → nothing.
+- BrokenHope Titan waves 9–10 = TitanDec, 10+ = BruteDec (both 7).
+- Remnant Titan 7–9 = BruteAut, 11+ = TitanAut (both 7).
+- Every kill still adds +1, plus headshot +5 / melee +1 / explosion +1.
