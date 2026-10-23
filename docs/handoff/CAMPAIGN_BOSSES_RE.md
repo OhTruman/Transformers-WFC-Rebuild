@@ -166,3 +166,48 @@ A3 has no boss AI of its own. It has a **VIP escort / defend** and a **heavy tan
   - tank health monitor: **≤ 50** → a remote event (H: the defeat sequence).
 - Checkpoints: `OmegaTankCheckpointActivated` / `DefeatGigantorCheckpointActivated`.
 - Another tank in Caves_Split / Routing3C uses the same template, plus move-to and untargetable-at-spawn hooks.
+
+---
+
+## A5_TRY: Trypticon (per-stage action sets)
+
+The stage mechanics, weak points and TrypticonEvents outputs are in **SETPIECES §2**. This section adds the per-stage AI
+parameters and the Kismet hooks (C, from TR_Trypticon_AI_p and the A5 kismet manifests).
+
+### Template (C)
+- **Pawn:** `Trypticon_AICD` → `TnTrypticonPawnContent`, chassis Trypticon_ROBODEF.
+- **Default set:** ScanningIdle only. `Stages[]` replaces the action set per stage; the goal set is always Trypticon_AiGoalSet
+  (React, Emote, Kill, Idle).
+- **Targeting:** sensors LOS + threat, with these evaluators:
+  - **RoundRobin** (each player in turn gets threat **+3 for 7 s**; AI ignored), so he spreads attacks across the trio;
+  - **TargetDowned −10**: he ignores downed players;
+  - Weapon-based and Cloaked evaluators (defaults).
+
+### Stage action sets (C)
+
+| Stage (stance) | Action | Parameters |
+|---|---|---|
+| **1A** (standing) | **ShoulderCannons** | AttackLength **8 s**: `Shooting_ShoulderCannons_start` → loop `Shooting_ShoulderCannons` → `_end`; blend 0.5; cost 2 |
+| | **Mouth mortar** | TnProjectileTrypticonMouthMortar from WeaponSocket_MouthMortarStanding: **5 shells**, intro 1.79 s, then one per **1.802 s**; first available after **13 s**, then every **35 s**; usage interval 12 s |
+| | Reactions | React_Wounded, React_Bump (blend 0.3) |
+| **1B** (standing) | **MortarFrenzy** | TnProjectileTrypticonMultipleMortar: **9 shells**, intro 1.13 s, one per **1.0 s**; first after **18 s**, then every **38 s** |
+| | **TailSmash** (L / R) | **175 damage** at **6.58 s** into the anim, to every non-team pawn in the paired damage volume; impulse robot 2000 / vehicle 1000; cost 1 |
+| | **ExposeChest** | opens the chest plates (blend 0.3 / 0.5); while open they're damageable (SETPIECES §2) |
+| | Reaction | React_Wounded = `HitReaction_ExposedRibs_R` |
+| **2** (crouching) | **TailStrike** | intro `Melee_ScorpionStrike_Start`. **Left / Forward / Right** strike: anim `Melee_ScorpionStrike_L/F/R`, volume `TRYPVOLUME_*TailStrike`, Kismet event `TRYPTICON_*TailStrike`. **AttackDelay 5.2 s, DamageDelay 4.85 s, 175 damage** (TnDamageTypeTrypticonTailSmash), impulse 2000 / 1000; cost 2 |
+| | **Head mortar** | TnProjectileTrypticonHeadMortar from WeaponSocket_MouthMortar: **35 shells**, intro 2.6 s, one per **0.25 s**; first after **20 s**, then every **65 s** |
+| | **ScriptedAttack** | `TRYPTICON_TestAttack1`, anim `Mangaburst_Crouch`; first after **10 s**, then every **35 s** (fires TrypticonEvents 13) |
+| | **RoarEmote** | `Taunt_Roar_Crouch` / `Nav_Crouch_Idle_Spiders`; TimeBeforeFinalRoar **20 s** |
+
+### Kismet hooks (C)
+1. **Stage switches** (`SeqAct_TnSetTrypticonStage`; no Stage property = 1A):
+   - 1A: intro tail-spike sequence;
+   - **1B:** after the stage-1 bombing-run minimatic (`STAGE1A_POSTBOMBINGRUN` / `STAGE1_BOMBINGRUN_MINIMATIC`);
+   - **2:** `STAGE1_TRANSITIONTOSTAGE2_MINIMATIC`, plus an electrocution set-up path.
+2. **TrypticonEvents:**
+   - tail smash / strike → remote events, and Delays that drive the `AddImpulseToPawnInVolume` knock-backs (15 in A5);
+   - every weak-point destroyed → **AddCompetitiveScore** + a remote event;
+   - **Second Chest Destroyed** → stage-1 → 2 transition;
+   - **Third Back Destroyed** → the end of the fight (3 remote events: outro).
+3. **Spiders** (27 factories) and TrypticonSentry groups (shoulder / tail sentries, SETPIECES §2) are spawned / woken by the stage
+   sequences.
