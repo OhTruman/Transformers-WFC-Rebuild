@@ -5267,13 +5267,15 @@ void Pipeline::setChapterUnitVisible(const std::string& unit, bool visible) {
 }
 
 void Pipeline::rtLoadData() {
+    // (the loading screen presents between the phases: A1 Realistic's were one 16 s step - masked world 2.7 s, GI passes, the
+    // probe grid 5.8 s)
     r1CheckGl();
-    if (r1Map_ && rtShadowAoOn() && !r1Built_) r1Build();   // (R1: the V_bake pages / arrays under the loading screen, not in frame 1)
-    if (!giFinished_ && !giTexels_.empty()) giFinishTexels();   // (R4: the gutter list, the coverage maps freed)
+    if (r1Map_ && rtShadowAoOn() && !r1Built_) { r1Build(); yieldLoad(); }   // (R1: the V_bake pages / arrays under the loading screen, not in frame 1)
+    if (!giFinished_ && !giTexels_.empty()) { giFinishTexels(); yieldLoad(); }   // (R4: the gutter list, the coverage maps freed)
     // (RT: the masked-world atlas and the reflection hit data under the loading screen too - the hit data's texture readbacks
     // were a 2-3 s hitch on the first Realistic frame; a mid-map switch to Realistic still builds them at that moment)
-    if (rtShadowAoOn() && !rtFailed_ && !rtMaskedBuilt_) rtBuildMasked();
-    if (rtShadowAoOn() && !rtFailed_ && !rtHitBuilt_ && rtReflPass()) rtBuildHit();
+    if (rtShadowAoOn() && !rtFailed_ && !rtMaskedBuilt_) { rtBuildMasked(); yieldLoad(); }
+    if (rtShadowAoOn() && !rtFailed_ && !rtHitBuilt_ && rtReflPass()) { rtBuildHit(); yieldLoad(); }
     if (!giSetupDone_ && giFinished_ && rtHitBuilt_) giSetup();   // (R4: the RT lightmap's buffers, pages, load passes)
 }
 
@@ -5286,7 +5288,7 @@ void Pipeline::endChapterUnits(const std::vector<int>& worldMeshes) {
     std::vector<int> add;
     for (int id : worldMeshes) if (id >= 0 && (size_t)id < meshes_.size() && meshes_[(size_t)id].world && !inRt(id)) add.push_back(id);
     for (const SublevelRT& sl : sublevels_) if (sl.bsp >= 0 && (size_t)sl.bsp < meshes_.size() && !inRt(sl.bsp)) add.push_back(sl.bsp);
-    for (int id : add) rtBuildWorld(id);
+    for (int id : add) { rtBuildWorld(id); yieldLoad(); }   // (the loading screen presents between units: A1 Realistic had a 16 s gap)
     LOG_INFO("chapter: %zu unit mesh(es) added to the RT static world (%zu sets in all)", add.size(), rtSets_.size());
     BindFramebuffer(GL_FRAMEBUFFER, 0);
     rtLoadData();

@@ -482,7 +482,7 @@ void Pipeline::giSetup() {
     J.mix[3] = gain;
     giSliceFirst_ = 0; giSliceCount_ = giTexels_.size();   // (every layer refreshed once)
     giAfterFrame();
-    if (ran) giBuildProbes();                            // (S3: from the calibrated RT lightmap)
+    if (ran) { yieldLoad(); giBuildProbes(); }           // (S3: from the calibrated RT lightmap; the loading screen first)
     if (ran) {
         const double r = measure(true);
         LOG_INFO("RT GI check: RT / bake mean ratio %.2f at bounce gain %.3f%s", r, gain, fixedGain >= 0.0f ? " (WFC_RT_GIBOUNCE)" : "");

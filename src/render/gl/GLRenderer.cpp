@@ -1619,7 +1619,8 @@ public:
         watchdog::phase("uploadMesh");
         if (mesh.empty()) return kInvalidMesh;
         addDecalReceivers(mesh);
-        if (recv_.dirty && mesh.vertexCount() > 100000) buildDecalGrid();   // the world: under the loading screen
+        if (recv_.dirty && mesh.vertexCount() > 100000 && !chapterLoading_) buildDecalGrid();   // the world: under the loading screen
+        // (a chapter's units: once after the last one - per unit, A1's 47 rebuilt a growing grid, 0.3-0.4 s each, to 630 MB)
         const int gpu = wfc_.active() ? wfc_.upload(mesh) : -1;
         if (gpu >= 0 && mesh.vertexCount() > 100000 && !loadingFrontendScene_ && !uploadingFrontendWorld_)
             wfc_.warmupWorld(gpu, vpW_, vpH_);   // M75: the driver's first-draw work, under the loading screen
@@ -1681,6 +1682,7 @@ public:
     }
     // (campaign chapters, stage 1) the chapter's other units merged into the loaded Pipeline; their world.glb uploaded here
     std::vector<MeshHandle> chapterMeshes_;
+    bool chapterLoading_ = false;                     // (the units' uploads: the decal grid waits for the last)
     int chapterFrame_ = -1;
     int loadChapterUnits(const std::string& chapterDir, const std::vector<std::string>& units) override {
         std::string cd = chapterDir;
@@ -1690,6 +1692,7 @@ public:
         // every unit's data first (its lightmap pages before the first world mesh builds the lightmap array), then the world
         // meshes; the RT data waits for all of them (Pipeline::endChapterUnits)
         wfc_.beginChapterUnits();
+        chapterLoading_ = true;
         std::vector<std::string> loaded;
         for (const std::string& u : units) {
             if (!wfc_.loadSublevel(cd + "/" + u)) continue;
@@ -1708,6 +1711,8 @@ public:
             } else LOG_WARN("chapter: %s has no world.glb in its render data", u.c_str());
             wfc_.yieldLoad();
         }
+        chapterLoading_ = false;
+        if (recv_.dirty) buildDecalGrid();
         wfc_.endChapterUnits(gpuIds);
         // the units' placed actors (and the persistent unit's: A1's intro lift) for matinee poses (setMapActorTransform)
         wfc_.registerGlbActors(wfc_.dataDir() + "/world.glb");
