@@ -3495,3 +3495,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   queue (Gameplay Kismet runtime, Rendering decals + materials, Frontend campaign menus, Systems FX / audio, AssetTools
   pipeline gaps, RE remaining decode). Seed decisions: #10 drop BlockingVolume 9745 (ART), keep 7008 (PC adaptation);
   #13 per-poly pawn collision for the 40 undersized-hull meshes. #8 = authentic (ally bars through walls). #4 = runtime condition.
+2026-10-23 00:23 MERGED 12d438d4 #4 root cause: hdTextureLevelAvailable(2) hard-coded false; Enhanced now offered when the colour pack + hdPbrIndex
+  exist (runtime check in the Frontend's next slot). RE #14: MP liquids = the energon waterfalls only (additive unlit, two-speed
+  panned colour / normal, cube reflection, depth-biased alpha x vertex R, distortion x20); RE #11 follow-up: our spread uses a
+  +-1 square where the original uses UE3's disc AddSpread (~+-0.5 x spread) = ~2x too wide; shotguns fixed patterns.
