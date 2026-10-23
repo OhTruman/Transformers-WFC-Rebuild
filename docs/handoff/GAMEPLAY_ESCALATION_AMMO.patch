@@ -1,0 +1,61 @@
+diff --git a/src/game/WorldSurvival.cpp b/src/game/WorldSurvival.cpp
+index d77774d0..72983f4e 100644
+--- a/src/game/WorldSurvival.cpp
++++ b/src/game/WorldSurvival.cpp
+@@ -13,6 +13,7 @@
+ #include <fstream>
+ #include <cstdlib>
+ #include <cstring>
++#include <map>
+ 
+ namespace game {
+ 
+@@ -342,11 +343,45 @@ void World::svApplySpawnLoadout(Character& c) {
+     c.setLoadout(robot, c.vehicleWeapons());
+ }
+ 
+-// A pickup's weapon: PostInstantiateFromPickupFactory -> SetupAmmoForDefaultPlayerPickup [RE E2b §1]. PROV: a full clip + the initial
+-// reserve until the PlayerData DefaultPickupAmount values land.
++// A pickup's weapon: PostInstantiateFromPickupFactory -> SetupAmmoForDefaultPlayerPickup [C, RE E2b §1]: clip = min(DefaultPickupAmount,
++// MaxAmmoClipCount), reserve = clamp(DefaultPickupAmount - clip, 0, MaxAmmoCount), from the weapon's PlayerData (Escalation's
++// DesiredWeaponDataType 4 has none: the GivenTo fallback) - AssetTools manifests/escalation/escalation_weapons.json. The reserve cap
++// and the clip are PlayerData's too; the other PlayerData values (damage, spread) stay the MP ones until E3b (PROV).
++struct SvPickupAmmo { int amount = -1, clip = -1, maxAmmo = -1; };
++static const SvPickupAmmo& svPickupAmmo(const std::string& id) {
++    static std::map<std::string, SvPickupAmmo> table; static bool loaded = false;
++    if (!loaded) {
++        loaded = true;
++        const char* mr = std::getenv("WFC_MANIFESTS");
++        std::ifstream f(std::string(mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests") + "/escalation/escalation_weapons.json", std::ios::binary);
++        std::stringstream ss; ss << f.rdbuf();
++        assets::Json j;
++        if (f.good() && assets::Json::parse(ss.str(), j))
++            for (const auto& kv : j["weapons"].obj) {
++                const std::string pre = "TransContent.TnWeapon";
++                if (kv.first.compare(0, pre.size(), pre) != 0) continue;
++                const assets::Json& v = kv.second["escalation_data"]["values"];
++                SvPickupAmmo a;
++                a.amount = kv.second["DefaultPickupAmount"].asInt(-1);
++                a.clip = v["MaxAmmoClipCount"].asInt(-1); a.maxAmmo = v["MaxAmmoCount"].asInt(-1);
++                table[kv.first.substr(pre.size())] = a;
++            }
++        LOG_INFO("escalation: %zu pickup ammo entries (escalation_weapons.json)", table.size());
++    }
++    static const SvPickupAmmo none;
++    auto it = table.find(id);
++    return it == table.end() ? none : it->second;
++}
+ static Weapon svPickupWeapon(const WeaponDef& d) {
+     Weapon w = Weapon::fromDef(d);
+-    w.ammo = w.magSize; w.reserve = std::min(w.reserveMax, d.initialReserve);
++    const SvPickupAmmo& a = svPickupAmmo(d.id ? d.id : "");
++    if (a.amount < 0) { w.ammo = w.magSize; w.reserve = std::min(w.reserveMax, d.initialReserve); return w; }   // not in the table (PROV)
++    if (a.maxAmmo >= 0) w.reserveMax = a.maxAmmo;
++    if (a.clip > 0) w.magSize = a.clip;   // PlayerData MaxAmmoClipCount
++    // a clip-less class (grenade bags: MaxAmmoClipCount 0) keeps its count in our clip, as Weapon::fromDef models it
++    const int clipMax = a.clip > 0 ? a.clip : w.magSize;
++    w.ammo = std::min(a.amount, clipMax);
++    w.reserve = std::clamp(a.amount - w.ammo, 0, a.maxAmmo >= 0 ? a.maxAmmo : w.reserveMax);
+     return w;
+ }
+ 
