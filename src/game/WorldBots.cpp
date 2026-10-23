@@ -1204,7 +1204,12 @@ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
         if (d <= 7.0f && std::fabs(wrapPi(yawOf(to) - b.yaw)) < 0.6f) {   // the assist lunge closes the rest
             if (pbSandbox_) { pbPress_ |= 1u << (int)platform::Button::Melee; ++b.melees; b.meleeCooldown = b.frange(1.2f, 2.0f) + (2 - b.difficulty) * 0.5f; return; }   // online player bot
             startMeleeFor(pc, o.matchPlayer(), false, b.yaw);
-            if (pc.isMeleeing()) { ++b.melees; b.meleeCooldown = b.frange(1.2f, 2.0f) + (2 - b.difficulty) * 0.5f; return; }
+            if (pc.isMeleeing()) {
+                ++b.melees;
+                // the Escalation horde: a 1 s-interval melee action whenever adjacent [C, RE ESCALATION_HORDE_AI 1]
+                b.meleeCooldown = match_.players()[(size_t)o.matchPlayer()].directorSpawned ? 1.0f : b.frange(1.2f, 2.0f) + (2 - b.difficulty) * 0.5f;
+                return;
+            }
         }
     }
     if (!usable || match_.matchTime() < b.rushUntil) return;   // a melee rush holds fire (a reload would block the strike)

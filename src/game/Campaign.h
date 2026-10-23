@@ -58,6 +58,8 @@ struct CampaignMover {
     core::Vec3 pivot{0, 0, 0}, offset{0, 0, 0}, lastOffset{0, 0, 0}, lo{0, 0, 0}, hi{0, 0, 0};
     std::vector<core::Vec3> tris;   // pivot-relative
     int pawnSet = -1;
+    int floorSet = -1;              // its footprint as a walkable floor (a mover whose collision is the rim only: A1's lift)
+    bool navMoving = false;         // its nav cells moved since the last relink
     std::vector<int> navCells;      // its mover-attached nav cells
     core::Vec3 navOffset{0, 0, 0};  // the offset those cells were last moved to
 };

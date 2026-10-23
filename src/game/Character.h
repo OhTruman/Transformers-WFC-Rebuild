@@ -65,6 +65,8 @@ public:
     void toggleForm() { setForm(form_ == Form::Robot ? Form::Vehicle : Form::Robot); }
 
     // Transformation: plays paired transform clips with a mid-sequence skeleton handoff.
+    // TnHitReactionAnimator.Play: a hit from `momentum` (world direction of the hit's push). Robot form only; restarts on every hit.
+    void playHitReaction(const core::Vec3& momentum);
     void beginTransform();
     // Campaign matinee AnimControl: hold the robot model's clip `clip` at `time` as the whole pose (locomotion off) until cleared.
     void setCineClip(int clip, float time, bool loop) { cineClip_ = clip; cineTime_ = time; cineLoop_ = loop; }
@@ -719,6 +721,7 @@ private:
         std::vector<float> upperMask;            // C_Spine01_Lumbar01_XB subtree
         int reloadClip = -1, idleClip = -1, landClip = -1, land2Clip = -1, land3Clip = -1;   // Nav_Land / _02 / _03
         int equipClip = -1, unequipClip = -1;   // ADD_Shooting_equip_weapon / ADD_Shooting_UnEquip_Weapon (additive, upper body)
+        int hitClip[4] = {-1, -1, -1, -1};       // RobotHitReactions: Normal F / B, Turret F / B (ADD_HitReaction_*, additive, full body)
     } robotRig_;
     struct VehicleRig {
         bool built = false;
@@ -759,6 +762,7 @@ private:
     RecoilControl recoilSpine_{ionBlasterSpineRecoil()}, recoilHand_{ionBlasterRightHandRecoil()};
     float reloadW_ = 0.0f, reloadT_ = 0.0f;
     float unequipW_ = 0.0f, unequipT_ = 0.0f, equipW_ = 0.0f, equipT_ = 0.0f; int switchPhase_ = 0;   // the weapon switch overlay
+    int hitReact_ = -1; float hitReactT_ = 0.0f, hitReactW_ = 0.0f;   // the hit reaction overlay (index into robotRig_.hitClip)
     bool prevReloading_ = false;
     std::vector<float> reloadMask_;
     int actionClip_ = -1;

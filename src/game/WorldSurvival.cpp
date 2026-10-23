@@ -348,8 +348,14 @@ void World::svApplySpawnLoadout(Character& c) {
 // A pickup's weapon: PostInstantiateFromPickupFactory -> SetupAmmoForDefaultPlayerPickup [C, RE E2b §1]: clip = min(DefaultPickupAmount,
 // MaxAmmoClipCount), reserve = clamp(DefaultPickupAmount - clip, 0, MaxAmmoCount), from the weapon's PlayerData (Escalation's
 // DesiredWeaponDataType 4 has none: the GivenTo fallback) - AssetTools manifests/escalation/escalation_weapons.json. The reserve cap
-// and the clip are PlayerData's too; the other PlayerData values (damage, spread) stay the MP ones until E3b (PROV).
-struct SvPickupAmmo { int amount = -1, clip = -1, maxAmmo = -1; };
+// and the clip are PlayerData's too; the rest of PlayerData (damage, fire interval, spread, range falloff, shots, timings) where authored (M10).
+struct SvPickupAmmo {
+    int amount = -1, clip = -1, maxAmmo = -1;
+    // the rest of PlayerData (M10): -1 = not authored (the MP value stays)
+    float damage = -1.0f, interval = -1.0f, spreadMin = -1.0f, spreadMax = -1.0f, spreadPerShot = -1.0f, spreadCooldown = -1.0f, fineAim = -1.0f;
+    float rangeM = -1.0f, reload = -1.0f, equip = -1.0f, putDown = -1.0f; int shots = -1;
+    int rangeMods = 0; float rangeModM[4] = {0, 0, 0, 0}, rangeModMul[4] = {1, 1, 1, 1};
+};
 static const SvPickupAmmo& svPickupAmmo(const std::string& id) {
     static std::map<std::string, SvPickupAmmo> table; static bool loaded = false;
     if (!loaded) {
@@ -366,6 +372,20 @@ static const SvPickupAmmo& svPickupAmmo(const std::string& id) {
                 SvPickupAmmo a;
                 a.amount = kv.second["DefaultPickupAmount"].asInt(-1);
                 a.clip = v["MaxAmmoClipCount"].asInt(-1); a.maxAmmo = v["MaxAmmoCount"].asInt(-1);
+                if (v["InstantHitDamage"].size() > 0 && v["InstantHitDamage"][0].isNumber()) a.damage = v["InstantHitDamage"][0].asFloat();
+                if (v["FireIntervalModifier"]["IntervalRange"]["Min"].isNumber()) a.interval = v["FireIntervalModifier"]["IntervalRange"]["Min"].asFloat();
+                const assets::Json& ps = v["PerShotSpreadModifier"];
+                if (ps["Modifier"]["Min"].isNumber()) { a.spreadMin = ps["Modifier"]["Min"].asFloat(); a.spreadMax = ps["Modifier"]["Max"].asFloat(a.spreadMin); }
+                if (ps["ModifierChangePerShot"].isNumber()) a.spreadPerShot = ps["ModifierChangePerShot"].asFloat();
+                if (ps["Cooldown"].isNumber()) a.spreadCooldown = ps["Cooldown"].asFloat();
+                if (v["FineAimSpreadModifier"].isNumber()) a.fineAim = v["FineAimSpreadModifier"].asFloat();
+                if (v["WeaponRange"].isNumber()) a.rangeM = v["WeaponRange"].asFloat() * 0.01f;
+                if (v["WeaponReloadAnimTime"].isNumber()) a.reload = v["WeaponReloadAnimTime"].asFloat();
+                if (v["EquipTime"].isNumber()) a.equip = v["EquipTime"].asFloat();
+                if (v["PutDownTime"].isNumber()) a.putDown = v["PutDownTime"].asFloat();
+                if (v["NumShotsToFire"].isNumber()) a.shots = v["NumShotsToFire"].asInt(-1);
+                const assets::Json& rm = v["RangeDamageModifiers"];
+                for (size_t r = 0; r < rm.size() && a.rangeMods < 4; ++r, ++a.rangeMods) { a.rangeModM[a.rangeMods] = rm[r]["Range"].asFloat() * 0.01f; a.rangeModMul[a.rangeMods] = rm[r]["Modifier"].asFloat(1.0f); }
                 table[kv.first.substr(pre.size())] = a;
             }
         LOG_INFO("escalation: %zu pickup ammo entries (escalation_weapons.json)", table.size());
@@ -380,6 +400,19 @@ static Weapon svPickupWeapon(const WeaponDef& d) {
     if (a.amount < 0) { w.ammo = w.magSize; w.reserve = std::min(w.reserveMax, d.initialReserve); return w; }   // not in the table (PROV)
     if (a.maxAmmo >= 0) w.reserveMax = a.maxAmmo;
     if (a.clip > 0) w.magSize = a.clip;   // PlayerData MaxAmmoClipCount
+    // M10: the rest of PlayerData where authored (damage, fire interval, spread, range falloff, shots, timings)
+    if (a.damage >= 0.0f && w.hitscan) w.damage = a.damage;
+    if (a.interval > 0.0f) w.fireInterval = a.interval;
+    if (a.spreadMin >= 0.0f) { w.spreadMin = a.spreadMin; w.spreadMax = a.spreadMax; w.spread = a.spreadMin; }
+    if (a.spreadPerShot >= 0.0f) w.spreadPerShot = a.spreadPerShot;
+    if (a.spreadCooldown > 0.0f) w.spreadCooldown = a.spreadCooldown;
+    if (a.fineAim >= 0.0f) w.fineAimSpreadMult = a.fineAim;
+    if (a.rangeM > 0.0f) w.rangeM = a.rangeM;
+    if (a.reload > 0.0f) w.reloadTime = a.reload;
+    if (a.equip > 0.0f) w.equipTime = a.equip;
+    if (a.putDown > 0.0f) w.putDownTime = a.putDown;
+    if (a.shots > 0) w.shots = a.shots;
+    if (a.rangeMods > 0) { w.rangeModCount = a.rangeMods; for (int k = 0; k < 4; ++k) { w.rangeModM[k] = a.rangeModM[k]; w.rangeModMul[k] = a.rangeModMul[k]; } }
     // a clip-less class (grenade bags: MaxAmmoClipCount 0) keeps its count in our clip, as Weapon::fromDef models it
     const int clipMax = a.clip > 0 ? a.clip : w.magSize;
     w.ammo = std::min(a.amount, clipMax);

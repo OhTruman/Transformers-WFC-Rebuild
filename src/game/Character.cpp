@@ -100,6 +100,10 @@ void Character::buildRobotRigUncached(const assets::SkinnedModel& mdl) {
     R.reloadClip = mdl.clipByName("Shooting_Reload_IonBlaster_ROBO");
     R.equipClip = mdl.clipByName("ADD_Shooting_equip_weapon");
     R.unequipClip = mdl.clipByName("ADD_Shooting_UnEquip_Weapon");
+    R.hitClip[0] = mdl.clipByName("ADD_HitReaction_React_F");
+    R.hitClip[1] = mdl.clipByName("ADD_HitReaction_React_B");
+    R.hitClip[2] = mdl.clipByName("ADD_HitReaction_Turret_React_F");
+    R.hitClip[3] = mdl.clipByName("ADD_HitReaction_Turret_React_B");
     if (R.reloadClip < 0) R.reloadClip = mdl.clipOfCategoryNamed("reload", "IonBlaster");
     // NAV_Idle is Optimus's own gameplay idle (Optimus_ROBO_ANIM); Cust_Idle is the
     // customization-screen idle and Nav_Idle_Base the shared-animset fallback.
@@ -455,6 +459,20 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
             assets::samplePose(mdl, R.equipClip, equipT_, false, layerPose_, /*additive*/ true);
             traceClip(mdl, R.equipClip, equipT_, false, equipW_);
             assets::addPose(finalPose_, layerPose_, equipW_, &R.upperMask);
+        }
+    }
+
+    // 3a) Hit reaction [C, RE CAMPAIGN_OMEGA_HITREACT_RE 2]: the additive clip over the whole body, blend in 0.05 s, out 0.4 s.
+    if (hitReact_ >= 0 && robotRig && R.hitClip[hitReact_] >= 0) {
+        const int ci = R.hitClip[hitReact_];
+        const float len = mdl.clips[(size_t)ci].duration;
+        hitReactT_ += dt;
+        if (hitReactT_ >= len) hitReact_ = -1;
+        else {
+            hitReactW_ = std::min({1.0f, hitReactT_ / 0.05f, (len - hitReactT_) / 0.4f});
+            assets::samplePose(mdl, ci, hitReactT_, false, layerPose_, /*additive*/ true);
+            traceClip(mdl, ci, hitReactT_, false, hitReactW_);
+            assets::addPose(finalPose_, layerPose_, hitReactW_);
         }
     }
 
@@ -1033,3 +1051,17 @@ void Character::draw(render::IRenderer& r) const {
 } // namespace game
 
 const game::Weapon* game::Character::vehicleWeaponPtr() const { return const_cast<game::Character*>(this)->vehicleWeapon(); }
+
+namespace game {
+// TnHitReactionAnimator.Play [C]: front when (Momentum << Rotation).X > 0, Turret while holding a heavy weapon, else Normal; the
+// gate (not interacting, not WeaponType 7) is the caller's; vehicles and transitions play nothing.
+void Character::playHitReaction(const core::Vec3& momentum) {
+    if (form_ != Form::Robot || trans_ != Transition::None) return;
+    const float fx = -std::sin(yaw()), fz = -std::cos(yaw());   // the facing (forwardFromYawPitch convention)
+    const bool front = momentum.x * fx + momentum.z * fz > 0.0f;
+    hitReact_ = (carryingHeavy_ != 0 ? 2 : 0) + (front ? 0 : 1);
+    hitReactT_ = 0.0f;
+    static int logged = 0;   // the first few, for the logs
+    if (logged < 3) { ++logged; LOG_INFO("hit reaction: %s (%s)", front ? "front" : "back", carryingHeavy_ ? "turret" : "normal"); }
+}
+} // namespace game

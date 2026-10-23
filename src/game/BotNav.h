@@ -52,6 +52,8 @@ public:
     void recomputePieces() { computePieces(); }
     // Campaign movers: move these cells (polygons, centroids, bounds, portals, link ends) by d; an xz move re-buckets them.
     void translateCells(const std::vector<int>& cells, const core::Vec3& d);
+    // After translateCells: the cells' portals to unmoved cells are rebuilt from the edges they share at rest; returns the portal pairs made.
+    int relinkCells(const std::vector<int>& cells);
     bool isBlocked(int cell) const { return cell >= 0 && (size_t)cell < blocked_.size() && blocked_[(size_t)cell] != 0; }
     int pieceOf(int c) const { return c >= 0 && (size_t)c < piece_.size() ? piece_[(size_t)c] : -1; }
     int mainPieceId() const { return mainPieceId_; }

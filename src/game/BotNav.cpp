@@ -207,6 +207,95 @@ void BotNav::translateCells(const std::vector<int>& ids, const core::Vec3& d) {
     for (Link& L : links_) { if (moved[(size_t)L.from]) L.fromPos = L.fromPos + d; if (moved[(size_t)L.to]) L.toPos = L.toPos + d; }
 }
 
+int BotNav::relinkCells(const std::vector<int>& ids) {
+    std::vector<uint8_t> moved(cells_.size(), 0);
+    for (int id : ids) if (id >= 0 && (size_t)id < cells_.size()) moved[(size_t)id] = 1;
+    // drop the portals between a moved and an unmoved cell (both sides)
+    for (size_t i = 0; i < cells_.size(); ++i) {
+        auto& ps = cells_[i].portals;
+        ps.erase(std::remove_if(ps.begin(), ps.end(), [&](const Portal& p) { return moved[i] != moved[(size_t)p.to]; }), ps.end());
+    }
+    auto addPortal = [&](int from, int to, const core::Vec3& a, const core::Vec3& b) {
+        const Cell& c = cells_[(size_t)from];
+        core::Vec3 e = b - a; core::Vec3 n{e.z, 0.0f, -e.x};
+        const float l = std::sqrt(n.x * n.x + n.z * n.z); if (l > 1e-6f) { n.x /= l; n.z /= l; }
+        const core::Vec3 mid = (a + b) * 0.5f;
+        if ((c.centroid.x - mid.x) * n.x + (c.centroid.z - mid.z) * n.z > 0.0f) { n.x = -n.x; n.z = -n.z; }   // outward
+        cells_[(size_t)from].portals.push_back(Portal{to, a, b, std::sqrt(e.x * e.x + e.y * e.y + e.z * e.z), n});
+    };
+    int made = 0;
+    for (int id : ids) {
+        if (id < 0 || (size_t)id >= cells_.size()) continue;
+        const Cell& m = cells_[(size_t)id];
+        std::vector<int> cand;
+        if (!grid_.empty()) {
+            const int ax = std::clamp((int)((m.bmin.x - 1.0f - gx0_) / gcell_), 0, gw_ - 1), bx = std::clamp((int)((m.bmax.x + 1.0f - gx0_) / gcell_), 0, gw_ - 1);
+            const int az = std::clamp((int)((m.bmin.z - 1.0f - gz0_) / gcell_), 0, gh_ - 1), bz = std::clamp((int)((m.bmax.z + 1.0f - gz0_) / gcell_), 0, gh_ - 1);
+            for (int z = az; z <= bz; ++z) for (int x = ax; x <= bx; ++x) for (int q : grid_[(size_t)z * (size_t)gw_ + (size_t)x]) cand.push_back(q);
+            std::sort(cand.begin(), cand.end()); cand.erase(std::unique(cand.begin(), cand.end()), cand.end());
+        } else for (size_t q = 0; q < cells_.size(); ++q) cand.push_back((int)q);
+        for (int q : cand) {
+            if (moved[(size_t)q]) continue;
+            const Cell& o = cells_[(size_t)q];
+            if (o.bmin.y > m.bmax.y + 0.6f || o.bmax.y < m.bmin.y - 0.6f) continue;
+            bool linked = false;
+            for (size_t i = 0; i < m.poly.size() && !linked; ++i) {
+                const core::Vec3 p = m.poly[i], r = m.poly[(i + 1) % m.poly.size()];
+                const float ex = r.x - p.x, ez = r.z - p.z, len = std::sqrt(ex * ex + ez * ez);
+                if (len < 0.3f) continue;
+                const float ux = ex / len, uz = ez / len;
+                for (size_t j = 0; j < o.poly.size() && !linked; ++j) {
+                    const core::Vec3 s = o.poly[j], t = o.poly[(j + 1) % o.poly.size()];
+                    auto off = [&](const core::Vec3& v) { return std::fabs((v.x - p.x) * uz - (v.z - p.z) * ux); };
+                    if (off(s) > 0.2f || off(t) > 0.2f) continue;   // not on the edge's line
+                    float s0 = (s.x - p.x) * ux + (s.z - p.z) * uz, t0 = (t.x - p.x) * ux + (t.z - p.z) * uz;
+                    if (s0 > t0) std::swap(s0, t0);
+                    const float lo = std::max(0.0f, s0), hi = std::min(len, t0);
+                    if (hi - lo < 0.3f) continue;
+                    const core::Vec3 a = p + (r - p) * (lo / len), b = p + (r - p) * (hi / len);
+                    if (std::fabs(a.y - (s.y + (t.y - s.y) * 0.5f)) > 0.6f) continue;
+                    addPortal(id, q, a, b); addPortal(q, id, b, a);
+                    linked = true; ++made;
+                }
+            }
+        }
+    }
+    // the moved cells' links to unmoved cells are dropped; a moved cell left without a portal gets walk links both ways to the
+    // nearest unmoved cell at its height (<= 30 m, |dy| <= 1 m): A1's lift cells are 2 m patches inside the pod, no shared edge
+    {
+        std::vector<Link> keep;
+        for (const Link& L : links_) if (moved[(size_t)L.from] == moved[(size_t)L.to]) keep.push_back(L);
+        links_.swap(keep);
+        for (Cell& c : cells_) c.links.clear();
+        for (size_t i = 0; i < links_.size(); ++i) cells_[(size_t)links_[i].from].links.push_back((int)i);
+    }
+    for (int id : ids) {
+        if (id < 0 || (size_t)id >= cells_.size()) continue;
+        bool has = false;
+        for (const Portal& p : cells_[(size_t)id].portals) if (!moved[(size_t)p.to]) has = true;
+        if (has) continue;
+        const core::Vec3 m = cells_[(size_t)id].centroid;
+        int best = -1; float bd = 30.0f * 30.0f;
+        for (size_t q = 0; q < cells_.size(); ++q) {
+            if (moved[q]) continue;
+            const core::Vec3 o = cells_[q].centroid;
+            if (std::fabs(o.y - m.y) > 1.0f) continue;
+            const float d2 = (o.x - m.x) * (o.x - m.x) + (o.z - m.z) * (o.z - m.z);
+            if (d2 < bd) { bd = d2; best = (int)q; }
+        }
+        if (best < 0) continue;
+        for (int k = 0; k < 2; ++k) {
+            Link L{k == 0 ? id : best, k == 0 ? best : id, false, true, false, k == 0 ? m : cells_[(size_t)best].centroid, k == 0 ? cells_[(size_t)best].centroid : m};
+            L.walk = true;
+            links_.push_back(L);
+            cells_[(size_t)L.from].links.push_back((int)links_.size() - 1);
+        }
+        ++made;
+    }
+    computePieces();
+    return made;
+}
+
 void BotNav::computePieces() {
     const bool blk = blocked_.size() == cells_.size();
     auto open = [&](size_t c) { return !blk || !blocked_[c]; };

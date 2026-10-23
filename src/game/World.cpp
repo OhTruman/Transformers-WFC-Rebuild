@@ -3277,6 +3277,14 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
     }
     if (sv_.phase != SurvivalState::Phase::Off) amount *= svDamageMul(victim, instigator);   // Escalation wave buffs
     float applied = h->applyDamage(amount);
+    // TnPawn.PlayHit -> the robot form's hit reaction, unless the damage type has ShouldCauseHitReaction false [C, RE HITREACT 2]
+    if (applied > 0.0f && instigator >= 0 && instigator != victim) {
+        static const char* const kNoReact[] = {"AudioBlast", "DecoyDot", "Drain", "TransformDisruptorDot", "HealType"};   // Drain covers DownedDrain
+        bool react = !(damageType.size() >= 13 && damageType.compare(damageType.size() - 13, 13, ".TnDamageType") == 0) && damageType != "TnDamageType";
+        for (const char* k : kNoReact) if (damageType.find(k) != std::string::npos) react = false;
+        Character* vc = victim == localPlayer_ ? &player_.pawn() : (opp ? &opp->pawn() : nullptr);
+        if (react && vc) vc->playHitReaction(vc->actorLocation() - match_.playerLocation(instigator));
+    }
     if (applied > 0.0f) {                                   // TnPlayerPawn.TakeDamage -> ExposeSelf
         if (victim == localPlayer_) player_.pawn().exposeSelf(); else if (opp) opp->pawn().exposeSelf();
     }

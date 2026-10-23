@@ -124,6 +124,19 @@ void World::cpBindMoverNav() {
         for (size_t c = 0; c < botNav_.cells().size(); ++c)
             if (!botNav_.cells()[c].moverBase.empty() && shortName(botNav_.cells()[c].moverBase) == m.name) m.navCells.push_back((int)c);
         n += (int)m.navCells.size();
+        // The walkable floor of a mover with nav cells: its collision footprint (x / z of the split-out triangles) at its cells' height, as
+        // a collision set riding with it. A1's lift collision is the rim only (the floor is TnTransformingWorldActor_6275's skeletal pod,
+        // no collision row), so the pawns fell to the bottom of the shaft at the start (PROV floor until a collision export of the pod).
+        if (!m.navCells.empty() && m.floorSet < 0 && !m.tris.empty()) {
+            float y = 0.0f;
+            for (int c : m.navCells) y += botNav_.cells()[(size_t)c].centroid.y;
+            y /= (float)m.navCells.size();
+            const core::Vec3 at = m.pivot + m.offset;
+            const core::Vec3 a{m.lo.x, y, m.lo.z}, b{m.hi.x, y, m.lo.z}, c{m.hi.x, y, m.hi.z}, d{m.lo.x, y, m.hi.z};
+            const std::vector<core::Vec3> ft{a - at, c - at, b - at, a - at, d - at, c - at};
+            m.floorSet = collision_.addDynamicSet(ft, core::Mat4::translate(at));
+            LOG_INFO("campaign: %s floor %.1f x %.1f m at y %.1f (its nav cells' height)", m.name.c_str(), m.hi.x - m.lo.x, m.hi.z - m.lo.z, y);
+        }
     }
     if (n > 0) LOG_INFO("campaign: %d mover-attached nav cells bound", n);
 }
@@ -131,10 +144,13 @@ void World::cpBindMoverNav() {
 void World::cpSyncMoverNav() {
     for (CampaignMover& m : cpMovers_) {
         const core::Vec3 d = m.offset - m.navOffset;
-        if (m.navCells.empty() || (std::fabs(d.x) < 0.01f && std::fabs(d.y) < 0.01f && std::fabs(d.z) < 0.01f)) continue;
+        if (m.navCells.empty() || (!m.navMoving && std::fabs(d.x) < 0.01f && std::fabs(d.y) < 0.01f && std::fabs(d.z) < 0.01f)) continue;
+        m.navMoving = false;
         botNav_.translateCells(m.navCells, d);
+        const int links = botNav_.relinkCells(m.navCells);   // the portals where it rests (not the old landing's)
         m.navOffset = m.offset;
-        LOG_INFO("campaign: %zu nav cells of %s moved by (%.1f %.1f %.1f)", m.navCells.size(), m.name.c_str(), d.x, d.y, d.z);
+        for (BotBrain& b : bots_) { b.path.clear(); b.wp = 0; b.wantRepath = true; }   // every plan replans on the moved nav
+        LOG_INFO("campaign: %zu nav cells of %s moved by (%.1f %.1f %.1f), %d portals at rest", m.navCells.size(), m.name.c_str(), d.x, d.y, d.z, links);
     }
 }
 
@@ -254,7 +270,12 @@ void World::cpTickMatinees(float dt) {
     for (CampaignMover& m : cpMovers_) {
         const core::Vec3 d = m.offset - m.lastOffset;
         m.lastOffset = m.offset;
-        if (m.pawnSet < 0 || (d.x == 0.0f && d.y == 0.0f && d.z == 0.0f)) continue;
+        if ((m.pawnSet < 0 && m.floorSet < 0) || (d.x == 0.0f && d.y == 0.0f && d.z == 0.0f)) continue;
+        if (!m.navCells.empty()) {   // its nav cells ride with it (relinked where it comes to rest: cpSyncMoverNav)
+            botNav_.translateCells(m.navCells, m.offset - m.navOffset);   // (a matinee end this tick may have synced them already)
+            m.navOffset = m.offset;
+            m.navMoving = true;
+        }
         const core::Vec3 lo = m.lo + m.lastOffset - d, hi = m.hi + m.lastOffset - d;
         for (size_t q = 0; q < match_.players().size(); ++q) {
             Character* c = participantPawnMutable((int)q);
@@ -305,16 +326,25 @@ void World::cpMatineeApply(CampaignState::Interp& in, float from, float to) {
             else if (t.kind == 0 && act != g.actors.end()) {
                 float p[3], r[3];
                 evalKeys(t.pos, to, p); evalKeys(t.euler, to, r);
-                for (const std::string& a : act->second)
+                for (const std::string& a : act->second) {
+                    bool mover = false;
+                    for (const CampaignMover& m : cpMovers_) if (m.name == a) mover = true;
+                    core::Vec3 base;
+                    if (!mover && renderer_ && a.rfind("CHARACTER:", 0) != 0 && cpActorPos(a, base)) {   // drawn only (no collision): e.g. A1's pod
+                        const core::Vec3 w = t.relative ? base + ueToGltf(p) : ueToGltf(p);
+                        renderer_->setMapActorTransform(a, core::Vec3{w.x * 100.0f, w.z * 100.0f, w.y * 100.0f}, core::Vec3{r[1], r[2], r[0]});
+                    }
                     for (CampaignMover& m : cpMovers_) {
                         if (m.name != a) continue;
                         m.offset = t.relative ? ueToGltf(p) : ueToGltf(p) - m.pivot;
                         if (m.pawnSet >= 0) collision_.setDynamicPose(m.pawnSet, core::Mat4::translate(m.pivot + m.offset));
+                        if (m.floorSet >= 0) collision_.setDynamicPose(m.floorSet, core::Mat4::translate(m.pivot + m.offset));
                         if (renderer_) {
                             const core::Vec3 w = m.pivot + m.offset;
                             renderer_->setMapActorTransform(m.name, core::Vec3{w.x * 100.0f, w.z * 100.0f, w.y * 100.0f}, core::Vec3{r[1], r[2], r[0]});
                         }
                     }
+                }
             }
         }
     }
