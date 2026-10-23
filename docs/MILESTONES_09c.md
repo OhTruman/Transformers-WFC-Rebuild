@@ -4160,3 +4160,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 18:03 BLOCKER (Frontend, from the handover logs): A1's intro movie FMV_a1intro plays twice (the level Kismet replays it right
   after the first play ends; a player must skip twice). Gameplay compares with the original's gating and fixes (play once);
   the cut waits for it.
+2026-10-23 18:08 MERGED d5bb6863 campaign movies play once (a Game.PlayMovie bridge race replayed the ended movie for one frame) +
+  FINAL_BASE_ITEMS 12. FINAL CODE d5bb6863. Frontend confirms with one A1 Off run; Experimental rebuilds arms final7 /
+  d5bb6863; Systems re-pointed. Then the reboot -> gate -> cut.
