@@ -1,0 +1,1009 @@
+diff --git a/src/core/Application_CampaignTest.cpp b/src/core/Application_CampaignTest.cpp
+index 7cecd633..d792428d 100644
+--- a/src/core/Application_CampaignTest.cpp
++++ b/src/core/Application_CampaignTest.cpp
+@@ -40,6 +40,7 @@ void Application::runCampaignTest() {
+     check(game::MatchLaunch::fromURL("D5_OME_BASE_m?GameModeTag=SOLO?MapId=105?WfcDifficulty=1", L) && L.settings.campaign && L.map == "D5_OME" &&
+           L.settings.goalScore == 0 && L.settings.timeLimit == 0 && L.difficulty == 1, "URL: SOLO = campaign, the chapter by its persistent level, no goal / time limit");
+     check(world_.launchMatch(L), "launchMatch(SOLO) on D5_OME");
++    world_.cpHoldOmegaForTest(true);   // the boss stays passive: these checks are the squad's and the game over's
+     const game::Match& m = world_.match();
+     const game::CampaignState& S = world_.campaign();
+     const int me = world_.localMatchPlayer();
+@@ -94,6 +95,7 @@ void Application::runCampaignTest() {
+     game::MatchLaunch L2;
+     check(game::MatchLaunch::fromURL("D5_OME_BASE_m?GameModeTag=SOLO?MapId=105?Checkpoint=D5_OME_BASE_m.TheWorld.PersistentLevel.Checkpoint_10917", L2) &&
+           world_.launchMatch(L2), "a launch at Checkpoint_10917 (Stage 2)");
++    world_.cpHoldOmegaForTest(true);
+     run(1.5f);
+     const game::CampaignChapter::Checkpoint* c2 = C.checkpoint("Checkpoint_10917");
+     check(c2 && S.checkpoint == "Checkpoint_10917" && !world_.localPlayerDead() && hdist(world_.player().pawn().position(), c2->pos) < 3.0f && S.squad.size() == 2,
+diff --git a/src/game/Campaign.h b/src/game/Campaign.h
+index 40a8ebad..ac74542a 100644
+--- a/src/game/Campaign.h
++++ b/src/game/Campaign.h
+@@ -67,7 +67,8 @@ struct CampaignMover {
+ // A campaign destructible (an HmDestructible blueprint instance): its pieces' current states, health and timers, its hit box.
+ struct CampaignDestructible {
+     struct State { int handle = 0; std::string name, mesh; float health = 0.0f, autoTime = 0.0f; std::vector<std::pair<int, std::string>> links;
+-                   bool blocks = false; int colSet = -1; };   // a static-mesh state blocks; its collision set (built once)
++                   bool blocks = false; int colSet = -1;     // a static-mesh state blocks; its collision set (built once)
++                   float damageDeps = 0.0f; };              // HmDamageDependentsDestructionEffectFactory DamageAmount (0 = none)
+     struct Piece { std::string name; std::vector<State> states; int cur = 0; float health = 0.0f, timer = 0.0f; State* state(); };
+     std::string name;
+     core::Vec3 pos{0, 0, 0}, lo{0, 0, 0}, hi{0, 0, 0};
+@@ -77,6 +78,8 @@ struct CampaignDestructible {
+     std::vector<Piece> pieces;
+     int lastHitter = -1;
+     std::vector<int> events;   // its Kismet notification events (op indices)
++    bool gone = false;         // removed (its factory's Kill All)
++    bool off = false;          // SeqAct_TnToggleDestructible Turn Off: not damageable
+ };
+ struct CampaignMeshAsset { bool ok = false; render::MeshData mesh; render::MeshHandle handle = -1; };
+ 
+@@ -99,9 +102,33 @@ struct CampaignFactory {
+     float delay = 0.5f, timer = 0.0f;
+     std::vector<core::Vec3> points;
+     std::vector<std::string> outputs;
++    std::vector<int> spawnedDes;   // a destructible factory's spawned actors (Kill All)
+     std::vector<int> pool;
+ };
+ 
++// A player interact (TnInteract*) and its TnSeqEvent_Interact events.
++struct CampaignInteract {
++    std::string name, cls;
++    core::Vec3 pos{0, 0, 0};
++    float touch = 10.0f, useRange = 10.0f, hold = 2.0f, t = 0.0f;   // TouchDistance, the use range, the Begin Use sequence length
++    bool singleUse = false, enabled = true;
++    int user = -1, toucher = -1;
++    std::vector<int> events;
++};
++// Omega Supreme (D5): the boss state machine and his arms (WorldCampaignOmega.cpp).
++struct CampaignOmega {
++    enum Stage { Intro, Healthy, Wounded, Healing, Corrupted, Critical, Dying, Dead };
++    int p = -1, stage = Intro, pendingStage = 0;
++    core::Vec3 anchor{0, 0, 0}; float yaw = 0.0f, timer = 0.0f;
++    float sentryHp[4] = {0, 0, 0, 0}; int sentryKills = 0, lastSentryHitter = -1; float heartHp = 0.0f;
++    int battery = -1, healPhase = 0, heals = 0; float healT = 0.0f; bool healCorrupt = false; std::vector<int> corrupt;
++    int target = -1, robin = 0; float targetT = 0.0f;
++    int grabVictim = -1, grabPhase = 0; float grabTimer = 0.0f, grabT = 0.0f;
++    int frenzyLeft = 0; float frenzyNext = 0.0f, frenzyT = 0.0f, barrageT = 0.0f, aoeT = 0.0f, rocketT = 0.0f;
++    uint32_t rng = 0x0E6A5u;
++    float rand01() { rng = rng * 1664525u + 1013904223u; return (float)(rng >> 8) * (1.0f / 16777216.0f); }
++};
++
+ struct CampaignState {
+     bool active = false;
+     int difficulty = 1;                  // ?WfcDifficulty 0 / 1 / 2 (GameDifficulty)
+@@ -135,6 +162,15 @@ struct CampaignState {
+                    float radius = 0.0f, halfHeight = 0.0f; std::set<int> inside; };
+     std::vector<Touch> touches;               // step 8: SeqEvent_Touch
+     std::vector<CampaignDestructible> destructibles;   // step 9
++    std::vector<CampaignInteract> interacts;   // step 14
++    std::string interactPrompt;                // the local player's interact in reach (its class; empty = none)
++    std::vector<uint8_t> interactHeldPrev;
++    CampaignOmega omega;
++    std::map<int, std::string> shootAt;        // SeqAct_TnAiShootAtActor: AI player -> its forced fire target
++    std::map<int, std::string> aiUse;          // SeqAct_TnAiUseInteract: AI player -> the interact it goes to use
++    std::map<std::string, std::vector<core::Vec3>> auxSpawns;   // checkpoint actor -> its AuxilliarySpawnPoints
++    bool auxLoaded = false;
++    bool omegaHold = false;                    // CAMPAIGNTEST: Omega stays passive
+     bool cinematicMode = false;               // SeqAct_ToggleCinematicMode: the local player's input + HUD off
+     std::map<std::string, std::vector<int>> bodyPools;   // step 6: AI participants per body (shared by the factories)
+     std::string streamingState;
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 43a0cb54..8df7fa5e 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -3258,6 +3258,10 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
+     if (victim == localPlayer_) h = &player_.pawn().health();
+     else for (MatchOpponent* o : opponents_) if (o->matchPlayer() == victim) { opp = o; h = &o->health(); }
+     if (!h) return false;
++    if (cp_.active) {   // campaign: an interact's user is invincible; Omega's states route / clamp the damage
++        if (cpInteractUserInvincible(victim)) return false;
++        if (cpOmegaDamage(victim, instigator, amount, *h)) return false;
++    }
+     // Form damage multiplier (ROBODEF / VEHDEF DamageMultiplier, e.g. vehicles 0.75-0.9) and self damage
+     // (SelfDamageMultiplier 0.45) of the victim pawn [CONF data; HIGH: applied in TnPawn.TakeDamage / AdjustDamage].
+     {
+@@ -4330,6 +4334,7 @@ HudGameState World::hudState() const {
+         h.tags.push_back(t);
+     }
+     h.cpCinematic = cp_.active && cp_.cinematicMode;
++    h.cpInteract = cp_.active ? cp_.interactPrompt : std::string();
+     h.cpActive = cp_.active; h.cpGameOver = cp_.gameOverSent; h.cpMissionComplete = cp_.missionComplete; h.cpCheckpoint = cp_.checkpoint;
+     if (sv_.phase != SurvivalState::Phase::Off) {
+         h.svWave = std::max(1, sv_.displayWave + 1);
+diff --git a/src/game/World.h b/src/game/World.h
+index a653269e..851327d7 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -235,6 +235,7 @@ struct HudGameState {
+     // Campaign: the game over shown (UI event 14 -> CampaignGameOver_GFX), MissionComplete, the active checkpoint actor.
+     bool cpActive = false, cpGameOver = false, cpMissionComplete = false; std::string cpCheckpoint;
+     bool cpCinematic = false;   // SeqAct_ToggleCinematicMode on: the HUD hides
++    std::string cpInteract;     // the local player's interact prompt: the TnInteract class in reach (empty = none)
+     int svPower = 0; std::string svGeneratorName; int svGeneratorNeeded = -1;
+     bool svDowned = false; float svDownedHealth = 0.0f; bool svReviveTarget = false; float svReviveProgress = -1.0f;
+     // TDM player tags (TnObjectiveMarkerTypeTransformerVersus): hidden for self and the dead; allies labelled,
+@@ -900,6 +901,7 @@ public:
+     bool campaignMap() const { return campaignMap_; }
+     const CampaignChapter& campaignChapter() const { return cpChapter_; }
+     const CampaignState& campaign() const { return cp_; }
++    void cpHoldOmegaForTest(bool on) { cp_.omegaHold = on; }   // CAMPAIGNTEST
+     bool cpRestartFromCheckpoint();   // RestartFromActiveCheckpoint (host; the Frontend's Restart From Last Checkpoint)
+     int cpTestFireFactory(int k);   // WFC_CAMPAIGNTEST: Spawn Actor into factory k (its pool size, or -1)
+     bool cpKismetActivate(KismetVM& vm, int op, int input);   // the level Kismet's host ops
+@@ -1452,6 +1454,27 @@ private:
+     int cpDesRayHit(const core::Vec3& o, const core::Vec3& dir, float range, float& t) const;
+     void cpRadiusDes(const core::Vec3& at, float damage, float radius, int instigator, const std::string& type);
+     void cpTickDestructibles(float dt);
++    bool cpToggleDestructible(KismetVM& vm, int op, int input);
++    void cpRemoveDestructible(int i);
++    void cpLoadInteracts();                      // WorldCampaignInteract.cpp
++    void cpInteractFire(CampaignInteract& I, const char* out, int user);
++    bool cpInteractActivate(KismetVM& vm, int op, int input);
++    void cpTickInteracts(float dt);
++    bool cpInteractUserInvincible(int player) const;
++    void cpOmegaStatus(int k);                   // WorldCampaignOmega.cpp
++    float cpOmegaClip(const char* clip, float fallback) const;
++    void cpOmegaPlay(const char* clip);
++    core::Vec3 cpOmegaSentryPos(int k) const;
++    void cpOmegaEnterHealthy();
++    void cpOmegaBind();
++    bool cpOmegaActivate(KismetVM& vm, int op, int input);
++    bool cpOmegaDamage(int victim, int instigator, float& amount, Health& h);
++    bool cpOmegaSees(int target) const;
++    void cpOmegaFire(int target, float dmg, float radiusM, const char* type, float spread);
++    void cpTickOmega(float dt);
++    void cpTickAiUse();
++    bool cpShootAtPoint(int player, core::Vec3& out) const;
++    bool cpAuxSpawn(const std::string& actor, int k, core::Vec3& out);
+     void cpDrawDestructibles(render::IRenderer& r) const;
+     void cpBindDesEvents(int i);
+     void cpLoadPlacedDestructibles();
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index ca086278..427d26bb 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -362,6 +362,8 @@ void World::botThink(BotBody o, BotBrain& b) {
+         if (p == b.player || !match_.players()[i].alive || (match_.settings().teamGame && match_.sameTeam(p, b.player))) continue;
+         const Character* c = participantPawn(p);
+         if (!c) continue;
++        // Omega Supreme is AI-targetable only while Corrupted (his sentries are; PROV: not modelled as actors) [C, SETPIECES 1]
++        if (cp_.active && p == cp_.omega.p && cp_.omega.stage != CampaignOmega::Corrupted) continue;
+         const float d = core::length(targetable(*c) - eye);
+         if (d > sk.sightM) continue;
+         cands.push_back({p, d, c});
+@@ -1135,6 +1137,19 @@ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
+     float wantYaw = b.yaw, wantPitch = 0.0f;
+     core::Vec3 aimPoint = eye + core::forwardFromYawPitch(b.yaw, b.pitch) * 50.0f;
+     Weapon* w = pc.moveForm() == Form::Vehicle ? pc.vehicleWeapon() : &pc.weapon();
++    // Campaign SeqAct_TnAiShootAtActor: a forced fire target suspends the threat choice - aim at it and fire the normal weapon.
++    core::Vec3 forcedAt;
++    if (cp_.active && w && cpShootAtPoint(o.matchPlayer(), forcedAt)) {
++        const core::Vec3 d = forcedAt - eye;
++        const float maxStep = sk.turnRateDeg * 0.0174533f * dt;
++        b.yaw = wrapPi(b.yaw + core::clampf(wrapPi(yawOf(d) - b.yaw), -maxStep, maxStep));
++        b.pitch = core::clampf(b.pitch + core::clampf(pitchOf(d) - b.pitch, -maxStep, maxStep), -1.2f, 1.2f);
++        if (!pbSandbox_) pc.setAimPitch(b.pitch);
++        if (pc.weaponUsable() && w->ammo == 0 && w->canReload()) { w->beginReload(); ++b.reloads; }
++        const core::Vec3 aim = core::forwardFromYawPitch(b.yaw, b.pitch);
++        if (pc.weaponUsable() && w->canFire() && core::dot(aim, core::normalize(d)) > 0.995f) botFire(o, b, *w, forcedAt);
++        return;
++    }
+     // Repairing a teammate: aim at it and run the Repair Ray's beam ticks (TnWeaponRepair: RepairAmount 60 / s as TnHealTypeRepairTeam,
+     // the weapon's own fire interval and ammo) [CONF values; bot use PC ADAPTATION].
+     if (b.healTarget >= 0 && w && w->beam() && pc.moveForm() == Form::Robot)
+@@ -2423,6 +2438,9 @@ void World::tickBots(float dt) {
+             if (tickProfOn()) tickProfAdd(19, profMsBots() - tp0);
+         }
+         botPathUpkeep(*o, b, dt);
++        // Omega Supreme: no steering / fire (his boss AI: WorldCampaignOmega.cpp); his think still runs - skipping the whole brain
++        // froze D5's squad in CAMPAIGNTEST (the Move-To-Buddy check)
++        if (cp_.active && b.player == cp_.omega.p) continue;
+         pending.push_back({o, &b, MoveIntent{}});
+     }
+     {
+diff --git a/src/game/WorldCampaign.cpp b/src/game/WorldCampaign.cpp
+index 52c601d9..799b28cd 100644
+--- a/src/game/WorldCampaign.cpp
++++ b/src/game/WorldCampaign.cpp
+@@ -180,7 +180,8 @@ void World::cpSetStarts(const std::string& checkpointName) {
+         Match::Start s;
+         s.actor = k == 0 ? actor : actor + "_Aux" + std::to_string(k);
+         s.cluster = cpChapter_.initialState; s.team = cpChapter_.faction;
+-        s.pos = at + core::Vec3{k == 1 ? 5.0f : k == 2 ? -5.0f : 0.0f, 0.0f, 0.0f};   // clear of a pawn on the start (Match safe())
++        // the squad: the checkpoint's authored AuxilliarySpawnPoints (M1); else 5 m to its sides (clear of a pawn on the start)
++        if (k == 0 || !cpAuxSpawn(actor, k - 1, s.pos)) s.pos = at + core::Vec3{k == 1 ? 5.0f : k == 2 ? -5.0f : 0.0f, 0.0f, 0.0f};
+         st.push_back(s);
+     }
+     match_.setCampaignStarts(st);
+@@ -241,6 +242,7 @@ void World::setupCampaign(const MatchLaunch& l) {
+         cpLoadMatinees();
+         cpLoadSkeletal();
+         cpLoadPawnGroups();
++        cpLoadInteracts();
+         cpLoadTouches();
+         cpLoadPlacedDestructibles();
+         cpBindMoverNav();   // (the nav is loaded by addBots above)
+@@ -290,6 +292,9 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
+         vm.output(op, "Started"); vm.output(op, "Finished");
+         return true;
+     }
++    if (cpInteractActivate(vm, op, input)) return true;   // SeqAct_Toggle on interacts
++    if (cpToggleDestructible(vm, op, input)) return true;
++    if (cpOmegaActivate(vm, op, input)) return true;      // SetOmegaStage / CorruptOmegaBattery
+     if (c == "SeqAct_TnPawnFactory") return cpPawnFactoryActivate(vm, op, input);
+     if (cpInterpActivate(vm, op, input)) return true;   // SeqAct_Interp: Matinee
+     if (c == "SeqAct_ToggleCinematicMode") {   // Enable / Disable / Toggle: the local player's input and HUD [H CDO: HUD off, movement / turning / input off]
+@@ -466,6 +471,9 @@ void World::tickCampaign(float dt) {
+     cpTickForms();
+     if (!cp_.gameOver) cpTickTouches();
+     cpTickDestructibles(dt);
++    cpTickInteracts(dt);
++    cpTickAiUse();
++    if (!cp_.gameOver) cpTickOmega(dt);
+     // TnCampaignGame.Killed: a human killed by anything but DmgType_Suicided -> CampaignGameOver (solo: never downed).
+     const auto& kh = match_.killHistory();
+     for (; cp_.killsSeen < kh.size(); ++cp_.killsSeen) {
+diff --git a/src/game/WorldCampaignDestructibles.cpp b/src/game/WorldCampaignDestructibles.cpp
+index f541c703..39c015e9 100644
+--- a/src/game/WorldCampaignDestructibles.cpp
++++ b/src/game/WorldCampaignDestructibles.cpp
+@@ -30,8 +30,14 @@ std::string tail(const std::string& s) { const size_t k = s.find_last_of('.'); r
+ // AssetTools' provenance wrappers: {"value": v, "confidence": ...} -> v
+ const assets::Json& val(const assets::Json& j) { return j.isObject() && j.has("value") ? j["value"] : j; }
+ 
+-bool damageTrigger(const std::string& t) {   // the triggers damage drives [H: by class name; RE confirms the Tn* ones]
+-    return t.find("GenericDamage") != std::string::npos || t.find("Corruption") != std::string::npos || t.find("Damage") != std::string::npos;
++// The triggers damage drives [C, RE CAMPAIGN_OMEGA_HITREACT_RE 3.4]: GenericDamage (normal damage against the state's InitialHealth);
++// TnCorruption only by a damage type carrying it (TnDamageTypeCorruption); TractorBeam (Omega's lock), Notification (script / a
++// sibling's DamageDependents), TimerExpired and PawnBaseDied never by damage.
++bool damageTrigger(const std::string& t, const std::string& type) {
++    if (t.find("Corruption") != std::string::npos) return type.find("Corruption") != std::string::npos;
++    if (t.find("TractorBeam") != std::string::npos || t.find("Notification") != std::string::npos || t.find("TimerExpired") != std::string::npos ||
++        t.find("PawnBaseDied") != std::string::npos) return false;
++    return t.find("Damage") != std::string::npos;
+ }
+ 
+ } // namespace
+@@ -60,6 +66,7 @@ static bool buildDes(const assets::Json& bp, const std::string& contentRoot, Cam
+                     // debris (HmPhysicalMeshDestructionEffectFactory) does not (PROV)
+                     S.blocks = ss[k]["effects"][e]["class"].asString() == "HmStaticMeshDestructionEffectFactory";
+                 }
++                if (ss[k]["effects"][e]["class"].asString() == "HmDamageDependentsDestructionEffectFactory") S.damageDeps = eff["DamageAmount"].asFloat(0.0f);
+             }
+             for (size_t l = 0; l < ss[k]["links"].size(); ++l) {
+                 const assets::Json& L = ss[k]["links"][l];
+@@ -134,7 +141,7 @@ void World::cpDesCollide(int i) {
+     for (size_t k = 0; k < d.pieces.size(); ++k) {
+         CampaignDestructible::Piece& p = d.pieces[k];
+         for (CampaignDestructible::State& s : p.states) {
+-            const bool want = s.handle == p.cur && s.blocks && !s.mesh.empty();
++            const bool want = !d.gone && s.handle == p.cur && s.blocks && !s.mesh.empty();
+             if (want && s.colSet < 0) {
+                 auto it = cpDesMeshes_.find(s.mesh);
+                 if (it == cpDesMeshes_.end() || !it->second.ok) continue;
+@@ -160,6 +167,10 @@ void World::cpDesTransition(int i, size_t piece, int to) {
+     static const bool dlog = std::getenv("WFC_KISMETLOG") != nullptr;
+     if (dlog) LOG_INFO("campaign: destructible %s piece %s -> state %d", d.name.c_str(), p.name.c_str(), to);
+     for (int op : d.events) cp_.vm.fireEvent(op, "Out");
++    // HmDamageDependentsDestructionEffectFactory on the new state: its DamageAmount to the dependent pieces with its trigger
++    // (Notification) [C]; PROV: every other piece of the actor is a dependent (the piece dependency lists are not decoded)
++    const CampaignDestructible::State* ns = p.state();
++    if (!ns || ns->damageDeps <= 0.0f) return;
+     for (size_t k = 0; k < d.pieces.size(); ++k) {
+         if (k == piece) continue;
+         CampaignDestructible::State* s = d.pieces[k].state();
+@@ -172,14 +183,14 @@ void World::cpDesTransition(int i, size_t piece, int to) {
+ void World::cpDamageDes(int i, float amount, int instigator, const std::string& type) {
+     if (i < 0 || (size_t)i >= cp_.destructibles.size() || amount <= 0.0f) return;
+     CampaignDestructible& d = cp_.destructibles[(size_t)i];
++    if (d.gone || d.off) return;   // SeqAct_TnToggleDestructible Turn Off: not damageable
+     d.lastHitter = instigator;
+-    (void)type;
+     for (size_t k = 0; k < d.pieces.size(); ++k) {
+         CampaignDestructible::Piece& p = d.pieces[k];
+         CampaignDestructible::State* s = p.state();
+         if (!s || s->health <= 0.0f) continue;
+         for (const auto& L : s->links) {
+-            if (!damageTrigger(L.second)) continue;
++            if (!damageTrigger(L.second, type)) continue;
+             if ((p.health -= amount) <= 0.0f) cpDesTransition(i, k, L.first);
+             break;
+         }
+@@ -190,6 +201,7 @@ int World::cpDesRayHit(const core::Vec3& o, const core::Vec3& dir, float range,
+     int best = -1; t = range;
+     for (size_t i = 0; i < cp_.destructibles.size(); ++i) {
+         const CampaignDestructible& d = cp_.destructibles[i];
++        if (d.gone) continue;
+         float th;
+         if (rayAabb(o, dir, range, d.lo, d.hi, th) && th < t) { t = th; best = (int)i; }
+     }
+@@ -199,6 +211,7 @@ int World::cpDesRayHit(const core::Vec3& o, const core::Vec3& dir, float range,
+ void World::cpRadiusDes(const core::Vec3& at, float damage, float radius, int instigator, const std::string& type) {
+     for (size_t i = 0; i < cp_.destructibles.size(); ++i) {
+         const CampaignDestructible& d = cp_.destructibles[i];
++        if (d.gone) continue;
+         const core::Vec3 c = (d.lo + d.hi) * 0.5f;
+         const float dist = std::max(0.0f, core::length(c - at) - core::length(d.hi - d.lo) * 0.5f);
+         if (dist < radius) cpDamageDes((int)i, damage * (1.0f - dist / std::max(radius, 1e-3f)), instigator, type);
+@@ -210,7 +223,7 @@ void World::cpTickDestructibles(float dt) {
+         for (size_t k = 0; k < cp_.destructibles[i].pieces.size(); ++k) {
+             CampaignDestructible::Piece& p = cp_.destructibles[i].pieces[k];
+             CampaignDestructible::State* s = p.state();
+-            if (!s || s->autoTime <= 0.0f) continue;
++            if (!s || s->autoTime <= 0.0f || cp_.destructibles[i].gone) continue;
+             if ((p.timer -= dt) > 0.0f) continue;
+             for (const auto& L : s->links)
+                 if (L.second.find("TimerExpired") != std::string::npos) { cpDesTransition((int)i, k, L.first); break; }
+@@ -220,6 +233,7 @@ void World::cpTickDestructibles(float dt) {
+ void World::cpDrawDestructibles(render::IRenderer& r) const {
+     for (const CampaignDestructible& d : cp_.destructibles)
+         for (const CampaignDestructible::Piece& p : d.pieces) {
++            if (d.gone) break;
+             const CampaignDestructible::State* s = nullptr;
+             for (const auto& st : p.states) if (st.handle == p.cur) s = &st;
+             if (!s || s->mesh.empty()) continue;
+@@ -279,3 +293,33 @@ void World::cpLoadPlacedDestructibles() {
+ }
+ 
+ } // namespace game
++
++namespace game {
++
++// SeqAct_TnToggleDestructible (Turn On / Turn Off / Toggle) [H: Off = not damageable, e.g. A1's "can't shoot the targets anymore"].
++bool World::cpToggleDestructible(KismetVM& vm, int op, int input) {
++    const KismetVM::Op& o = vm.op(op);
++    if (o.cls != "SeqAct_TnToggleDestructible") return false;
++    for (int v : vm.varLink(op, "Target")) {
++        const KismetVM::Var* var = vm.var(v);
++        if (var && var->named >= 0) var = vm.var(var->named);
++        if (!var) continue;
++        const std::string nm = var->obj.rfind("des:", 0) == 0 ? std::string() : tail(var->obj);
++        for (size_t i = 0; i < cp_.destructibles.size(); ++i) {
++            CampaignDestructible& d = cp_.destructibles[i];
++            if (!(nm.empty() ? var->obj == "des:" + std::to_string(i) : d.name == nm)) continue;
++            d.off = input == 1 ? true : input == 0 ? false : !d.off;
++        }
++    }
++    if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
++    return true;
++}
++
++// A destructible factory's Kill All: its spawned actors leave the world (not drawn, no collision, no damage).
++void World::cpRemoveDestructible(int i) {
++    if (i < 0 || (size_t)i >= cp_.destructibles.size()) return;
++    cp_.destructibles[(size_t)i].gone = true;
++    cpDesCollide(i);
++}
++
++} // namespace game
+diff --git a/src/game/WorldCampaignInteract.cpp b/src/game/WorldCampaignInteract.cpp
+new file mode 100644
+index 00000000..732a35b6
+--- /dev/null
++++ b/src/game/WorldCampaignInteract.cpp
+@@ -0,0 +1,154 @@
++// Campaign player interacts (TnInteract*: buttons, hacking terminals, detpacks, emotes, energon, the Omega batteries' corrupt) and their
++// TnSeqEvent_Interact events (Touch / Untouch / Begin Use / End Use, Instigator) [C, RE CAMPAIGN_CONTENT_DELTAS 2.2a]: a tap of Interact
++// in the class's use range and cone (+-45 deg) in robot form -> Begin Use (the user invincible), End Use when the class's sequence
++// completes (PROV lengths); single-use classes disable afterwards; SeqAct_Toggle on the actor 0 On / 1 Off / 2 Toggle; humans only (the
++// AI uses them through SeqAct_TnAiUseInteract). PROV: no slide to the hotspot, no anims / camera / hacking movie, the Optimus / Megatron
++// gates of Light / Dark Energon not applied. WFC_CPAUTOUSE=1 (test only): a human in range uses it without the button.
++#include "game/World.h"
++#include "assets/Json.h"
++#include "core/Log.h"
++
++#include <algorithm>
++#include <cmath>
++#include <cstdlib>
++#include <fstream>
++#include <sstream>
++
++namespace game {
++
++namespace {
++bool readJ3(const std::string& path, assets::Json& j) {
++    std::ifstream f(path, std::ios::binary);
++    if (!f) return false;
++    std::stringstream ss; ss << f.rdbuf();
++    return assets::Json::parse(ss.str(), j);
++}
++std::string tail3(const std::string& s) { const size_t k = s.find_last_of('.'); return k == std::string::npos ? s : s.substr(k + 1); }
++// Per class [C, RE CAMPAIGN_CONTENT_DELTAS 2.2a]: TouchDistance (UU / 100), the use range of the condition (Button 300, Hacking 200 UU), single
++// use (a DisableInteract action) and the Begin Use sequence's length (PROV seconds: the class anims / movie until their lengths land).
++void classOf(CampaignInteract& I) {
++    const std::string& c = I.cls;
++    I.touch = 10.0f; I.useRange = 10.0f; I.hold = 2.0f; I.singleUse = false;
++    if (c.find("ButtonReusable") != std::string::npos) { I.touch = 5.0f; I.useRange = 3.0f; I.hold = 1.5f; }
++    else if (c.find("Button") != std::string::npos) { I.touch = 5.0f; I.useRange = 3.0f; I.hold = 1.5f; I.singleUse = true; }
++    else if (c.find("HackingTerminal") != std::string::npos) { I.touch = 5.0f; I.useRange = 2.0f; I.hold = 6.0f; }
++    else if (c.find("Detpack") != std::string::npos) { I.touch = 5.0f; I.useRange = 5.0f; I.hold = 1.5f; I.singleUse = true; }
++    else if (c.find("CorruptOmegaBattery") != std::string::npos) { I.touch = 5.0f; I.useRange = 5.0f; I.hold = 2.0f; I.singleUse = true; I.enabled = false; }
++    else if (c.find("DarkEnergon") != std::string::npos) { I.touch = 6.0f; I.useRange = 6.0f; I.hold = 3.0f; }
++    else if (c.find("LightEnergon") != std::string::npos) { I.touch = 8.0f; I.useRange = 8.0f; I.hold = 3.0f; I.singleUse = true; }
++    else if (c.find("Emote") != std::string::npos) { I.hold = 2.5f; }
++}
++} // namespace
++
++void World::cpLoadInteracts() {
++    cp_.interacts.clear();
++    assets::Json j;
++    if (!readJ3(cpChapter_.dir + "actors.json", j)) return;
++    const assets::Json& as = j["actors"];
++    for (size_t i = 0; i < as.size(); ++i) {
++        const std::string cls = as[i]["class"].asString();
++        if (cls.rfind("TnInteract", 0) != 0) continue;
++        const assets::Json& L = as[i]["location_gltf"];
++        if (L.size() < 3) continue;
++        CampaignInteract I;
++        I.name = as[i]["actor"].asString();
++        I.cls = cls;
++        I.pos = core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
++        classOf(I);
++        cp_.interacts.push_back(I);
++    }
++    int bound = 0;
++    for (int op = 0; op < (int)cp_.vm.opCount(); ++op) {
++        const KismetVM::Op& o = cp_.vm.op(op);
++        if (o.cls != "TnSeqEvent_Interact") continue;
++        const std::string org = tail3(o.authored["Originator"].asString());
++        for (CampaignInteract& I : cp_.interacts) if (I.name == org) { I.events.push_back(op); ++bound; }
++    }
++    LOG_INFO("campaign: %zu interacts, %d interact events bound", cp_.interacts.size(), bound);
++}
++
++void World::cpInteractFire(CampaignInteract& I, const char* out, int user) {
++    const bool ai = user >= 0 && (size_t)user < match_.players().size() && match_.players()[(size_t)user].kind == ParticipantKind::Bot;
++    for (int op : I.events) {
++        if (ai && cp_.vm.op(op).authored["bPlayerOnly"].asBool(true)) continue;   // bPlayerOnly (default true) ignores AI users
++        for (int v : cp_.vm.varLink(op, "Instigator")) if (KismetVM::Var* var = cp_.vm.var(v)) var->obj = "pawn:" + std::to_string(user);
++        cp_.vm.fireEvent(op, out);
++    }
++    LOG_INFO("campaign: interact %s (%s): %s by p%d", I.name.c_str(), I.cls.c_str(), out, user);
++}
++
++// SeqAct_Toggle whose targets include interacts: Turn On (0) / Turn Off (1) / Toggle (2).
++bool World::cpInteractActivate(KismetVM& vm, int op, int input) {
++    const KismetVM::Op& o = vm.op(op);
++    if (o.cls != "SeqAct_Toggle") return false;
++    bool any = false;
++    for (int v : vm.varLink(op, "Target")) {
++        const KismetVM::Var* var = vm.var(v);
++        if (var && var->named >= 0) var = vm.var(var->named);
++        if (!var) continue;
++        const std::string nm = tail3(var->obj);
++        for (CampaignInteract& I : cp_.interacts)
++            if (I.name == nm) { I.enabled = input == 0 ? true : input == 1 ? false : !I.enabled; any = true; }
++    }
++    if (!any) return false;
++    if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
++    return true;
++}
++
++void World::cpTickInteracts(float dt) {
++    static const bool autoUse = [] { const char* e = std::getenv("WFC_CPAUTOUSE"); return e && std::atoi(e) != 0; }();
++    cp_.interactPrompt.clear();
++    if (match_.state() != Match::State::InProgress) return;
++    if (cp_.interactHeldPrev.size() < match_.players().size()) cp_.interactHeldPrev.resize(match_.players().size(), 0);
++    // the uses in progress: End Use when the class's Begin Use sequence completes; a dead / gone user is force-ended
++    for (CampaignInteract& I : cp_.interacts) {
++        if (I.user < 0) continue;
++        const bool gone = (size_t)I.user >= match_.players().size() || !match_.players()[(size_t)I.user].alive;
++        I.t += dt;
++        if (I.t >= I.hold || gone || !I.enabled) {
++            cpInteractFire(I, "End Use", I.user);
++            I.user = -1;
++            if (I.singleUse) I.enabled = false;   // DisableInteract
++        }
++    }
++    for (size_t q = 0; q < match_.players().size(); ++q) {
++        const MatchPlayer& mp = match_.players()[q];
++        bool held = false;
++        if ((int)q == localPlayer_) held = player_.controller().interactHeld();
++        else if (q < seatInteract_.size()) held = seatInteract_[q] != 0;
++        const bool pressed = (held && !cp_.interactHeldPrev[q]) || autoUse;
++        cp_.interactHeldPrev[q] = held ? 1 : 0;
++        if (mp.kind == ParticipantKind::Bot || !mp.alive || cp_.cinematicMode) continue;
++        const Character* c = participantPawn((int)q);
++        if (!c) continue;
++        bool busy = false;
++        for (const CampaignInteract& I : cp_.interacts) if (I.user == (int)q) busy = true;
++        const core::Vec3 p = c->position();
++        const float fx = -std::sin(c->yaw()), fz = -std::cos(c->yaw());
++        CampaignInteract* best = nullptr; float bd = 1e30f;
++        for (CampaignInteract& I : cp_.interacts) {
++            const float dx = I.pos.x - p.x, dz = I.pos.z - p.z, d = std::sqrt(dx * dx + dz * dz);
++            const bool touch = I.enabled && d <= I.touch && std::fabs(I.pos.y - p.y) <= std::max(2.5f, I.touch * 0.5f);
++            // Touch / Untouch: the touch cylinder (one toucher tracked: the first human in it)
++            if (touch && I.toucher < 0) { I.toucher = (int)q; cpInteractFire(I, "Touch", (int)q); }
++            else if (!touch && I.toucher == (int)q) { I.toucher = -1; cpInteractFire(I, "Untouch", (int)q); }
++            // the use test: in range, the use cone (+-45 deg toward it), robot form, not in use
++            if (!touch || busy || I.user >= 0 || c->moveForm() != Form::Robot || d > I.useRange) continue;
++            if (d > 0.3f && (dx * fx + dz * fz) / d < 0.7071f) continue;
++            if (d < bd) { bd = d; best = &I; }
++        }
++        if (!best) continue;
++        if ((int)q == localPlayer_) cp_.interactPrompt = best->cls;   // SetInteractState(1): the prompt
++        if (!pressed) continue;
++        best->user = (int)q; best->t = 0.0f;   // a tap: AdjustingUser (PROV: no slide) -> Interacting
++        cpInteractFire(*best, "Begin Use", (int)q);
++    }
++}
++
++// The user of an interact is invincible while using it (MakeUserInvincible, default true).
++bool World::cpInteractUserInvincible(int player) const {
++    for (const CampaignInteract& I : cp_.interacts) if (I.user == player) return true;
++    return false;
++}
++
++} // namespace game
+diff --git a/src/game/WorldCampaignOmega.cpp b/src/game/WorldCampaignOmega.cpp
+new file mode 100644
+index 00000000..966c7339
+--- /dev/null
++++ b/src/game/WorldCampaignOmega.cpp
+@@ -0,0 +1,291 @@
++// Omega Supreme, D5's boss (TnOmegaSupremePawn + OmegaSupreme_AICD) [C, RE CAMPAIGN_SETPIECES 1 / CAMPAIGN_BOSSES D5 /
++// CAMPAIGN_OMEGA_HITREACT_RE 1]: stationary (no move actions: he turns, locks on and fires), the state machine Intro -> Healthy (4
++// sentries) -> Wounded (battery lock-on + heal) -> Healthy again (a clean battery: the sentries heal) or Corrupted (vulnerable) ->
++// Critical (<= 1 HP, invulnerable) -> the heart armor -> OmegaDeath, with TnSeqEvent_OmegaStatus 0-9 back to the Kismet.
++// The arms: RocketArm (lock 2 s, a homing rocket every 1-5 s, 25 dmg), ShootingFrenzy (every 25 s: tell + lock 2 s, 15 homing rockets
++// 0.25 s apart, 55 dmg r 15 m), RocketBarrage (every 15 s, OmegaStatus 5), AoE (Melee_AOE within 32 m), the tractor-beam grab (every 20
++// s, 4 s warning, OmegaStatus 8, 1000 dmg at 5.3 s of Melee_ClawCrush_Omega). Targets: round robin over the living enemies, 7 s each.
++// PROV: the sentries are 4 hit pools of 400 HP at fixed spots on his body (no TnSentryGroup export; a hit while Healthy goes to the
++// sentry nearest the shooter), the heart armor is a 1000 HP pool hit while Critical, the AoE deals 50, the barrage is 8 rockets, the
++// healing anims' lengths come from his clips (else 6 s), the grab's LOS from 40 m up his body.
++#include "game/World.h"
++#include "core/Log.h"
++
++#include <algorithm>
++#include <cmath>
++#include <cstdlib>
++
++namespace game {
++
++namespace {
++const char* const kStatus[] = {"Healthy", "Wounded", "Critical", "Dying", "GrabbedBattery", "ShootingRockets", "Corrupted",
++                               "SentryDestroyed", "LockingGrabOnPlayer", "HeartArmorDestroyed"};
++// The sentry spots (PROV, metres in his frame: x right, y up, z forward): shoulders and forearms.
++const float kSentry[4][3] = {{-22.0f, 48.0f, 4.0f}, {22.0f, 48.0f, 4.0f}, {-34.0f, 28.0f, 10.0f}, {34.0f, 28.0f, 10.0f}};
++}
++
++void World::cpOmegaStatus(int k) {
++    for (int op = 0; op < (int)cp_.vm.opCount(); ++op)
++        if (cp_.vm.op(op).cls == "TnSeqEvent_OmegaStatus") cp_.vm.fireEvent(op, kStatus[k]);
++    LOG_INFO("campaign: Omega status %d %s at t %.1f", k, kStatus[k], match_.matchTime());
++}
++
++float World::cpOmegaClip(const char* clip, float fallback) const {
++    const Character* c = participantPawn(cp_.omega.p);
++    const assets::SkinnedModel* m = c ? c->currentModel() : nullptr;
++    const int ci = m ? m->clipByName(clip) : -1;
++    return ci >= 0 ? m->clips[(size_t)ci].duration : fallback;
++}
++
++void World::cpOmegaPlay(const char* clip) {
++    if (Character* c = participantPawnMutable(cp_.omega.p)) c->playAction(clip, false);
++}
++
++core::Vec3 World::cpOmegaSentryPos(int k) const {
++    const CampaignOmega& O = cp_.omega;
++    const float s = std::sin(O.yaw), c = std::cos(O.yaw);   // forward = (-sin, -cos); right = (cos, -sin)
++    const float* o = kSentry[k];
++    return O.anchor + core::Vec3{o[0] * c - o[2] * s, o[1], -o[0] * s - o[2] * c};
++}
++
++void World::cpOmegaEnterHealthy() {
++    CampaignOmega& O = cp_.omega;
++    O.stage = CampaignOmega::Healthy;
++    for (float& h : O.sentryHp) h = 400.0f;   // Sentries.Heal(): vulnerable, healed, the kill count reset
++    O.sentryKills = 0;
++    cpOmegaStatus(0);
++}
++
++// Bind the factory-spawned Omega participant once it is alive: stationary, out of the bot brains, 5000 HP.
++void World::cpOmegaBind() {
++    CampaignOmega& O = cp_.omega;
++    auto pool = cp_.bodyPools.find("CMP_OmegaSupreme");
++    if (pool == cp_.bodyPools.end()) return;
++    for (int p : pool->second) {
++        if (!match_.players()[(size_t)p].alive) continue;
++        Character* c = participantPawnMutable(p);
++        if (!c) continue;
++        O = CampaignOmega{};
++        O.p = p; O.anchor = c->position(); O.yaw = c->yaw();
++        for (MatchOpponent* o : opponents_) if (o->matchPlayer() == p) { o->health().max = 5000.0f; o->health().current = 5000.0f; }
++        O.stage = CampaignOmega::Intro;
++        O.timer = cpOmegaClip("Omega_Supreme_Intro", 15.0f);
++        cpOmegaPlay("Omega_Supreme_Intro");
++        O.rocketT = 4.0f; O.frenzyT = 25.0f; O.barrageT = 15.0f; O.grabT = 20.0f; O.aoeT = 6.0f;
++        LOG_INFO("campaign: Omega Supreme is p%d at (%.1f %.1f %.1f), intro %.1f s", p, O.anchor.x, O.anchor.y, O.anchor.z, O.timer);
++        return;
++    }
++}
++
++// TnSeqAct_SetOmegaStage (OMEGASTAGE_1 default: intro done + the sentries heal; OMEGASTAGE_2: intro done + Critical, the checkpoint
++// resume), SeqAct_TnCorruptOmegaBattery (the battery's CorruptedSpikes piece takes its TnCorruption trigger; the battery corrupted).
++bool World::cpOmegaActivate(KismetVM& vm, int op, int input) {
++    (void)input;
++    const KismetVM::Op& o = vm.op(op);
++    if (o.cls == "TnSeqAct_SetOmegaStage") {
++        if (cp_.omega.p < 0) cpOmegaBind();
++        if (cp_.omega.p >= 0) {
++            if (o.authored["Stage"].asString() == "OMEGASTAGE_2") { cp_.omega.stage = CampaignOmega::Critical; cp_.omega.heartHp = 1000.0f; cpOmegaStatus(2); }
++            else cpOmegaEnterHealthy();
++        } else cp_.omega.pendingStage = o.authored["Stage"].asString() == "OMEGASTAGE_2" ? 2 : 1;
++        if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
++        return true;
++    }
++    if (o.cls == "SeqAct_TnCorruptOmegaBattery") {
++        for (int v : vm.varLink(op, "Target")) {
++            const KismetVM::Var* var = vm.var(v);
++            if (!var || var->obj.rfind("des:", 0) != 0) continue;
++            const int di = std::atoi(var->obj.c_str() + 4);
++            if (di < 0 || (size_t)di >= cp_.destructibles.size()) continue;
++            cp_.omega.corrupt.push_back(di);
++            CampaignDestructible& d = cp_.destructibles[(size_t)di];
++            for (size_t k = 0; k < d.pieces.size(); ++k)
++                if (const CampaignDestructible::State* s = d.pieces[k].state())
++                    for (const auto& L : s->links) if (L.second.find("Corruption") != std::string::npos) { cpDesTransition(di, k, L.first); break; }
++            LOG_INFO("campaign: Omega battery %s corrupted", d.name.c_str());
++        }
++        if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
++        return true;
++    }
++    return false;
++}
++
++// TakeDamage on Omega: invulnerable outside Corrupted (Healthy: the hit goes to a sentry; Critical: to the heart armor); clamped at 1 HP
++// (-> Critical). True = the damage is consumed here.
++bool World::cpOmegaDamage(int victim, int instigator, float& amount, Health& h) {
++    CampaignOmega& O = cp_.omega;
++    if (victim != O.p || O.p < 0) return false;
++    if (O.stage == CampaignOmega::Healthy) {
++        const Character* ic = participantPawn(instigator);
++        int k = -1; float bd = 1e30f;
++        for (int s = 0; s < 4; ++s) {
++            if (O.sentryHp[s] <= 0.0f) continue;
++            const core::Vec3 sp = cpOmegaSentryPos(s);
++            const float d = ic ? core::length(sp - ic->position()) : (float)s;
++            if (d < bd) { bd = d; k = s; }
++        }
++        if (k >= 0 && (O.sentryHp[k] -= amount) <= 0.0f) {
++            ++O.sentryKills;
++            cpOmegaStatus(7);
++            if (O.sentryKills >= 4) {   // the 4th kill: an emote, Wounded
++                O.stage = CampaignOmega::Wounded;
++                cpOmegaPlay("HitReactions_React_Stand_F");
++                cpOmegaStatus(1);
++            }
++        }
++        if (instigator >= 0) O.lastSentryHitter = instigator;   // SentryGroupDamage: draws his attention
++        return true;
++    }
++    if (O.stage == CampaignOmega::Critical) {
++        if (O.heartHp > 0.0f && (O.heartHp -= amount) <= 0.0f) {
++            O.stage = CampaignOmega::Dying;   // OmegaDeath: needs Critical + the heart armor gone
++            cpOmegaStatus(9);
++            cpOmegaPlay("Death_Omega");
++            O.timer = cpOmegaClip("Death_Omega", 5.0f);
++        }
++        return true;
++    }
++    if (O.stage != CampaignOmega::Corrupted) return true;
++    if (h.current - amount <= 1.0f) {   // he can't die from damage: invulnerable at 1 HP -> Critical
++        amount = std::max(0.0f, h.current - 1.0f);
++        O.stage = CampaignOmega::Critical;
++        O.heartHp = 1000.0f;
++        cpOmegaPlay("HitReactions_React_Stand_F");
++        cpOmegaStatus(2);
++    }
++    return false;
++}
++
++// LOS from his head (WeaponSocket_Primary height, PROV 40 m) to the victim's chest: the static world blocks it.
++bool World::cpOmegaSees(int target) const {
++    const Character* tc = participantPawn(target);
++    if (!tc || !collision_.valid()) return tc != nullptr;
++    const core::Vec3 from = cp_.omega.anchor + core::Vec3{0.0f, 40.0f, 0.0f}, to = tc->actorLocation();
++    float t;
++    return !collision_.segmentHit(from, to, t) || t > 0.98f;
++}
++
++void World::cpOmegaFire(int target, float dmg, float radiusM, const char* type, float spread) {
++    const Character* tc = participantPawn(target);
++    if (!tc) return;
++    CampaignOmega& O = cp_.omega;
++    const core::Vec3 from = O.anchor + core::Vec3{0.0f, 40.0f, 0.0f} + core::Vec3{-std::sin(O.yaw), 0.0f, -std::cos(O.yaw)} * 12.0f;
++    core::Vec3 dir = tc->actorLocation() - from;
++    const float L = core::length(dir);
++    if (L < 1e-3f) return;
++    dir = dir * (1.0f / L);
++    if (spread > 0.0f) { dir.x += (O.rand01() * 2.0f - 1.0f) * spread; dir.y += (O.rand01() * 2.0f - 1.0f) * spread; }
++    Weapon w;
++    w.projSpeed = 70.0f; w.projDamage = dmg; w.projRadiusM = radiusM; w.rangeM = 300.0f; w.damageType = type;
++    w.projHoming = true; w.homingForce = 40.0f; w.projMaxSpeed = 70.0f; w.lockRobots = true;
++    spawnProjectile(from, dir * 70.0f, w, O.p);
++    projectiles_.back().target = target;
++}
++
++void World::cpTickOmega(float dt) {
++    CampaignOmega& O = cp_.omega;
++    if (O.p < 0) {
++        cpOmegaBind();
++        if (O.p >= 0 && O.pendingStage) { if (O.pendingStage == 2) { O.stage = CampaignOmega::Critical; O.heartHp = 1000.0f; cpOmegaStatus(2); } else cpOmegaEnterHealthy(); }
++        if (O.p < 0) return;
++    }
++    Character* c = participantPawnMutable(O.p);
++    if (!c || match_.state() != Match::State::InProgress) return;
++    if (core::length(c->position() - O.anchor) > 0.5f) { c->setPosition(O.anchor); c->velocity() = core::Vec3{0, 0, 0}; }   // stationary
++    if (cp_.omegaHold) return;   // CAMPAIGNTEST: held (the squad / game-over checks run beside him)
++    if (O.stage == CampaignOmega::Dead) return;
++    if (O.stage == CampaignOmega::Dying) {
++        if ((O.timer -= dt) <= 0.0f) { O.stage = CampaignOmega::Dead; cpOmegaStatus(3); }   // RobotDying -> 3 Dying
++        return;
++    }
++    if (O.stage == CampaignOmega::Intro) {
++        if ((O.timer -= dt) <= 0.0f) cpOmegaEnterHealthy();
++        return;
++    }
++    // the target: round robin over the living enemies (+3 for 7 s), the last sentry attacker first
++    if ((O.targetT -= dt) <= 0.0f || O.target < 0 || !match_.players()[(size_t)O.target].alive) {
++        std::vector<int> en;
++        for (size_t q = 0; q < match_.players().size(); ++q)
++            if ((int)q != O.p && match_.players()[q].alive && !match_.sameTeam((int)q, O.p) && participantPawn((int)q)) en.push_back((int)q);
++        O.target = -1;
++        if (O.lastSentryHitter >= 0 && std::find(en.begin(), en.end(), O.lastSentryHitter) != en.end()) { O.target = O.lastSentryHitter; O.lastSentryHitter = -1; }
++        else if (!en.empty()) O.target = en[(size_t)(O.robin++ % (int)en.size())];
++        O.targetT = 7.0f;
++    }
++    const Character* tc = O.target >= 0 ? participantPawn(O.target) : nullptr;
++    if (tc) { const core::Vec3 d = tc->position() - O.anchor; O.yaw = std::atan2(-d.x, -d.z); c->setYaw(O.yaw); }
++    // Wounded: LockOnBattery (a FullMesh battery: 2 s) -> the grab (TnTractorBeam trigger, OmegaStatus 4) -> HealWithGrabbedObject
++    if (O.stage == CampaignOmega::Wounded && O.battery < 0) {
++        for (size_t i = 0; i < cp_.destructibles.size() && O.battery < 0; ++i) {
++            CampaignDestructible& d = cp_.destructibles[i];
++            if (d.gone || d.name.find("Battery") == std::string::npos) continue;
++            for (auto& pc : d.pieces) {   // only a FullMesh battery can be taken
++                const CampaignDestructible::State* st = pc.state();
++                if (pc.name == "BaseBattery" && st && st->name == "FullMesh") { O.battery = (int)i; O.healT = 2.0f; O.healPhase = 0; }
++            }
++        }
++    }
++    if (O.battery >= 0 && (O.stage == CampaignOmega::Wounded || O.stage == CampaignOmega::Healing)) {
++        if ((O.healT -= dt) <= 0.0f) {
++            if (O.healPhase == 0) {   // grabbed
++                CampaignDestructible& d = cp_.destructibles[(size_t)O.battery];
++                for (size_t k = 0; k < d.pieces.size(); ++k)
++                    if (const CampaignDestructible::State* s = d.pieces[k].state())
++                        for (const auto& L : s->links) if (L.second.find("TractorBeam") != std::string::npos) { cpDesTransition(O.battery, k, L.first); break; }
++                cpOmegaStatus(4);
++                O.healCorrupt = std::find(O.corrupt.begin(), O.corrupt.end(), O.battery) != O.corrupt.end();
++                const char* clip = O.healCorrupt ? "HitReactions_React_CorruptBattery_F" : "HitReactions_React_HealingBattery_F";
++                cpOmegaPlay(clip);
++                O.healT = cpOmegaClip(clip, 6.0f);
++                O.healPhase = 1; O.stage = CampaignOmega::Healing;
++                if (O.healCorrupt) { O.stage = CampaignOmega::Corrupted; cpOmegaStatus(6); O.healT = std::max(O.healT, 20.0f); }   // Omega.Corrupt(): vulnerable
++            } else {   // the heal ends: a clean battery heals the sentries; a corrupted one ends the vulnerable window unless Critical
++                ++O.heals;
++                O.battery = -1;
++                if (O.stage != CampaignOmega::Critical) cpOmegaEnterHealthy();
++            }
++        }
++    }
++    if (!tc || O.stage == CampaignOmega::Healing) return;
++    // the arms
++    if (O.grabVictim >= 0) {   // the tractor-beam grab: the 4 s warning, then Melee_ClawCrush_Omega; 1000 at 5.3 s
++        if ((O.grabTimer -= dt) <= 0.0f) {
++            if (O.grabPhase == 0) {   // the lock needs LOS at its end: cover breaks it
++                if (!cpOmegaSees(O.grabVictim)) { LOG_INFO("campaign: Omega's grab on p%d broken (no LOS)", O.grabVictim); O.grabVictim = -1; return; }
++                O.grabPhase = 1; O.grabTimer = 5.3f; cpOmegaPlay("Melee_ClawCrush_Omega");
++            }
++            else { applyMatchDamage(O.grabVictim, O.p, 1000.0f, false, "TnDamageTypeOmegaTractorBeamGrab"); O.grabVictim = -1; }
++        }
++        return;
++    }
++    if ((O.grabT -= dt) <= 0.0f && cpOmegaSees(O.target)) { O.grabT = 20.0f; O.grabVictim = O.target; O.grabPhase = 0; O.grabTimer = 4.0f; cpOmegaStatus(8); return; }
++    if (O.frenzyLeft > 0) {
++        if ((O.frenzyNext -= dt) <= 0.0f) { cpOmegaFire(O.target, 55.0f, 15.0f, "TnDamageTypeOmegaShootingFrenzyRocket", 0.08f); O.frenzyNext = 0.25f; --O.frenzyLeft; }
++        return;
++    }
++    if ((O.frenzyT -= dt) <= 0.0f) { O.frenzyT = 25.0f; O.frenzyLeft = 15; O.frenzyNext = 2.0f; cpOmegaPlay("Melee_ShootingFrenzy"); return; }
++    if ((O.barrageT -= dt) <= 0.0f) {
++        O.barrageT = 15.0f;
++        cpOmegaPlay("Melee_RocketBarrage");
++        cpOmegaStatus(5);
++        for (int k = 0; k < 8; ++k) cpOmegaFire(O.target, 40.0f, 0.4f, "TnDamageTypeOmegaRocket", 0.3f);
++    }
++    if ((O.aoeT -= dt) <= 0.0f) {
++        O.aoeT = 6.0f;
++        bool any = false;
++        for (size_t q = 0; q < match_.players().size(); ++q) {
++            const Character* e = (int)q != O.p && match_.players()[q].alive && !match_.sameTeam((int)q, O.p) ? participantPawn((int)q) : nullptr;
++            if (!e) continue;
++            const core::Vec3 d = e->position() - O.anchor;
++            if (std::sqrt(d.x * d.x + d.z * d.z) > 32.0f) continue;
++            if (!any) { cpOmegaPlay("Melee_AOE"); any = true; }
++            applyMatchDamage((int)q, O.p, 50.0f, true, "TnDamageTypeOmegaAOE");
++        }
++    }
++    if ((O.rocketT -= dt) <= 0.0f) {   // RocketArm: Missile_Shoot every 1-5 s (after the 2 s lock of each new target)
++        O.rocketT = 1.0f + O.rand01() * 4.0f;
++        cpOmegaFire(O.target, 25.0f, 0.1f, "TnDamageTypeOmegaRocket", 0.1f);
++    }
++}
++
++} // namespace game
+diff --git a/src/game/WorldCampaignRuntime.cpp b/src/game/WorldCampaignRuntime.cpp
+index 46bc7c79..9b25361a 100644
+--- a/src/game/WorldCampaignRuntime.cpp
++++ b/src/game/WorldCampaignRuntime.cpp
+@@ -120,11 +120,23 @@ bool World::cpPawnFactoryActivate(KismetVM& vm, int op, int input) {
+     for (CampaignFactory& F : cp_.factories) {
+         if (F.op != op) continue;
+         KismetVM::Op& o = vm.op(op);
++        const bool desFactory = F.cls == "TnActorFactoryOmegaBatteryDestructible";
++        if (desFactory && input == 4) {   // Kill All: the factory's destructibles leave the world
++            for (int di : F.spawnedDes) cpRemoveDestructible(di);
++            F.spawnedDes.clear();
++            return true;
++        }
+         if (input != 0) return true;   // Stop / other inputs: nothing to do yet
+-        if (F.cls == "TnActorFactoryOmegaBatteryDestructible" && !F.points.empty()) {   // a destructible factory: the blueprint at its spawn point
++        if (desFactory && !F.points.empty()) {   // a destructible factory: the blueprint at its spawn point
++            // named after its sequence + op (the four D5 battery sequences share the op name), the Spawned variable = "des:<i>"
++            std::string seq = F.action.substr(0, F.action.find_last_of('.'));
++            seq = seq.substr(seq.find_last_of('.') + 1);
+             for (int c = 0; c < F.count; ++c) {
+-                const int di = cpSpawnDestructible(F.aicd, afterDot(F.action) + "_" + std::to_string(c), F.points[(size_t)c % F.points.size()], 0.0f);
+-                if (di >= 0) cpBindDesEvents(di);
++                const int di = cpSpawnDestructible(F.aicd, seq + "_" + afterDot(F.action) + "_" + std::to_string(c), F.points[(size_t)c % F.points.size()], 0.0f);
++                if (di < 0) continue;
++                cpBindDesEvents(di);
++                F.spawnedDes.push_back(di);
++                for (int v : vm.varLink(op, "Spawned")) if (KismetVM::Var* var = vm.var(v)) var->obj = "des:" + std::to_string(di);
+             }
+             vm.output(op, std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Spawned") != F.outputs.end() ? "All Pawns Spawned" : "Out");
+             return true;
+@@ -308,25 +320,131 @@ std::vector<int> World::cpTargets(KismetVM& vm, int op, const std::string& link)
+     return out;
+ }
+ 
+-// SeqAct_TnAiMoveToActor (one move, In), SeqAct_TnAiSetMoveToObjective (Enable / Disable, Range), SeqAct_TnAiUseInteract (move to the
+-// interact object; PROV: the interact itself is the generic Out), SeqAct_TnAiShootAtActor / UseTurret (PROV: the generic Out) [H].
++// TnAiController.RangeSet [C, RE batch 3.5] -> the arrival radius (the band's outer edge, metres): Touch 0-175, Striking -600, Close
++// -1500, Medium -3000, Far -5000, Retreated -7000 UU; SetMoveToObjective's default is RANGE_Touch.
++static float rangeRadius(const std::string& r) {
++    if (r == "RANGE_Striking") return 6.0f;
++    if (r == "RANGE_Close") return 15.0f;
++    if (r == "RANGE_Medium") return 30.0f;
++    if (r == "RANGE_Far" || r == "RANGE_Long") return 50.0f;
++    if (r == "RANGE_Retreated") return 70.0f;
++    return 1.75f;
++}
++
++// SeqAct_TnAiMoveToActor (one move, In), SeqAct_TnAiSetMoveToObjective (Enable / Disable, Range), SeqAct_TnAiUseInteract (Use / Abort /
++// End: the AI paths to the interact, uses it in reach - Begin Use on its bPlayerOnly-false events - End Use when its sequence ends or on
++// Abort / End; "Out" at once, "AI Command Receive" when AI-driven), SeqAct_TnAiShootAtActor (Enable / Disable / Toggle: a persistent
++// forced fire target until Disable), SeqAct_TnAiUseTurret (Stay In Turret / Can Leave Turret; PROV: no mounting yet - the AI holds at
++// the turret, fighting from there, until Can Leave) [C, RE batch 3.1-3.3].
+ bool World::cpAiOpActivate(KismetVM& vm, int op, int input) {
+     KismetVM::Op& o = vm.op(op);
+     const std::string& c = o.cls;
++    const std::vector<int> who = cpTargets(vm, op, "Target");
++    if (c == "SeqAct_TnAiShootAtActor") {
++        const std::string at = vm.objectOf(op, "Shoot At Actor");
++        for (int p : who) {
++            const bool on = input == 0 ? true : input == 1 ? false : cp_.shootAt.find(p) == cp_.shootAt.end();
++            if (on && !at.empty()) cp_.shootAt[p] = at; else cp_.shootAt.erase(p);
++        }
++        LOG_INFO("campaign: %s: %zu AI %s %s", afterDot(o.path).c_str(), who.size(), input == 1 ? "stop shooting" : "shoot at", afterDot(at).c_str());
++        if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
++        return true;
++    }
++    if (c == "SeqAct_TnAiUseTurret") {
++        const std::string tur = vm.objectOf(op, "Turret Object");
++        core::Vec3 at;
++        for (int p : who) {
++            if (input == 0 && !tur.empty() && cpActorPos(tur, at)) cp_.objectives[p] = {at, 1.75f, true};
++            else cp_.objectives.erase(p);
++        }
++        if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
++        return true;
++    }
+     const bool move = c == "SeqAct_TnAiMoveToActor", objective = c == "SeqAct_TnAiSetMoveToObjective", interact = c == "SeqAct_TnAiUseInteract";
+     if (!move && !objective && !interact) return false;
+-    const std::vector<int> who = cpTargets(vm, op, "Target");
+     std::string dest = vm.objectOf(op, move ? "Destination" : objective ? "Objective Point" : "Interact Object");
+     if (dest.empty() && interact) dest = o.authored["Interact"].asString();
++    if (interact) {
++        const std::string nm = afterDot(dest);
++        for (int p : who) {
++            if (input == 0) cp_.aiUse[p] = nm;
++            else {   // Abort / End Interact: the release
++                cp_.aiUse.erase(p);
++                for (CampaignInteract& I : cp_.interacts) if (I.user == p) { cpInteractFire(I, "End Use", p); I.user = -1; }
++            }
++        }
++        vm.output(op, "Out");
++        bool ai = false;
++        for (int p : who) ai |= match_.players()[(size_t)p].kind == ParticipantKind::Bot;
++        if (ai) vm.output(op, "AI Command Receive");
++        if (input != 0) return true;
++    }
+     core::Vec3 at{0, 0, 0};
+     const bool found = !dest.empty() && cpActorPos(dest, at);
+     if (objective && input == 1) { for (int p : who) cp_.objectives.erase(p); }
+     else if (found) {
+-        const std::string range = o.authored["Range"].asString();
+-        const float r = range == "RANGE_Long" ? 25.0f : range == "RANGE_Medium" ? 12.0f : 5.0f;   // PROV radii
+-        for (int p : who) cp_.objectives[p] = {at, r, !move && !interact};
++        // (at least 3 m: our nav arrival is not exact to the Touch band's 1.75 m - a squad member short of it would wait there for good)
++        const float r = std::max(3.0f, interact ? 1.75f : rangeRadius(o.authored["Range"].asString()));
++        for (int p : who) cp_.objectives[p] = {at, r, objective};
+     } else if (!dest.empty()) LOG_INFO("campaign: %s: destination %s not located (actors.json pending)", afterDot(o.path).c_str(), afterDot(dest).c_str());
+-    if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
++    if (!interact && !o.outputs.empty()) vm.output(op, o.outputs.front().first);
++    return true;
++}
++
++// The AI interact uses in progress: in the interact's use range (and it enabled, free) -> Begin Use; the interact tick ends it.
++void World::cpTickAiUse() {
++    for (auto it = cp_.aiUse.begin(); it != cp_.aiUse.end();) {
++        const Character* c = participantPawn(it->first);
++        CampaignInteract* I = nullptr;
++        for (CampaignInteract& x : cp_.interacts) if (x.name == it->second) I = &x;
++        if (!c || !I || !match_.players()[(size_t)it->first].alive) { it = cp_.aiUse.erase(it); continue; }
++        const float dx = I->pos.x - c->position().x, dz = I->pos.z - c->position().z;
++        const float reach = std::max(4.0f, I->useRange);
++        if (I->enabled && I->user < 0 && dx * dx + dz * dz <= reach * reach) {
++            I->user = it->first; I->t = 0.0f;
++            cpInteractFire(*I, "Begin Use", it->first);
++            cp_.objectives.erase(it->first);
++            it = cp_.aiUse.erase(it);
++            continue;
++        }
++        ++it;
++    }
++}
++
++// SeqAct_TnAiShootAtActor's forced target for this AI: the actor's location (a destructible: its bounds' centre; a pawn).
++bool World::cpShootAtPoint(int player, core::Vec3& out) const {
++    auto it = cp_.shootAt.find(player);
++    if (it == cp_.shootAt.end()) return false;
++    const std::string nm = afterDot(it->second);
++    for (const CampaignDestructible& d : cp_.destructibles) if (!d.gone && d.name == nm) { out = (d.lo + d.hi) * 0.5f; return true; }
++    if (it->second.rfind("des:", 0) == 0) {
++        const int i = std::atoi(it->second.c_str() + 4);
++        if (i >= 0 && (size_t)i < cp_.destructibles.size() && !cp_.destructibles[(size_t)i].gone) { out = (cp_.destructibles[(size_t)i].lo + cp_.destructibles[(size_t)i].hi) * 0.5f; return true; }
++        return false;
++    }
++    return cpActorPos(it->second, out);
++}
++
++// A checkpoint's authored AuxilliarySpawnPoints (AssetTools <CH>/checkpoint_spawns.json) for the squad: the k-th (0-based).
++bool World::cpAuxSpawn(const std::string& actor, int k, core::Vec3& out) {
++    if (!cp_.auxLoaded) {
++        cp_.auxLoaded = true;
++        assets::Json j;
++        if (readJsonFile(cpChapter_.dir + "checkpoint_spawns.json", j)) {
++            const assets::Json& rows = j["rows"];
++            for (size_t r = 0; r < rows.size(); ++r) {
++                std::vector<core::Vec3>& pts = cp_.auxSpawns[rows[r]["actor"].asString()];
++                const assets::Json& ap = rows[r]["auxilliary_spawn_points"];
++                for (size_t a = 0; a < ap.size(); ++a) {
++                    const assets::Json& L = ap[a]["location_gltf"];
++                    if (L.size() >= 3) pts.push_back(core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()});
++                }
++            }
++        }
++    }
++    auto it = cp_.auxSpawns.find(actor);
++    if (it == cp_.auxSpawns.end() || k < 0 || (size_t)k >= it->second.size()) return false;
++    out = it->second[(size_t)k];
+     return true;
+ }
+ 

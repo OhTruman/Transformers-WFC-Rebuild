@@ -362,6 +362,8 @@ void World::botThink(BotBody o, BotBrain& b) {
         if (p == b.player || !match_.players()[i].alive || (match_.settings().teamGame && match_.sameTeam(p, b.player))) continue;
         const Character* c = participantPawn(p);
         if (!c) continue;
+        // Omega Supreme is AI-targetable only while Corrupted (his sentries are; PROV: not modelled as actors) [C, SETPIECES 1]
+        if (cp_.active && p == cp_.omega.p && cp_.omega.stage != CampaignOmega::Corrupted) continue;
         const float d = core::length(targetable(*c) - eye);
         if (d > sk.sightM) continue;
         cands.push_back({p, d, c});
@@ -1135,6 +1137,19 @@ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
     float wantYaw = b.yaw, wantPitch = 0.0f;
     core::Vec3 aimPoint = eye + core::forwardFromYawPitch(b.yaw, b.pitch) * 50.0f;
     Weapon* w = pc.moveForm() == Form::Vehicle ? pc.vehicleWeapon() : &pc.weapon();
+    // Campaign SeqAct_TnAiShootAtActor: a forced fire target suspends the threat choice - aim at it and fire the normal weapon.
+    core::Vec3 forcedAt;
+    if (cp_.active && w && cpShootAtPoint(o.matchPlayer(), forcedAt)) {
+        const core::Vec3 d = forcedAt - eye;
+        const float maxStep = sk.turnRateDeg * 0.0174533f * dt;
+        b.yaw = wrapPi(b.yaw + core::clampf(wrapPi(yawOf(d) - b.yaw), -maxStep, maxStep));
+        b.pitch = core::clampf(b.pitch + core::clampf(pitchOf(d) - b.pitch, -maxStep, maxStep), -1.2f, 1.2f);
+        if (!pbSandbox_) pc.setAimPitch(b.pitch);
+        if (pc.weaponUsable() && w->ammo == 0 && w->canReload()) { w->beginReload(); ++b.reloads; }
+        const core::Vec3 aim = core::forwardFromYawPitch(b.yaw, b.pitch);
+        if (pc.weaponUsable() && w->canFire() && core::dot(aim, core::normalize(d)) > 0.995f) botFire(o, b, *w, forcedAt);
+        return;
+    }
     // Repairing a teammate: aim at it and run the Repair Ray's beam ticks (TnWeaponRepair: RepairAmount 60 / s as TnHealTypeRepairTeam,
     // the weapon's own fire interval and ammo) [CONF values; bot use PC ADAPTATION].
     if (b.healTarget >= 0 && w && w->beam() && pc.moveForm() == Form::Robot)
@@ -2423,6 +2438,9 @@ void World::tickBots(float dt) {
             if (tickProfOn()) tickProfAdd(19, profMsBots() - tp0);
         }
         botPathUpkeep(*o, b, dt);
+        // Omega Supreme: no steering / fire (his boss AI: WorldCampaignOmega.cpp); his think still runs - skipping the whole brain
+        // froze D5's squad in CAMPAIGNTEST (the Move-To-Buddy check)
+        if (cp_.active && b.player == cp_.omega.p) continue;
         pending.push_back({o, &b, MoveIntent{}});
     }
     {

@@ -40,6 +40,7 @@ void Application::runCampaignTest() {
     check(game::MatchLaunch::fromURL("D5_OME_BASE_m?GameModeTag=SOLO?MapId=105?WfcDifficulty=1", L) && L.settings.campaign && L.map == "D5_OME" &&
           L.settings.goalScore == 0 && L.settings.timeLimit == 0 && L.difficulty == 1, "URL: SOLO = campaign, the chapter by its persistent level, no goal / time limit");
     check(world_.launchMatch(L), "launchMatch(SOLO) on D5_OME");
+    world_.cpHoldOmegaForTest(true);   // the boss stays passive: these checks are the squad's and the game over's
     const game::Match& m = world_.match();
     const game::CampaignState& S = world_.campaign();
     const int me = world_.localMatchPlayer();
@@ -94,6 +95,7 @@ void Application::runCampaignTest() {
     game::MatchLaunch L2;
     check(game::MatchLaunch::fromURL("D5_OME_BASE_m?GameModeTag=SOLO?MapId=105?Checkpoint=D5_OME_BASE_m.TheWorld.PersistentLevel.Checkpoint_10917", L2) &&
           world_.launchMatch(L2), "a launch at Checkpoint_10917 (Stage 2)");
+    world_.cpHoldOmegaForTest(true);
     run(1.5f);
     const game::CampaignChapter::Checkpoint* c2 = C.checkpoint("Checkpoint_10917");
     check(c2 && S.checkpoint == "Checkpoint_10917" && !world_.localPlayerDead() && hdist(world_.player().pawn().position(), c2->pos) < 3.0f && S.squad.size() == 2,

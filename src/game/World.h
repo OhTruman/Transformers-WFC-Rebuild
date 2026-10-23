@@ -235,6 +235,7 @@ struct HudGameState {
     // Campaign: the game over shown (UI event 14 -> CampaignGameOver_GFX), MissionComplete, the active checkpoint actor.
     bool cpActive = false, cpGameOver = false, cpMissionComplete = false; std::string cpCheckpoint;
     bool cpCinematic = false;   // SeqAct_ToggleCinematicMode on: the HUD hides
+    std::string cpInteract;     // the local player's interact prompt: the TnInteract class in reach (empty = none)
     int svPower = 0; std::string svGeneratorName; int svGeneratorNeeded = -1;
     bool svDowned = false; float svDownedHealth = 0.0f; bool svReviveTarget = false; float svReviveProgress = -1.0f;
     // TDM player tags (TnObjectiveMarkerTypeTransformerVersus): hidden for self and the dead; allies labelled,
@@ -900,6 +901,7 @@ public:
     bool campaignMap() const { return campaignMap_; }
     const CampaignChapter& campaignChapter() const { return cpChapter_; }
     const CampaignState& campaign() const { return cp_; }
+    void cpHoldOmegaForTest(bool on) { cp_.omegaHold = on; }   // CAMPAIGNTEST
     bool cpRestartFromCheckpoint();   // RestartFromActiveCheckpoint (host; the Frontend's Restart From Last Checkpoint)
     int cpTestFireFactory(int k);   // WFC_CAMPAIGNTEST: Spawn Actor into factory k (its pool size, or -1)
     bool cpKismetActivate(KismetVM& vm, int op, int input);   // the level Kismet's host ops
@@ -1452,6 +1454,27 @@ private:
     int cpDesRayHit(const core::Vec3& o, const core::Vec3& dir, float range, float& t) const;
     void cpRadiusDes(const core::Vec3& at, float damage, float radius, int instigator, const std::string& type);
     void cpTickDestructibles(float dt);
+    bool cpToggleDestructible(KismetVM& vm, int op, int input);
+    void cpRemoveDestructible(int i);
+    void cpLoadInteracts();                      // WorldCampaignInteract.cpp
+    void cpInteractFire(CampaignInteract& I, const char* out, int user);
+    bool cpInteractActivate(KismetVM& vm, int op, int input);
+    void cpTickInteracts(float dt);
+    bool cpInteractUserInvincible(int player) const;
+    void cpOmegaStatus(int k);                   // WorldCampaignOmega.cpp
+    float cpOmegaClip(const char* clip, float fallback) const;
+    void cpOmegaPlay(const char* clip);
+    core::Vec3 cpOmegaSentryPos(int k) const;
+    void cpOmegaEnterHealthy();
+    void cpOmegaBind();
+    bool cpOmegaActivate(KismetVM& vm, int op, int input);
+    bool cpOmegaDamage(int victim, int instigator, float& amount, Health& h);
+    bool cpOmegaSees(int target) const;
+    void cpOmegaFire(int target, float dmg, float radiusM, const char* type, float spread);
+    void cpTickOmega(float dt);
+    void cpTickAiUse();
+    bool cpShootAtPoint(int player, core::Vec3& out) const;
+    bool cpAuxSpawn(const std::string& actor, int k, core::Vec3& out);
     void cpDrawDestructibles(render::IRenderer& r) const;
     void cpBindDesEvents(int i);
     void cpLoadPlacedDestructibles();

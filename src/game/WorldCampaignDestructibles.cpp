@@ -30,8 +30,14 @@ std::string tail(const std::string& s) { const size_t k = s.find_last_of('.'); r
 // AssetTools' provenance wrappers: {"value": v, "confidence": ...} -> v
 const assets::Json& val(const assets::Json& j) { return j.isObject() && j.has("value") ? j["value"] : j; }
 
-bool damageTrigger(const std::string& t) {   // the triggers damage drives [H: by class name; RE confirms the Tn* ones]
-    return t.find("GenericDamage") != std::string::npos || t.find("Corruption") != std::string::npos || t.find("Damage") != std::string::npos;
+// The triggers damage drives [C, RE CAMPAIGN_OMEGA_HITREACT_RE 3.4]: GenericDamage (normal damage against the state's InitialHealth);
+// TnCorruption only by a damage type carrying it (TnDamageTypeCorruption); TractorBeam (Omega's lock), Notification (script / a
+// sibling's DamageDependents), TimerExpired and PawnBaseDied never by damage.
+bool damageTrigger(const std::string& t, const std::string& type) {
+    if (t.find("Corruption") != std::string::npos) return type.find("Corruption") != std::string::npos;
+    if (t.find("TractorBeam") != std::string::npos || t.find("Notification") != std::string::npos || t.find("TimerExpired") != std::string::npos ||
+        t.find("PawnBaseDied") != std::string::npos) return false;
+    return t.find("Damage") != std::string::npos;
 }
 
 } // namespace
@@ -60,6 +66,7 @@ static bool buildDes(const assets::Json& bp, const std::string& contentRoot, Cam
                     // debris (HmPhysicalMeshDestructionEffectFactory) does not (PROV)
                     S.blocks = ss[k]["effects"][e]["class"].asString() == "HmStaticMeshDestructionEffectFactory";
                 }
+                if (ss[k]["effects"][e]["class"].asString() == "HmDamageDependentsDestructionEffectFactory") S.damageDeps = eff["DamageAmount"].asFloat(0.0f);
             }
             for (size_t l = 0; l < ss[k]["links"].size(); ++l) {
                 const assets::Json& L = ss[k]["links"][l];
@@ -134,7 +141,7 @@ void World::cpDesCollide(int i) {
     for (size_t k = 0; k < d.pieces.size(); ++k) {
         CampaignDestructible::Piece& p = d.pieces[k];
         for (CampaignDestructible::State& s : p.states) {
-            const bool want = s.handle == p.cur && s.blocks && !s.mesh.empty();
+            const bool want = !d.gone && s.handle == p.cur && s.blocks && !s.mesh.empty();
             if (want && s.colSet < 0) {
                 auto it = cpDesMeshes_.find(s.mesh);
                 if (it == cpDesMeshes_.end() || !it->second.ok) continue;
@@ -160,6 +167,10 @@ void World::cpDesTransition(int i, size_t piece, int to) {
     static const bool dlog = std::getenv("WFC_KISMETLOG") != nullptr;
     if (dlog) LOG_INFO("campaign: destructible %s piece %s -> state %d", d.name.c_str(), p.name.c_str(), to);
     for (int op : d.events) cp_.vm.fireEvent(op, "Out");
+    // HmDamageDependentsDestructionEffectFactory on the new state: its DamageAmount to the dependent pieces with its trigger
+    // (Notification) [C]; PROV: every other piece of the actor is a dependent (the piece dependency lists are not decoded)
+    const CampaignDestructible::State* ns = p.state();
+    if (!ns || ns->damageDeps <= 0.0f) return;
     for (size_t k = 0; k < d.pieces.size(); ++k) {
         if (k == piece) continue;
         CampaignDestructible::State* s = d.pieces[k].state();
@@ -172,14 +183,14 @@ void World::cpDesTransition(int i, size_t piece, int to) {
 void World::cpDamageDes(int i, float amount, int instigator, const std::string& type) {
     if (i < 0 || (size_t)i >= cp_.destructibles.size() || amount <= 0.0f) return;
     CampaignDestructible& d = cp_.destructibles[(size_t)i];
+    if (d.gone || d.off) return;   // SeqAct_TnToggleDestructible Turn Off: not damageable
     d.lastHitter = instigator;
-    (void)type;
     for (size_t k = 0; k < d.pieces.size(); ++k) {
         CampaignDestructible::Piece& p = d.pieces[k];
         CampaignDestructible::State* s = p.state();
         if (!s || s->health <= 0.0f) continue;
         for (const auto& L : s->links) {
-            if (!damageTrigger(L.second)) continue;
+            if (!damageTrigger(L.second, type)) continue;
             if ((p.health -= amount) <= 0.0f) cpDesTransition(i, k, L.first);
             break;
         }
@@ -190,6 +201,7 @@ int World::cpDesRayHit(const core::Vec3& o, const core::Vec3& dir, float range, 
     int best = -1; t = range;
     for (size_t i = 0; i < cp_.destructibles.size(); ++i) {
         const CampaignDestructible& d = cp_.destructibles[i];
+        if (d.gone) continue;
         float th;
         if (rayAabb(o, dir, range, d.lo, d.hi, th) && th < t) { t = th; best = (int)i; }
     }
@@ -199,6 +211,7 @@ int World::cpDesRayHit(const core::Vec3& o, const core::Vec3& dir, float range, 
 void World::cpRadiusDes(const core::Vec3& at, float damage, float radius, int instigator, const std::string& type) {
     for (size_t i = 0; i < cp_.destructibles.size(); ++i) {
         const CampaignDestructible& d = cp_.destructibles[i];
+        if (d.gone) continue;
         const core::Vec3 c = (d.lo + d.hi) * 0.5f;
         const float dist = std::max(0.0f, core::length(c - at) - core::length(d.hi - d.lo) * 0.5f);
         if (dist < radius) cpDamageDes((int)i, damage * (1.0f - dist / std::max(radius, 1e-3f)), instigator, type);
@@ -210,7 +223,7 @@ void World::cpTickDestructibles(float dt) {
         for (size_t k = 0; k < cp_.destructibles[i].pieces.size(); ++k) {
             CampaignDestructible::Piece& p = cp_.destructibles[i].pieces[k];
             CampaignDestructible::State* s = p.state();
-            if (!s || s->autoTime <= 0.0f) continue;
+            if (!s || s->autoTime <= 0.0f || cp_.destructibles[i].gone) continue;
             if ((p.timer -= dt) > 0.0f) continue;
             for (const auto& L : s->links)
                 if (L.second.find("TimerExpired") != std::string::npos) { cpDesTransition((int)i, k, L.first); break; }
@@ -220,6 +233,7 @@ void World::cpTickDestructibles(float dt) {
 void World::cpDrawDestructibles(render::IRenderer& r) const {
     for (const CampaignDestructible& d : cp_.destructibles)
         for (const CampaignDestructible::Piece& p : d.pieces) {
+            if (d.gone) break;
             const CampaignDestructible::State* s = nullptr;
             for (const auto& st : p.states) if (st.handle == p.cur) s = &st;
             if (!s || s->mesh.empty()) continue;
@@ -276,6 +290,36 @@ void World::cpLoadPlacedDestructibles() {
         ++n;
     }
     LOG_INFO("campaign: %d placed destructibles", n);
+}
+
+} // namespace game
+
+namespace game {
+
+// SeqAct_TnToggleDestructible (Turn On / Turn Off / Toggle) [H: Off = not damageable, e.g. A1's "can't shoot the targets anymore"].
+bool World::cpToggleDestructible(KismetVM& vm, int op, int input) {
+    const KismetVM::Op& o = vm.op(op);
+    if (o.cls != "SeqAct_TnToggleDestructible") return false;
+    for (int v : vm.varLink(op, "Target")) {
+        const KismetVM::Var* var = vm.var(v);
+        if (var && var->named >= 0) var = vm.var(var->named);
+        if (!var) continue;
+        const std::string nm = var->obj.rfind("des:", 0) == 0 ? std::string() : tail(var->obj);
+        for (size_t i = 0; i < cp_.destructibles.size(); ++i) {
+            CampaignDestructible& d = cp_.destructibles[i];
+            if (!(nm.empty() ? var->obj == "des:" + std::to_string(i) : d.name == nm)) continue;
+            d.off = input == 1 ? true : input == 0 ? false : !d.off;
+        }
+    }
+    if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
+    return true;
+}
+
+// A destructible factory's Kill All: its spawned actors leave the world (not drawn, no collision, no damage).
+void World::cpRemoveDestructible(int i) {
+    if (i < 0 || (size_t)i >= cp_.destructibles.size()) return;
+    cp_.destructibles[(size_t)i].gone = true;
+    cpDesCollide(i);
 }
 
 } // namespace game

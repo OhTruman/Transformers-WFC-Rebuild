@@ -3258,6 +3258,10 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
     if (victim == localPlayer_) h = &player_.pawn().health();
     else for (MatchOpponent* o : opponents_) if (o->matchPlayer() == victim) { opp = o; h = &o->health(); }
     if (!h) return false;
+    if (cp_.active) {   // campaign: an interact's user is invincible; Omega's states route / clamp the damage
+        if (cpInteractUserInvincible(victim)) return false;
+        if (cpOmegaDamage(victim, instigator, amount, *h)) return false;
+    }
     // Form damage multiplier (ROBODEF / VEHDEF DamageMultiplier, e.g. vehicles 0.75-0.9) and self damage
     // (SelfDamageMultiplier 0.45) of the victim pawn [CONF data; HIGH: applied in TnPawn.TakeDamage / AdjustDamage].
     {
@@ -4330,6 +4334,7 @@ HudGameState World::hudState() const {
         h.tags.push_back(t);
     }
     h.cpCinematic = cp_.active && cp_.cinematicMode;
+    h.cpInteract = cp_.active ? cp_.interactPrompt : std::string();
     h.cpActive = cp_.active; h.cpGameOver = cp_.gameOverSent; h.cpMissionComplete = cp_.missionComplete; h.cpCheckpoint = cp_.checkpoint;
     if (sv_.phase != SurvivalState::Phase::Off) {
         h.svWave = std::max(1, sv_.displayWave + 1);

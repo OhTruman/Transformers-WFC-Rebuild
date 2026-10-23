@@ -180,7 +180,8 @@ void World::cpSetStarts(const std::string& checkpointName) {
         Match::Start s;
         s.actor = k == 0 ? actor : actor + "_Aux" + std::to_string(k);
         s.cluster = cpChapter_.initialState; s.team = cpChapter_.faction;
-        s.pos = at + core::Vec3{k == 1 ? 5.0f : k == 2 ? -5.0f : 0.0f, 0.0f, 0.0f};   // clear of a pawn on the start (Match safe())
+        // the squad: the checkpoint's authored AuxilliarySpawnPoints (M1); else 5 m to its sides (clear of a pawn on the start)
+        if (k == 0 || !cpAuxSpawn(actor, k - 1, s.pos)) s.pos = at + core::Vec3{k == 1 ? 5.0f : k == 2 ? -5.0f : 0.0f, 0.0f, 0.0f};
         st.push_back(s);
     }
     match_.setCampaignStarts(st);
@@ -241,6 +242,7 @@ void World::setupCampaign(const MatchLaunch& l) {
         cpLoadMatinees();
         cpLoadSkeletal();
         cpLoadPawnGroups();
+        cpLoadInteracts();
         cpLoadTouches();
         cpLoadPlacedDestructibles();
         cpBindMoverNav();   // (the nav is loaded by addBots above)
@@ -290,6 +292,9 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
         vm.output(op, "Started"); vm.output(op, "Finished");
         return true;
     }
+    if (cpInteractActivate(vm, op, input)) return true;   // SeqAct_Toggle on interacts
+    if (cpToggleDestructible(vm, op, input)) return true;
+    if (cpOmegaActivate(vm, op, input)) return true;      // SetOmegaStage / CorruptOmegaBattery
     if (c == "SeqAct_TnPawnFactory") return cpPawnFactoryActivate(vm, op, input);
     if (cpInterpActivate(vm, op, input)) return true;   // SeqAct_Interp: Matinee
     if (c == "SeqAct_ToggleCinematicMode") {   // Enable / Disable / Toggle: the local player's input and HUD [H CDO: HUD off, movement / turning / input off]
@@ -466,6 +471,9 @@ void World::tickCampaign(float dt) {
     cpTickForms();
     if (!cp_.gameOver) cpTickTouches();
     cpTickDestructibles(dt);
+    cpTickInteracts(dt);
+    cpTickAiUse();
+    if (!cp_.gameOver) cpTickOmega(dt);
     // TnCampaignGame.Killed: a human killed by anything but DmgType_Suicided -> CampaignGameOver (solo: never downed).
     const auto& kh = match_.killHistory();
     for (; cp_.killsSeen < kh.size(); ++cp_.killsSeen) {

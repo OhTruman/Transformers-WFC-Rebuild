@@ -67,7 +67,8 @@ struct CampaignMover {
 // A campaign destructible (an HmDestructible blueprint instance): its pieces' current states, health and timers, its hit box.
 struct CampaignDestructible {
     struct State { int handle = 0; std::string name, mesh; float health = 0.0f, autoTime = 0.0f; std::vector<std::pair<int, std::string>> links;
-                   bool blocks = false; int colSet = -1; };   // a static-mesh state blocks; its collision set (built once)
+                   bool blocks = false; int colSet = -1;     // a static-mesh state blocks; its collision set (built once)
+                   float damageDeps = 0.0f; };              // HmDamageDependentsDestructionEffectFactory DamageAmount (0 = none)
     struct Piece { std::string name; std::vector<State> states; int cur = 0; float health = 0.0f, timer = 0.0f; State* state(); };
     std::string name;
     core::Vec3 pos{0, 0, 0}, lo{0, 0, 0}, hi{0, 0, 0};
@@ -77,6 +78,8 @@ struct CampaignDestructible {
     std::vector<Piece> pieces;
     int lastHitter = -1;
     std::vector<int> events;   // its Kismet notification events (op indices)
+    bool gone = false;         // removed (its factory's Kill All)
+    bool off = false;          // SeqAct_TnToggleDestructible Turn Off: not damageable
 };
 struct CampaignMeshAsset { bool ok = false; render::MeshData mesh; render::MeshHandle handle = -1; };
 
@@ -99,7 +102,31 @@ struct CampaignFactory {
     float delay = 0.5f, timer = 0.0f;
     std::vector<core::Vec3> points;
     std::vector<std::string> outputs;
+    std::vector<int> spawnedDes;   // a destructible factory's spawned actors (Kill All)
     std::vector<int> pool;
+};
+
+// A player interact (TnInteract*) and its TnSeqEvent_Interact events.
+struct CampaignInteract {
+    std::string name, cls;
+    core::Vec3 pos{0, 0, 0};
+    float touch = 10.0f, useRange = 10.0f, hold = 2.0f, t = 0.0f;   // TouchDistance, the use range, the Begin Use sequence length
+    bool singleUse = false, enabled = true;
+    int user = -1, toucher = -1;
+    std::vector<int> events;
+};
+// Omega Supreme (D5): the boss state machine and his arms (WorldCampaignOmega.cpp).
+struct CampaignOmega {
+    enum Stage { Intro, Healthy, Wounded, Healing, Corrupted, Critical, Dying, Dead };
+    int p = -1, stage = Intro, pendingStage = 0;
+    core::Vec3 anchor{0, 0, 0}; float yaw = 0.0f, timer = 0.0f;
+    float sentryHp[4] = {0, 0, 0, 0}; int sentryKills = 0, lastSentryHitter = -1; float heartHp = 0.0f;
+    int battery = -1, healPhase = 0, heals = 0; float healT = 0.0f; bool healCorrupt = false; std::vector<int> corrupt;
+    int target = -1, robin = 0; float targetT = 0.0f;
+    int grabVictim = -1, grabPhase = 0; float grabTimer = 0.0f, grabT = 0.0f;
+    int frenzyLeft = 0; float frenzyNext = 0.0f, frenzyT = 0.0f, barrageT = 0.0f, aoeT = 0.0f, rocketT = 0.0f;
+    uint32_t rng = 0x0E6A5u;
+    float rand01() { rng = rng * 1664525u + 1013904223u; return (float)(rng >> 8) * (1.0f / 16777216.0f); }
 };
 
 struct CampaignState {
@@ -135,6 +162,15 @@ struct CampaignState {
                    float radius = 0.0f, halfHeight = 0.0f; std::set<int> inside; };
     std::vector<Touch> touches;               // step 8: SeqEvent_Touch
     std::vector<CampaignDestructible> destructibles;   // step 9
+    std::vector<CampaignInteract> interacts;   // step 14
+    std::string interactPrompt;                // the local player's interact in reach (its class; empty = none)
+    std::vector<uint8_t> interactHeldPrev;
+    CampaignOmega omega;
+    std::map<int, std::string> shootAt;        // SeqAct_TnAiShootAtActor: AI player -> its forced fire target
+    std::map<int, std::string> aiUse;          // SeqAct_TnAiUseInteract: AI player -> the interact it goes to use
+    std::map<std::string, std::vector<core::Vec3>> auxSpawns;   // checkpoint actor -> its AuxilliarySpawnPoints
+    bool auxLoaded = false;
+    bool omegaHold = false;                    // CAMPAIGNTEST: Omega stays passive
     bool cinematicMode = false;               // SeqAct_ToggleCinematicMode: the local player's input + HUD off
     std::map<std::string, std::vector<int>> bodyPools;   // step 6: AI participants per body (shared by the factories)
     std::string streamingState;
