@@ -3742,3 +3742,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   chapter render layout = <root>/<chapter>/<SublevelName>/ (URL name, no _m) + chapter.json manifest; Rendering starts the
   chapter loader (Pipeline::loadSublevel / unloadSublevel, per-sublevel ownership, static all-loaded D5_OME first; game-side
   load / unload events later). AssetTools reruns D5_OME lighting + materials on this head after A1.
+2026-10-23 04:02 MERGED 5ae6d3c5 Escalation E2b part 2 (17 weapon factories, dropped weapons, take / slot / bag / heavy rules, SV AR
+  loadout, W1; ESCTEST 33 / 33 + 6 / 6), e324e48c Frontend leave half (no flow SlotSwap; Water row dev-only; CampaignSelect
+  fixes), a0781461 Quick Match host owns its port (pt9 root cause: the host kept the search transport = seat 255 -> 11 seats
+  -> no driver; UDPSESSIONTEST repro). pt9 rerun on a0781461 next after Rendering's relay; internal package after it passes.
+  RE D5_OME pass: AnimNodeSlot skip flag HIGH, FMV outro 10 tracks (selection UNKNOWN -> Ghidra job), RandomSeed default 0.
