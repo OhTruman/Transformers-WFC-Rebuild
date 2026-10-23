@@ -3489,3 +3489,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 00:17 #3 / #16 cause found (Rendering): the per-frame transient-light re-ranking moved headlights in and out of the 4 RT-shadow
   slots as vehicles / muzzle flashes moved; fix = 1.5x hysteresis for last frame's selection + sticky shadow slot (rt2 fefd136b,
   Realistic only; WFC_TLSTABLE=0 old; WFC_TLDIAG=1 counts). Patch against c86a56cf + a 10-min card A/B after Experimental.
+2026-10-23 00:22 MERGED e6feadfc Gameplay seat pieces (Choose Character consumer, per-seat homing lock + mines; SESSIONTEST 40 / 40) + 40ff8e3e
+  Frontend #2 respawn-timer leak (movieCall opened a second copy of the respawn movie) + RE's #11 / #12 / #15 / #8 answers.
+  USER (2026-10-23 00:22): "complete the campaign as well if any of the paths run out of things to do" -> campaign = every lane's fallback
+  queue (Gameplay Kismet runtime, Rendering decals + materials, Frontend campaign menus, Systems FX / audio, AssetTools
+  pipeline gaps, RE remaining decode). Seed decisions: #10 drop BlockingVolume 9745 (ART), keep 7008 (PC adaptation);
+  #13 per-poly pawn collision for the 40 undersized-hull meshes. #8 = authentic (ally bars through walls). #4 = runtime condition.
