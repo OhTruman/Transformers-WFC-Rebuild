@@ -24,7 +24,15 @@ must be on the **same home network**.
    PC A's lobby. Both lobbies list both players.
 4. **PC A:** pick a map and start. Both PCs load, then the match starts together (Choose Character on each).
 5. Play a few minutes: move, shoot, transform, die, respawn. Both screens should agree: the same scores, the same kills, each
-   other's robot where it should be. Try the voice key (push to talk) if you have headsets.
+   other's robot where it should be.
+
+**Voice (if each PC has a headset or a microphone):** Settings > Audio sets the voice mode (Push to talk by default, or Open
+mic), who hears you and the volume.
+- In the game lobby, hold the push-to-talk key and speak: the other PC hears you, and the speaking icon lights next to your name
+  in its player list.
+- In the match, teammates hear you by radio anywhere, and anyone near your robot hears you from where it stands (with the room's
+  echo).
+- Mute the other player from the lobby or the pause menu: you no longer hear them, and they are not told.
 
 ## 3. Join in progress (a public match)
 
