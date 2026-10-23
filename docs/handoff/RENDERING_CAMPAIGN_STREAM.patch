@@ -1,0 +1,289 @@
+diff -ru a/src/render/d3d12/D3D12RtBridge.cpp b/src/render/d3d12/D3D12RtBridge.cpp
+--- a/src/render/d3d12/D3D12RtBridge.cpp	2026-10-23 08:15:34.731134500 -0500
++++ b/src/render/d3d12/D3D12RtBridge.cpp	2026-10-23 08:15:34.829471600 -0500
+@@ -378,6 +378,32 @@
+         return true;
+ #endif
+     }
++    // (chapter streaming) a static set's two instances (InstanceID idBase, idBase + 1) take this mask - 0: out of every trace -
++    // and the static TLAS is rebuilt (the per-frame character TLAS copies instances_ each frame)
++    bool setStaticMask(unsigned idBase, unsigned mask) {
++#if !defined(WFC_RT_SHADERS)
++        (void)idBase; (void)mask; return false;
++#else
++        bool any = false;
++        for (auto& in : instances_)
++            if (in.InstanceID >= idBase && in.InstanceID < idBase + 2 && in.InstanceMask != (mask & 0xFF)) { in.InstanceMask = mask & 0xFF; any = true; }
++        if (!any) return true;
++        if (!dev5_ || !tlas_ || !waitIdle()) return false;
++        ID3D12CommandAllocator* al = nullptr; ID3D12GraphicsCommandList4* cl = nullptr;
++        if (FAILED(dev_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&al)) ||
++            FAILED(dev_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, al, nullptr, __uuidof(ID3D12GraphicsCommandList4), (void**)&cl))) {
++            rel(al); return false;
++        }
++        std::vector<ID3D12Resource*> temp;
++        const bool ok = rebuildTlas(cl, temp);
++        cl->Close();
++        const bool idle = ok ? submitTimed(cl, "static set mask") : waitIdle();
++        rel(cl); rel(al);
++        if (idle) for (auto* r : temp) r->Release();
++        if (ok && heap_) writeDescriptors();
++        return ok;
++#endif
++    }
+     // the TLAS over instances_ (static sets + masked sets), built on cl; the previous TLAS released (callers waited idle)
+     bool rebuildTlas(ID3D12GraphicsCommandList4* cl, std::vector<ID3D12Resource*>& temp) {
+         D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+@@ -1677,6 +1703,7 @@
+ GLuint rtBridgeMaskAtlas(int w, int h) { return ensure() ? g_bridge->maskAtlas(w, h) : 0; }
+ bool rtBridgeAddHitData(const RtHitData& d) { return g_bridge && g_bridge->addHitData(d); }
+ bool rtBridgeAddMasked(const RtMaskedWorld& m) { return g_bridge && g_bridge->addMasked(m); }
++bool rtBridgeSetStaticMask(unsigned idBase, unsigned mask) { return g_bridge && g_bridge->setStaticMask(idBase, mask); }
+ void rtBridgeSetSignalBuffers(const GLuint* bufs, int n) { if (g_bridge) g_bridge->setSignalBuffers(bufs, n); }
+ bool rtBridgeGiSetup(const RtGiSetup& s, std::vector<GLuint>& glTex) { return g_bridge && g_bridge->giSetup(s, glTex); }
+ double rtBridgeVramMB() { return g_bridge ? g_bridge->vramMB() : 0.0; }
+@@ -1700,6 +1727,7 @@
+ GLuint rtBridgeMaskAtlas(int, int) { return 0; }
+ bool rtBridgeAddHitData(const RtHitData&) { return false; }
+ bool rtBridgeAddMasked(const RtMaskedWorld&) { return false; }
++bool rtBridgeSetStaticMask(unsigned, unsigned) { return false; }
+ void rtBridgeSetSignalBuffers(const GLuint*, int) {}
+ bool rtBridgeGiSetup(const RtGiSetup&, std::vector<GLuint>& glTex) { glTex.clear(); return false; }
+ double rtBridgeVramMB() { return 0.0; }
+diff -ru a/src/render/d3d12/D3D12RtBridge.h b/src/render/d3d12/D3D12RtBridge.h
+--- a/src/render/d3d12/D3D12RtBridge.h	2026-10-23 08:15:34.761237700 -0500
++++ b/src/render/d3d12/D3D12RtBridge.h	2026-10-23 08:15:34.836495700 -0500
+@@ -92,6 +92,7 @@
+ };
+ bool rtBridgeAddHitData(const RtHitData& d);
+ GLuint rtBridgeMaskAtlas(int w, int h);                     // the shared R8 opacity atlas (GL texture), made once
++bool rtBridgeSetStaticMask(unsigned idBase, unsigned mask);   // (chapter streaming) a static set's mask, 0 = untraced
+ bool rtBridgeAddMasked(const RtMaskedWorld& m);             // non-opaque BLAS (instance mask 0x8) + lookup buffers
+ // GL buffers written before the signal that D3D12 reads (Systems' skinned positions): signalled and reacquired with
+ // the targets on every round trip until changed (n = 0 clears)
+diff -ru a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
+--- a/src/render/gl/GLRenderer.cpp	2026-10-23 08:15:34.547003500 -0500
++++ b/src/render/gl/GLRenderer.cpp	2026-10-23 08:15:34.843017900 -0500
+@@ -403,7 +403,8 @@
+         if (wfc_.active() && !chapterMeshes_.empty() && chapterFrame_ != wfc_.frameNumber()) {
+             chapterFrame_ = wfc_.frameNumber();
+             for (MeshHandle c : chapterMeshes_)
+-                if (c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0) wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
++                if (c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0 && wfc_.chapterMeshVisible(gpu_[(size_t)c]))
++                    wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
+             glLoadMatrixf(view_.m);
+         }
+         if (wfc_.active()) wfc_.drawMapPresentation();
+@@ -1266,6 +1267,7 @@
+         wfc_.setActorPose(a, p, r);
+     }
+     void setFrontendActorScale(const std::string& a, float s) override { wfc_.setActorScale(a, s); }
++    void setMapActorTransform(const std::string& a, const core::Vec3& p, const core::Vec3& r) override { wfc_.setActorPose(a, p, r); }
+     bool sceneGroundHeight(float x, float y, float zFrom, float& z) const override {
+         return wfc_.active() && wfc_.groundBelowUE(x, y, zFrom, z);
+     }
+@@ -1666,7 +1668,8 @@
+             if (!chapterMeshes_.empty() && chapterFrame_ != wfc_.frameNumber() && wfc_.isWorldMesh(gpu_[(size_t)h])) {
+                 chapterFrame_ = wfc_.frameNumber();
+                 for (MeshHandle c : chapterMeshes_)
+-                    if (c != h && c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0) wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
++                    if (c != h && c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0 && wfc_.chapterMeshVisible(gpu_[(size_t)c]))
++                        wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
+             }
+             glLoadMatrixf(view_.m);
+             return;
+@@ -1697,12 +1700,15 @@
+                 const MeshHandle h = uploadMesh(w);
+                 if (h != kInvalidMesh) {
+                     chapterMeshes_.push_back(h);
+-                    if ((size_t)h < gpu_.size() && gpu_[(size_t)h] >= 0) gpuIds.push_back(gpu_[(size_t)h]);
++                    if ((size_t)h < gpu_.size() && gpu_[(size_t)h] >= 0) { gpuIds.push_back(gpu_[(size_t)h]); wfc_.setUnitWorldMesh(u, gpu_[(size_t)h]); }
+                 }
+             } else LOG_WARN("chapter: %s has no world.glb in its render data", u.c_str());
+             wfc_.yieldLoad();
+         }
+         wfc_.endChapterUnits(gpuIds);
++        // the units' placed actors (and the persistent unit's: A1's intro lift) for matinee poses (setMapActorTransform)
++        wfc_.registerGlbActors(wfc_.dataDir() + "/world.glb");
++        for (const std::string& u : loaded) wfc_.registerGlbActors(cd + "/" + u + "/world.glb");
+         wfc_.loadChapterPost(cd);                   // (the chapter's post-process volumes: <chapter dir>/postprocess_volumes.json)
+         LOG_INFO("chapter: %d of %zu unit(s) merged, %zu world mesh(es)", n, units.size(), chapterMeshes_.size());
+         return n;
+@@ -1729,6 +1735,7 @@
+     }
+     void notifyCameraCut(const char* reason) override { wfc_.notifyCameraCut(reason); }
+     void setPostProcessVolumeEnabled(const std::string& volume, bool on) override { wfc_.setPostVolumeEnabled(volume, on); }
++    void setChapterUnitVisible(const std::string& unit, bool visible) override { wfc_.setChapterUnitVisible(unit, visible); }
+     void setCinematicView(const CinematicView& view) override { wfc_.setCinematicView(view); }
+     bool frameGenerationAvailable() const override { return frameGenerationRuntimeShipped(); }
+     bool frameGenerationActive() const override { return framegenActive(); }
+diff -ru a/src/render/gl/WfcCampaignPost.cpp b/src/render/gl/WfcCampaignPost.cpp
+--- a/src/render/gl/WfcCampaignPost.cpp	2026-10-23 08:15:34.700028000 -0500
++++ b/src/render/gl/WfcCampaignPost.cpp	2026-10-23 08:15:34.849038500 -0500
+@@ -92,7 +92,7 @@
+     parsePost(J["world_default"], ppWorld_.s);
+     interpOf(J["world_default"], ppWorld_.interp);
+     {
+-        assets::Json W; W.obj["settings"] = J["world_default"]; W.obj["lut"] = J["world_lut"];
++        assets::Json W; W.type = assets::Json::Type::Object; W.obj["settings"] = J["world_default"]; W.obj["lut"] = J["world_lut"];
+         ppWorld_.lut = lutOf(W);
+     }
+     const assets::Json& V = J["volumes"];
+diff -ru a/src/render/gl/WfcMovers.cpp b/src/render/gl/WfcMovers.cpp
+--- a/src/render/gl/WfcMovers.cpp	2026-10-23 08:15:34.640825000 -0500
++++ b/src/render/gl/WfcMovers.cpp	2026-10-23 08:15:34.855561000 -0500
+@@ -405,5 +405,35 @@
+     LOG_INFO("wfc: scene actors: %d poses, %d PHYS_Rotating, %d authored-hidden", poses, rot, hid);
+ }
+ 
++// (campaign chapters) the actor nodes of a unit's world.glb as loadSceneActors entries - the JSON chunk alone is read (the
++// binary chunk is the meshes, already uploaded)
++void Pipeline::registerGlbActors(const std::string& glbPath) {
++    std::ifstream f(glbPath, std::ios::binary);
++    uint32_t hdr[5] = {};
++    if (!f || !f.read(reinterpret_cast<char*>(hdr), sizeof hdr) || hdr[0] != 0x46546C67u || hdr[4] != 0x4E4F534Au) return;
++    std::string js(hdr[3], ' ');
++    if (!f.read(&js[0], (std::streamsize)js.size())) return;
++    assets::Json J;
++    if (!assets::Json::parse(js, J)) return;
++    assets::Json L, list;
++    const assets::Json& N = J["nodes"];
++    for (size_t i = 0; i < N.size(); ++i) {
++        const assets::Json& nd = N[i];
++        const assets::Json& ex = nd["extras"];
++        if (!ex["actor"].isString() || nd["matrix"].size() < 16) continue;
++        const std::string cls = ex["class"].asString();
++        if (cls != "InterpActor" && cls != "StaticMeshActor" && cls != "HmSkeletalMeshActor" && cls != "Emitter") continue;
++        assets::Json e;
++        e.type = assets::Json::Type::Object;
++        e.obj["actor"] = ex["actor"]; e.obj["class"] = ex["class"]; e.obj["gltf_matrix"] = nd["matrix"];
++        list.arr.push_back(e);
++    }
++    if (list.arr.empty()) return;
++    list.type = assets::Json::Type::Array;
++    L.obj["glb"] = list;
++    L.type = assets::Json::Type::Object;
++    loadSceneActors(L);
++}
++
+ } // namespace wfc
+ } // namespace render
+diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-23 08:15:34.580116900 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 08:15:34.863588700 -0500
+@@ -5164,14 +5164,14 @@
+     drawSubs(g, model, !g.world);
+     if (g.drawsBsp && bspMesh_ >= 0 && bspMesh_ != id) drawSubs(meshes_[(size_t)bspMesh_], model, false);
+     if (g.drawsBsp)                                  // (chapter loader) the merged sublevels' BSP (stage 1: per-sub draws, no MDI set)
+-        for (const SublevelRT& sl : sublevels_) if (sl.bsp >= 0 && sl.bsp != id) drawSubs(meshes_[(size_t)sl.bsp], model, false);
++        for (const SublevelRT& sl : sublevels_) if (sl.visible && sl.bsp >= 0 && sl.bsp != id) drawSubs(meshes_[(size_t)sl.bsp], model, false);
+     if (g.drawsBsp && testMesh_ >= 0) drawSubs(meshes_[(size_t)testMesh_], testModel_, true);
+     if (g.drawsBsp && ((decalMesh_ >= 0 && decalMesh_ != id) || !sublevels_.empty()) && !WFC_ENV("WFC_NODECALS")) {
+         // DecalComponent DepthBias (-0.0002): pull decals toward the camera over their receivers.
+         glEnable(GL_POLYGON_OFFSET_FILL);
+         glPolygonOffset(-1.0f, -4.0f);
+         if (decalMesh_ >= 0 && decalMesh_ != id) drawSubs(meshes_[(size_t)decalMesh_], model, false);
+-        for (const SublevelRT& sl : sublevels_) if (sl.decal >= 0 && sl.decal != id) drawSubs(meshes_[(size_t)sl.decal], model, false);
++        for (const SublevelRT& sl : sublevels_) if (sl.visible && sl.decal >= 0 && sl.decal != id) drawSubs(meshes_[(size_t)sl.decal], model, false);
+         glDisable(GL_POLYGON_OFFSET_FILL);
+     }
+     if (g.drawsBsp && !rtDecals_.empty()) {
+@@ -5244,6 +5244,28 @@
+     }
+ }
+ 
++void Pipeline::setUnitWorldMesh(const std::string& unit, int gpuId) {
++    for (SublevelRT& sl : sublevels_) if (sl.unit == unit) { sl.world = gpuId; return; }
++}
++
++void Pipeline::setChapterUnitVisible(const std::string& unit, bool visible) {
++    SublevelRT* sl = nullptr;
++    for (SublevelRT& s : sublevels_) if (s.unit == unit) { sl = &s; break; }
++    if (!sl) { LOG_WARN("chapter: no merged unit %s to %s", unit.c_str(), visible ? "show" : "hide"); return; }
++    if (sl->visible == visible) return;
++    sl->visible = visible;
++    for (size_t i = sl->light0; i < sl->light1 && i < lights_.size(); ++i)
++        lights_[i].enabled = visible && (i - sl->light0 < sl->lightOn.size() ? sl->lightOn[i - sl->light0] != 0 : true);
++    for (size_t i = sl->fx0; i < sl->fx1 && i < fxInstances_.size(); ++i)
++        fxInstances_[i].hidden = !visible || (i - sl->fx0 < sl->fxHidden.size() && sl->fxHidden[i - sl->fx0] != 0);
++    int masked = 0;
++    for (size_t k = 0; k < rtSets_.size() && k < rtSetIdBase_.size(); ++k)
++        if (rtSets_[k].first == sl->world || rtSets_[k].first == sl->bsp)
++            masked += rtBridgeSetStaticMask(rtSetIdBase_[k], visible ? (1u << rtSets_[k].second) : 0u) ? 1 : 0;
++    LOG_INFO("chapter: %s %s (%zu lights, %zu FX instances, %d RT sets)", unit.c_str(), visible ? "shown" : "hidden",
++             sl->light1 - sl->light0, sl->fx1 - sl->fx0, masked);
++}
++
+ void Pipeline::rtLoadData() {
+     r1CheckGl();
+     if (r1Map_ && rtShadowAoOn() && !r1Built_) r1Build();   // (R1: the V_bake pages / arrays under the loading screen, not in frame 1)
+@@ -9973,6 +9995,9 @@
+             if (sl.decal >= 0) meshes_[(size_t)sl.decal].decal = true;
+         }
+     }
++    sl.light0 = lights0; sl.light1 = lights_.size(); sl.fx0 = fx0; sl.fx1 = fxInstances_.size();   // (stage 3: its ranges + own states)
++    for (size_t i = sl.light0; i < sl.light1; ++i) sl.lightOn.push_back(lights_[i].enabled ? 1 : 0);
++    for (size_t i = sl.fx0; i < sl.fx1; ++i) sl.fxHidden.push_back(fxInstances_[i].hidden ? 1 : 0);
+     sublevels_.push_back(sl);
+     LOG_INFO("wfc: sublevel %s merged: +%zu materials, +%zu lights, +%zu lightmapped components, +%zu FX instances, BSP %s, decals %s",
+              unit.c_str(), mats_.size() - mats0, lights_.size() - lights0, lightmaps_.size() - lm0, fxInstances_.size() - fx0,
+diff -ru a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h	2026-10-23 08:15:34.611223800 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-23 08:15:34.870612500 -0500
+@@ -202,6 +202,14 @@
+     // (chapter loader) the RT data (masked atlas, reflection hits, RT GI) waits for every unit: begin before the units load,
+     // end with their world meshes - each one (and each unit's BSP) joins the RT static world, then the RT data is built once
+     void beginChapterUnits() { chapterDefer_ = true; }
++    // (stage 3) streaming as visibility: every unit preloaded, a hidden one draws nothing (world mesh, BSP, decals, its lights
++    // and map FX) and leaves the RT scene (instance mask 0); its masked (alpha-tested) RT set is not per unit and stays
++    void setUnitWorldMesh(const std::string& unit, int gpuId);
++    void setChapterUnitVisible(const std::string& unit, bool visible);
++    bool chapterMeshVisible(int gpuId) const {
++        for (const SublevelRT& sl : sublevels_) if (sl.world == gpuId) return sl.visible;
++        return true;
++    }
+     void endChapterUnits(const std::vector<int>& worldMeshes);
+     // M74 energy death: the draw owner's dynamic materials swap to their package's Defrag instance at `defrag`
+     void setDrawEnergyDeath(float defrag) {
+@@ -287,6 +295,9 @@
+     // frontend pose of a scene actor in UE space: world = M * (x - L0) + L1, M = DrawScale ratio * A1 A0^T (columns)
+     bool frontendPoseUE(const std::string& actorLower, float M[9], float L0[3], float L1[3]) const;
+     void loadSceneActors(const assets::Json& actorsByLevel);   // render_index actors_by_level (UI families)
++    // (campaign chapters) a unit's placed actors (world.glb nodes: extras actor / class + the node matrix) registered for
++    // matinee poses (IRenderer::setMapActorTransform) - the chapter units carry no render_index
++    void registerGlbActors(const std::string& glbPath);
+     void loadSceneNonDrawnActors(const assets::Json& actorsByLevel, const assets::Json& cameras);   // cameras, lens flares
+ 
+     void beginFrame(const Camera& cam, int w, int h);
+@@ -694,6 +705,7 @@
+     bool rtHitBuilt_ = false;
+     void rtBuildHit();
+     std::vector<std::pair<int, int>> rtSets_;          // (mesh, set) of the static sets on D3D12
++    std::vector<unsigned> rtSetIdBase_;                // ... their InstanceID base (stage 3: a hidden unit's sets masked out)
+     GLuint rtAtlasFbo_ = 0;
+     void rtBuildMasked();
+     float rtSunDir_[3] = {0, 0, 0};                    // towards the traced sun (uRtSunDir; 0 = none)
+@@ -1101,7 +1113,10 @@
+     void loadPpvFogs(const assets::Json& lighting, bool append = false);   // (append: a merged sublevel's volumes)
+     void addMaterials(const assets::Json& M, const std::string& dir);
+     void addLightingRecords(const assets::Json& L, const std::string& dir, bool primary);
+-    struct SublevelRT { std::string unit, dir; int bsp = -1, decal = -1; };
++    struct SublevelRT { std::string unit, dir; int bsp = -1, decal = -1;
++                        int world = -1; bool visible = true;                      // (stage 3: its world mesh, streaming visibility)
++                        size_t light0 = 0, light1 = 0, fx0 = 0, fx1 = 0;          // (its lights_ / fxInstances_ ranges)
++                        std::vector<char> lightOn, fxHidden; };                   // (their own states, restored when shown)
+     std::vector<SublevelRT> sublevels_;           // (chapter loader) the merged units, in load order
+     bool bspHosted_ = false;                         // (chapter loader) a world mesh already draws the BSP / decals
+     bool chapterDefer_ = false;                      // (chapter loader) units still loading: the RT data waits
+diff -ru a/src/render/gl/WfcRt.cpp b/src/render/gl/WfcRt.cpp
+--- a/src/render/gl/WfcRt.cpp	2026-10-23 08:15:34.669925000 -0500
++++ b/src/render/gl/WfcRt.cpp	2026-10-23 08:15:34.878138200 -0500
+@@ -318,7 +318,7 @@
+         }
+     }
+     if (rtBridgeAddStaticWorld(W, 1u << set)) {
+-        ++rtWorldSets_; rtSets_.push_back({meshId, set});
++        ++rtWorldSets_; rtSets_.push_back({meshId, set}); rtSetIdBase_.push_back(W.idBase);
+         if (keepHit) rtHitKeep_.push_back(std::move(keep));
+     }
+     else LOG_WARN("RT depth check: no static world on D3D12 (the round trip runs the copy)");

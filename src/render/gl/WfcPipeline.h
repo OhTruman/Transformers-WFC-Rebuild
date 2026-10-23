@@ -202,6 +202,14 @@ public:
     // (chapter loader) the RT data (masked atlas, reflection hits, RT GI) waits for every unit: begin before the units load,
     // end with their world meshes - each one (and each unit's BSP) joins the RT static world, then the RT data is built once
     void beginChapterUnits() { chapterDefer_ = true; }
+    // (stage 3) streaming as visibility: every unit preloaded, a hidden one draws nothing (world mesh, BSP, decals, its lights
+    // and map FX) and leaves the RT scene (instance mask 0); its masked (alpha-tested) RT set is not per unit and stays
+    void setUnitWorldMesh(const std::string& unit, int gpuId);
+    void setChapterUnitVisible(const std::string& unit, bool visible);
+    bool chapterMeshVisible(int gpuId) const {
+        for (const SublevelRT& sl : sublevels_) if (sl.world == gpuId) return sl.visible;
+        return true;
+    }
     void endChapterUnits(const std::vector<int>& worldMeshes);
     // M74 energy death: the draw owner's dynamic materials swap to their package's Defrag instance at `defrag`
     void setDrawEnergyDeath(float defrag) {
@@ -287,6 +295,9 @@ public:
     // frontend pose of a scene actor in UE space: world = M * (x - L0) + L1, M = DrawScale ratio * A1 A0^T (columns)
     bool frontendPoseUE(const std::string& actorLower, float M[9], float L0[3], float L1[3]) const;
     void loadSceneActors(const assets::Json& actorsByLevel);   // render_index actors_by_level (UI families)
+    // (campaign chapters) a unit's placed actors (world.glb nodes: extras actor / class + the node matrix) registered for
+    // matinee poses (IRenderer::setMapActorTransform) - the chapter units carry no render_index
+    void registerGlbActors(const std::string& glbPath);
     void loadSceneNonDrawnActors(const assets::Json& actorsByLevel, const assets::Json& cameras);   // cameras, lens flares
 
     void beginFrame(const Camera& cam, int w, int h);
@@ -694,6 +705,7 @@ private:
     bool rtHitBuilt_ = false;
     void rtBuildHit();
     std::vector<std::pair<int, int>> rtSets_;          // (mesh, set) of the static sets on D3D12
+    std::vector<unsigned> rtSetIdBase_;                // ... their InstanceID base (stage 3: a hidden unit's sets masked out)
     GLuint rtAtlasFbo_ = 0;
     void rtBuildMasked();
     float rtSunDir_[3] = {0, 0, 0};                    // towards the traced sun (uRtSunDir; 0 = none)
@@ -1101,7 +1113,10 @@ private:
     void loadPpvFogs(const assets::Json& lighting, bool append = false);   // (append: a merged sublevel's volumes)
     void addMaterials(const assets::Json& M, const std::string& dir);
     void addLightingRecords(const assets::Json& L, const std::string& dir, bool primary);
-    struct SublevelRT { std::string unit, dir; int bsp = -1, decal = -1; };
+    struct SublevelRT { std::string unit, dir; int bsp = -1, decal = -1;
+                        int world = -1; bool visible = true;                      // (stage 3: its world mesh, streaming visibility)
+                        size_t light0 = 0, light1 = 0, fx0 = 0, fx1 = 0;          // (its lights_ / fxInstances_ ranges)
+                        std::vector<char> lightOn, fxHidden; };                   // (their own states, restored when shown)
     std::vector<SublevelRT> sublevels_;           // (chapter loader) the merged units, in load order
     bool bspHosted_ = false;                         // (chapter loader) a world mesh already draws the BSP / decals
     bool chapterDefer_ = false;                      // (chapter loader) units still loading: the RT data waits

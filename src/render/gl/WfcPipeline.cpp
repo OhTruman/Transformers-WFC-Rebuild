@@ -5164,14 +5164,14 @@ void Pipeline::draw(int id, const core::Mat4& model) {
     drawSubs(g, model, !g.world);
     if (g.drawsBsp && bspMesh_ >= 0 && bspMesh_ != id) drawSubs(meshes_[(size_t)bspMesh_], model, false);
     if (g.drawsBsp)                                  // (chapter loader) the merged sublevels' BSP (stage 1: per-sub draws, no MDI set)
-        for (const SublevelRT& sl : sublevels_) if (sl.bsp >= 0 && sl.bsp != id) drawSubs(meshes_[(size_t)sl.bsp], model, false);
+        for (const SublevelRT& sl : sublevels_) if (sl.visible && sl.bsp >= 0 && sl.bsp != id) drawSubs(meshes_[(size_t)sl.bsp], model, false);
     if (g.drawsBsp && testMesh_ >= 0) drawSubs(meshes_[(size_t)testMesh_], testModel_, true);
     if (g.drawsBsp && ((decalMesh_ >= 0 && decalMesh_ != id) || !sublevels_.empty()) && !WFC_ENV("WFC_NODECALS")) {
         // DecalComponent DepthBias (-0.0002): pull decals toward the camera over their receivers.
         glEnable(GL_POLYGON_OFFSET_FILL);
         glPolygonOffset(-1.0f, -4.0f);
         if (decalMesh_ >= 0 && decalMesh_ != id) drawSubs(meshes_[(size_t)decalMesh_], model, false);
-        for (const SublevelRT& sl : sublevels_) if (sl.decal >= 0 && sl.decal != id) drawSubs(meshes_[(size_t)sl.decal], model, false);
+        for (const SublevelRT& sl : sublevels_) if (sl.visible && sl.decal >= 0 && sl.decal != id) drawSubs(meshes_[(size_t)sl.decal], model, false);
         glDisable(GL_POLYGON_OFFSET_FILL);
     }
     if (g.drawsBsp && !rtDecals_.empty()) {
@@ -5242,6 +5242,28 @@ void Pipeline::parsePost(const assets::Json& P, Post& out) {
     if (!P["bEnableSceneEffect"].asBool(true)) {
         out.shadows = {0, 0, 0}; out.highlights = {1, 1, 1}; out.midtones = {1, 1, 1}; out.desat = 0;
     }
+}
+
+void Pipeline::setUnitWorldMesh(const std::string& unit, int gpuId) {
+    for (SublevelRT& sl : sublevels_) if (sl.unit == unit) { sl.world = gpuId; return; }
+}
+
+void Pipeline::setChapterUnitVisible(const std::string& unit, bool visible) {
+    SublevelRT* sl = nullptr;
+    for (SublevelRT& s : sublevels_) if (s.unit == unit) { sl = &s; break; }
+    if (!sl) { LOG_WARN("chapter: no merged unit %s to %s", unit.c_str(), visible ? "show" : "hide"); return; }
+    if (sl->visible == visible) return;
+    sl->visible = visible;
+    for (size_t i = sl->light0; i < sl->light1 && i < lights_.size(); ++i)
+        lights_[i].enabled = visible && (i - sl->light0 < sl->lightOn.size() ? sl->lightOn[i - sl->light0] != 0 : true);
+    for (size_t i = sl->fx0; i < sl->fx1 && i < fxInstances_.size(); ++i)
+        fxInstances_[i].hidden = !visible || (i - sl->fx0 < sl->fxHidden.size() && sl->fxHidden[i - sl->fx0] != 0);
+    int masked = 0;
+    for (size_t k = 0; k < rtSets_.size() && k < rtSetIdBase_.size(); ++k)
+        if (rtSets_[k].first == sl->world || rtSets_[k].first == sl->bsp)
+            masked += rtBridgeSetStaticMask(rtSetIdBase_[k], visible ? (1u << rtSets_[k].second) : 0u) ? 1 : 0;
+    LOG_INFO("chapter: %s %s (%zu lights, %zu FX instances, %d RT sets)", unit.c_str(), visible ? "shown" : "hidden",
+             sl->light1 - sl->light0, sl->fx1 - sl->fx0, masked);
 }
 
 void Pipeline::rtLoadData() {
@@ -9973,6 +9995,9 @@ bool Pipeline::loadSublevel(const std::string& unitDir) {
             if (sl.decal >= 0) meshes_[(size_t)sl.decal].decal = true;
         }
     }
+    sl.light0 = lights0; sl.light1 = lights_.size(); sl.fx0 = fx0; sl.fx1 = fxInstances_.size();   // (stage 3: its ranges + own states)
+    for (size_t i = sl.light0; i < sl.light1; ++i) sl.lightOn.push_back(lights_[i].enabled ? 1 : 0);
+    for (size_t i = sl.fx0; i < sl.fx1; ++i) sl.fxHidden.push_back(fxInstances_[i].hidden ? 1 : 0);
     sublevels_.push_back(sl);
     LOG_INFO("wfc: sublevel %s merged: +%zu materials, +%zu lights, +%zu lightmapped components, +%zu FX instances, BSP %s, decals %s",
              unit.c_str(), mats_.size() - mats0, lights_.size() - lights0, lightmaps_.size() - lm0, fxInstances_.size() - fx0,

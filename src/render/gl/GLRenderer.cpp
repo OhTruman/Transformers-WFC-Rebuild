@@ -403,7 +403,8 @@ public:
         if (wfc_.active() && !chapterMeshes_.empty() && chapterFrame_ != wfc_.frameNumber()) {
             chapterFrame_ = wfc_.frameNumber();
             for (MeshHandle c : chapterMeshes_)
-                if (c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0) wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
+                if (c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0 && wfc_.chapterMeshVisible(gpu_[(size_t)c]))
+                    wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
             glLoadMatrixf(view_.m);
         }
         if (wfc_.active()) wfc_.drawMapPresentation();
@@ -1266,6 +1267,7 @@ public:
         wfc_.setActorPose(a, p, r);
     }
     void setFrontendActorScale(const std::string& a, float s) override { wfc_.setActorScale(a, s); }
+    void setMapActorTransform(const std::string& a, const core::Vec3& p, const core::Vec3& r) override { wfc_.setActorPose(a, p, r); }
     bool sceneGroundHeight(float x, float y, float zFrom, float& z) const override {
         return wfc_.active() && wfc_.groundBelowUE(x, y, zFrom, z);
     }
@@ -1666,7 +1668,8 @@ public:
             if (!chapterMeshes_.empty() && chapterFrame_ != wfc_.frameNumber() && wfc_.isWorldMesh(gpu_[(size_t)h])) {
                 chapterFrame_ = wfc_.frameNumber();
                 for (MeshHandle c : chapterMeshes_)
-                    if (c != h && c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0) wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
+                    if (c != h && c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0 && wfc_.chapterMeshVisible(gpu_[(size_t)c]))
+                        wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
             }
             glLoadMatrixf(view_.m);
             return;
@@ -1697,12 +1700,15 @@ public:
                 const MeshHandle h = uploadMesh(w);
                 if (h != kInvalidMesh) {
                     chapterMeshes_.push_back(h);
-                    if ((size_t)h < gpu_.size() && gpu_[(size_t)h] >= 0) gpuIds.push_back(gpu_[(size_t)h]);
+                    if ((size_t)h < gpu_.size() && gpu_[(size_t)h] >= 0) { gpuIds.push_back(gpu_[(size_t)h]); wfc_.setUnitWorldMesh(u, gpu_[(size_t)h]); }
                 }
             } else LOG_WARN("chapter: %s has no world.glb in its render data", u.c_str());
             wfc_.yieldLoad();
         }
         wfc_.endChapterUnits(gpuIds);
+        // the units' placed actors (and the persistent unit's: A1's intro lift) for matinee poses (setMapActorTransform)
+        wfc_.registerGlbActors(wfc_.dataDir() + "/world.glb");
+        for (const std::string& u : loaded) wfc_.registerGlbActors(cd + "/" + u + "/world.glb");
         wfc_.loadChapterPost(cd);                   // (the chapter's post-process volumes: <chapter dir>/postprocess_volumes.json)
         LOG_INFO("chapter: %d of %zu unit(s) merged, %zu world mesh(es)", n, units.size(), chapterMeshes_.size());
         return n;
@@ -1729,6 +1735,7 @@ public:
     }
     void notifyCameraCut(const char* reason) override { wfc_.notifyCameraCut(reason); }
     void setPostProcessVolumeEnabled(const std::string& volume, bool on) override { wfc_.setPostVolumeEnabled(volume, on); }
+    void setChapterUnitVisible(const std::string& unit, bool visible) override { wfc_.setChapterUnitVisible(unit, visible); }
     void setCinematicView(const CinematicView& view) override { wfc_.setCinematicView(view); }
     bool frameGenerationAvailable() const override { return frameGenerationRuntimeShipped(); }
     bool frameGenerationActive() const override { return framegenActive(); }

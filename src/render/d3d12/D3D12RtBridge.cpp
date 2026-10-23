@@ -378,6 +378,32 @@ public:
         return true;
 #endif
     }
+    // (chapter streaming) a static set's two instances (InstanceID idBase, idBase + 1) take this mask - 0: out of every trace -
+    // and the static TLAS is rebuilt (the per-frame character TLAS copies instances_ each frame)
+    bool setStaticMask(unsigned idBase, unsigned mask) {
+#if !defined(WFC_RT_SHADERS)
+        (void)idBase; (void)mask; return false;
+#else
+        bool any = false;
+        for (auto& in : instances_)
+            if (in.InstanceID >= idBase && in.InstanceID < idBase + 2 && in.InstanceMask != (mask & 0xFF)) { in.InstanceMask = mask & 0xFF; any = true; }
+        if (!any) return true;
+        if (!dev5_ || !tlas_ || !waitIdle()) return false;
+        ID3D12CommandAllocator* al = nullptr; ID3D12GraphicsCommandList4* cl = nullptr;
+        if (FAILED(dev_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&al)) ||
+            FAILED(dev_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, al, nullptr, __uuidof(ID3D12GraphicsCommandList4), (void**)&cl))) {
+            rel(al); return false;
+        }
+        std::vector<ID3D12Resource*> temp;
+        const bool ok = rebuildTlas(cl, temp);
+        cl->Close();
+        const bool idle = ok ? submitTimed(cl, "static set mask") : waitIdle();
+        rel(cl); rel(al);
+        if (idle) for (auto* r : temp) r->Release();
+        if (ok && heap_) writeDescriptors();
+        return ok;
+#endif
+    }
     // the TLAS over instances_ (static sets + masked sets), built on cl; the previous TLAS released (callers waited idle)
     bool rebuildTlas(ID3D12GraphicsCommandList4* cl, std::vector<ID3D12Resource*>& temp) {
         D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
@@ -1677,6 +1703,7 @@ bool rtBridgeRoundTrip(const RtFrame* frame) { return g_bridge && g_bridge->roun
 GLuint rtBridgeMaskAtlas(int w, int h) { return ensure() ? g_bridge->maskAtlas(w, h) : 0; }
 bool rtBridgeAddHitData(const RtHitData& d) { return g_bridge && g_bridge->addHitData(d); }
 bool rtBridgeAddMasked(const RtMaskedWorld& m) { return g_bridge && g_bridge->addMasked(m); }
+bool rtBridgeSetStaticMask(unsigned idBase, unsigned mask) { return g_bridge && g_bridge->setStaticMask(idBase, mask); }
 void rtBridgeSetSignalBuffers(const GLuint* bufs, int n) { if (g_bridge) g_bridge->setSignalBuffers(bufs, n); }
 bool rtBridgeGiSetup(const RtGiSetup& s, std::vector<GLuint>& glTex) { return g_bridge && g_bridge->giSetup(s, glTex); }
 double rtBridgeVramMB() { return g_bridge ? g_bridge->vramMB() : 0.0; }
@@ -1700,6 +1727,7 @@ bool rtBridgeRoundTrip(const RtFrame*) { return false; }
 GLuint rtBridgeMaskAtlas(int, int) { return 0; }
 bool rtBridgeAddHitData(const RtHitData&) { return false; }
 bool rtBridgeAddMasked(const RtMaskedWorld&) { return false; }
+bool rtBridgeSetStaticMask(unsigned, unsigned) { return false; }
 void rtBridgeSetSignalBuffers(const GLuint*, int) {}
 bool rtBridgeGiSetup(const RtGiSetup&, std::vector<GLuint>& glTex) { glTex.clear(); return false; }
 double rtBridgeVramMB() { return 0.0; }
