@@ -11,6 +11,7 @@
 #include <fstream>
 #include <random>
 #include <thread>
+#include <future>
 #include <array>
 #include <windows.h>
 #endif
@@ -762,14 +763,42 @@ public:
     bool loadingFrontendScene_ = false;
     bool matchMap_ = false;                  // a match map's render data is loaded (not a menu scene)
     bool uploadingFrontendWorld_ = false;
+    // (playtest 2026-10-23 #1) AnimSets parsing on worker threads (prefetchAnimSets); a null result = the parse failed
+    std::map<std::string, std::future<std::unique_ptr<assets::AnimFile>>> animPending_;
     const assets::AnimFile* animFile(const std::string& path) {   // M69 parsed AnimSet, cached by path
         auto cached = animFileCache_.find(path);
         if (cached == animFileCache_.end()) {
-            assets::AnimFile f;
-            if (!assets::loadAnimationFile(path, f)) return nullptr;
-            cached = animFileCache_.emplace(path, std::move(f)).first;
+            auto pend = animPending_.find(path);
+            if (pend != animPending_.end()) {             // in flight: wait for it, the loading screen still presenting
+                const auto t0 = std::chrono::steady_clock::now();
+                while (pend->second.wait_for(std::chrono::milliseconds(4)) != std::future_status::ready) wfc_.yieldLoad();
+                std::unique_ptr<assets::AnimFile> f = pend->second.get();
+                animPending_.erase(pend);
+                const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+                if (ms > 1.0) LOG_INFO("anim prefetch: waited %.1f ms for %s", ms, path.c_str());
+                if (!f) return nullptr;
+                cached = animFileCache_.emplace(path, std::move(*f)).first;
+            } else {
+                assets::AnimFile f;
+                if (!assets::loadAnimationFile(path, f)) return nullptr;
+                cached = animFileCache_.emplace(path, std::move(f)).first;
+            }
         }
         return &cached->second;
+    }
+    void prefetchAnimSets(const std::vector<std::string>& sets) override {
+        int started = 0;
+        for (const std::string& s : sets) {
+            const std::string p = animSetPath(s);
+            if (p.empty() || animFileCache_.count(p) || animPending_.count(p)) continue;
+            animPending_.emplace(p, std::async(std::launch::async, [p] {
+                auto f = std::make_unique<assets::AnimFile>();
+                if (!assets::loadAnimationFile(p, *f)) f.reset();
+                return f;
+            }));
+            ++started;
+        }
+        if (started) LOG_INFO("anim prefetch: %d AnimSet(s) parsing on worker threads", started);
     }
     std::string animSetPath(const std::string& s) const {          // "Package.Set" -> content/Package/Set.anim.gltf
         size_t dot = s.find('.');
@@ -777,6 +806,7 @@ public:
     }
     void preparePreviewBody(const std::string& gl, const std::vector<std::string>& sets) override {
         const auto t0 = std::chrono::steady_clock::now();
+        prefetchAnimSets(sets);                   // (all of this body's sets in parallel; already prefetched ones are skipped)
         for (const std::string& s : sets) { std::string p = animSetPath(s); if (!p.empty()) animFile(p); wfc_.yieldLoad(); }
         if (wfc_.active()) {
             std::string rel = gl.rfind("content/", 0) == 0 ? gl.substr(8) : gl;
@@ -1154,6 +1184,8 @@ public:
         matchMap_ = ok && !loadingFrontendScene_;
         if (ok) glDisable(GL_FOG);   // fog is evaluated per vertex in the shader path (UE3 height fog)
         if (ok && !loadingFrontendScene_) {
+            for (auto& kv : animPending_) kv.second.wait();   // (prefetches still parsing finish first: they own their data)
+            animPending_.clear();
             animFileCache_.clear();          // M69: menu-only data, not held during a match
             wfc_.requestMaterialPrewarm();   // M54: after the world upload, yielding
             for (const MeshData& r : prewarmRequests_) wfc_.prewarmDynamic(r);   // M59: replayed per map load

@@ -636,6 +636,18 @@ void Application::attachPresenter() {
             drawFrontendFrame();
         });
         setRendererYield(renderer_, true);
+        // (playtest 2026-10-23 #1) the class list's chassis AnimSets parse on worker threads from the first frontend scene load
+        // (the boot main menu) on, so the lobby's preview bodies find them parsed (no-op for sets parsed or in flight)
+        if (renderer_) {
+            std::set<std::string> done;
+            std::vector<std::string> sets;
+            for (const auto& c : frontend_->roster().customCharacters())
+                for (const std::string& id : c.chassis) {
+                    const frontend::ChassisInfo* ci = frontend_->roster().chassis(id);
+                    if (ci && done.insert(id).second) sets.insert(sets.end(), ci->robotAnimSets.begin(), ci->robotAnimSets.end());
+                }
+            renderer_->prefetchAnimSets(sets);
+        }
         load();
         setRendererYield(renderer_, false);
         core::setLoadYield(nullptr);
