@@ -4072,3 +4072,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 12:05 MERGED dffcf31f Realistic probe-dark fix (characters no longer lit by near-black RT probes; Off unchanged) + e4549909
   build_lighting decal-tail fix (D1_ORB_Crash2_ART rerun). CANDIDATE = e4549909 (code dffcf31f). D1 shipped (6 / 10).
   Pending: the Frontend's D5 Realistic confirm, Experimental pre, chapters D2 / D3A / D3B / A5 (~14:30), the user's reboot.
+2026-10-23 12:08 Probe-dark CONFIRMED (Frontend D5 Realistic on Rendering's exe: 79 / 80 ENVLOG probes rejected dark, Megatron lit).
+  Frontend now reruns the full milestone script on e4549909 (hand-over run). D1 complete (6 / 10 chapters).
