@@ -31,19 +31,23 @@ if [ "$PH" = pre ]; then
   [ -f $HEAD/build-release/bin/wfc_rebuild.exe ] || run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/m05/build-target.ps1 -Ref $H -Name fast_$h -Jobs 4 -NoDebug -ThirdParty work/ab/_third_party > $O/build_head.log 2>&1; powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/link-render.ps1 -Target $HEAD >> $O/build_head.log 2>&1"
   [ $WHATIF = 1 ] || [ -f $HEAD/build-release/bin/wfc_rebuild.exe ] || { st "head build failed ($O/build_head.log)"; exit 1; }
   [ $WHATIF = 1 ] || grep -q "WFC_OPUS=1" $HEAD/build-release/build.ninja || { st "head built without Opus (third_party/opus missing)"; exit 1; }
+  NEG=${FINAL_NEG:-work/ab/fast_af4d073_neg_hover}   # the negative control: af4d0731 + hover + the headless runner only (no sim diffs)
+  [ -f $NEG/build-release/bin/wfc_rebuild.exe ] || run "BASE_REF=af4d0731 bash tools/fidelity/gate-base.sh neg_hover $GB/hover_cfca1717_srcgame.patch $GB/headless_runner_be54be6d_af4d.patch > $O/build_neg.out 2>&1"
+  if [ -z "$FINAL_SKIP_BASE" ]; then   # FINAL_SKIP_BASE=1: no base yet (FINAL_BASE_ITEMS pending) - head, control and stability only
   [ -f $BASE/build-release/bin/wfc_rebuild.exe ] || run "BASE_REF=af4d0731 bash tools/fidelity/gate-base.sh $BN $ITEMS > $O/build_base.out 2>&1"
   [ $WHATIF = 1 ] || [ -f $BASE/build-release/bin/wfc_rebuild.exe ] || { st "base build failed ($O/build_base.out)"; exit 1; }
   st "same match (headless): Streets TDM + Remnant ESC, base vs head; negative control = the hover-only base"
-  NEG=${FINAL_NEG:-work/ab/fast_af4d073_neg_hover}   # the negative control: af4d0731 + hover + the headless runner only (no sim diffs)
-  [ -f $NEG/build-release/bin/wfc_rebuild.exe ] || run "BASE_REF=af4d0731 bash tools/fidelity/gate-base.sh neg_hover $GB/hover_cfca1717_srcgame.patch $GB/headless_runner_be54be6d_af4d.patch > $O/build_neg.out 2>&1"
   for m in 508 506; do run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/samematch-$m -Map $m -Arms 'base|$BASE|WFC_NULLRENDER=1;;head|$HEAD|WFC_NULLRENDER=1;;neg|$NEG|WFC_NULLRENDER=1' -Steps 9600 -From 600 -PlayerBot 1 -Reps 1 -Seed 1234 > $O/samematch-$m.out 2>&1"
     sm=$(grep -oE "lockstep\.head\.r1: head: steps [0-9]+ \([0-9-]+\), same match as 'base' [A-Za-z]+" $O/samematch-$m.out 2>/dev/null); ng=$(grep -oE "lockstep\.neg\.r1: neg: steps [0-9]+ \([0-9-]+\), same match as 'base' [A-Za-z]+" $O/samematch-$m.out 2>/dev/null)
     st "map $m same match: ${sm:-?}; negative control: ${ng:-?}"
     [ $WHATIF = 1 ] || case "$sm" in *True) ;; *) st "STOP: the base does not play the head's match on $m - not gating (a sim-only diff is missing)"; exit 2;; esac
   done
+  fi
+  if [ -z "$FINAL_SKIP_STABILITY" ]; then
   st "stability set on the head exe (work/udp/batch.ps1 -SkipBuild)"
   run "powershell -NoProfile -ExecutionPolicy Bypass -File work/udp/batch.ps1 -Ref $H -Tag $h -SkipBuild > $O/stability.out 2>&1; cp work/udp/batch_$h.log $O/stability.log"
-  st "FINAL GATE pre DONE: base $BASE verified; stability $O/stability.log - ready for Integration's GO"
+  fi
+  st "FINAL GATE pre DONE: base $( [ -n "$FINAL_SKIP_BASE" ] && echo "NOT built yet (FINAL_SKIP_BASE)" || echo "$BASE verified"); stability $O/stability.log - ready for Integration's GO"
 elif [ "$PH" = gate ]; then
   [ $WHATIF = 1 ] || [ -f $BASE/build-release/bin/wfc_rebuild.exe ] || { st "run 'pre' first"; exit 1; }
   st "FINAL GATE timed: head $H vs base $BASE; maps $MAPS; res $RES$( [ $WHATIF = 1 ] && echo ' (WHATIF)')"
