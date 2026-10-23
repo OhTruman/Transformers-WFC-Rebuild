@@ -1753,6 +1753,38 @@ static void testRespawnUiLifetime() {
           std::to_string(shown) + std::to_string(resumedAlive) + std::to_string(resumedDead) + std::to_string(closed));
 }
 
+static void testCampaignC1C4() {
+    // CAMPAIGN_FRONTEND_PLAN C1 / C4: Solo -> Mission Select opens the SOLO campaign lobby; difficulty is the profile's
+    // setting 12 (default Medium, clamped 0-2, saved); CampaignSelect's chapter fields come from the profile (each faction's
+    // first chapter open, never completed, checkpoint 0); no checkpoint saves yet (Resume rows hidden).
+    std::remove("wfc_profile.ini");
+    {
+        FrontendRuntime rt;
+        if (!rt.init()) { check(false, "campaign.C1_C4", "init"); return; }
+        GameFlow& f = rt.flow();
+        runUntil(rt, [&] { return f.frontEndStarted(); });
+        DataStores& ds = rt.dataStores();
+        auto rd = [&](const char* m) { return ds.call("ReadValue", {m}).s; };
+        const bool fields = rd("<OnlinePlayerData:ProfileData.A1Available>") == "1" && rd("<OnlinePlayerData:ProfileData.D1Available>") == "1" &&
+                            rd("<OnlinePlayerData:ProfileData.A2Available>") == "0" && rd("<OnlinePlayerData:ProfileData.D3Difficulty>") == "-1" &&
+                            rd("<OnlinePlayerData:ProfileData.A1Checkpoint>") == "0";
+        const bool diffDefault = f.call("Game.GetGameDifficulty", {}).n == 1.0;
+        f.call("Game.SetGameDifficulty", {"5"});
+        const bool clamped = f.call("Game.GetGameDifficulty", {}).n == 2.0;
+        f.call("Console.SaveProfileSettings", {});
+        const bool noResume = !f.call("Game.GetCheckpointFileStatus", {"0"}).b && !f.call("Game.GetCheckpointFileStatus", {"1"}).b;
+        f.call("Online.OpenCampaignGameLobby", {});
+        const bool lobby = runUntil(rt, [&] { return f.level() == LevelKind::GameLobby && !f.loading().active; }) &&
+                           f.lobby().gameModeTag == "SOLO" && rd("<CurrentGame:GameTeamStatus>") == "GTS_CampaignGame";
+        LocalProfile back;
+        back.load();
+        check(fields && diffDefault && clamped && noResume && lobby && back.campaign.difficulty == 2, "campaign.C1_C4",
+              std::to_string(fields) + std::to_string(diffDefault) + std::to_string(clamped) + std::to_string(noResume) + std::to_string(lobby) +
+              std::to_string(back.campaign.difficulty));
+    }
+    std::remove("wfc_profile.ini");
+}
+
 static void testLobbyFlowV2() {
     // LV1: Private Match hosts at once (offline: the same lobby with bots), with the profile's last mode (new profile: TDM)
     {
@@ -2057,6 +2089,7 @@ int main() {
     testLensFlaresSetting();
     testLobbyFlowV2();
     testRespawnUiLifetime();
+    testCampaignC1C4();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);

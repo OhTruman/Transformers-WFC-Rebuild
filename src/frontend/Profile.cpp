@@ -131,6 +131,18 @@ bool LocalProfile::loadFrom(std::istream& f) {
         } else if (section == "[Online]") {
             if (k == "FirstRunShown") onlineFirstRunShown = v == "1";
             else if (k == "LobbyService") lobbyService = v;
+        } else if (section == "[Campaign]") {
+            auto ints = [&](int* out, int n) {
+                std::stringstream ss(v); std::string t; int i = 0;
+                while (i < n && std::getline(ss, t, ',')) out[i++] = std::atoi(t.c_str());
+            };
+            int tmp[Campaign::kChapters] = {};
+            if (k == "Difficulty") campaign.difficulty = std::clamp(std::atoi(v.c_str()), 0, 2);
+            else if (k == "Available") { ints(tmp, Campaign::kChapters); for (int i = 0; i < Campaign::kChapters; ++i) campaign.available[i] = tmp[i] != 0; }
+            else if (k == "Complete") { ints(tmp, Campaign::kChapters); for (int i = 0; i < Campaign::kChapters; ++i) campaign.complete[i] = tmp[i] != 0; }
+            else if (k == "BestDifficulty") ints(campaign.bestDifficulty, Campaign::kChapters);
+            else if (k == "Checkpoint") ints(campaign.checkpoint, Campaign::kChapters);
+            else if (k == "Resume") ints(campaign.resumeMap, 2);
         } else if (section == "[Tutorials]") {
             if (k == "Shown") {
                 tutorialsShown.clear();
@@ -220,11 +232,40 @@ void LocalProfile::save() const {
         if (!lobbyService.empty()) f << "LobbyService=" << lobbyService << "\n";
     }
     if (!lobbyLastMode.empty()) f << "\n[Lobby]\nLastMode=" << lobbyLastMode << "\n";   // only once a mode was chosen   // only when set (offline profiles unchanged)
+    if (!campaign.isDefault()) {   // only once the campaign changed something (versus profiles unchanged)
+        auto list = [&](const auto* a, int n) { for (int i = 0; i < n; ++i) f << (i ? "," : "") << (int)a[i]; f << "\n"; };
+        f << "\n[Campaign]\nDifficulty=" << campaign.difficulty << "\nAvailable=";
+        list(campaign.available, Campaign::kChapters);
+        f << "Complete="; list(campaign.complete, Campaign::kChapters);
+        f << "BestDifficulty="; list(campaign.bestDifficulty, Campaign::kChapters);
+        f << "Checkpoint="; list(campaign.checkpoint, Campaign::kChapters);
+        f << "Resume="; list(campaign.resumeMap, 2);
+    }
     if (!tutorialsShown.empty()) {   // CAMPAIGN_HUD_PLAN.md E5: only when not empty (versus profiles unchanged)
         f << "\n[Tutorials]\nShown=";
         for (size_t i = 0; i < tutorialsShown.size(); ++i) f << (i ? "," : "") << tutorialsShown[i];
         f << "\n";
     }
+}
+
+bool LocalProfile::Campaign::isDefault() const {
+    const Campaign d;
+    if (difficulty != d.difficulty || resumeMap[0] != -1 || resumeMap[1] != -1) return false;
+    for (int i = 0; i < kChapters; ++i)
+        if (available[i] != d.available[i] || complete[i] || bestDifficulty[i] != -1 || checkpoint[i] != 0) return false;
+    return true;
+}
+
+bool LocalProfile::campaignField(const std::string& field, std::string& value) const {
+    for (int i = 0; i < Campaign::kChapters; ++i) {
+        const std::string k = Campaign::key(i);
+        if (field.rfind(k, 0) != 0) continue;
+        const std::string rest = field.substr(k.size());
+        if (rest == "Available") { value = campaign.available[i] ? "1" : "0"; return true; }
+        if (rest == "Difficulty") { value = std::to_string(campaign.bestDifficulty[i]); return true; }
+        if (rest == "Checkpoint") { value = std::to_string(campaign.checkpoint[i]); return true; }
+    }
+    return false;
 }
 
 } // namespace frontend
