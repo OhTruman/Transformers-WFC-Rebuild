@@ -3618,3 +3618,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 01:41 Systems CARD FREE: #5 PASS (jet death smoke 101 s -> 7.3 s; nothing older than 36 s); #9 closes with one head-exe FXLIVELOG
   run in their next slot + the catch-up numbers. Card -> Frontend two-window retest 01:41 -> Rendering smoke -> Systems.
   CAMPAIGN_BOSSES §A2 / §A3 merged.
+2026-10-23 01:46 MILESTONE: a windowed two-player match through the REAL MENUS runs on this PC (loopback): host by code, join, lobby, launch
+  record, load gate, Choose Character, a 2-min TDM with bots past +95 s, no desync, teams agree. New: both exes crash on exit
+  after "Shutdown complete" (NetMatchDriver::~NetMatchDriver -> Lockstep::bye on a destroyed transport) -> Systems. MERGED
+  2cc1edb9 #7 scoreboard spacing (versus lists used the 104 px iconic portrait rows; now DisableIconicDisplay -> 25 px) + the
+  5b vote hook + test. Card -> Rendering smoke (8 min) -> Systems.
