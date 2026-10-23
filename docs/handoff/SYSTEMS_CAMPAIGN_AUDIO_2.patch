@@ -1,0 +1,189 @@
+diff -ruN a/src/core/Application_CampaignAudio.cpp b/src/core/Application_CampaignAudio.cpp
+--- a/src/core/Application_CampaignAudio.cpp	2026-10-23 03:09:56.018931200 -0500
++++ b/src/core/Application_CampaignAudio.cpp	2026-10-23 03:09:56.033480700 -0500
+@@ -8,6 +8,7 @@
+ #include "core/Config.h"
+ #include "core/Log.h"
+ #include "assets/Json.h"
++#include "game/CampaignSubtitles.h"
+ #include "game/LevelAudioScript.h"
+ #include "game/SoundCues.h"
+ 
+@@ -35,6 +36,16 @@
+     game::LevelAudioScript script;
+     const assets::Json& k = doc["kismet"];
+     script.load(k);
++    game::CampaignSubtitles subtitles;
++    const int subCues = subtitles.load(doc);
++    int linesStarted = 0, linesWithText = 0;
++    auto listen = [&](const std::string& cue, int) {
++        ++linesStarted;
++        if (const auto* l = subtitles.lines(cue, "int")) {
++            ++linesWithText;
++            if (!l->empty()) LOG_INFO("CAMPAIGNAUDIO subtitle %s @%.2f: %s%s", cue.c_str(), (*l)[0].time, (*l)[0].text.c_str(), (*l)[0].show ? "" : " (hidden)");
++        }
++    };
+     LOG_INFO("CAMPAIGNAUDIO %s: %d cues, %d ops, %d links", doc["map"].asString().c_str(), nCues, script.opCount(), script.linkCount());
+     const core::Vec3 listener{0, 0, 0};
+     // Drive each op through a private trigger: a test link per op ("Test:<id>:<input>") added to a copy of the script.
+@@ -51,6 +62,7 @@
+         link.obj["input"].type = assets::Json::Type::Number; link.obj["input"].numVal = 0;
+         one.obj["links"].arr.push_back(link);
+         script.load(one);
++        script.setDialogListener(listen);
+         script.fire("Test:play", cues, nullptr, listener);
+         const int shots0 = script.soundKeysFired();
+         bool done = false;
+@@ -85,6 +97,7 @@
+         }
+         cues.stopAll();
+     }
++    LOG_INFO("CAMPAIGNAUDIO subtitles: %d cues with text; %d of %d started dialog lines resolved to a subtitle", subCues, linesWithText, linesStarted);
+     LOG_INFO("CAMPAIGNAUDIO RESULT %s: %d conversations (%d finished, %d stopped), %d timelines (%d keys), %d failures",
+              fail ? "FAIL" : "PASS", convs, finished, stopped, timelines, keys, fail);
+     std::exit(fail ? 1 : 0);
+diff -ruN a/src/game/CampaignSubtitles.cpp b/src/game/CampaignSubtitles.cpp
+--- a/src/game/CampaignSubtitles.cpp	1969-12-31 18:00:00.000000000 -0600
++++ b/src/game/CampaignSubtitles.cpp	2026-10-23 03:09:56.061577000 -0500
+@@ -0,0 +1,67 @@
++// [Systems] Campaign dialog subtitles - see CampaignSubtitles.h.
++#include "game/CampaignSubtitles.h"
++
++namespace game {
++namespace {
++
++void collectWaves(const assets::Json& n, std::vector<std::string>& out) {
++    if (n["class"].asString() == "SoundNodeWaveEx" && !n["loc"].asString().empty()) out.push_back(n["node"].asString());
++    const assets::Json& ch = n["children"];
++    for (size_t i = 0; i < ch.size(); ++i) collectWaves(ch[i], out);
++}
++
++}  // namespace
++
++int CampaignSubtitles::load(const assets::Json& doc) {
++    clear();
++    const assets::Json& subs = doc["subtitles"];
++    for (const auto& kv : subs.obj) {
++        Wave w;
++        w.duration = kv.second["duration"].asFloat(0.0f);
++        for (const auto& lang : kv.second.obj) {
++            if (lang.first == "duration") continue;
++            std::vector<Line>& lines = w.byLang[lang.first];
++            for (size_t i = 0; i < lang.second.size(); ++i) {
++                const assets::Json& l = lang.second[i];
++                lines.push_back({l["time"].asFloat(0.0f), l["text"].asString(), l["show"].asBool(true)});
++            }
++        }
++        byWave_[kv.first] = std::move(w);
++    }
++    int n = 0;
++    for (const auto& kv : doc["cues"].obj) {
++        std::vector<std::string> waves;
++        collectWaves(kv.second["tree"], waves);
++        bool any = false;
++        for (const std::string& w : waves) any = any || byWave_.count(w) != 0;
++        if (!waves.empty()) cueWaves_[kv.first] = std::move(waves);
++        n += any ? 1 : 0;
++    }
++    return n;
++}
++
++const CampaignSubtitles::Wave* CampaignSubtitles::waveFor(const std::string& cue, const std::string& lang) const {
++    auto it = cueWaves_.find(cue);
++    if (it == cueWaves_.end()) return nullptr;
++    for (const std::string& name : {lang, std::string("int")})
++        for (const std::string& w : it->second) {
++            auto wi = byWave_.find(w);
++            if (wi != byWave_.end() && wi->second.byLang.count(name)) return &wi->second;
++        }
++    return nullptr;
++}
++
++const std::vector<CampaignSubtitles::Line>* CampaignSubtitles::lines(const std::string& cue, const std::string& lang) const {
++    const Wave* w = waveFor(cue, lang);
++    if (!w) return nullptr;
++    auto l = w->byLang.find(lang);
++    if (l == w->byLang.end()) l = w->byLang.find("int");
++    return l == w->byLang.end() ? nullptr : &l->second;
++}
++
++float CampaignSubtitles::duration(const std::string& cue) const {
++    const Wave* w = waveFor(cue, "int");
++    return w ? w->duration : 0.0f;
++}
++
++}  // namespace game
+diff -ruN a/src/game/CampaignSubtitles.h b/src/game/CampaignSubtitles.h
+--- a/src/game/CampaignSubtitles.h	1969-12-31 18:00:00.000000000 -0600
++++ b/src/game/CampaignSubtitles.h	2026-10-23 03:09:56.048030500 -0500
+@@ -0,0 +1,31 @@
++#pragma once
++// [Systems] Campaign dialog subtitles (CAMPAIGN_AUDIO_DIALOG.md section 3). The chapter audio JSON (tools/systems/gen_level_audio.py
++// --campaign) carries "subtitles": {wave: {duration, int: [{time, text, show}], fra: [...]}} from the chapter's _LOC packages
++// (SoundNodeWaveEx Subtitles / Duration), and the cue trees that name each cue's localized waves. This table answers "a dialog cue
++// started: which lines, when": the first localized wave of the cue that has lines in the language (else the English "int" text).
++// show = the original's UseSubtitles (false: authored not to display - the HUD skips the line). Display is the HUD's (the original's
++// subtitle movie clip; the profile's Subtitles option, default off).
++#include <string>
++#include <unordered_map>
++#include <vector>
++#include "assets/Json.h"
++
++namespace game {
++
++class CampaignSubtitles {
++public:
++    struct Line { float time = 0.0f; std::string text; bool show = true; };
++    // Loads a chapter audio document (its "cues" and "subtitles"); returns the number of cues with subtitles.
++    int load(const assets::Json& doc);
++    void clear() { byWave_.clear(); cueWaves_.clear(); }
++    // The lines for a dialog cue in a language ("int", "fra"; another / missing language falls back to "int"); null = none.
++    const std::vector<Line>* lines(const std::string& cue, const std::string& lang = "int") const;
++    float duration(const std::string& cue) const;   // the wave's authored Duration (s), 0 = unknown
++private:
++    struct Wave { float duration = 0.0f; std::unordered_map<std::string, std::vector<Line>> byLang; };
++    std::unordered_map<std::string, Wave> byWave_;
++    std::unordered_map<std::string, std::vector<std::string>> cueWaves_;   // cue -> its localized waves, tree order
++    const Wave* waveFor(const std::string& cue, const std::string& lang) const;
++};
++
++}  // namespace game
+diff -ruN a/src/game/LevelAudioScript.cpp b/src/game/LevelAudioScript.cpp
+--- a/src/game/LevelAudioScript.cpp	2026-10-23 03:09:55.976786700 -0500
++++ b/src/game/LevelAudioScript.cpp	2026-10-23 03:09:55.990834800 -0500
+@@ -385,6 +385,7 @@
+                 continue;
+             }
+             op.lineStarted = true;
++            if (dialogListener_) dialogListener_(ln.cue, op.lineInst);
+             if (logOn()) LOG_INFO("LEVELAUDIO %s line %d %s on %d", op.id.c_str(), op.lineIdx, ln.cue.c_str(), ln.speaker);
+         } else if (op.postTimer < 0.0f && !cues.playing(op.lineInst)) {   // DialogEventCallback Finished
+             op.postTimer = ln.postDelay;
+diff -ruN a/src/game/LevelAudioScript.h b/src/game/LevelAudioScript.h
+--- a/src/game/LevelAudioScript.h	2026-10-23 03:09:55.933136900 -0500
++++ b/src/game/LevelAudioScript.h	2026-10-23 03:09:55.947185300 -0500
+@@ -59,6 +59,7 @@
+ // e.g. Game:TnSeqEvent_SurvivalEvents:Round Begin - fired by Gameplay through World::levelAudioEvent). Sub-sequences,
+ // remote events and pass-through actions are flattened by the generator.
+ #pragma once
++#include <functional>
+ #include <string>
+ #include <unordered_map>
+ #include <unordered_set>
+@@ -101,6 +102,8 @@
+     int conversationsPlaying() const;
+     float timelinePosition() const;       // the first timeline's position (s), -1 if none
+     int oneShots() const { return oneShots_; }
++    // A conversation line started (cue, its sound instance): the subtitle hook (CampaignSubtitles resolves the text; the HUD shows it).
++    void setDialogListener(std::function<void(const std::string& cue, int instance)> f) { dialogListener_ = std::move(f); }
+     int soundKeysFired() const { return keysFired_; }   // timeline sound keys passed (played or not: a culled cue counts)
+     int fired() const { return fired_; }
+     // Test hook (WFC_CAMPAIGNAUDIOTEST): every trigger fired since load(), linked or not.
+@@ -176,6 +179,7 @@
+     int touches_ = 0;
+     int links_ = 0, oneShots_ = 0, fired_ = 0, depth_ = 0, keysFired_ = 0;
+     std::string musicStart_;
++    std::function<void(const std::string&, int)> dialogListener_;
+     std::unordered_set<std::string> firedSet_;
+ };
+ 
