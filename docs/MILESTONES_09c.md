@@ -4012,3 +4012,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Gameplay FINAL_BASE_ITEMS, Rendering shard FX, AssetTools lanes (A3 / D1 running).
 2026-10-23 10:36 MERGED 3476b84c Escalation loot shards drawn (Rendering; last render item). Rendering + Frontend DONE for the build.
   Pending for the cut: Gameplay FINAL_BASE_ITEMS, AssetTools lanes.
+2026-10-23 10:38 CUT CANDIDATE a5d088db (code 3476b84c + FINAL_BASE_ITEMS a5d088db). Gameplay, Frontend, Rendering DONE for the build.
+  Running: Experimental final-gate PRE stage; the Frontend's final milestone run (4 campaign + TDM + ESC from the menus);
+  AssetTools' two chapter lanes (~16:30). Then: PERF_HOLD timed gate (~90 min) -> Systems refresh.sh -> verify -> hand-over.
