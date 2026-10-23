@@ -3777,3 +3777,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   BrokenHope 30 / 58) and the versus strand-suicide rule killed them 30 s later -> waves cleared with no combat. DECISION:
   the horde is exempt from strand-suicide for good (original never suicides) + PROV nav-reachable spawn substitution with a
   log until AssetTools' ESC nav (NavigationCell mesh) covers every spawn point (priority after the D5 inputs).
+2026-10-23 06:02 Campaign render data in the chapter layout (AssetTools): D5_OME 6 sublevels 113.5 MB, 0 compile errors, 0 missing
+  textures; A1_IAC 48 sublevels 1.92 GB, 1,952 materials, 5 errors (DarkEnergon_Spreading x3, Hologram_Post -> Rendering),
+  rerun on the head after the queue. chapter.json = persistent level + derived streaming order. Probes: not holes.
