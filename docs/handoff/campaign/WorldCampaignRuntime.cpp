@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <set>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
@@ -304,6 +305,7 @@ void World::cpLoadActors() {
             const std::string name = afterDot(n.has("object") ? n["object"].asString() : n["node"].asString());
             const assets::Json& L = n["location_gltf"];
             if (!name.empty() && L.size() >= 3) cp_.actorPos[name] = core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
+            if (!name.empty() && n["rotation_deg"].has("yaw")) cp_.actorYaw[name] = n["rotation_deg"]["yaw"].asFloat(0.0f);
             if (!name.empty() && std::string(file) == "actors.json") {   // the authored start visibility (Toggle's base)
                 // drawable classes only: lights, volumes, sounds, brushes, nav points and notes carry bHidden by class default (an editor
                 // sprite), not as "not drawn" - a hide on a light's name would switch it off in the renderer
@@ -339,7 +341,9 @@ std::vector<int> World::cpTargets(KismetVM& vm, int op, const std::string& link)
         if (!v) continue;
         if (v->named >= 0) v = vm.var(v->named);
         if (!v) continue;
-        if (v->cls == "TnSeqVar_Buddy") {   // FindBuddy [C]: BuddyIndex 1-based (default 1) over the ACTIVE members in squad order
+        if (v->cls == "TnSeqVar_Character") {   // the participants playing that ROBODEF
+            for (int p : cpCharacterTargets(v->chassisPath)) out.push_back(p);
+        } else if (v->cls == "TnSeqVar_Buddy") {   // FindBuddy [C]: BuddyIndex 1-based (default 1) over the ACTIVE members in squad order
             const int bi = std::max(1, v->buddyIndex);
             std::vector<int> active;
             for (int p : cp_.squad) if (match_.players()[(size_t)p].alive) active.push_back(p);
@@ -1104,6 +1108,61 @@ bool World::cpHideOpActivate(KismetVM& vm, int op, int input) {
     }
     static const bool klog = std::getenv("WFC_KISMETLOG") != nullptr;
     if (klog) LOG_INFO("campaign: %s %s: %d actors", afterDot(o.path).c_str(), destroy ? "Destroy" : input == 0 ? "Hide" : input == 1 ? "UnHide" : "Toggle", n);
+    if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
+    return true;
+}
+
+} // namespace game
+
+namespace game {
+
+// ---- SeqAct_Teleport + TnSeqVar_Character (every chapter: A1 60 refs ... A3 253) ----
+// TnSeqVar_Character (ChassisTypePathName = a ROBODEF) names the participants playing that character: the chassis whose roster
+// robot definition is that ROBODEF (several chassis can share one: Truck / Truck7). SeqAct_Teleport moves its Target pawns to the
+// Destination actor's location and rotation (stopped, re-grounded within 2 m); non-pawn targets are left (PROV).
+std::vector<int> World::cpCharacterTargets(const std::string& robodef) {
+    static std::map<std::string, std::set<std::string>> chassisOf;
+    if (chassisOf.empty()) {
+        assets::Json r;
+        if (readJsonFile(manifestsRoot() + "/mp_content/roster_package.json", r))
+            for (const auto& kv : r["chassis"].obj) chassisOf[kv.second["robot"]["definition"].asString()].insert(kv.first);
+    }
+    std::vector<int> out;
+    auto it = chassisOf.find(robodef);
+    if (it == chassisOf.end()) return out;
+    for (size_t q = 0; q < match_.players().size(); ++q) {
+        const MatchPlayer& mp = match_.players()[q];
+        if (mp.directorSpawned) continue;   // the factories' AI are not the named characters
+        if (it->second.count(resolveChassis(mp.selection, match_.faction((int)q)))) out.push_back((int)q);
+    }
+    return out;
+}
+
+bool World::cpTeleportActivate(KismetVM& vm, int op, int input) {
+    (void)input;
+    const KismetVM::Op& o = vm.op(op);
+    if (o.cls != "SeqAct_Teleport") return false;
+    std::string dest = vm.objectOf(op, "Destination");
+    if (dest.empty()) dest = o.authored["DestinationActor"].asString();
+    core::Vec3 at;
+    int moved = 0;
+    if (!dest.empty() && cpActorPos(dest, at)) {
+        auto yi = cp_.actorYaw.find(afterDot(dest));
+        for (int p : cpTargets(vm, op, "Target")) {
+            Character* c = participantPawnMutable(p);
+            if (!c) continue;
+            core::Vec3 q = at;
+            float gy; core::Vec3 n;
+            if (collision_.valid() && collision_.groundHeight(q.x, q.z, q.y + 0.5f, 2.0f, gy, n) && gy > q.y - 2.0f) q.y = gy;
+            c->setPosition(q); c->velocity() = core::Vec3{0, 0, 0}; c->groundY = q.y;
+            if (yi != cp_.actorYaw.end()) {   // UE yaw (degrees) -> the pawn's yaw (forwardFromYawPitch convention)
+                const float ue = yi->second * 0.0174533f;
+                c->setYaw(std::atan2(-std::cos(ue), -std::sin(ue)));
+            }
+            ++moved;
+        }
+    }
+    LOG_INFO("campaign: %s -> %s: %d pawns", afterDot(o.path).c_str(), afterDot(dest).c_str(), moved);
     if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
     return true;
 }
