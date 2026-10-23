@@ -192,6 +192,11 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
             return;
         }
         if (st.rfind("dump:", 0) == 0) { if (dumpHook) dumpHook(st.substr(5)); continue; }
+        if (st.rfind("qa:", 0) == 0) {
+            if (qaHook) qaHook(st.substr(3));
+            else FlowTrace::emit("script.qa", {{"cmd", st.substr(3)}, {"result", "skipped"}, {"why", "no hook"}});
+            continue;
+        }
         if (st.rfind("session:", 0) == 0) { if (sessionHook) sessionHook(st.substr(8)); continue; }
         if (st.rfind("navcheck:", 0) == 0) { if (navCheckHook) navCheckHook(st.substr(9)); continue; }
         if (st.rfind("display:", 0) == 0) {

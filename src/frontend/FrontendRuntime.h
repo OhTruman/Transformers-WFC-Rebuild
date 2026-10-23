@@ -104,6 +104,7 @@ public:
     std::function<void(const std::string& fn, const std::vector<std::string>& args)> hudCallHook;   // hudcall:<fn>,<args>
     std::function<void(const std::string& file)> shotHook;     // shot:<file>
     std::function<void(const std::string& movie)> dumpHook;    // dump:<movie substring>
+    std::function<void(const std::string& cmd)> qaHook;        // qa:<cmd> - TEST ONLY match actions (the Application: die)
     std::function<void(const std::string& label)> navCheckHook;   // navcheck:<label> (navigation stress harness)
     std::function<void(const std::string& spec)> sessionHook;    // session:<Event>[,args] (DEV TOOL, WFC_FAKESESSION)
     std::function<void(int w, int h, bool fullscreen)> displayHook;   // display:<w>,<h>,<0|1> (runtime resolution change)
