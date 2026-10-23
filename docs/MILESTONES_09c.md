@@ -4120,3 +4120,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 14:27 MERGED b315e585 actor subs keyed by object path (Rendering): fixes the 35 short-name collisions once Gameplay sends paths
   (patch requested) and AssetTools adds extras.actor_path to every chapter (requested). Experimental arms final4 / 78caf2bc
   built; rebuild at the grant with the final head.
+2026-10-23 14:27 Set-dressing look on 78caf2bc PASS (Frontend setdress3/): A1 509 / A2 242 authored hidden sent as expected; A1 identical
+  to the baseline except the lift's black band now gone (the pod mesh is authored hidden) and a pose offset; nothing
+  vanished wrongly. Pending: Gameplay's path-send patch (+ FINAL_BASE_ITEMS 10), AssetTools actor_path + D3B + outside list.
