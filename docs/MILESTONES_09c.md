@@ -3990,3 +3990,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   floor set + moving nav cells relinked at rest; the trio now rides y 1093 -> 406 m), robot hit reactions (RE §2; the
   offline SIMHASH stayed IDENTICAL: presentation only; the commit message's 'changes as expected' is wrong), Escalation M10
   (PlayerData values, 1 s horde melee). Gameplay left: Omega AI, H3, H5, M1, M5, M11, then FINAL_BASE_ITEMS.
+2026-10-23 10:05 BOUNCED Gameplay runtime 14 (interacts + Omega Supreme + H5): CAMPAIGNTEST 22 / 24 on the head (squad follow + squad
+  respawn checks fail, likely Omega's attacks reaching the test squad); Gameplay fixes + reruns once, recut vs 66109cf5.
