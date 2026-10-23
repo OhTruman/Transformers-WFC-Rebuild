@@ -491,6 +491,7 @@ private:
     void returnToPartyLobby() { travel(partyLobbyUrl(), false); }
     static const char* partyLobbyUrl();           // member: name (D1), platform, character, a team request
     int pickOnlineTeam();                               // TnTeamHandlerTwoTeams.PickTeam over the humans
+    void publicSnakeDraft();                            // public lobbies: the teams re-drafted at the final countdown
     int onlineGateStatus() const;                       // LobbyStatus 6 / 4 / 3 (the original start gate, D4)
     void applyBrowserCap(const char* why);              // D10: Player Limit capped to 5 v 5 while a browser peer is in
     std::string publishedLobbyKey_;                     // host: the lobby last published (publish on change)

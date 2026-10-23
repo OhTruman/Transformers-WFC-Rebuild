@@ -1309,6 +1309,7 @@ void GameFlow::voteTick() {
         FlowTrace::emit("lobby.vote", {{"state", "closed"}, {"winner", std::to_string(vote_.winner)}, {"votes", std::to_string(counts[(size_t)w])},
                                        {"tied", std::to_string(tied.size())}});
         lobby_.countdownRubicon = true;   // the launch is decided: no more stops
+        publicSnakeDraft();
         sendOnlineLaunch();
     }
 }
