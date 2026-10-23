@@ -397,8 +397,8 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     // out into moving collision sets (MapState).
     const std::string mapDir = this->mapDir();
     mapState_.load(mapDir + "gameplay.json", matchMode_);
-    mapState_.loadObjectiveVolumes(mapDir + "physics.json");
-    loadForcedDirVolumes(mapDir + "physics.json");
+    mapState_.loadObjectiveVolumes(overlayed(mapDir + "physics.json"));
+    loadForcedDirVolumes(overlayed(mapDir + "physics.json"));
     auto splitMovers = [this](const render::MeshData& in, render::MeshData& out,
                           std::vector<std::pair<std::string, std::vector<core::Vec3>>>& moverTris) {
         std::vector<std::string> names = mapState_.moverActorNames();
@@ -419,7 +419,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     };
     render::MeshData colMesh, pawnStatic, weaponColMesh, weaponStatic;
     std::vector<std::pair<std::string, std::vector<core::Vec3>>> pawnMovers, weaponMovers;
-    bool authored = assets::loadGlb(mapDir + "collision_pawn.glb", colMesh);
+    bool authored = assets::loadGlb(overlayed(mapDir + "collision_pawn.glb"), colMesh);
     if (!authored) assets::loadGlb(mapDir + "collision.glb", colMesh);
     // Per-node bounds of the authored movement collision (for tracing contacts back to authored actors).
     colActors_.clear();
@@ -5262,6 +5262,19 @@ void World::forcedDirPost(Character& c) const {
 }
 
 std::string World::mapDir() const { return assetRoot() + "/Maps/" + mapName_ + "/"; }
+
+std::string World::overlayed(const std::string& path) {
+    static const char* root = std::getenv("WFC_OVERLAY_ROOT");
+    if (!root || !*root) return path;
+    std::string p = path; for (char& c : p) if (c == '\\') c = '/';
+    const size_t k = p.find("ExtractedAssets/");
+    if (k == std::string::npos) return path;
+    const std::string o = std::string(root) + "/" + p.substr(k + 16);
+    std::ifstream f(o, std::ios::binary);
+    if (!f.good()) return path;
+    LOG_INFO("overlay: %s", o.c_str());
+    return o;
+}
 
 std::string World::canonicalMapName(const std::string& m) {
     std::string base = m;

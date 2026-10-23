@@ -928,6 +928,8 @@ public:
         return o && o->spawned() ? &o->intent() : nullptr;
     }
     bool ensureBotNav();
+    // WFC_OVERLAY_ROOT (dev runs): an ExtractedAssets-relative file the overlay holds wins (the package overlay rule); else `path`.
+    static std::string overlayed(const std::string& path);
     // TnAiActionDodgePlanningUtil.CheckDodgeAvailable: the walkable fraction of 18 m along the pawn's left (1) / right (2) on the nav.
     float botDodgeClear(const Character& pc, int side) const;
     // Per-step bot cost (diagnostics; WFC_BOTTEST / perf).

@@ -1,0 +1,70 @@
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index d62e2be3..40ef8464 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -397,8 +397,8 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
+     // out into moving collision sets (MapState).
+     const std::string mapDir = this->mapDir();
+     mapState_.load(mapDir + "gameplay.json", matchMode_);
+-    mapState_.loadObjectiveVolumes(mapDir + "physics.json");
+-    loadForcedDirVolumes(mapDir + "physics.json");
++    mapState_.loadObjectiveVolumes(overlayed(mapDir + "physics.json"));
++    loadForcedDirVolumes(overlayed(mapDir + "physics.json"));
+     auto splitMovers = [this](const render::MeshData& in, render::MeshData& out,
+                           std::vector<std::pair<std::string, std::vector<core::Vec3>>>& moverTris) {
+         std::vector<std::string> names = mapState_.moverActorNames();
+@@ -419,7 +419,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
+     };
+     render::MeshData colMesh, pawnStatic, weaponColMesh, weaponStatic;
+     std::vector<std::pair<std::string, std::vector<core::Vec3>>> pawnMovers, weaponMovers;
+-    bool authored = assets::loadGlb(mapDir + "collision_pawn.glb", colMesh);
++    bool authored = assets::loadGlb(overlayed(mapDir + "collision_pawn.glb"), colMesh);
+     if (!authored) assets::loadGlb(mapDir + "collision.glb", colMesh);
+     // Per-node bounds of the authored movement collision (for tracing contacts back to authored actors).
+     colActors_.clear();
+@@ -5262,6 +5262,19 @@ void World::forcedDirPost(Character& c) const {
+ 
+ std::string World::mapDir() const { return assetRoot() + "/Maps/" + mapName_ + "/"; }
+ 
++std::string World::overlayed(const std::string& path) {
++    static const char* root = std::getenv("WFC_OVERLAY_ROOT");
++    if (!root || !*root) return path;
++    std::string p = path; for (char& c : p) if (c == '\\') c = '/';
++    const size_t k = p.find("ExtractedAssets/");
++    if (k == std::string::npos) return path;
++    const std::string o = std::string(root) + "/" + p.substr(k + 16);
++    std::ifstream f(o, std::ios::binary);
++    if (!f.good()) return path;
++    LOG_INFO("overlay: %s", o.c_str());
++    return o;
++}
++
+ std::string World::canonicalMapName(const std::string& m) {
+     std::string base = m;
+     for (const char* suf : {"_BASE_m", "_Base_m", "_base_m", "_m"}) {
+diff --git a/src/game/World.h b/src/game/World.h
+index 810fe685..faa30237 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -928,6 +928,8 @@ public:
+         return o && o->spawned() ? &o->intent() : nullptr;
+     }
+     bool ensureBotNav();
++    // WFC_OVERLAY_ROOT (dev runs): an ExtractedAssets-relative file the overlay holds wins (the package overlay rule); else `path`.
++    static std::string overlayed(const std::string& path);
+     // TnAiActionDodgePlanningUtil.CheckDodgeAvailable: the walkable fraction of 18 m along the pawn's left (1) / right (2) on the nav.
+     float botDodgeClear(const Character& pc, int side) const;
+     // Per-step bot cost (diagnostics; WFC_BOTTEST / perf).
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index 922dd961..ebfe297f 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -32,7 +32,7 @@ bool World::ensureBotNav() {
+     botNavTried_ = true;
+     // DEV / TEST: WFC_BOTNAV=<dir> loads <dir>/<map>/bot_nav.json (a regenerated nav set, before it is installed in the assets).
+     const char* navDir = std::getenv("WFC_BOTNAV");
+-    const std::string path = navDir ? std::string(navDir) + "/" + mapName_ + "/bot_nav.json" : mapDir() + "bot_nav.json";
++    const std::string path = navDir ? std::string(navDir) + "/" + mapName_ + "/bot_nav.json" : overlayed(mapDir() + "bot_nav.json");
+     if (navDir) LOG_INFO("bots: nav override %s", path.c_str());
+     if (!botNav_.load(path)) LOG_WARN("bots: no nav data at %s (AssetTools bot_nav.py); bots will hold position and fight", path.c_str());
+     if (botNav_.valid()) {   // closed transforming doors: the nav cells under them are unusable

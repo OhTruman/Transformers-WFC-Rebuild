@@ -32,7 +32,7 @@ bool World::ensureBotNav() {
     botNavTried_ = true;
     // DEV / TEST: WFC_BOTNAV=<dir> loads <dir>/<map>/bot_nav.json (a regenerated nav set, before it is installed in the assets).
     const char* navDir = std::getenv("WFC_BOTNAV");
-    const std::string path = navDir ? std::string(navDir) + "/" + mapName_ + "/bot_nav.json" : mapDir() + "bot_nav.json";
+    const std::string path = navDir ? std::string(navDir) + "/" + mapName_ + "/bot_nav.json" : overlayed(mapDir() + "bot_nav.json");
     if (navDir) LOG_INFO("bots: nav override %s", path.c_str());
     if (!botNav_.load(path)) LOG_WARN("bots: no nav data at %s (AssetTools bot_nav.py); bots will hold position and fight", path.c_str());
     if (botNav_.valid()) {   // closed transforming doors: the nav cells under them are unusable
