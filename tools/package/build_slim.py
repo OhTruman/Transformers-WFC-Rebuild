@@ -69,9 +69,15 @@ ASSETTOOLS_IF_PRESENT = ['AssetTools/manifests/maps/mp_transforming_actors.json'
 # ChassisDef as <ExtractedAssets/VerticalSlice>/../../AssetTools/out/escalation_characters/<id>/ (character.json, robot.glb, textures,
 # weapons; 2026-10-23: every ESC_* chassis was UNAVAILABLE in the package)
 ASSETTOOLS_TREES = ['AssetTools/out/escalation_characters',   # + the campaign chapters, shipped whole at their AssetTools path: one
-                    'AssetTools/out/campaign_render/D5_OME',   # campaign root, <WFC_CAMPAIGN_ROOT>/<chapter>/<unit>/ (Play.bat sets it; Integration 2026-10-23; A1 later)
+                    # (the campaign chapters: CAMPAIGN_RENDER below, every chapter AssetTools has exported)
                     'AssetTools/manifests/maps/transforming_actors',   # the skeletal doors / bridges mp_transforming_actors.json names
                     'AssetTools/out/campaign_anims']   # animation sets character.json files point at (ESC_Soldier_Tank_Decepticon's Shared_ROBO_ANIM)
+# The campaign (Integration 2026-10-23): every chapter under AssetTools/out/campaign_render, shipped at its AssetTools path (one campaign
+# root, <WFC_CAMPAIGN_ROOT>/<chapter>/<unit>/, Play.bat sets it). A chapter with its own <chapter>/lightmaps/ (AssetTools' dedup: one
+# copy per chapter, Rendering reads it) skips the per-unit <unit>/lightmaps/ copies. Plus the campaign's assets outside the render
+# data (ExtractedAssets content, out/campaign_characters, out/campaign_anims): AssetTools' list, ROOT-relative paths.
+CAMPAIGN_RENDER = 'AssetTools/out/campaign_render'
+CAMPAIGN_OUTSIDE_TSV = 'AssetTools/manifests/campaign/campaign_assets_outside_render.tsv'
 # the head's own data folders (this repo): every file ships from the head being packaged, at Rebuild/<dir>/ (slim_files.tsv listed 7
 # of data/frontend's 9 files - iconic_presets.json and bot_skill.json were missing - and sources them from the live Rebuild tree)
 HEAD_DATA_DIRS = ['data/frontend', 'data/gameplay', 'data/campaign']   # + the chapters' generated audio (SYSTEMS_CAMPAIGN_AUDIO_HOSTED)
@@ -194,6 +200,49 @@ def main():
                 if 'Transformers Rebuild/' + src not in have_dest:
                     rows.append(dict(dest='Transformers Rebuild/' + src, source=src, bytes=str(os.path.getsize(os.path.join(dp, f))), action='keep', reason='assettools tree'))
                     have_dest.add('Transformers Rebuild/' + src); at_extra += 1
+    camp_files, camp_bytes, camp_skipped_lm, camp_chapters = 0, 0, 0, []
+    ctop = os.path.join(ROOT, CAMPAIGN_RENDER)
+    for ch in sorted(os.listdir(ctop)) if os.path.isdir(ctop) else []:
+        cdir = os.path.join(ctop, ch)
+        if not os.path.isdir(cdir):
+            continue
+        chapter_lm = os.path.isdir(os.path.join(cdir, 'lightmaps'))
+        camp_chapters.append(ch + (' (chapter lightmaps)' if chapter_lm else ''))
+        for dp, _, fs in os.walk(cdir):
+            rel = os.path.relpath(dp, cdir).replace(os.sep, '/')
+            if chapter_lm and rel.count('/') == 1 and rel.endswith('/lightmaps'):   # <unit>/lightmaps: the duplicates
+                camp_skipped_lm += len(fs)
+                continue
+            for f in fs:
+                src = os.path.relpath(os.path.join(dp, f), ROOT).replace(os.sep, '/')
+                dst = 'Transformers Rebuild/' + src
+                if dst in have_dest:
+                    continue
+                sz = os.path.getsize(os.path.join(dp, f))
+                rows.append(dict(dest=dst, source=src, bytes=str(sz), action='keep', reason='campaign render'))
+                have_dest.add(dst); camp_files += 1; camp_bytes += sz
+    out_files, out_bytes, out_missing = 0, 0, 0
+    tsvp = os.path.join(ROOT, CAMPAIGN_OUTSIDE_TSV)
+    if os.path.isfile(tsvp):
+        for r in csv.DictReader(open(tsvp, encoding='utf-8'), delimiter='\t'):
+            src = (r.get('path') or '').replace('\\', '/')
+            if not src:
+                continue
+            dst = 'Transformers Rebuild/' + src
+            if dst in have_dest:
+                continue
+            if not os.path.isfile(os.path.join(ROOT, src)):
+                out_missing += 1
+                continue
+            sz = os.path.getsize(os.path.join(ROOT, src))
+            rows.append(dict(dest=dst, source=src, bytes=str(sz), action='keep', reason='campaign outside render'))
+            have_dest.add(dst); out_files += 1; out_bytes += sz
+    else:
+        problems.append('campaign asset list missing: %s' % CAMPAIGN_OUTSIDE_TSV)
+    if out_missing:
+        problems.append('campaign asset list: %d listed files missing on disk' % out_missing)
+    print('campaign: chapters %s; render %d files %.2f GB (%d per-unit lightmap copies skipped); outside render %d files %.2f GB'
+          % (', '.join(camp_chapters), camp_files, camp_bytes / 1e9, camp_skipped_lm, out_files, out_bytes / 1e9))
     head_data, head_replaced = 0, 0
     for d in HEAD_DATA_DIRS:
         top = os.path.join(REPO, d)
