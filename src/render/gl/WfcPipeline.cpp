@@ -855,6 +855,12 @@ uniform sampler2D uBloom;
 uniform sampler2D uDepth;
 uniform sampler3D uClut;
 uniform int uBloomOn, uClutOn, uDofOn;
+uniform sampler3D uClut2;      // (campaign) the LUT being blended to, uClutLerp its weight (uClut2On 0: identity)
+uniform int uClut2On;
+uniform float uClutLerp;
+uniform vec3 uColorScale;     // (campaign) matinee ColorScale
+uniform vec4 uFade;           // (campaign) camera fade: rgb + amount
+uniform vec2 uLetterbox;      // (campaign) the visible half extent in uv (0.5, 0.5: none)
 uniform vec4 uDofPacked;
 uniform vec2 uDofMaxBlur;
 uniform vec2 uNearFar;
@@ -918,12 +924,19 @@ void main() {
         c = max(mix(vec3(l), c, uToneGrade.y), 0.0);
         c = wfcFilmShoulder(c, 0.6);
     }
+    c *= uColorScale;
     c = clamp(c - uShadows, 0.0, 1.0) * uInvHighLights;
     c = pow(max(c, vec3(0.0001)), uMidTones);
     c = c * (1.0 - uDesat) + vec3(dot(c, vec3(0.3, 0.59, 0.11)) * uDesat);
     c = clamp(c, 0.0, 1.0);
     c = pow(max(c, vec3(0.0001)), vec3(uInvGamma));
-    if (uClutOn != 0) c = texture(uClut, c * uClutScaleBias.x + uClutScaleBias.y).rgb;
+    {
+        vec3 la = uClutOn != 0 ? texture(uClut, c * uClutScaleBias.x + uClutScaleBias.y).rgb : c;
+        vec3 lb = uClut2On != 0 ? texture(uClut2, c * uClutScaleBias.x + uClutScaleBias.y).rgb : c;
+        c = mix(la, lb, uClutLerp);
+    }
+    c = mix(c, uFade.rgb, uFade.a);
+    if (abs(vUV.x - 0.5) > uLetterbox.x || abs(vUV.y - 0.5) > uLetterbox.y) c = vec3(0.0);
     oColor = vec4(c, 1.0);
 }
 )";
@@ -1215,6 +1228,8 @@ void Pipeline::release() {
     if (mdiRowTex_) { glDeleteTextures(1, &mdiRowTex_); mdiRowTex_ = 0; }
     for (auto& kv : hdPbrTex_) if (kv.second) glDeleteTextures(1, &kv.second);
     hdPbrTex_.clear();
+    for (auto& kv : ppLuts_) if (kv.second) glDeleteTextures(1, &kv.second);   // (campaign post: the chapter's LUTs)
+    ppLuts_.clear();
     if (lmArray_) { glDeleteTextures(1, &lmArray_); lmArray_ = 0; }
     for (size_t a = 1; a < lmArrays_.size(); ++a) if (lmArrays_[a]) glDeleteTextures(1, &lmArrays_[a]);
     lmArrays_.clear(); lmArrOf_.clear();
@@ -1840,31 +1855,7 @@ bool Pipeline::load(const std::string& mapArg) {
 
     loadPpvFogs(L);                                  // (post-process volume height fogs: the load's layers above are their base)
     {
-        const assets::Json& P = L["postprocess"]["settings"];
-        auto f = [&](const char* k, float d) { return P[k].asFloat(d); };
-        post_.bloom = P["bEnableBloom"].asBool(true);
-        post_.dof = P["bEnableDOF"].asBool(false);
-        post_.bloomScale = f("Bloom_Scale", 1.0f);
-        post_.bloomThreshold = f("Bloom_Threshold", 1.0f);
-        // [MED] UE3 DOF PackedParameters = (FocusDistance, 1/FocusNearFalloff, FalloffExponent,
-        // 1/FocusFarFalloff), MinMaxBlurClamp = (MaxNear, MaxFar): layout from the decoded gather/uber PS.
-        post_.dofPacked[0] = f("DOF_FocusDistance", 0.0f);
-        post_.dofPacked[1] = 1.0f / std::max(f("DOF_FocusNearFalloff", 2000.0f), 1.0f);
-        post_.dofPacked[2] = f("DOF_FalloffExponent", 4.0f);
-        post_.dofPacked[3] = 1.0f / std::max(f("DOF_FocusFarFalloff", 2000.0f), 1.0f);
-        post_.dofMaxBlur[0] = f("DOF_MaxNearBlurAmount", 1.0f);
-        post_.dofMaxBlur[1] = f("DOF_MaxFarBlurAmount", 1.0f);
-        auto v3 = [&](const char* k, core::Vec3 d) {
-            const assets::Json& a = P[k];
-            return a.isArray() ? core::Vec3{a[0].asFloat(d.x), a[1].asFloat(d.y), a[2].asFloat(d.z)} : d;
-        };
-        post_.shadows = v3("Scene_Shadows", {0, 0, 0});
-        post_.highlights = v3("Scene_HighLights", {1, 1, 1});
-        post_.midtones = v3("Scene_MidTones", {1, 1, 1});
-        post_.desat = f("Scene_Desaturation", 0.0f);
-        if (!P["bEnableSceneEffect"].asBool(true)) {
-            post_.shadows = {0, 0, 0}; post_.highlights = {1, 1, 1}; post_.midtones = {1, 1, 1}; post_.desat = 0;
-        }
+        parsePost(L["postprocess"]["settings"], post_);
         const assets::Json& C = L["postprocess"]["clut"];
         ImageData strip;
         // The build writes the strip next to lighting.json; the recorded "file" is relative to the build's cwd, so it
@@ -5327,6 +5318,34 @@ void Pipeline::applyRenderScale(int& w, int& h) const {
     if (fsrScale_ >= 0.999f || fsrFailed_) return;
     w = std::max(1, (int)std::lround(w * fsrScale_));
     h = std::max(1, (int)std::lround(h * fsrScale_));
+}
+
+// the resolved FPostProcessSettings of a map / volume (lighting.json postprocess.settings, build_campaign_pp.py) -> Post
+void Pipeline::parsePost(const assets::Json& P, Post& out) {
+    auto f = [&](const char* k, float d) { return P[k].asFloat(d); };
+    out.bloom = P["bEnableBloom"].asBool(true);
+    out.dof = P["bEnableDOF"].asBool(false);
+    out.bloomScale = f("Bloom_Scale", 1.0f);
+    out.bloomThreshold = f("Bloom_Threshold", 1.0f);
+    // [MED] UE3 DOF PackedParameters = (FocusDistance, 1/FocusNearFalloff, FalloffExponent,
+    // 1/FocusFarFalloff), MinMaxBlurClamp = (MaxNear, MaxFar): layout from the decoded gather/uber PS.
+    out.dofPacked[0] = f("DOF_FocusDistance", 0.0f);
+    out.dofPacked[1] = 1.0f / std::max(f("DOF_FocusNearFalloff", 2000.0f), 1.0f);
+    out.dofPacked[2] = f("DOF_FalloffExponent", 4.0f);
+    out.dofPacked[3] = 1.0f / std::max(f("DOF_FocusFarFalloff", 2000.0f), 1.0f);
+    out.dofMaxBlur[0] = f("DOF_MaxNearBlurAmount", 1.0f);
+    out.dofMaxBlur[1] = f("DOF_MaxFarBlurAmount", 1.0f);
+    auto v3 = [&](const char* k, core::Vec3 d) {
+        const assets::Json& a = P[k];
+        return a.isArray() ? core::Vec3{a[0].asFloat(d.x), a[1].asFloat(d.y), a[2].asFloat(d.z)} : d;
+    };
+    out.shadows = v3("Scene_Shadows", {0, 0, 0});
+    out.highlights = v3("Scene_HighLights", {1, 1, 1});
+    out.midtones = v3("Scene_MidTones", {1, 1, 1});
+    out.desat = f("Scene_Desaturation", 0.0f);
+    if (!P["bEnableSceneEffect"].asBool(true)) {
+        out.shadows = {0, 0, 0}; out.highlights = {1, 1, 1}; out.midtones = {1, 1, 1}; out.desat = 0;
+    }
 }
 
 void Pipeline::rtLoadData() {
@@ -9465,6 +9484,7 @@ void Pipeline::endFrame() {
     ActiveTexture(GL_TEXTURE0);
     // Authored settings (TnWorldInfo over Default__WorldInfo), see load(). The quarter-res
     // gather/blur carries both bloom and the DOF-blurred scene, as in UE3's DOFAndBloom effect.
+    chapterPostFrame();                                // (campaign: the volume chain + the cinematic view write post_)
     bool dof = post_.dof && !WFC_ENV("WFC_NODOF");
     volApply();                                         // (X3, Realistic: the volumetric light into the HDR scene)
     const bool filmic = toneFilmicOn();                 // (X1, Realistic: the tone curve + the soft HDR bloom)
@@ -9518,7 +9538,8 @@ void Pipeline::endFrame() {
     UseProgram(postProg_);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, bloomTex_[0]);
     ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, depthTex_);
-    ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_3D, clutTex_);
+    ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_3D, ppChapter_ ? postLutA_ : clutTex_);
+    ActiveTexture(GL_TEXTURE0 + 5); glBindTexture(GL_TEXTURE_3D, ppChapter_ ? postLutB_ : 0);
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, fsr3 ? fsr3Out_ : colorTex_);
     auto U = [&](const char* n) { return GetUniformLocation(postProg_, n); };
     Uniform1i(U("uScene"), 0);
@@ -9530,8 +9551,15 @@ void Pipeline::endFrame() {
     Uniform4f(U("uDofPacked"), post_.dofPacked[0], post_.dofPacked[1], post_.dofPacked[2], post_.dofPacked[3]);
     Uniform2f(U("uDofMaxBlur"), post_.dofMaxBlur[0], post_.dofMaxBlur[1]);
     Uniform2f(U("uNearFar"), znear_, zfar_);
-    bool clut = clutTex_ && !WFC_ENV("WFC_NOCLUT");
+    bool clut = (ppChapter_ ? postLutA_ : clutTex_) && !WFC_ENV("WFC_NOCLUT");
     Uniform1i(U("uClutOn"), clut ? 1 : 0);
+    // (campaign: the second LUT of a blend, the matinee colour scale / fade / letterbox; identity on MP maps)
+    Uniform1i(U("uClut2"), 5);
+    Uniform1i(U("uClut2On"), ppChapter_ && postLutB_ && !WFC_ENV("WFC_NOCLUT") ? 1 : 0);
+    Uniform1f(U("uClutLerp"), ppChapter_ ? postLutLerp_ : 0.0f);
+    Uniform3f(U("uColorScale"), postColorScale_[0], postColorScale_[1], postColorScale_[2]);
+    Uniform4f(U("uFade"), postFade_[0], postFade_[1], postFade_[2], postFade_[3]);
+    Uniform2f(U("uLetterbox"), postLetterbox_[0], postLetterbox_[1]);
     // UE3 ColorCorrectionTexCoordScaleBias for an N^3 LUT: scale (N-1)/N, bias 0.5/N
     Uniform2f(U("uClutScaleBias"), (float)(clutSize_ - 1) / (float)clutSize_, 0.5f / (float)clutSize_);
     Uniform3f(U("uShadows"), post_.shadows.x, post_.shadows.y, post_.shadows.z);

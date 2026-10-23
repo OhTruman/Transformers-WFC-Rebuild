@@ -1682,6 +1682,7 @@ public:
             wfc_.yieldLoad();
         }
         wfc_.endChapterUnits(gpuIds);
+        wfc_.loadChapterPost(cd);                   // (the chapter's post-process volumes: <chapter dir>/postprocess_volumes.json)
         LOG_INFO("chapter: %d of %zu unit(s) merged, %zu world mesh(es)", n, units.size(), chapterMeshes_.size());
         return n;
     }
@@ -1708,6 +1709,8 @@ public:
         LOG_INFO("renderer: upscaling mode %d (%s)", mode, kName[mode]);
     }
     void notifyCameraCut(const char* reason) override { wfc_.notifyCameraCut(reason); }
+    void setPostProcessVolumeEnabled(const std::string& volume, bool on) override { wfc_.setPostVolumeEnabled(volume, on); }
+    void setCinematicView(const CinematicView& view) override { wfc_.setCinematicView(view); }
     bool frameGenerationAvailable() const override { return frameGenerationRuntimeShipped(); }
     bool frameGenerationActive() const override { return framegenActive(); }
     int frameGenerationFactor() const override { return framegenGenerating() ? 2 : 1; }   // (menus: real frames only)
