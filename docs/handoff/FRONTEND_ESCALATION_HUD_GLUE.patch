@@ -1,0 +1,39 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 94e3858..9ce3186 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -429,6 +429,26 @@ template <class R> int preparePreviewBodies(R* r, const frontend::CharacterRoste
+     } else { (void)r; (void)roster; return 0; }
+ }
+ 
++// Escalation HUD values (Gameplay E1, names agreed 2026-10-23: HudGameState svWave / svNextWaveTime / svGameOver; svPower
++// declared for E2), detected until they land; MP_ESCALATION_RE 8.1. static_assert once on integration (trait-glue rule).
++template <class H, class = void> struct HasSurvivalHud : std::false_type {};
++template <class H>
++struct HasSurvivalHud<H, std::void_t<decltype(std::declval<H&>().svWave), decltype(std::declval<H&>().svNextWaveTime),
++                                     decltype(std::declval<H&>().svGameOver)>> : std::true_type {};
++template <class H, class = void> struct HasSurvivalPower : std::false_type {};
++template <class H> struct HasSurvivalPower<H, std::void_t<decltype(std::declval<H&>().svPower)>> : std::true_type {};
++template <class H> void fillSurvival(const H& h, frontend::MatchValues& v) {
++    if constexpr (HasSurvivalHud<H>::value) {
++        v.svWave = h.svWave;
++        v.svNextWaveTime = h.svNextWaveTime;
++        v.svGameOver = h.svGameOver;
++    }
++    if constexpr (HasSurvivalPower<H>::value) {
++        for (frontend::MatchValues::Player& p : v.players) if (p.local) p.power = std::clamp(h.svPower, 0, 9999);
++    }
++    (void)h; (void)v;
++}
++
+ // Gameplay's GRI objective fields (agents/gameplay bec41cd: HudGameState attackingTeamIndex / currentObjectiveCountdown /
+ // competitiveScoreEnabled), detected.
+ template <class H, class = void> struct HasGriObjective : std::false_type {};
+@@ -1680,6 +1700,7 @@ void Application::routeMatchToFrontend(float dt) {
+         fillRemote(mp, p);
+         v.players.push_back(p);
+     }
++    fillSurvival(h, v);   // Escalation: wave / next-wave time / game over, the local seat's power
+     flow.setMatchValues(std::move(v));   // [integration 09c] no roster copy per step (Frontend MatchValues&& overload)
+     // HUD movie values (TnHUD data observers), Gameplay authoritative.
+     frontend::HudFrame hf;
