@@ -1,8 +1,8 @@
 diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
-index f9381c5..8210f86 100644
+index bc94d93..e775eed 100644
 --- a/src/core/Application_Frontend.cpp
 +++ b/src/core/Application_Frontend.cpp
-@@ -1937,6 +1937,23 @@ void core::Application::runOnlineFlowTest() {
+@@ -1975,6 +1975,24 @@ void core::Application::runOnlineFlowTest() {
          check(ma.mapId == 508 && mb.mapId == 508 && ma.modeTag == mb.modeTag, "same map and mode on both (" + ma.modeTag + " " + std::to_string(mb.mapId) + ")");
          check(ma.seed != 0 && ma.seed == mb.seed, "the host's seed on both (" + std::to_string(ma.seed) + " / " + std::to_string(mb.seed) + ")");
          check(ma.onlineSlots.size() == mb.onlineSlots.size() && !ma.onlineSlots.empty(), "the host's slots on both (" + std::to_string(mb.onlineSlots.size()) + ")");
@@ -17,8 +17,9 @@ index f9381c5..8210f86 100644
 +        int hostSlotTeam = -1, memberSlotTeam = -1;
 +        for (const frontend::SessionSlot& sl : ma.onlineSlots) {
 +            if (sl.kind != frontend::SessionSlot::Kind::Human) continue;
-+            if (sl.member.fingerprint.empty()) hostSlotTeam = sl.team; else if (sl.member == mb.self) memberSlotTeam = sl.team;
++            if (sl.member == ma.self) hostSlotTeam = sl.team; else if (sl.member == mb.self) memberSlotTeam = sl.team;
 +        }
++        check(!ma.self.fingerprint.empty() && ma.self == a.currentMatch().self, "the host knows its own member id (" + ma.self.fingerprint + ")");
 +        check(sameTeams, "the same teams in every slot on both (host/member: " + teams + ")");
 +        check(ma.teamIndex == hostSlotTeam && mb.teamIndex == memberSlotTeam,
 +              "each side's own team = its slot's (host " + std::to_string(ma.teamIndex) + " / " + std::to_string(hostSlotTeam) + ", member " +

@@ -140,7 +140,7 @@ void GameFlow::fillOnlineLaunch() {   // the match's participants (WFC_SESSIONTE
     const bool host = role_ == SessionRole::Host;
     const SessionLobby l = !launchLobby_.slots.empty() ? launchLobby_ : host ? hostLobbySnapshot() : memberLobby_;
     match_.onlineSlots = l.slots;
-    match_.self = host ? SessionMemberId{} : selfId_;
+    match_.self = selfId_;   // the host's own id from HostOpened (Systems 2528df5e); "" only from a session that gives none
     for (const SessionMemberInfo& m : l.members) match_.onlineNames.push_back({m.id, m.displayName});
     for (const SessionSlot& sl : l.slots)
         if (sl.kind == SessionSlot::Kind::Human && sl.member == match_.self && (sl.team == 0 || sl.team == 1)) { match_.teamIndex = sl.team; break; }
@@ -225,6 +225,7 @@ void GameFlow::onlineTick() {
         session_->cancelJoin();
         onlineJoinFailed(SessionJoinFailure::Timeout);
     }
+    if (level_ == LevelKind::GameLobby && vote_.round > 0) lobby_.numPlayers = 1 + (int)onlineMembers_.size();   // "Finding `p more players"
     if (level_ == LevelKind::GameLobby && role_ != SessionRole::Offline && !lobby_.countingDown) lobby_.lobbyStatus = onlineGateStatus();
     if (role_ == SessionRole::Host) applyBrowserCap("tick");
     if (role_ == SessionRole::Host && level_ == LevelKind::GameLobby) voteTick();   // public lobbies (4.1)
@@ -265,12 +266,13 @@ SessionLobby GameFlow::hostLobbySnapshot() const {
     for (const BotOption& o : botOptions()) l.settings[o.name] = botChoiceLabel(o.field, botValue(o.field));
     // the members (the host first) and the human slots; bots fill the rest per team (onlineBotsFor)
     SessionMemberInfo self;
+    self.id = selfId_;   // the host's real id (HostOpened.member), so every peer keys the host's slot, voice and swaps by it
     self.displayName = profile_.playerName();   // D1: the account name
     self.iconicCharacter = selected_.valid && selected_.type == 1 ? selected_.name : std::string();
     self.hasCharacter = !iconicMode() || !self.iconicCharacter.empty();
     self.mapVote = myVote_;
     l.members.push_back(self);
-    SessionSlot hs; hs.kind = SessionSlot::Kind::Human; hs.team = lobby_.localTeam >= 0 ? lobby_.localTeam : 0;
+    SessionSlot hs; hs.kind = SessionSlot::Kind::Human; hs.member = selfId_; hs.team = lobby_.localTeam >= 0 ? lobby_.localTeam : 0;
     l.slots.push_back(hs);
     for (const OnlineMember& m : onlineMembers_) {
         l.members.push_back(m.info);
@@ -301,6 +303,8 @@ int GameFlow::onlineGateStatus() const {
     // The original lobby gate (D4): every human has a character, then balanced teams, then the host starts: LobbyStatus 6
     // WaitingForCharacterChoice / 4 WaitingForBalancedTeams / 3 WaitingForHostToStart. Teams must be balanced only with Team
     // Balancing "Manual": "Autobalanced" (the default) balances them itself at the final countdown (AssignTeams).
+    // a public (voting) lobby gathers players first: the original WaitingForPlayersStatus until NumRequiredPlayers humans
+    if (vote_.round > 0 && 1 + (int)onlineMembers_.size() < lobby_.numRequiredPlayers) return 1;
     for (const OnlineMember& m : onlineMembers_) if (!m.info.hasCharacter || m.connecting) return 6;
     if (iconicMode()) {   // every human holds an iconic character, each one at most once (the host's pick first, then join order)
         if (role_ == SessionRole::Host && !(selected_.valid && selected_.type == 1)) return 6;
@@ -494,6 +498,7 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
     switch (e.type) {
     case T::HostOpened:   // our host session opened (Private Match), or a Quick Match found nothing: we host a public lobby
         if (onlinePending_ != OnlinePending::Hosting && onlinePending_ != OnlinePending::Searching) break;
+        selfId_ = e.member;   // the host's own member id (empty from a session that does not report it)
         onlinePending_ = OnlinePending::None;
         closePopup();
         role_ = SessionRole::Host;

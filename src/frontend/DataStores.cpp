@@ -123,7 +123,8 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<CurrentGame:GameTeamStatus>") return gtsName(inMatch ? flow_.currentMatch().gameTeamStatus : L.gameTeamStatus);
     if (markup == "<CurrentGame:MapSelectionMethod>") return std::to_string(L.mapSelectionMethod);
     if (markup == "<CurrentGame:SelectedMapID>") return std::to_string(inMatch ? flow_.currentMatch().mapId : L.mapId);
-    if (markup == "<CurrentGame:AllowMapVeto>") return b(L.allowMapVeto);
+    // a voting lobby (ONLINE_LOBBY_FLOW_V2 4.1) replaces the original rotate-and-veto: no Veto button hint
+    if (markup == "<CurrentGame:AllowMapVeto>") return b(L.allowMapVeto && flow_.mapVote().round == 0);
     if (markup == "<CurrentGame:MapVetos>") return "0";
     if (markup == "<CurrentGame:RequiredVetos>") return std::to_string(L.numRequiredPlayers / 2 + 1);
     if (markup == "<CurrentGame:IsCountingDown>") return b(L.countingDown);
