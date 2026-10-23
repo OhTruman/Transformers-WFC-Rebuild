@@ -3971,3 +3971,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   RENDERS (the opening plays); loads D5 Off 37 s / 5.9 GB, D5 Realistic 55 s / 6.8 GB, A1 Off 44 s / 7.3 GB, A1 Realistic
   62 s / 8.4 GB (was 142 s / 17.6 GB); black regions around the lift (void vs not-streamed: Rendering eye pass); a squad
   strand-recover once per A1 run at ~60 s (Gameplay); persistent bsp.glb 'cannot read' (expected?).
+2026-10-23 09:22 Run #2 eye pass (Rendering): cyan line CLOSED (void-only artefact); the persistent bsp.glb error is benign (empty BSP in
+  the original); D5 PASS again; A1's black band = the opening in the lift pod with nothing drawn beyond (not sky either):
+  state membership vs black surfaces -> RE asked what the original shows there and in which level / state.
