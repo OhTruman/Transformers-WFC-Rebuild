@@ -1434,7 +1434,9 @@ void GameFlow::matchLoaded() {
     // ignores OnBeginGame (Choose Character stays up until a character is chosen) and the UI enters InGame when the
     // player's pawn spawns (OnRespawn, event 5).
     selected_ = SelectedCharacter{};
-    matchHasBegun_ = false;
+    // a late joiner enters a running match: GRI.bMatchHasBegun is already true, so its pick spawns it at once (no pre-game
+    // countdown screen) [RE ONLINE_JOIN_IN_PROGRESS_RE]
+    matchHasBegun_ = match_.lateSeat >= 0;
     // TnCampaignGame -> TnUIControllerCoop (in-map trio select, MISSION FAILED); versus -> TnUIControllerMultiplayer
     setUIController(campaign() ? UIControllerClass::Coop : UIControllerClass::Multiplayer, !selected_.valid);
     ui_.setGRIAvailable(true);
