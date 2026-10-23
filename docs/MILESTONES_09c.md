@@ -3723,3 +3723,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   arms; not smoke, not async step, not intent) -> every frontend match-frame A/B before it was never same-seed. Experimental on
   309c450c: ESC PASS (Remnant 3 waves), UdpSession 5 profiles + late join PASS (6,001 ticks identical). Third NAVQ seed: keep
   overlay e; Streets stucks 1.31 -> 1.80 per bot-min to AssetTools (not a blocker). c3d4cdf1 build_materials VS_MAPS.
+2026-10-23 03:36 Campaign render data: D5_OME DONE (AssetTools\out\campaign_render\D5_OME, 6 sublevels, 108 MB; all world.glb materials
+  compile; 0 missing textures); gaps for Rendering: 3 Omega Supreme robot material instances (translator), the
+  PostProcessVolumeHeightFog subclass not read by tools/render, the M72 fallback MP-only (campaign extras cooked in sibling
+  sublevels). A1_IAC running (48 sublevels).
