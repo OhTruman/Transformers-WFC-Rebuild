@@ -4818,6 +4818,7 @@ void Pipeline::flushTranslucency() {
                     for (size_t k = gr.i; k < gr.j; ++k)
                         for (const Sprite& s : batchOf(k)->sprites) { c = c + (s.c[0] + s.c[2]) * 0.5f; ++cn; }
                     smokeCenter_ = cn ? c * (1.0f / (float)cn) : c;
+                    for (size_t k = gr.i; k < gr.j; ++k) smokeVolumeAdd(batchOf(k)->sprites.data(), batchOf(k)->sprites.size());
                 }
                 frameFx_ = true;
                 drawSubs(g, core::Mat4::identity(), true);
@@ -8945,6 +8946,43 @@ void Pipeline::drawFallbackSprites(const FallbackBatch& b) {
     ++counts_.draws; ++counts_.translucent;
 }
 
+// (Smoke stage 2, Realistic) one Enhanced smoke batch's sprites -> per-plume density blobs for the next RT frame's froxel pass;
+// called by both sprite paths (the frame stream per batch, drawSprites' immediate path)
+void Pipeline::smokeVolumeAdd(const Sprite* sp, size_t n) {
+    // (Smoke stage 2, Realistic only: the batch as a density blob for the froxel volume - its extent, and an optical depth
+    // across it of K x the sprites' mean opacity; WFC_SMOKEVOL = K, 0 off)
+    static const float volK = std::getenv("WFC_SMOKEVOL") ? (float)std::atof(std::getenv("WFC_SMOKEVOL")) : 0.6f;
+    if (rtMode_ == 2 && volK > 0.0f && smokeVolAcc_.size() < 256) {
+        // (x43: one batch can hold several plumes - every emitter of the material - so its single blob was centred in the
+        // air between them, tens of metres wide and near-empty; the sprites are clustered per plume instead: a sprite joins
+        // the first cluster whose seed is within 4 m, else seeds a new one (8 per batch))
+        struct Cl { core::Vec3 seed, sum; float a = 0.0f; int n = 0; };
+        Cl cl[8]; int ncl = 0;
+        std::vector<int>& of = smokeClusterOf_;
+        of.assign(n, -1);
+        for (size_t i = 0; i < n; ++i) {
+            const core::Vec3 m = (sp[i].c[0] + sp[i].c[2]) * 0.5f;
+            int k = 0;
+            while (k < ncl && core::length(m - cl[k].seed) > 4.0f) ++k;
+            if (k == ncl) { if (ncl == 8) continue; cl[ncl++].seed = m; }
+            cl[k].sum = cl[k].sum + m; cl[k].a += std::min(std::max(sp[i].color[3], 0.0f), 1.0f); ++cl[k].n;
+            of[i] = k;
+        }
+        float r[8] = {};
+        for (int k = 0; k < ncl; ++k) cl[k].sum = cl[k].sum * (1.0f / (float)cl[k].n);   // (now the centre)
+        for (size_t i = 0; i < n; ++i) {
+            if (of[i] < 0) continue;
+            const core::Vec3 m = (sp[i].c[0] + sp[i].c[2]) * 0.5f;
+            r[of[i]] = std::max(r[of[i]], core::length(m - cl[of[i]].sum) + 0.5f * core::length(sp[i].c[2] - sp[i].c[0]));
+        }
+        for (int k = 0; k < ncl && smokeVolAcc_.size() < 256; ++k) {
+            const float a = cl[k].a / (float)cl[k].n;
+            if (r[k] > 0.1f && a > 0.01f)
+                smokeVolAcc_.push_back({cl[k].sum.x, cl[k].sum.y, cl[k].sum.z, r[k], volK * a / r[k]});
+        }
+    }
+}
+
 bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, const core::Vec3& facing) {
     // AMD stability (Milestone E): never upload non-finite sprite corners or an unbounded batch
     {
@@ -8991,38 +9029,7 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
         core::Vec3 c{0, 0, 0};
         for (size_t i = 0; i < n; ++i) c = c + (sp[i].c[0] + sp[i].c[2]) * 0.5f;
         smokeCenter_ = c * (1.0f / (float)n);
-        // (Smoke stage 2, Realistic only: the batch as a density blob for the froxel volume - its extent, and an optical depth
-        // across it of K x the sprites' mean opacity; WFC_SMOKEVOL = K, 0 off)
-        static const float volK = std::getenv("WFC_SMOKEVOL") ? (float)std::atof(std::getenv("WFC_SMOKEVOL")) : 0.6f;
-        if (rtMode_ == 2 && volK > 0.0f && smokeVolAcc_.size() < 256) {
-            // (x43: one batch can hold several plumes - every emitter of the material - so its single blob was centred in the
-            // air between them, tens of metres wide and near-empty; the sprites are clustered per plume instead: a sprite joins
-            // the first cluster whose seed is within 4 m, else seeds a new one (8 per batch))
-            struct Cl { core::Vec3 seed, sum; float a = 0.0f; int n = 0; };
-            Cl cl[8]; int ncl = 0;
-            std::vector<int>& of = smokeClusterOf_;
-            of.assign(n, -1);
-            for (size_t i = 0; i < n; ++i) {
-                const core::Vec3 m = (sp[i].c[0] + sp[i].c[2]) * 0.5f;
-                int k = 0;
-                while (k < ncl && core::length(m - cl[k].seed) > 4.0f) ++k;
-                if (k == ncl) { if (ncl == 8) continue; cl[ncl++].seed = m; }
-                cl[k].sum = cl[k].sum + m; cl[k].a += std::min(std::max(sp[i].color[3], 0.0f), 1.0f); ++cl[k].n;
-                of[i] = k;
-            }
-            float r[8] = {};
-            for (int k = 0; k < ncl; ++k) cl[k].sum = cl[k].sum * (1.0f / (float)cl[k].n);   // (now the centre)
-            for (size_t i = 0; i < n; ++i) {
-                if (of[i] < 0) continue;
-                const core::Vec3 m = (sp[i].c[0] + sp[i].c[2]) * 0.5f;
-                r[of[i]] = std::max(r[of[i]], core::length(m - cl[of[i]].sum) + 0.5f * core::length(sp[i].c[2] - sp[i].c[0]));
-            }
-            for (int k = 0; k < ncl && smokeVolAcc_.size() < 256; ++k) {
-                const float a = cl[k].a / (float)cl[k].n;
-                if (r[k] > 0.1f && a > 0.01f)
-                    smokeVolAcc_.push_back({cl[k].sum.x, cl[k].sum.y, cl[k].sum.z, r[k], volK * a / r[k]});
-            }
-        }
+        smokeVolumeAdd(sp, n);
     }
     if (!spriteVao_) {
         GenVertexArrays(1, &spriteVao_);
