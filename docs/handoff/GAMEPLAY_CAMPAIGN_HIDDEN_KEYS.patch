@@ -1,0 +1,50 @@
+diff --git a/src/game/WorldCampaignRuntime.cpp b/src/game/WorldCampaignRuntime.cpp
+index 2b063eed..9b8f1737 100644
+--- a/src/game/WorldCampaignRuntime.cpp
++++ b/src/game/WorldCampaignRuntime.cpp
+@@ -6,6 +6,7 @@
+ #include "core/Log.h"
+ 
+ #include <algorithm>
++#include <array>
+ #include <cmath>
+ #include <cstdlib>
+ #include <fstream>
+@@ -290,6 +291,7 @@ bool World::cpActorPos(const std::string& path, core::Vec3& out) const {
+ 
+ void World::cpLoadActors() {
+     cp_.actorPos.clear();
++    std::map<std::string, std::array<int, 2>> hiddenRows;   // name -> rows visible / hidden
+     cp_.actorHidden.clear(); cp_.actorDestroyed.clear();
+     bool actorsFile = false;
+     for (const char* file : {"navigation.json", "actors.json"}) {
+@@ -302,12 +304,27 @@ void World::cpLoadActors() {
+             const std::string name = afterDot(n.has("object") ? n["object"].asString() : n["node"].asString());
+             const assets::Json& L = n["location_gltf"];
+             if (!name.empty() && L.size() >= 3) cp_.actorPos[name] = core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
+-            if (!name.empty() && n["props"]["bHidden"].asBool(false)) cp_.actorHidden[name] = true;   // the authored start visibility (Toggle's base)
++            if (!name.empty() && std::string(file) == "actors.json") {   // the authored start visibility (Toggle's base)
++                // drawable classes only: lights, volumes, sounds, brushes, nav points and notes carry bHidden by class default (an editor
++                // sprite), not as "not drawn" - a hide on a light's name would switch it off in the renderer
++                const std::string cls = n["class"].asString();
++                const bool drawable = cls.find("MeshActor") != std::string::npos || cls.find("InterpActor") != std::string::npos ||
++                                      cls.find("KActor") != std::string::npos || cls.find("TransformingWorldActor") != std::string::npos;
++                const bool hid = drawable && n["props"]["bHidden"].asBool(false);
++                ++hiddenRows[name][hid ? 1 : 0];
++            }
+         }
+     }
+     LOG_INFO("campaign: %zu actor locations (navigation.json%s)", cp_.actorPos.size(), actorsFile ? " + actors.json" : "");
+     // the authored bHidden: the renderer's actor nodes start visible, so the hidden ones are hidden here (the flag is by actor name and
+-    // survives streaming; ToggleHidden / Destroy flip the same flag)
++    // survives streaming; ToggleHidden / Destroy flip the same flag). Short names repeat across a chapter's levels (AssetTools): a name
++    // hidden in one level and visible in another is left visible (the renderer keys by name; logged).
++    int conflicts = 0;
++    for (const auto& kv : hiddenRows) {
++        if (kv.second[1] > 0 && kv.second[0] == 0) cp_.actorHidden[kv.first] = true;
++        else if (kv.second[1] > 0) ++conflicts;
++    }
++    if (conflicts > 0) LOG_INFO("campaign: %d actor names hidden in one level and visible in another: left visible", conflicts);
+     int hid = 0;
+     if (renderer_) for (const auto& kv : cp_.actorHidden) if (kv.second) { renderer_->setActorHidden(kv.first, true); ++hid; }
+     LOG_INFO("campaign: %zu actors authored hidden (%d sent)", cp_.actorHidden.size(), hid);
