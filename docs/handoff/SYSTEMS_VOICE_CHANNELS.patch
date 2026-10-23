@@ -1,0 +1,136 @@
+diff -ruN a/src/core/Application_Net.cpp b/src/core/Application_Net.cpp
+--- a/src/core/Application_Net.cpp	2026-10-23 06:41:51.268319600 -0500
++++ b/src/core/Application_Net.cpp	2026-10-23 06:41:51.295924600 -0500
+@@ -211,6 +211,7 @@
+         const auto& ps = world_.match().players();
+         const int a = seatMp[(size_t)talker], b = seatMp[(size_t)listener];
+         if (a < 0 || b < 0 || (size_t)a >= ps.size() || (size_t)b >= ps.size()) return false;
++        if (net::voiceChannelOpen(world_)) return true;   // FFA / after EndGame: everyone (the original's channels)
+         if ((flags & 1) && ps[(size_t)a].team == ps[(size_t)b].team && ps[(size_t)a].team != 255) return true;   // radio
+         if (!(flags & 2)) return false;
+         const game::Character* x = world_.participantPawn(a);
+@@ -248,6 +249,7 @@
+             const core::Vec3 lp = me ? me->position() + core::Vec3{0, 1.8f, 0} : core::Vec3{0, 0, 0};
+             const float yaw = me ? me->yaw() : 0.0f;
+             const core::Vec3 right = core::normalize(core::cross(core::forwardFromYawPitch(yaw, 0.0f), core::Vec3{0, 1, 0}));
++            voice->setOpenChannel(net::voiceChannelOpen(world_));
+             voice->update(true, seatPos, sameTeam, occludedQ, roomQ, lp, right);
+         }
+         const uint32_t n = (uint32_t)world_.simTick() + 1;
+diff -ruN a/src/frontend/Profile.h b/src/frontend/Profile.h
+--- a/src/frontend/Profile.h	2026-10-23 06:41:51.272834500 -0500
++++ b/src/frontend/Profile.h	2026-10-23 06:41:51.301973400 -0500
+@@ -119,13 +119,13 @@
+     // per-player mutes (fingerprints, local only). [Voice], written only when something differs from the defaults.
+     struct Voice {
+         int mode = 1;                 // 0 Off, 1 Push to Talk (the user's default), 2 Open Mic
+-        int audience = 3;             // 0 Team Radio, 1 All Radio, 2 Proximity, 3 Radio + Proximity (the proposed default)
++        int audience = 0;             // 0 Team Radio (the original: team-only voice, RE TnVoiceMuteHandler), 1 All Radio, 2 Proximity, 3 Radio + Proximity
+         std::string device;           // "" = System Default
+         std::string pttKey = "V";
+         int volume = 70, proximityVolume = 70;
+         std::vector<std::string> muted;
+         bool isDefault() const {
+-            return mode == 1 && audience == 3 && device.empty() && pttKey == "V" && volume == 70 && proximityVolume == 70 && muted.empty();
++            return mode == 1 && audience == 0 && device.empty() && pttKey == "V" && volume == 70 && proximityVolume == 70 && muted.empty();
+         }
+     };
+     Voice voice;
+diff -ruN a/src/frontend/Session.h b/src/frontend/Session.h
+--- a/src/frontend/Session.h	2026-10-23 06:41:51.273336500 -0500
++++ b/src/frontend/Session.h	2026-10-23 06:41:51.300934400 -0500
+@@ -116,7 +116,7 @@
+ enum class SessionVoiceAudience { TeamRadio, AllRadio, Proximity, RadioPlusProximity };
+ struct SessionVoiceSettings {
+     SessionVoiceMode mode = SessionVoiceMode::PushToTalk;   // the user's default
+-    SessionVoiceAudience audience = SessionVoiceAudience::RadioPlusProximity;   // the proposed default
++    SessionVoiceAudience audience = SessionVoiceAudience::TeamRadio;   // the original: team-only voice (RE TnVoiceMuteHandler); proximity opt-in
+     std::string device;                     // capture device name; "" = the system default
+     int volume = 70;                        // playback 0-100
+ };
+diff -ruN a/src/net/NetMatchDriver.cpp b/src/net/NetMatchDriver.cpp
+--- a/src/net/NetMatchDriver.cpp	2026-10-23 06:41:51.270827600 -0500
++++ b/src/net/NetMatchDriver.cpp	2026-10-23 06:41:51.299930000 -0500
+@@ -122,6 +122,7 @@
+             const int talker = im->player(talkerSeat), listener = im->player(listenerSeat);
+             const auto& ps = w->match().players();
+             if (talker < 0 || listener < 0 || (size_t)talker >= ps.size() || (size_t)listener >= ps.size()) return false;
++            if (voiceChannelOpen(*w)) return true;
+             if ((flags & 1) && ps[(size_t)talker].team == ps[(size_t)listener].team && ps[(size_t)talker].team != 255) return true;
+             if (!(flags & 2)) return false;
+             const game::Character* x = w->participantPawn(talker);
+@@ -169,6 +170,8 @@
+         const core::Vec3 right = core::normalize(core::cross(core::forwardFromYawPitch(yaw, 0.0f), core::Vec3{0, 1, 0}));
+         const int self = m.player(m.cfg.self);
+         Impl* im = &m;
++        // the original's channels: team-only in a team match; FFA and from EndGame on (MatchOver) everyone (TnVoiceMuteHandler)
++        m.voice->setOpenChannel(voiceChannelOpen(w));
+         m.voice->update(m.talking,
+                         [&w, im](int seat, core::Vec3& out) { const int p = im->player(seat); const game::Character* c = p >= 0 ? w.participantPawn(p) : nullptr; if (!c) return false; out = c->position() + core::Vec3{0, 1.8f, 0}; return true; },
+                         [&w, im, self](int seat) { const int p = im->player(seat); const auto& ps = w.match().players(); return p >= 0 && self >= 0 && (size_t)p < ps.size() && (size_t)self < ps.size() && ps[(size_t)p].team == ps[(size_t)self].team && ps[(size_t)p].team != 255; },
+@@ -243,6 +246,11 @@
+ VoiceSession* NetMatchDriver::voice() { return impl_->voice.get(); }
+ void NetMatchDriver::setTalking(bool talking) { impl_->talking = talking; }
+ 
++bool voiceChannelOpen(const game::World& w) {
++    const game::Match& m = w.match();
++    return !m.settings().teamGame || m.state() == game::Match::State::MatchOver || m.state() == game::Match::State::Returned;
++}
++
+ void NetMatchDriver::dropSeat(int seat) { impl_->ls->dropSeat(seat); }
+ 
+ void NetMatchDriver::chooseCharacter(const game::CharacterSelection& sel) {
+diff -ruN a/src/net/NetMatchDriver.h b/src/net/NetMatchDriver.h
+--- a/src/net/NetMatchDriver.h	2026-10-23 06:41:51.271329100 -0500
++++ b/src/net/NetMatchDriver.h	2026-10-23 06:41:51.297923700 -0500
+@@ -29,6 +29,11 @@
+ class Lockstep;
+ class VoiceSession;
+ 
++// The original's voice channels (TnVoiceMuteHandler, RE ONLINE_POSTMATCH_PARTY_VOICE_RE section 3): open (everyone hears everyone)
++// in a match without teams and from EndGame on; otherwise team-only. Both the listener (VoiceSession::setOpenChannel) and the host's
++// fan-out use it.
++bool voiceChannelOpen(const game::World& w);
++
+ class NetMatchDriver {
+ public:
+     struct Config {
+diff -ruN a/src/net/VoiceSession.cpp b/src/net/VoiceSession.cpp
+--- a/src/net/VoiceSession.cpp	2026-10-23 06:41:51.270325500 -0500
++++ b/src/net/VoiceSession.cpp	2026-10-23 06:41:51.298930200 -0500
+@@ -160,9 +160,10 @@
+     if (!have) return;
+     if (tap_) tap_(seat, pcm, concealedFrame);
+     (void)right;   // the mixer pans positional streams itself
+-    // Who hears it: radio = the talker's team, 2D at the voice volume; proximity = anyone in earshot, as a 3D voice in the cue mix
+-    // (falloff, pan, the listener's room reverb, occlusion); radio wins for teammates.
+-    const bool radio = (t.lastFlags & kFlagRadio) && sameTeam && sameTeam(seat);
++    // Who hears it: radio = the talker's team, 2D at the voice volume; proximity (opt-in: the audience row) = anyone in earshot, as a
++    // 3D voice in the cue mix (falloff, pan, the listener's room reverb, occlusion); radio wins for teammates. An open channel (FFA,
++    // after EndGame: setOpenChannel) = everyone, 2D.
++    const bool radio = open_ || ((t.lastFlags & kFlagRadio) && sameTeam && sameTeam(seat));
+     if (!radio) {
+         core::Vec3 at;
+         if (!(t.lastFlags & kFlagProximity) || !seatPos || !seatPos(seat, at)) { ++stats_.unheard; return; }   // not for this listener
+diff -ruN a/src/net/VoiceSession.h b/src/net/VoiceSession.h
+--- a/src/net/VoiceSession.h	2026-10-23 06:41:51.269332500 -0500
++++ b/src/net/VoiceSession.h	2026-10-23 06:41:51.297419000 -0500
+@@ -55,6 +55,10 @@
+     void setConfig(const Config& c);                      // live: volume, audience, open mic / push to talk (the Audio rows)
+     // Local mute (the lobby / pause menu's Mute): a muted talker's frames are dropped before decoding (never played). Seat -> muted.
+     void setMuted(std::function<bool(int seat)> f) { muted_ = std::move(f); }
++    // The original's gameplay channels (TnVoiceMuteHandler, RE ONLINE_POSTMATCH_PARTY_VOICE_RE section 3): in a team match each player's
++    // VoiceChannel is its team and other channels are muted both ways (team-only voice); no teams (FFA) and from EndGame on
++    // (ResetMuting) every channel is open - everyone hears everyone, 2D. Open = every talker heard as radio. Independent of setMuted.
++    void setOpenChannel(bool open) { open_ = open; }
+     // TEST ONLY: every decoded (or concealed) frame of a talker, before routing (WFC_VOICETEST compares it with the source).
+     void setPlayTap(std::function<void(int seat, const VoiceFrame& pcm, bool concealed)> f) { tap_ = std::move(f); }
+     // The talking indicator (SessionEvent::MemberVoice HeadsetState): 0 no voice heard for 10 s, 1 voice on, 2 speaking (a frame in the
+@@ -103,6 +107,7 @@
+     double lastPlayMs_ = 0.0;
+     VoiceStats stats_;
+     std::function<bool(int)> muted_;
++    bool open_ = false;
+     std::function<void(int, const VoiceFrame&, bool)> tap_;
+     struct Heard { double lastMs = -1e9; uint8_t via = 0; };
+     std::map<int, Heard> heard_;       // per seat (this seat too: its own sends) - the indicators
