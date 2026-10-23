@@ -4046,3 +4046,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   confirmed = the bind-pose pod (SKIPMAT=Pod arm). AssetTools' transforming_actors_gameplay.json ready for A1 / D5 / A2 /
   A3 (MP schema). Draw route: the World draws campaign transforming actors posed (versus path) + setActorHidden on the
   bind-pose node; renderer part nil. Gameplay implementing TransformWorldProp -> sentries -> roller mines.
+2026-10-23 11:13 Cyan sheet NOT removed by ClampedPow (confirm on Rendering's exe: unchanged). ClampedPow stays (RE-correct). Next: a
+  diagnostic exe (WFC_DRAWDUMP near-camera draw list at the shot frame + SKIPMAT on skinned draws), one Frontend slot, then
+  a named mesh and the fix.
