@@ -68,3 +68,11 @@ Verified:
 - the 01–08 chain applies to a fresh af4d0731 and reproduces the tested tree exactly;
 - headless against the 59cb3162 head build, the SIMHASH stream is identical at every step: Streets TDM 4,201, Remnant ESC 1,675,
   BrokenHope ESC 2,530, and A1_IAC campaign 60 s (3,749 steps), so the base is exact for the campaign too.
+
+## 09: the campaign authored-hidden keys (59cb3162 -> 78caf2bc)
+
+`09_campaign_hidden_keys.patch`: `git diff --binary 59cb3162 78caf2bc` over the same paths. It touches WorldCampaignRuntime.cpp only:
+the authored bHidden is sent for drawable classes only, and names that collide across levels are left visible. Apply it after 08.
+
+Verified: the 01–09 chain applies to a fresh af4d0731 and matches 78caf2bc's tree over every patched path (by file). It is
+campaign-only, so the versus / Escalation same-match of 07 / 08 is unchanged.
