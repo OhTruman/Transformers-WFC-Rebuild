@@ -3759,3 +3759,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 04:16 MERGED 72a0043d Escalation E3a: the horde's real bodies (ESC_<id> chassis, per-entry weapons + ROBODEF health, wave
   buffs; ESCTEST 35 / 35 + 6 / 6; BrokenHope horde kills with its AR, Remnant PlayerBot reaches wave 3). E3 open: GOAP brains,
   Brute / Tank weak points, Jet flight, loot. Gameplay -> campaign runtime (D5_OME headless boot) now.
+2026-10-23 04:16 pt9 rerun (two windows, real menus): host runs the driver, the late member is accepted at tick 992 and launches from the
+  record, then ConnectionLost: a ~45 s cold map load (fresh shader cache) vs the host's 8 s member timeout, no keepalive during
+  the blocking load. Systems: late-join load window + keepalives (top priority). Next pt9 with a pre-warmed member cache.
+  Card: Rendering x39tune.
