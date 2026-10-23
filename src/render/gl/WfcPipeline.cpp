@@ -4159,7 +4159,13 @@ int Pipeline::upload(const MeshData& m) {
                 const std::string lk = r.dir.empty() ? r.coeff[i] : r.dir + "|" + r.coeff[i];
                 auto li = lmIndex_.find(lk);
                 if (li == lmIndex_.end()) {
-                    GLuint t = texture((r.dir.empty() ? dataDir_ : r.dir) + "/lightmaps/" + r.coeff[i] + ".png", true, true, true);
+                    // (a campaign chapter's pages: one shared set in <chapter>/lightmaps/ - AssetTools stopped copying A1's 1,050
+                    // pages into each of its 48 units - else the unit's own lightmaps/; MP maps have no shared folder)
+                    const std::string unitDir = r.dir.empty() ? dataDir_ : r.dir;
+                    const size_t up = unitDir.find_last_of("/\\");
+                    const std::string shared = up == std::string::npos ? std::string() : unitDir.substr(0, up) + "/lightmaps/" + r.coeff[i] + ".png";
+                    GLuint t = texture(!shared.empty() && platform::dataFileSize(shared) >= 0 ? shared : unitDir + "/lightmaps/" + r.coeff[i] + ".png",
+                                       true, true, true);
                     lmTextures_.push_back(t);
                     li = lmIndex_.emplace(lk, (int)lmTextures_.size() - 1).first;
                 }
@@ -5405,6 +5411,12 @@ void Pipeline::unloadChapterUnit(const std::string& unit) {
         if (it->first.compare(0, prefix.size(), prefix) == 0) {
             if (it->second >= 0 && (size_t)it->second < lmTextures_.size() && lmTextures_[(size_t)it->second]) {
                 const GLuint t = lmTextures_[(size_t)it->second];
+                // (a page of the chapter's shared lightmaps may also be another loaded unit's: freed only with its last user)
+                bool shared = false;
+                for (const auto& o : lmIndex_)
+                    if (o.second != it->second && o.second >= 0 && (size_t)o.second < lmTextures_.size() && lmTextures_[(size_t)o.second] == t &&
+                        o.first.compare(0, prefix.size(), prefix) != 0) { shared = true; break; }
+                if (shared) { lmTextures_[(size_t)it->second] = 0; it = lmIndex_.erase(it); continue; }
                 for (auto c = texCache_.begin(); c != texCache_.end();) c = c->second == t ? texCache_.erase(c) : std::next(c);
                 glDeleteTextures(1, &t);
                 lmTextures_[(size_t)it->second] = 0;

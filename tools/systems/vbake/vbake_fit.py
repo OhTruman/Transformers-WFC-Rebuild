@@ -90,7 +90,8 @@ def main():
 
     def tex(name):
         if name not in tex_cache:
-            im = Image.open(os.path.join(rdir, 'lightmaps', name + '.png')).convert('RGB')
+            shared = os.path.join(os.path.dirname(os.path.normpath(rdir)), 'lightmaps', name + '.png')   # (a chapter's shared pages)
+            im = Image.open(shared if os.path.exists(shared) else os.path.join(rdir, 'lightmaps', name + '.png')).convert('RGB')
             tex_cache[name] = srgb_to_linear(np.asarray(im, dtype=np.float64) / 255.0)
         return tex_cache[name]
 
