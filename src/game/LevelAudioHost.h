@@ -52,6 +52,9 @@ public:
     }
     void simLine(const std::string& opId, int line, const core::Vec3& listener) { if (audio_) ambient_.hostedScript().simLine(opId, line, cues_, listener); }
     void simEnd(const std::string& opId) { if (audio_) ambient_.hostedScript().simEnd(opId, cues_); }
+    void simTimeline(const std::string& opId, float from, float to, const core::Vec3& listener) {
+        if (audio_) ambient_.hostedScript().simTimeline(opId, from, to, cues_, listener);
+    }
     int event(const std::string& trigger, const core::Vec3& listener) {
         return audio_ ? ambient_.fireEvent(trigger, cues_, listener) : 0;
     }

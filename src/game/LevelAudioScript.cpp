@@ -346,6 +346,23 @@ void LevelAudioScript::simLine(const std::string& opId, int line, SoundCues& cue
     if (logOn()) LOG_INFO("LEVELAUDIO %s sim line %d %s (instance %d)", op.id.c_str(), line, ln.cue.c_str(), op.lineInst);
 }
 
+void LevelAudioScript::simTimeline(const std::string& opId, float from, float to, SoundCues& cues, const core::Vec3& listener) {
+    auto it = opById_.find(opId);
+    if (it == opById_.end()) return;
+    Op& tl = ops_[(size_t)it->second];
+    if (tl.type != Type::Timeline) return;
+    tl.playing = false;   // the matinee's clock is Gameplay's: this op's own clock stays stopped
+    if (!(to > from) && !(from == to && to == 0.0f)) return;   // forward only
+    for (const SoundKey& k : tl.soundKeys)
+        if ((k.time > from && k.time <= to) || (from == to && k.time == 0.0f)) {
+            ++keysFired_;
+            const core::Vec3 at = actorPos(k.actor, listener);
+            const int inst = cues.play(k.cue.c_str(), at, core::length(at - listener));
+            if (inst >= 0) { ++oneShots_; if (k.actor >= 0) sounds_.push_back({k.actor, k.cue, inst, false}); }
+            if (logOn()) LOG_INFO("LEVELAUDIO %s matinee sound key %.3f %s on %d -> %d", tl.id.c_str(), k.time, k.cue.c_str(), k.actor, inst);
+        }
+}
+
 void LevelAudioScript::simEnd(const std::string& opId, SoundCues& cues) {
     auto it = opById_.find(opId);
     if (it == opById_.end()) return;

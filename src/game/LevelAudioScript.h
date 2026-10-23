@@ -105,6 +105,10 @@ public:
     // playback-timed progression is off from the first simLine on. No outputs are made (the sim fires them).
     void simLine(const std::string& opId, int line, SoundCues& cues, const core::Vec3& listener);
     void simEnd(const std::string& opId, SoundCues& cues);
+    // SIM-TIMED matinee (campaign; Gameplay's SeqAct_Interp playback, WorldCampaignMatinee): the matinee moved from `from` to `to`
+    // (seconds): its InterpTrackSound keys crossed going FORWARD play at their group actor [HIGH, stock UE3: sound keys forward only];
+    // a key at 0 plays on the start evaluation (from == to == 0). Event keys are Gameplay's (they fire the op's outputs).
+    void simTimeline(const std::string& opId, float from, float to, SoundCues& cues, const core::Vec3& listener);
     // `pawn` = the local player's pawn origin (touch volumes, "player" sources); `pawnAlive` false = no / dead pawn.
     void tick(float dt, const core::Vec3& listener, SoundCues& cues, MusicPlayer* music,
               const core::Vec3* pawn = nullptr, bool pawnAlive = true);

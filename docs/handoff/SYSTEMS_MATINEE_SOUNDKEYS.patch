@@ -1,0 +1,80 @@
+diff -ruN a/src/game/LevelAudioHost.h b/src/game/LevelAudioHost.h
+--- a/src/game/LevelAudioHost.h	2026-10-23 08:39:58.284443700 -0500
++++ b/src/game/LevelAudioHost.h	2026-10-23 08:39:58.298993500 -0500
+@@ -52,6 +52,9 @@
+     }
+     void simLine(const std::string& opId, int line, const core::Vec3& listener) { if (audio_) ambient_.hostedScript().simLine(opId, line, cues_, listener); }
+     void simEnd(const std::string& opId) { if (audio_) ambient_.hostedScript().simEnd(opId, cues_); }
++    void simTimeline(const std::string& opId, float from, float to, const core::Vec3& listener) {
++        if (audio_) ambient_.hostedScript().simTimeline(opId, from, to, cues_, listener);
++    }
+     int event(const std::string& trigger, const core::Vec3& listener) {
+         return audio_ ? ambient_.fireEvent(trigger, cues_, listener) : 0;
+     }
+diff -ruN a/src/game/LevelAudioScript.cpp b/src/game/LevelAudioScript.cpp
+--- a/src/game/LevelAudioScript.cpp	2026-10-23 08:39:58.391811700 -0500
++++ b/src/game/LevelAudioScript.cpp	2026-10-23 08:39:58.405859800 -0500
+@@ -346,6 +346,23 @@
+     if (logOn()) LOG_INFO("LEVELAUDIO %s sim line %d %s (instance %d)", op.id.c_str(), line, ln.cue.c_str(), op.lineInst);
+ }
+ 
++void LevelAudioScript::simTimeline(const std::string& opId, float from, float to, SoundCues& cues, const core::Vec3& listener) {
++    auto it = opById_.find(opId);
++    if (it == opById_.end()) return;
++    Op& tl = ops_[(size_t)it->second];
++    if (tl.type != Type::Timeline) return;
++    tl.playing = false;   // the matinee's clock is Gameplay's: this op's own clock stays stopped
++    if (!(to > from) && !(from == to && to == 0.0f)) return;   // forward only
++    for (const SoundKey& k : tl.soundKeys)
++        if ((k.time > from && k.time <= to) || (from == to && k.time == 0.0f)) {
++            ++keysFired_;
++            const core::Vec3 at = actorPos(k.actor, listener);
++            const int inst = cues.play(k.cue.c_str(), at, core::length(at - listener));
++            if (inst >= 0) { ++oneShots_; if (k.actor >= 0) sounds_.push_back({k.actor, k.cue, inst, false}); }
++            if (logOn()) LOG_INFO("LEVELAUDIO %s matinee sound key %.3f %s on %d -> %d", tl.id.c_str(), k.time, k.cue.c_str(), k.actor, inst);
++        }
++}
++
+ void LevelAudioScript::simEnd(const std::string& opId, SoundCues& cues) {
+     auto it = opById_.find(opId);
+     if (it == opById_.end()) return;
+diff -ruN a/src/game/LevelAudioScript.h b/src/game/LevelAudioScript.h
+--- a/src/game/LevelAudioScript.h	2026-10-23 08:39:58.497173400 -0500
++++ b/src/game/LevelAudioScript.h	2026-10-23 08:39:58.511220800 -0500
+@@ -105,6 +105,10 @@
+     // playback-timed progression is off from the first simLine on. No outputs are made (the sim fires them).
+     void simLine(const std::string& opId, int line, SoundCues& cues, const core::Vec3& listener);
+     void simEnd(const std::string& opId, SoundCues& cues);
++    // SIM-TIMED matinee (campaign; Gameplay's SeqAct_Interp playback, WorldCampaignMatinee): the matinee moved from `from` to `to`
++    // (seconds): its InterpTrackSound keys crossed going FORWARD play at their group actor [HIGH, stock UE3: sound keys forward only];
++    // a key at 0 plays on the start evaluation (from == to == 0). Event keys are Gameplay's (they fire the op's outputs).
++    void simTimeline(const std::string& opId, float from, float to, SoundCues& cues, const core::Vec3& listener);
+     // `pawn` = the local player's pawn origin (touch volumes, "player" sources); `pawnAlive` false = no / dead pawn.
+     void tick(float dt, const core::Vec3& listener, SoundCues& cues, MusicPlayer* music,
+               const core::Vec3* pawn = nullptr, bool pawnAlive = true);
+diff -ruN a/src/game/WorldCampaign.cpp b/src/game/WorldCampaign.cpp
+--- a/src/game/WorldCampaign.cpp	2026-10-23 08:40:00.887363900 -0500
++++ b/src/game/WorldCampaign.cpp	2026-10-23 08:40:00.903418500 -0500
+@@ -422,9 +422,9 @@
+ int World::cpAudioActivate(KismetVM& vm, int op, int input) {
+     if ((size_t)op >= cp_.audioId.size() || cp_.audioId[(size_t)op].empty()) return 0;
+     KismetVM::Op& o = vm.op(op);
++    if (o.cls == "SeqAct_Interp") return 0;   // Gameplay's matinee: its sound keys come from cpMatineeApply (simTimeline)
+     const auto r = levelAudio_.hostedInput(cp_.audioId[(size_t)op], input, listenerPos_);
+     if (r == LevelAudioScript::Hosted::Unknown) return 0;
+-    if (o.cls == "SeqAct_Interp") return 0;   // its sounds / event keys only: the matinee itself stays Gameplay's (held latent)
+     if (r == LevelAudioScript::Hosted::Immediate) return 1;
+     if (o.cls == "SeqAct_Conversation" || o.cls == "SeqAct_PlayDialog") o.latent = true;   // until Finished / Stopped
+     return 2;
+diff -ruN a/src/game/WorldCampaignMatinee.cpp b/src/game/WorldCampaignMatinee.cpp
+--- a/src/game/WorldCampaignMatinee.cpp	2026-10-23 08:40:00.996738500 -0500
++++ b/src/game/WorldCampaignMatinee.cpp	2026-10-23 08:40:01.012292200 -0500
+@@ -254,6 +254,8 @@
+ void World::cpMatineeApply(CampaignState::Interp& in, float from, float to) {
+     const CampaignMatinee& M = cp_.matinees[(size_t)in.matinee];
+     const float lo = std::min(from, to), hi = std::max(from, to);
++    // [Systems] its InterpTrackSound keys (the chapter audio's timeline op of this SeqAct_Interp): forward crossings play
++    if ((size_t)in.op < cp_.audioId.size() && !cp_.audioId[(size_t)in.op].empty()) levelAudio_.simTimeline(cp_.audioId[(size_t)in.op], from, to, listenerPos_);
+     std::string camGroup;
+     float fade = 0.0f; bool haveFade = false;
+     for (const CampaignMatinee::Group& g : M.groups) {

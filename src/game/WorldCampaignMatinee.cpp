@@ -254,6 +254,8 @@ void World::cpTickMatinees(float dt) {
 void World::cpMatineeApply(CampaignState::Interp& in, float from, float to) {
     const CampaignMatinee& M = cp_.matinees[(size_t)in.matinee];
     const float lo = std::min(from, to), hi = std::max(from, to);
+    // [Systems] its InterpTrackSound keys (the chapter audio's timeline op of this SeqAct_Interp): forward crossings play
+    if ((size_t)in.op < cp_.audioId.size() && !cp_.audioId[(size_t)in.op].empty()) levelAudio_.simTimeline(cp_.audioId[(size_t)in.op], from, to, listenerPos_);
     std::string camGroup;
     float fade = 0.0f; bool haveFade = false;
     for (const CampaignMatinee::Group& g : M.groups) {

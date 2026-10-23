@@ -422,9 +422,9 @@ void World::campaignMovieEnded(int serial) {
 int World::cpAudioActivate(KismetVM& vm, int op, int input) {
     if ((size_t)op >= cp_.audioId.size() || cp_.audioId[(size_t)op].empty()) return 0;
     KismetVM::Op& o = vm.op(op);
+    if (o.cls == "SeqAct_Interp") return 0;   // Gameplay's matinee: its sound keys come from cpMatineeApply (simTimeline)
     const auto r = levelAudio_.hostedInput(cp_.audioId[(size_t)op], input, listenerPos_);
     if (r == LevelAudioScript::Hosted::Unknown) return 0;
-    if (o.cls == "SeqAct_Interp") return 0;   // its sounds / event keys only: the matinee itself stays Gameplay's (held latent)
     if (r == LevelAudioScript::Hosted::Immediate) return 1;
     if (o.cls == "SeqAct_Conversation" || o.cls == "SeqAct_PlayDialog") o.latent = true;   // until Finished / Stopped
     return 2;
