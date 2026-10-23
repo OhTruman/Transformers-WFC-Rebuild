@@ -916,10 +916,9 @@ void FrontendRuntime::updateProgression() {
         // ORIGINAL: CanGainXp = !IsPrivateGame() (private matches award no XP / challenge progress). PC ADAPTATION:
         // offline private matches (the only kind here, with bots) earn progression; WFC_ORIGINAL_XP_RULE=1 keeps the
         // original rule.
-        canGainXp_ = !std::getenv("WFC_ORIGINAL_XP_RULE") || flow_.lobby().playlistId >= 0;
-        // Online: the original rule - public games (Quick Match playlists, the voting lobby) earn XP, private ones do not (D8)
-        // [RE VERSUS_END_OF_MATCH_CHECK: CanGainXp = !IsPrivateGame].
-        if (flow_.sessionRole() != GameFlow::SessionRole::Offline) canGainXp_ = flow_.lobby().playlistId >= 0 || flow_.mapVote().round > 0;
+        // The launch URL carries the host's decision (?WfcCanGainXp, GameFlow::canGainXp), so every peer agrees with
+        // Gameplay's MVP award; a URL without it (old hosts) falls back to the local rule.
+        canGainXp_ = flow_.currentMatch().url.intOption("WfcCanGainXp", flow_.canGainXp() ? 1 : 0) != 0;
         FlowTrace::emit("progression.match", {{"begin", "1"}, {"canGainXp", FlowTrace::boolean(canGainXp_)},
                                               {"rule", std::getenv("WFC_ORIGINAL_XP_RULE") ? "original" : "PC ADAPTATION offline XP"}});
     } else if (progressionLevel_ == LevelKind::Match) {

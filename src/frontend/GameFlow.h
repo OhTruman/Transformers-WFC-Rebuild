@@ -334,6 +334,8 @@ public:
     // Public matches (ONLINE_LOBBY_FLOW_V2 4, user: no server list): Quick Match = the original Find Match playlist choice;
     // online it searches the mode's best-ping match (a gathering lobby or a match with open seats), else hosts one.
     bool quickMatch(int playlistId);
+    // GRI.CanGainXp for the next match (the launch URL's ?WfcCanGainXp: Gameplay's MVP award and the frontend's progression).
+    bool canGainXp() const;
     // The public lobby's map vote (ONLINE_LOBBY_FLOW_V2 4.1, PC ADAPTATION of the original veto; the user chose Halo Reach's
     // style): 3 options from the playlist's maps + None of these (round 1), live tallies, one changeable vote per human.
     struct MapVote { std::vector<int> maps, counts; int round = 0; bool open = false; int winner = -1; };

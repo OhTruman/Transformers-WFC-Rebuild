@@ -20,6 +20,7 @@ PlatformPC=PC
 PlatformWeb=Web
 WaitingForPlayers=Waiting for `n players
 WaitingForOnePlayer=Waiting for `n player
+CatchingUp=Joining the match in progress... `p%
 HostMigrated=The host left. `k is now the host.
 Resync=Resynchronising...
 [FirstRun]

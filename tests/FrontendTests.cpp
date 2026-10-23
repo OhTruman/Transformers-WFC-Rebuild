@@ -1854,6 +1854,35 @@ static void testLobbyFlowV2() {
               std::to_string(hosted) + std::to_string(opened) + std::to_string(tallied) + std::to_string(published) + std::to_string(rerolled) +
               std::to_string(closed) + std::to_string(memberIn) + std::to_string(cast) + std::to_string(memberStart));
     }
+    // LV8: join in progress (public games, once the session supports it): MatchInProgress -> joinRunningMatch ->
+    // CountdownStarted{lateJoin} -> straight to the match map (no lobby countdown); CatchUpProgress fills the loading text.
+    // Without session support (today): D6, wait in the lobby.
+    {
+        using T = SessionEvent::Type;
+        SessionLobby l; l.gameModeTag = "TDM"; l.mapId = 508; l.voteMaps = {508, 501, 503}; l.voteCounts = {0, 0, 0, 0}; l.voteRound = 1;
+        l.matchRunning = true;
+        SessionEvent mip = ev(T::MatchInProgress); mip.lobby = l; mip.member.fingerprint = "WFC-SELF-SELF-9";
+        OnlineRig d6({after("join", mip)});
+        d6.f().call("Online.JoinGame", {"7QK2M-9TDAB"});
+        const bool waits = runUntil(*d6.rt, [&] { return d6.f().level() == LevelKind::GameLobby && !d6.f().loading().active; }) &&
+                           d6.f().matchInProgressForMember() && d6.fake->count("joinRunningMatch") == 0;
+        SessionEvent late = ev(T::CountdownStarted); late.lateJoin = true; late.seed = 42u;
+        late.launchUrl = "MP_IAC_Streets_Base_m?GameModeTag=TDM?GameTeamStatus=3?MapId=508?listen";
+        SessionSlot hs; hs.kind = SessionSlot::Kind::Human; hs.member.fingerprint = "WFC-HOST-HOST-1"; hs.team = 0;
+        SessionSlot me; me.kind = SessionSlot::Kind::Human; me.member.fingerprint = "WFC-SELF-SELF-9"; me.team = 1;
+        late.lobby = l; late.lobby.slots = {hs, me};
+        SessionEvent cu = ev(T::CatchUpProgress); cu.catchUpTick = 300; cu.catchUpTarget = 600;
+        OnlineRig r({after("join", mip), after("joinRunningMatch", late), after("reportLoaded", cu, 0.2)});
+        r.fake->lateJoin = true;
+        r.f().call("Online.JoinGame", {"7QK2M-9TDAB"});
+        const bool asked = runUntil(*r.rt, [&] { return r.fake->count("joinRunningMatch") == 1; });
+        const bool loading = runUntil(*r.rt, [&] { return r.f().loading().active && r.f().loading().kind == "Map"; }) &&
+                             !r.f().lobby().countingDown && r.f().currentMatch().seed == 42u && r.f().currentMatch().teamIndex == 1;
+        r.f().matchLoaded();   // the Application loads the world; the replay (CatchUpProgress) runs under the load gate
+        const bool progress = runUntil(*r.rt, [&] { return r.f().loading().message.find("50") != std::string::npos; });
+        check(d6.ok && waits && r.ok && asked && loading && progress, "lobby.LV8_join_in_progress",
+              std::to_string(waits) + std::to_string(asked) + std::to_string(loading) + std::to_string(progress));
+    }
     // LV4: a member cannot change the mode
     {
         OnlineRig r;

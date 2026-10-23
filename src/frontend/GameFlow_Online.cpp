@@ -524,7 +524,14 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
         if (onlinePending_ == OnlinePending::Searching) { onlinePending_ = OnlinePending::Joining; closePopup(); }
         selfId_ = e.member;
         enterMemberLobby(e.lobby);
-        if (e.type == T::MatchInProgress) memberLobby_.matchRunning = true;
+        if (e.type == T::MatchInProgress) {
+            memberLobby_.matchRunning = true;   // D6: wait in the lobby for the next match ...
+            const bool publicGame = memberLobby_.voteRound > 0 || lobby_.playlistId >= 0;
+            if (publicGame && session_->supportsLateJoin()) {   // ... unless the game is public and the session can join it now
+                session_->joinRunningMatch();
+                FlowTrace::emit("online.lateJoin", {{"state", "requested"}});
+            }
+        }
         break;
     case T::JoinFailed:
         if (onlinePending_ == OnlinePending::Joining) onlineJoinFailed(e.joinFailure);
@@ -593,10 +600,30 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
         if (onlinePending_ == OnlinePending::Searching) { onlinePending_ = OnlinePending::None; closePopup(); lobby_.playlistId = -1; }
         FlowTrace::emit("online.quickMatch", {{"state", "cancelled"}});
         break;
+    case T::CatchUpProgress:   // the late joiner replays the match so far: the loading screen shows how far
+        if (loading_.active && e.catchUpTarget > 0) {
+            const int pct = std::clamp(e.catchUpTick * 100 / e.catchUpTarget, 0, 100);
+            std::string t = txt("$WfcPC.Online.CatchingUp");
+            const size_t at = t.find("`p");
+            if (at != std::string::npos) t.replace(at, 2, std::to_string(pct));
+            loading_.message = t;
+        }
+        break;
     case T::MemberVoice:
         voiceStates_[e.member.fingerprint] = VoiceState{e.headsetState, e.voiceVia};
         break;
     case T::CountdownStarted:   // member: the host started the game - the same lobby exit countdown here
+        if (role_ == SessionRole::Member && e.lateJoin && level_ == LevelKind::GameLobby) {   // join in progress: straight in
+            memberLaunchUrl_ = e.launchUrl;
+            launchSeed_ = e.seed;
+            if (!e.lobby.slots.empty()) { memberLobby_.slots = e.lobby.slots; memberLobby_.members = e.lobby.members; launchLobby_ = e.lobby; }
+            memberLobby_.matchRunning = false;
+            const int map = Url::parse(e.launchUrl).intOption("MapId", -1);
+            if (map >= 0 && map != lobby_.mapId) setMapId(map);
+            FlowTrace::emit("online.lateJoin", {{"state", "launch"}, {"map", std::to_string(map)}});
+            startLevel();   // no lobby countdown: the match is already running (the original spawns the joiner at once)
+            break;
+        }
         if (role_ == SessionRole::Member) {   // the host's launch record (map, options, seed, roster) for StartLevel
             memberLaunchUrl_ = e.launchUrl;
             launchSeed_ = e.seed;
