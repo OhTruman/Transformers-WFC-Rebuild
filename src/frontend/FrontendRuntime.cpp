@@ -122,6 +122,31 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
             ++pos_;
             continue;
         }
+        // pressuntil:<UI action>,<UI state>: press the action every 2 s until the UI state is reached (at most 20 presses) - a
+        // menu that is still building its contents (CharacterSelect's wheel on a slow load) ignores an early press
+        if (st.rfind("pressuntil:", 0) == 0) {
+            const std::vector<std::string> p = split(st.substr(11), ',');
+            const std::string action = p.empty() ? std::string() : p[0], until = p.size() > 1 ? p[1] : std::string();
+            if (uiStateName(flow.ui().state()) == until || pressCount_ >= 20) {
+                FlowTrace::emit("script.pressUntil", {{"action", action}, {"until", until}, {"presses", std::to_string(pressCount_)},
+                                                      {"reached", FlowTrace::boolean(uiStateName(flow.ui().state()) == until)}});
+                pressCount_ = 0; pressTimer_ = 0.0f;
+                ++pos_;
+                continue;
+            }
+            if ((pressTimer_ -= dt) > 0.0f) return;
+            for (int k = 0; k < (int)platform::UiKey::Count; ++k)
+                if (action == platform::UiBindings::actionName((platform::UiKey)k)) {
+                    pressTimer_ = 2.0f;
+                    ++pressCount_;
+                    queuePress(1u << k);
+                    synth_ = synthQueue_.front(); synthQueue_.erase(synthQueue_.begin());
+                    return;
+                }
+            LOG_WARN("FRONTEND script: unknown UI action in '%s'", st.c_str());
+            ++pos_;
+            continue;
+        }
         ++pos_;
         if (st.rfind("call:", 0) == 0) {
             std::vector<std::string> p = split(st.substr(5), ',');

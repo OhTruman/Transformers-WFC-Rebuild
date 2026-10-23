@@ -128,6 +128,8 @@ private:
     std::vector<std::string> steps_;
     size_t pos_ = 0;
     float waitTimer_ = 0.0f;
+    float pressTimer_ = 0.0f;   // pressuntil: seconds to the next press
+    int pressCount_ = 0;        // pressuntil: presses so far (at most 20)
     int keyUp_ = -1;
     std::string padUp_;
 };
