@@ -3936,3 +3936,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 08:44 BROAD PASS #1 (Experimental, d3c3e1af): TDM 20 / 20, campaign D5 + A1 4 / 4, harnesses + net rows all PASS; one
   finding: Remnant Escalation on the cell nav default = 0 kills (team bots strand) -> DECISION ESCNAV default back OFF
   (Gameplay's next patch) until the team-bot coverage is solved.
+2026-10-23 08:50 MERGED 7545f3b1 campaign runtime 9 (A1 BLACK FIXED: Switch IncrementAmount 1 + GameplayStarted filtered by the active
+  checkpoint; cinematic mode; A1's opening plays headless: establishing shot 12 s -> lift ride 21 s -> control; destructibles
+  D5 batteries + A1 1,040) + ESCNAV default OFF. Rendering: A1 not a render fault; the 16 s gap = RT load phases + a decal
+  grid rebuilt 47x (fixed, patch pending); DECISION: stream units at Started (load / unload render data at runtime) to cut
+  A1's 142 s / 17.6 GB. x51 done; eye-pass verdict pending.
