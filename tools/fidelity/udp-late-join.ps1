@@ -1,6 +1,6 @@
 # Late-join arm (Experimental 2026-10-23): host (WFC_UDPHOST, 2 seats + WFC_UDPRESERVE=1), an on-time member, and a member that joins
 # while the match runs (WFC_UDPLATEJOIN=1) after -LateAfter s; direct loopback (no shim); hash every tick; kills only its own PIDs.
-param([Parameter(Mandatory)][string]$Bin, [Parameter(Mandatory)][string]$Out, [int]$Seconds = 90, [int]$LateAfter = 25, [string]$Map = 'MP_IAC_Streets')
+param([Parameter(Mandatory)][string]$Bin, [Parameter(Mandatory)][string]$Out, [int]$Seconds = 90, [int]$LateAfter = 25, [string]$Map = 'MP_IAC_Streets', [int]$LoadDelayMs = 0)   # -LoadDelayMs: WFC_LOADDELAY_MS on the joiner (8d7c0cab+: a blocking load that long, the late-join load window)
 if (Test-Path $Out) { Remove-Item -Recurse -Force $Out }; New-Item -ItemType Directory -Force $Out | Out-Null
 $procs = @{}
 function Start-Peer($role, $extra) {
@@ -19,7 +19,8 @@ Start-Peer 'host' @{ WFC_UDPHOST = '14300'; WFC_UDPSEATS = '2'; WFC_UDPRESERVE =
 Start-Sleep -Milliseconds 500
 Start-Peer 'member' @{ WFC_UDPJOIN = '127.0.0.1:14300'; WFC_UDPBIND = '14301' }
 Start-Sleep -Seconds $LateAfter
-Start-Peer 'late' @{ WFC_UDPJOIN = '127.0.0.1:14300'; WFC_UDPBIND = '14302'; WFC_UDPLATEJOIN = '1' }
+$lateEnv = @{ WFC_UDPJOIN = '127.0.0.1:14300'; WFC_UDPBIND = '14302'; WFC_UDPLATEJOIN = '1' }; if ($LoadDelayMs -gt 0) { $lateEnv['WFC_LOADDELAY_MS'] = "$LoadDelayMs" }
+Start-Peer 'late' $lateEnv
 foreach ($r in 'host', 'member', 'late') { if (-not $procs[$r].WaitForExit(($Seconds + 240) * 1000)) { Stop-Process -Id $procs[$r].Id -Force; Write-Host "  $r TIMEOUT (killed PID $($procs[$r].Id))" } }
 foreach ($r in 'host', 'member', 'late') {
     $log = Join-Path $Out "$r\wfc.log"
