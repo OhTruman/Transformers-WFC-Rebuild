@@ -3802,3 +3802,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   ESC nav v3 typed links. Card: Frontend pt9 on the diag head (fresh exe verified).
 2026-10-23 06:22 overlay_20261023g FROZEN (f + Streets revertA; only Streets collision differs) = the shipping set. AssetTools queue:
   A1 rerun (mid-chapter) -> ESC nav v3 typed links -> unit-relative texture path post-pass (D5 + A1) -> Kismet I/O export.
+2026-10-23 06:26 pt9 (fresh exe on d0d5a3c7+): the two-window join in progress WORKS on the network (120 s window applied; caught up
+  1514, woke 1529, live 1559, in sync to the end). Remaining: no spawn: the joiner's Choose Character was stamped for tick 1
+  before its seat woke (Systems: hold + restamp at activation) and the flow treated it as pre-match (Frontend). Then the
+  internal package. RE: Kismet VM review K1-K6 (to Gameplay); horde armour / backpack rules C.
