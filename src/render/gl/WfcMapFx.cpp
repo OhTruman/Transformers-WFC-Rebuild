@@ -1193,10 +1193,11 @@ void Pipeline::tickMapFx(float frameDt) {
                     const float inc = 1.0f / rate[0];
                     const float spawnTime = std::max(0.0f, dt - (1.0f - oldLeftover) * inc - (float)s * inc);
                     if (spawnTime > 0.0f) {
-                        if (q.oneOverLife > 0.0f) q.relTime = std::min(0.999f, q.relTime + spawnTime * q.oneOverLife);
+                        if (q.oneOverLife > 0.0f) q.relTime += spawnTime * q.oneOverLife;
                         for (int c = 0; c < 3; ++c) q.pos[c] += q.vel[c] * spawnTime;
                     }
                 }
+                if (q.oneOverLife > 0.0f && q.relTime >= 1.0f) continue;   // born and dead within the step (UE3 kills RelativeTime > 1)
                 rt.parts.push_back(q);
             }
         }
