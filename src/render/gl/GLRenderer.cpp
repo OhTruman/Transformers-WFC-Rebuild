@@ -1231,7 +1231,7 @@ public:
                 std::vector<std::string> units;
                 std::stringstream ss(cu);
                 for (std::string u; std::getline(ss, u, ',');) if (!u.empty() && u != mapName) units.push_back(u);
-                loadChapterUnits(units);
+                loadChapterUnits(wfc::Pipeline::renderDataRoot() + "/", units);
             }
         }
         return ok;
@@ -1655,14 +1655,16 @@ public:
     // (campaign chapters, stage 1) the chapter's other units merged into the loaded Pipeline; their world.glb uploaded here
     std::vector<MeshHandle> chapterMeshes_;
     int chapterFrame_ = -1;
-    int loadChapterUnits(const std::vector<std::string>& units) override {
+    int loadChapterUnits(const std::string& chapterDir, const std::vector<std::string>& units) override {
+        std::string cd = chapterDir;
+        while (!cd.empty() && (cd.back() == '/' || cd.back() == '\\')) cd.pop_back();
         if (!wfc_.active()) return 0;
         int n = 0;
         for (const std::string& u : units) {
-            if (!wfc_.loadSublevel(u)) continue;
+            if (!wfc_.loadSublevel(cd + "/" + u)) continue;
             ++n;
             MeshData w;
-            if (assets::loadGlb(wfc::Pipeline::renderDataRoot() + "/" + u + "/world.glb", w)) {
+            if (assets::loadGlb(cd + "/" + u + "/world.glb", w)) {
                 const MeshHandle h = uploadMesh(w);
                 if (h != kInvalidMesh) chapterMeshes_.push_back(h);
             } else LOG_WARN("chapter: %s has no world.glb in its render data", u.c_str());

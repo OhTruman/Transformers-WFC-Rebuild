@@ -239,7 +239,8 @@ public:
     // (campaign chapters, stage 1: docs/handoff/RENDERING_CHAPTER_LOADER.md) after loadMapRenderData(persistent level): merge
     // the chapter's other units (<render root>/<unit>/, the sublevel URL names) and draw their world.glb with the game's world
     // mesh. Static: everything stays loaded until unloadMapRenderData. Returns the number of units merged.
-    virtual int loadChapterUnits(const std::vector<std::string>& units) { (void)units; return 0; }
+    // chapterDir: <campaign root>/<chapter>/ (the units are read from there, never copied into the render data root)
+    virtual int loadChapterUnits(const std::string& chapterDir, const std::vector<std::string>& units) { (void)chapterDir; (void)units; return 0; }
     // Level travel: release every GPU resource of the loaded map render data (meshes, textures, programs, targets).
     // The renderer stays usable; a later loadMapRenderData() rebuilds everything for the next map.
     virtual void unloadMapRenderData() {}
