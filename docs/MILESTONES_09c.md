@@ -3960,3 +3960,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (Experimental) on d48f995d now. Gameplay -> pawn-group AnimControl, Omega AI, hit reactions, destructible collision.
 2026-10-23 09:03 build_slim ships all chapters + the outside assets (Systems): base estimate ~15 GB with 10 chapters deduped (today
   ~12 GB), HD optional pack brings it to ~37 GB.
+2026-10-23 09:04 AssetTools: unit lightmap copies removed for D5 + A1 (A1 3.3 GB -> 1.2 GB; only byte-identical files; the chain does the
+  same per chapter). Frontend: campaign run #2 started on 022ba748 (5 runs incl. an A1 Realistic X3-off arm).
