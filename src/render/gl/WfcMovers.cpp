@@ -421,11 +421,12 @@ void Pipeline::registerGlbActors(const std::string& glbPath) {
         const assets::Json& nd = N[i];
         const assets::Json& ex = nd["extras"];
         if (!ex["actor"].isString() || nd["matrix"].size() < 16) continue;
-        const std::string cls = ex["class"].asString();
-        if (cls != "InterpActor" && cls != "StaticMeshActor" && cls != "HmSkeletalMeshActor" && cls != "Emitter") continue;
+        // (any placed actor a matinee may move - TnTransformingWorldActor too: A1's lift; loadSceneActors' own class list is for
+        // the UI families, so the entry goes in as an InterpActor)
         assets::Json e;
         e.type = assets::Json::Type::Object;
-        e.obj["actor"] = ex["actor"]; e.obj["class"] = ex["class"]; e.obj["gltf_matrix"] = nd["matrix"];
+        assets::Json cls; cls.type = assets::Json::Type::String; cls.strVal = "InterpActor";
+        e.obj["actor"] = ex["actor"]; e.obj["class"] = cls; e.obj["gltf_matrix"] = nd["matrix"];
         list.arr.push_back(e);
     }
     if (list.arr.empty()) return;
