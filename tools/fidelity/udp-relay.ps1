@@ -2,7 +2,7 @@
 # (WFC_UDPHOST + WFC_UDPSERVICE) and a member that joins by the logged 6-letter code (WFC_UDPJOIN=<code>), with WFC_NET_DIRECT_DROP=1 on
 # both so they can only reach each other through the relay. Headless, loopback, hash every tick; kills only its own PIDs.
 param([Parameter(Mandatory)][string]$Bin, [Parameter(Mandatory)][string]$Out, [Parameter(Mandatory)][string]$Service, [int]$Seconds = 70,
-      [int]$SvcPort = 14510, [int]$Port = 14500, [string]$Map = 'MP_IAC_Streets')
+      [int]$SvcPort = 14510, [int]$Port = 14500, [string]$Map = 'MP_IAC_Streets', [string[]]$PkgEnv = @())
 $py = 'F:\Transformers Rebuild\AssetTools\bin\py\python.exe'
 if (Test-Path $Out) { Remove-Item -Recurse -Force $Out }; New-Item -ItemType Directory -Force $Out | Out-Null
 $svc = Start-Process -FilePath $py -ArgumentList @('-I', "`"$Service`"", '--bind', "127.0.0.1:$SvcPort", '--log', "`"$(Join-Path $Out 'service.log')`"") -PassThru -WindowStyle Hidden -RedirectStandardOutput (Join-Path $Out 'service.out') -RedirectStandardError (Join-Path $Out 'service.err')
@@ -16,6 +16,7 @@ function Start-Peer($role, $extra) {
             WFC_MATCH_URL = "$($Map)?GameModeTag=TDM?BotsFriendly=2?BotsEnemy=2?PointsToWin=1000"; WFC_NET_HASH_EVERY = '1'; WFC_NET_LOG = (Join-Path $dir 'net.csv');
             WFC_UDPSERVICE = "127.0.0.1:$SvcPort"; WFC_NET_DIRECT_DROP = '1' }
     foreach ($k in $extra.Keys) { $e[$k] = $extra[$k] }
+    foreach ($kv in $PkgEnv) { $kk, $vv = $kv -split '=', 2; $e[$kk] = $vv }   # -PkgEnv: a package's data roots etc., applied last
     foreach ($k in $e.Keys) { Set-Item "env:$k" $e[$k] }
     $p = Start-Process -FilePath (Join-Path $Bin 'wfc_rebuild.exe') -WorkingDirectory $dir -WindowStyle Hidden -PassThru; $null = $p.Handle
     Get-ChildItem env: | ? { $_.Name -like 'WFC_*' } | % { Remove-Item -LiteralPath "env:$($_.Name)" }; foreach ($k in $saved.Keys) { Set-Item "env:$k" $saved[$k] }

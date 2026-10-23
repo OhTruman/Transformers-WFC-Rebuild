@@ -1,6 +1,6 @@
 # Late-join arm (Experimental 2026-10-23): host (WFC_UDPHOST, 2 seats + WFC_UDPRESERVE=1), an on-time member, and a member that joins
 # while the match runs (WFC_UDPLATEJOIN=1) after -LateAfter s; direct loopback (no shim); hash every tick; kills only its own PIDs.
-param([Parameter(Mandatory)][string]$Bin, [Parameter(Mandatory)][string]$Out, [int]$Seconds = 90, [int]$LateAfter = 25, [string]$Map = 'MP_IAC_Streets', [int]$LoadDelayMs = 0)   # -LoadDelayMs: WFC_LOADDELAY_MS on the joiner (8d7c0cab+: a blocking load that long, the late-join load window)
+param([Parameter(Mandatory)][string]$Bin, [Parameter(Mandatory)][string]$Out, [int]$Seconds = 90, [int]$LateAfter = 25, [string]$Map = 'MP_IAC_Streets', [int]$LoadDelayMs = 0, [string[]]$LateEnv = @())   # -LateEnv 'WFC_X=1','WFC_Y=2': more env on the joiner (e.g. WFC_UDPPICK_EARLY=1)   # -LoadDelayMs: WFC_LOADDELAY_MS on the joiner (8d7c0cab+: a blocking load that long, the late-join load window, [string[]]$PkgEnv = @())
 if (Test-Path $Out) { Remove-Item -Recurse -Force $Out }; New-Item -ItemType Directory -Force $Out | Out-Null
 $procs = @{}
 function Start-Peer($role, $extra) {
@@ -10,6 +10,7 @@ function Start-Peer($role, $extra) {
             WFC_PLAYERBOT = '1'; WFC_MATCH_SECONDS = "$Seconds"; WFC_RENDER_DATA = 'F:/Transformers Rebuild/Rebuild/work/render';
             WFC_MATCH_URL = "$($Map)?GameModeTag=TDM?BotsFriendly=2?BotsEnemy=2?PointsToWin=1000"; WFC_NET_HASH_EVERY = '1'; WFC_NET_LOG = (Join-Path $dir 'net.csv') }
     foreach ($k in $extra.Keys) { $e[$k] = $extra[$k] }
+    foreach ($kv in $PkgEnv) { $kk, $vv = $kv -split '=', 2; $e[$kk] = $vv }   # -PkgEnv: a package's data roots etc., applied last
     foreach ($k in $e.Keys) { Set-Item "env:$k" $e[$k] }
     $p = Start-Process -FilePath (Join-Path $Bin 'wfc_rebuild.exe') -WorkingDirectory $dir -WindowStyle Hidden -PassThru; $null = $p.Handle
     Get-ChildItem env: | ? { $_.Name -like 'WFC_*' } | % { Remove-Item -LiteralPath "env:$($_.Name)" }; foreach ($k in $saved.Keys) { Set-Item "env:$k" $saved[$k] }
@@ -19,8 +20,8 @@ Start-Peer 'host' @{ WFC_UDPHOST = '14300'; WFC_UDPSEATS = '2'; WFC_UDPRESERVE =
 Start-Sleep -Milliseconds 500
 Start-Peer 'member' @{ WFC_UDPJOIN = '127.0.0.1:14300'; WFC_UDPBIND = '14301' }
 Start-Sleep -Seconds $LateAfter
-$lateEnv = @{ WFC_UDPJOIN = '127.0.0.1:14300'; WFC_UDPBIND = '14302'; WFC_UDPLATEJOIN = '1' }; if ($LoadDelayMs -gt 0) { $lateEnv['WFC_LOADDELAY_MS'] = "$LoadDelayMs" }
-Start-Peer 'late' $lateEnv
+$joinEnv = @{ WFC_UDPJOIN = '127.0.0.1:14300'; WFC_UDPBIND = '14302'; WFC_UDPLATEJOIN = '1' }; if ($LoadDelayMs -gt 0) { $joinEnv['WFC_LOADDELAY_MS'] = "$LoadDelayMs" }; foreach ($kv in $LateEnv) { $k, $v = $kv -split '=', 2; $joinEnv[$k] = $v }
+Start-Peer 'late' $joinEnv
 foreach ($r in 'host', 'member', 'late') { if (-not $procs[$r].WaitForExit(($Seconds + 240) * 1000)) { Stop-Process -Id $procs[$r].Id -Force; Write-Host "  $r TIMEOUT (killed PID $($procs[$r].Id))" } }
 foreach ($r in 'host', 'member', 'late') {
     $log = Join-Path $Out "$r\wfc.log"

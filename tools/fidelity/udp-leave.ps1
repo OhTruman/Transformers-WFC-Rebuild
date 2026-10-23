@@ -2,7 +2,7 @@
 # match: -Mode end = the leaver's WFC_MATCH_SECONDS ends early (its own "match ended, leave"); -Mode kill = its PID is killed at
 # -LeaveAt s after AllLoaded (a hard drop); -Mode switch = WFC_UDPLEAVE_AT (if the build has it). Direct loopback, hash every tick.
 param([Parameter(Mandatory)][string]$Bin, [Parameter(Mandatory)][string]$Out, [ValidateSet('end', 'kill', 'switch')][string]$Mode = 'end',
-      [int]$Seconds = 120, [int]$LeaveAt = 60, [string]$Map = 'MP_IAC_Streets', [int]$Port = 14400, [int]$Seats = 3, [switch]$Empty, [int]$Bots = 2)   # -Bots N = BotsFriendly / BotsEnemy (0 = humans only: a Forfeit needs a team with nobody, bots count)   # -Empty: WFC_UDPLEAVE_EMPTY=1 on every peer (empty seat + Forfeit; default since ae9bbb6e = a bot takes the slot)   # -Seats 2 = a 1v1 (host + leaver)
+      [int]$Seconds = 120, [int]$LeaveAt = 60, [string]$Map = 'MP_IAC_Streets', [int]$Port = 14400, [int]$Seats = 3, [switch]$Empty, [int]$Bots = 2)   # -Bots N = BotsFriendly / BotsEnemy (0 = humans only: a Forfeit needs a team with nobody, bots count)   # -Empty: WFC_UDPLEAVE_EMPTY=1 on every peer (empty seat + Forfeit; default since ae9bbb6e = a bot takes the slot)   # -Seats 2 = a 1v1 (host + leaver, [string[]]$PkgEnv = @())
 if (Test-Path $Out) { Remove-Item -Recurse -Force $Out }; New-Item -ItemType Directory -Force $Out | Out-Null
 $procs = @{}
 function Start-Peer($role, $extra) {
@@ -13,6 +13,7 @@ function Start-Peer($role, $extra) {
             WFC_MATCH_URL = "$($Map)?GameModeTag=TDM?BotsFriendly=$Bots?BotsEnemy=$Bots?PointsToWin=1000"; WFC_NET_HASH_EVERY = '1'; WFC_NET_LOG = (Join-Path $dir 'net.csv') }
     if ($Empty) { $e['WFC_UDPLEAVE_EMPTY'] = '1' }
     foreach ($k in $extra.Keys) { $e[$k] = $extra[$k] }
+    foreach ($kv in $PkgEnv) { $kk, $vv = $kv -split '=', 2; $e[$kk] = $vv }   # -PkgEnv: a package's data roots etc., applied last
     foreach ($k in $e.Keys) { Set-Item "env:$k" $e[$k] }
     $p = Start-Process -FilePath (Join-Path $Bin 'wfc_rebuild.exe') -WorkingDirectory $dir -WindowStyle Hidden -PassThru; $null = $p.Handle
     Get-ChildItem env: | ? { $_.Name -like 'WFC_*' } | % { Remove-Item -LiteralPath "env:$($_.Name)" }; foreach ($k in $saved.Keys) { Set-Item "env:$k" $saved[$k] }
