@@ -1,0 +1,59 @@
+diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-23 17:05:01.895802200 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 17:05:01.928413900 -0500
+@@ -4562,8 +4562,20 @@
+     // end of the opaque pass. It ran only inside the characters' flush, so frames without a queued character (none in view,
+     // none deferred) had no RT at all (Systems' a44aa6db package gate: R1 loaded, never composited).
+     if (dynQueue_.empty() && !flushingDyn_) {
+-        flushWeaponQueue();                              // (as the characters' flush: the weapons before the RT depth copy)
+-        if (rtDynBegin()) { glx::gpuStamp("RT: world only (no queued characters)"); rtDynMid(); rtDynEnd(); }
++        // (RT) the weapons in the dynamic depth pass and the shaded pass, as the bodies: drawn before the world depth copy
++        // the world composite took their pixels for world pixels - the world's RT sun / AO factor, 0 indoors: D5's held
++        // rifle a pure black silhouette in Realistic
++        std::vector<DynDraw> weapons;
++        weapons.swap(weaponQueue_);
++        if (rtDynBegin()) {
++            glx::gpuStamp("RT: world only (no queued characters)");
++            weaponQueue_ = weapons; flushWeaponQueue();   // depth only
++            rtDynMid();
++            weaponQueue_ = weapons; flushWeaponQueue();   // shaded with the RT mask + AO
++            rtDynEnd();
++        } else {
++            weaponQueue_.swap(weapons); flushWeaponQueue();
++        }
+     }
+     flushDynQueue();                                   // queued characters (their shadows + draws) before translucency
+     if (transQueue_.empty()) return;
+@@ -8025,8 +8037,10 @@
+ }
+ 
+ void Pipeline::flushDynQueue() {
+-    flushWeaponQueue();                                  // (the weapons were drawn before the queued bodies)
+-    if (dynQueue_.empty() || flushingDyn_) return;
++    if (dynQueue_.empty() || flushingDyn_) { flushWeaponQueue(); return; }
++    // (the weapons are drawn before the queued bodies; on the RT path inside its depth and shaded passes - see below)
++    std::vector<DynDraw> weapons;
++    weapons.swap(weaponQueue_);
+     flushingDyn_ = true;
+     // the caller's per-draw state around the flush (the flush may run inside another draw call's setup)
+     const SkinDraw* sk0 = skinDraw_; const int sm0 = skinMode_, sr0 = skinRow_, sb0 = skinBones_; const float sa0 = skinAlpha_;
+@@ -8182,14 +8196,19 @@
+         DeleteFramebuffers(1, &sFbo); glDeleteTextures(1, &sCol); glDeleteTextures(1, &sDep);
+     } else if (rtDynBegin()) {                          // M7 stage 1 (WFC_RT_SHADOWAO): RT shadows / AO replace the projectors
+         glx::gpuStamp("RT: dynamic depth");
++        weaponQueue_ = weapons; flushWeaponQueue();      // (the weapons after the world depth copy: dynamic pixels)
+         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); draw(d); }   // depth only (rtDepthOnly_: opaque + masked)
+         rtDynMid();
+         glx::gpuStamp("characters: queued draws");
++        weaponQueue_ = weapons; flushWeaponQueue();
+         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); draw(d); }   // shaded with the RT mask + AO
+         rtDynEnd();
++        weapons.clear();
+     } else {
++        weaponQueue_.swap(weapons); flushWeaponQueue();  // (no RT pass: before the bodies, as before)
+         run(incremental);
+     }
++    if (!weapons.empty()) { weaponQueue_.swap(weapons); flushWeaponQueue(); }   // (the shadow-order comparison branch)
+     dynQueue_.clear();
+     skinDraw_ = sk0; skinMode_ = sm0; skinRow_ = sr0; skinBones_ = sb0; skinAlpha_ = sa0;
+     poseBlend_ = pb0; poseAlpha_ = pa0; envSamples_ = es0; envForm_ = ef0; envBoundsCenter_ = ec0; envBoundsExtent_ = ee0;
