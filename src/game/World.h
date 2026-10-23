@@ -1475,6 +1475,8 @@ private:
     void cpOmegaFire(int target, float dmg, float radiusM, const char* type, float spread);
     void cpTickOmega(float dt);
     void cpTickAiUse();
+    bool cpTransformWorldProp(KismetVM& vm, int op, int input);
+    void cpTickTransformOps();
     bool cpShootAtPoint(int player, core::Vec3& out) const;
     bool cpAuxSpawn(const std::string& actor, int k, core::Vec3& out);
     void cpDrawDestructibles(render::IRenderer& r) const;

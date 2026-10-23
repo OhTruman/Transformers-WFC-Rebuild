@@ -294,6 +294,7 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
     }
     if (cpInteractActivate(vm, op, input)) return true;   // SeqAct_Toggle on interacts
     if (cpToggleDestructible(vm, op, input)) return true;
+    if (cpTransformWorldProp(vm, op, input)) return true;   // doors / pods
     if (cpOmegaActivate(vm, op, input)) return true;      // SetOmegaStage / CorruptOmegaBattery
     if (c == "SeqAct_TnPawnFactory") return cpPawnFactoryActivate(vm, op, input);
     if (cpInterpActivate(vm, op, input)) return true;   // SeqAct_Interp: Matinee
@@ -473,6 +474,7 @@ void World::tickCampaign(float dt) {
     cpTickDestructibles(dt);
     cpTickInteracts(dt);
     cpTickAiUse();
+    cpTickTransformOps();
     if (!cp_.gameOver) cpTickOmega(dt);
     // TnCampaignGame.Killed: a human killed by anything but DmgType_Suicided -> CampaignGameOver (solo: never downed).
     const auto& kh = match_.killHistory();

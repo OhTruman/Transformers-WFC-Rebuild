@@ -474,7 +474,13 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
         mapState_.registerCollision(collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr, pawnMovers, weaponMovers);
         {   // TnTransformingWorldActors (AssetTools mp_transforming_actors.json; the frontend's manifest root)
             const char* mr = std::getenv("WFC_FRONTEND_MANIFESTS");
-            transforming_.load(mapName_, mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests", collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
+            const std::string mroot = mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests";
+            if (campaignMap_) {   // a campaign chapter: AssetTools' <CH>/transforming_actors_gameplay.json
+                transforming_.loadChapter(cpChapter_.dir + "transforming_actors_gameplay.json", mroot + "/..", collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
+                LOG_INFO("campaign: %zu transforming world actors", transforming_.actors().size());
+                // drawn posed by TransformingActorsDraw: the bind-pose copies in the units' world.glb are hidden (Rendering 2026-10-23)
+                for (const TransformingActors::Actor& ta : transforming_.actors()) renderer.setActorHidden(ta.name, true);
+            } else transforming_.load(mapName_, mroot, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
             syncTransformingActorSounds();
         }
         {   // the VehicleDying body pool: unit boxes (+-1), scaled by the pose; disabled until used

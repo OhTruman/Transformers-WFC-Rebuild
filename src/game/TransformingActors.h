@@ -40,6 +40,8 @@ public:
         int desired = 0;                     // DesiredTransformState: 0 Untransformed, 1 Transformed
         int startDesired = 0;                // at match start (Rust: Transform from SeqEvent_SequenceActivated)
         bool hidden = false, collide = true, bridge = false;
+        bool startTransformed = false;       // campaign: the authored start state (initial_state Transformed)
+        core::Mat4 baseMatrix;               // the authored gltf_matrix (matrix = a matinee's translation x it)
         std::vector<Body> bodies;
         std::vector<Box> boxes;
         std::shared_ptr<const assets::SkinnedModel> model;
@@ -48,12 +50,21 @@ public:
     };
     // Loads this map's actors (none: an empty list, nothing changes) and adds their collision sets to pawn / weapon.
     bool load(const std::string& mapName, const std::string& manifestRoot, CollisionWorld& pawn, CollisionWorld* weapon);
+    // A campaign chapter's actors (every row of the file; glb paths relative to toolsRoot); they start in their authored state.
+    bool loadChapter(const std::string& path, const std::string& toolsRoot, CollisionWorld& pawn, CollisionWorld* weapon);
     void clear() { actors_.clear(); }
     // Kismet: TnSeqAct_TransformWorldProp Transform (1) / Untransform (0); SeqAct_ChangeCollision / ToggleHidden for the bridges.
     void setDesired(size_t i, int desired) { if (i < actors_.size()) actors_[i].desired = desired ? 1 : 0; }
     // Escalation generators: SeqAct_ToggleHidden (UnHide / Hide) and SeqAct_ChangeCollision on an actor (the bridges); re-posed next tick.
     void setShown(size_t i, bool shown) { if (i < actors_.size()) { actors_[i].hidden = !shown; actors_[i].posedT = -1.0f; } }
     void setCollide(size_t i, bool on) { if (i < actors_.size()) { actors_[i].collide = on; actors_[i].posedT = -1.0f; } }
+    // Campaign: a matinee Move track moves the actor (A1's lift pod): its matrix = translate(offset) x the authored one; re-posed next tick.
+    void setOffset(size_t i, const core::Vec3& d) {
+        if (i >= actors_.size()) return;
+        Actor& a = actors_[i];
+        a.matrix = core::Mat4::translate(d) * a.baseMatrix;
+        a.posedT = -1.0f;
+    }
     int find(const std::string& name) const { for (size_t i = 0; i < actors_.size(); ++i) if (actors_[i].name == name) return (int)i; return -1; }
     // Match start (a fresh level): the start states above, t at the start pose. escalation: the SV game type (not in the rebuild yet).
     void resetForNewMatch(CollisionWorld& pawn, CollisionWorld* weapon, bool escalation = false);
@@ -69,6 +80,8 @@ public:
 
 private:
     std::vector<Actor> actors_;
+    bool campaign_ = false;   // loaded by loadChapter: the authored start states, no versus door rule
+    bool loadFile(const std::string& path, const std::string& mapName, const std::string& toolsRoot, CollisionWorld& pawn, CollisionWorld* weapon);
     void pose(Actor& a, CollisionWorld& pawn, CollisionWorld* weapon);
     core::Mat4 boneWorld(const Actor& a, int node, float t) const;
 };

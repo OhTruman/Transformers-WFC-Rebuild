@@ -31,19 +31,28 @@ std::vector<core::Vec3> boxTris(const core::Mat4& local, const core::Vec3& h) {
 } // namespace
 
 bool TransformingActors::load(const std::string& mapName, const std::string& manifestRoot, CollisionWorld& pawn, CollisionWorld* weapon) {
+    campaign_ = false;
+    return loadFile(manifestRoot + "/maps/mp_transforming_actors.json", mapName, manifestRoot + "/..", pawn, weapon);
+}
+
+bool TransformingActors::loadChapter(const std::string& path, const std::string& toolsRoot, CollisionWorld& pawn, CollisionWorld* weapon) {
+    campaign_ = true;
+    return loadFile(path, std::string(), toolsRoot, pawn, weapon);
+}
+
+bool TransformingActors::loadFile(const std::string& path, const std::string& mapName, const std::string& toolsRoot, CollisionWorld& pawn, CollisionWorld* weapon) {
     actors_.clear();
-    const std::string path = manifestRoot + "/maps/mp_transforming_actors.json";
     std::ifstream f(path, std::ios::binary);
     if (!f) return false;
     std::stringstream ss; ss << f.rdbuf();
     assets::Json root;
     if (!assets::Json::parse(ss.str(), root)) { LOG_WARN("transforming actors: cannot parse %s", path.c_str()); return false; }
-    const std::string toolsRoot = manifestRoot + "/..";   // glb paths are AssetTools-relative ("manifests/maps/transforming_actors/...")
+    // glb paths are AssetTools-relative ("manifests/maps/transforming_actors/..."): toolsRoot
     std::map<std::string, std::shared_ptr<assets::SkinnedModel>> models;
     const assets::Json& acts = root["actors"];
     for (size_t i = 0; i < acts.size(); ++i) {
         const assets::Json& j = acts[i];
-        if (j["map"].asString() != mapName) continue;
+        if (!mapName.empty() && j["map"].asString() != mapName) continue;   // (a chapter file: every row)
         const std::string meshName = j["mesh"].asString();
         const assets::Json& m = root["meshes"][meshName];
         Actor a;
@@ -53,6 +62,8 @@ bool TransformingActors::load(const std::string& mapName, const std::string& man
         a.length = std::max(0.01f, m["clip_length_s"].asFloat(1.0f));
         a.matrix = matFrom(j["gltf_matrix"]);
         a.bridge = meshName.rfind("NEU_Bridge", 0) == 0;
+        a.startTransformed = j["start_transformed"].asBool(false) || j["initial_state"].asString() == "Transformed";
+        a.baseMatrix = a.matrix;
         // Level start: a Transform input fired directly by SeqEvent_SequenceActivated (Rust; the op's SeqCond_GameRuleActive inputs are
         // dead authoring, RE CONFIRMED) -> Transform at match start in every mode.
         const assets::Json& drivers = j["drivers"];
@@ -99,7 +110,7 @@ bool TransformingActors::load(const std::string& mapName, const std::string& man
 
 void TransformingActors::resetForNewMatch(CollisionWorld& pawn, CollisionWorld* weapon, bool escalation) {
     for (Actor& a : actors_) {
-        if (!escalation && a.startDesired == 0 && !a.bridge) {
+        if (!escalation && !campaign_ && a.startDesired == 0 && !a.bridge) {
             // Versus on the Escalation-only maps (BrokenHope / Remnant: CompatibleGameTypes SV, RE MP_TRANSFORMING_ACTORS_RE.md section 4):
             // no authored versus state. Integration decision 2026-10-17 (option c): the doors Transformed from the start (t = length, no
             // animation; the late-Escalation layout). The BrokenHope bridges keep their Escalation start state (retracted, hidden, no
@@ -109,8 +120,8 @@ void TransformingActors::resetForNewMatch(CollisionWorld& pawn, CollisionWorld* 
             pose(a, pawn, weapon);
             continue;
         }
-        a.t = 0.0f;                          // Escalation (and Rust in every mode): Untransformed at the start (bridges: PreGameplaySetup's Untransform)
-        a.desired = a.startDesired;          // Rust doors: Transform at level start
+        a.t = campaign_ && a.startTransformed ? a.length : 0.0f;   // Escalation (and Rust in every mode): Untransformed at the start (bridges: PreGameplaySetup's Untransform); campaign: authored
+        a.desired = campaign_ && a.startTransformed ? 1 : a.startDesired;   // Rust doors: Transform at level start
         a.hidden = a.bridge;                 // bridges: Hide + ChangeCollision NoCollision at setup
         a.collide = !a.bridge;
         a.posedT = -1.0f;

@@ -166,6 +166,8 @@ struct CampaignState {
     std::string interactPrompt;                // the local player's interact in reach (its class; empty = none)
     std::vector<uint8_t> interactHeldPrev;
     CampaignOmega omega;
+    std::vector<std::pair<int, std::vector<int>>> transformOps;   // TnSeqAct_TransformWorldProp waiting for Finished: op, actors
+    bool transformMoved = false;               // a matinee moved a transforming actor (nav blocks re-applied at rest)
     std::map<int, std::string> shootAt;        // SeqAct_TnAiShootAtActor: AI player -> its forced fire target
     std::map<int, std::string> aiUse;          // SeqAct_TnAiUseInteract: AI player -> the interact it goes to use
     std::map<std::string, std::vector<core::Vec3>> auxSpawns;   // checkpoint actor -> its AuxilliarySpawnPoints
