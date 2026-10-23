@@ -3626,3 +3626,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 01:48 CAMPAIGN_BOSSES_RE COMPLETE (every chapter). Gameplay: nothing missing on their side for the online human seat / HUD / names /
   spectating (two real-session peers, 150 s, verified) -> Escalation E1 now. Rendering: smoke views show no smoke (cameras hold
   none); the match arms need a 5-min relay (runner race fixed). Card -> Systems 01:55 -> Frontend pt4 (3 min) -> Rendering (5 min).
+2026-10-23 01:50 MERGED 36e5760b the map vote on screen (lobby v2 5b). #1 load times routed to Rendering: AnimSet pre-parse on a worker thread
+  from boot (preview bodies 270 / 190 ms, 601 ms cold) + resident frontend scenes (re-read on every travel). Playtest status:
+  only #1 (code), #3 visual, #18 (A) data, #10 / #13 check remain open; #7 / #2 runtime checks in the Frontend's next slot.
