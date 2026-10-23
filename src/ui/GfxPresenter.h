@@ -5,6 +5,7 @@
 #pragma once
 #include <chrono>
 #include <map>
+#include <set>
 #include <memory>
 #include <string>
 #include <vector>
@@ -90,6 +91,13 @@ private:
     bool glReady_ = false;
     struct Open { std::string object; std::unique_ptr<GfxMovie> movie; };
     std::vector<Open> movies_;              // flow-open movies in open order (last = focus)
+    // Every movie the flow has opened (the UI controller's screens: respawn, pause, end game ...). movieCall never opens
+    // a second copy of one as an extra - a copy outlives its state and every travel (user playtest 2026-10-23 #2: the
+    // respawn timer stuck after respawn and back to the main menu).
+    std::set<std::string> flowMovieNames_;
+    frontend::LevelKind lastLevel_ = frontend::LevelKind::None;
+    static bool isUiControllerMovie(const std::string& movie);
+    GfxMovie* openMovieNamed(const std::string& movie);
     const uint8_t* video_ = nullptr;
     int videoW_ = 0, videoH_ = 0;
     uint64_t videoSerial_ = 0;
@@ -114,7 +122,8 @@ private:
     struct Deferred { std::string movie, fn; gfx::avm1::Args args; };
     std::vector<Deferred> deferred_;
     int viewW_ = 1280, viewH_ = 720;          // last drawn window size (pointer -> stage mapping)
-    struct PendingCall { std::string movie, fn; std::vector<frontend::BridgeValue> args; bool advanced = false; };
+    // waitFrames: a flow movie the flow opened this frame is presented by the next syncMovies; the call waits that long
+    struct PendingCall { std::string movie, fn; std::vector<frontend::BridgeValue> args; bool advanced = false; int waitFrames = 0; };
     std::vector<PendingCall> pendingCalls_;   // movieCall: delivered after the movie's first frame
     int frameLimitShown_ = 0;
     // Graphics -> Recommended Settings: re-apply the auto-detect preset, then leave and re-enter the page (queued
