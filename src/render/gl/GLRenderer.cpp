@@ -12,6 +12,7 @@
 #include <random>
 #include <thread>
 #include <future>
+#include <list>
 #include <array>
 #include <windows.h>
 #endif
@@ -692,6 +693,8 @@ public:
 
     // ---- frontend scenes ----
     MeshHandle sceneMesh_ = kInvalidMesh;
+    static constexpr size_t kFrontendGlbKeep = 3;          // (playtest 2026-10-23 #1) parsed frontend world.glb kept, by scene
+    std::list<std::pair<std::string, MeshData>> frontendGlb_;
     std::string sceneDir_;
     bool loadFrontendScene(const std::vector<std::string>& levels) override {
         unloadFrontendScene();
@@ -718,11 +721,26 @@ public:
             LOG_ERROR("frontend scene: NO RENDER DATA (legacy presentation) for any of %zu levels", levels.size());
             return false;
         }
-        MeshData world;
+        // (playtest 2026-10-23 #1) the last kFrontendGlbKeep scenes' parsed world.glb stay in memory: returning to a screen skips
+        // the read (main menu: one 408k-vertex mesh, 524 ms cold); most recent first
         auto tw = std::chrono::steady_clock::now();
-        bool okWorld = assets::loadGlb(assets + "/Maps/" + dir + "/world.glb", world);
-        LOG_INFO("frontend scene %s: world.glb read %.0f ms", dir.c_str(),
+        bool okWorld = false, cachedWorld = false;
+        auto hit = std::find_if(frontendGlb_.begin(), frontendGlb_.end(), [&](const auto& e) { return e.first == dir; });
+        if (hit != frontendGlb_.end()) {
+            frontendGlb_.splice(frontendGlb_.begin(), frontendGlb_, hit);
+            okWorld = cachedWorld = true;
+        } else {
+            MeshData w;
+            okWorld = assets::loadGlb(assets + "/Maps/" + dir + "/world.glb", w);
+            if (okWorld) {
+                frontendGlb_.emplace_front(dir, std::move(w));
+                while (frontendGlb_.size() > kFrontendGlbKeep) frontendGlb_.pop_back();
+            }
+        }
+        LOG_INFO("frontend scene %s: world.glb %s %.0f ms", dir.c_str(), cachedWorld ? "kept" : "read",
                  std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tw).count());
+        static const MeshData kNoWorld;
+        const MeshData& world = okWorld ? frontendGlb_.front().second : kNoWorld;
         wfc_.yieldLoad();
         if (!okWorld) {
             LOG_WARN("frontend scene %s: world.glb missing", dir.c_str());
