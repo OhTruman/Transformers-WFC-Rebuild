@@ -135,6 +135,11 @@ def system_runtime(name, s):
                                 'spawn_rate': tagged_dist(req.get('SpawnRate'), [0.0]),
                                 'burst_list': req.get('BurstList', []),
                                 'use_local_space': bool(req.get('bUseLocalSpace', False)),
+                                # playtest 2026-10-23 #9 (Systems' FX log: hover_plane_FX trails stuck): UE3 kills an
+                                # emitter's live particles when the component deactivates / when the emitter completes
+                                # (FParticleEmitterInstance; CDO false / false)
+                                'kill_on_deactivate': bool(req.get('bKillOnDeactivate', False)),
+                                'kill_on_completed': bool(req.get('bKillOnCompleted', False)),
                                 'screen_alignment': req.get('ScreenAlignment', 'PSA_Square'),
                                 'subimages': [req.get('SubImages_Horizontal', 1), req.get('SubImages_Vertical', 1)]},
                    'mesh': None, 'modules': [], 'assignment_complete': L.get('assignment_complete', False),
