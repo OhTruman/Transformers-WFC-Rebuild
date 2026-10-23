@@ -365,6 +365,10 @@ template <class W> void queueSelection(W& w, int seat, const game::CharacterSele
 // launch URL + seed + seats + this build, so a peer on another build / URL fails at HELLO (JoinFailed{Version} via the session).
 void Application::startNetDriver(const std::string& launchUrl, uint32_t seed, int seats, int localSeat) {
     netDriver_.reset();
+    if (seats < 2) {   // no remote human: the local loop runs the match (fillOnlineLaunch sends no seat order then)
+        LOG_INFO("online: %d seat(s) - no lockstep driver (the local loop runs the match)", seats);
+        return;
+    }
     if (!udpSession_ || !udpSession_->matchReady() || !udpSession_->matchTransport()) {
         LOG_WARN("online: an online launch without a ready session roster - the match runs without the lockstep driver");
         return;

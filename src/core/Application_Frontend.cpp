@@ -128,6 +128,10 @@ void fillOnlineLaunch(game::MatchLaunch& gl, const frontend::MatchLaunch& m) {
         if (sl.member == m.self) gl.localSeat = (int)gl.humans.size();
         gl.humans.push_back(h);
     }
+    // [Systems] No remote human (a private match hosted alone): the pre-phase-2 local path - no seat order, no lockstep driver (a
+    // 1-seat driver stepped nothing through Application's local loop: matchSteps froze, WFC_SHOTMATCH took no shots, same-seed
+    // arms diverged; Rendering 2026-10-23). The driver runs only when another human holds a seat.
+    if (gl.humans.size() < 2) { gl.humans.clear(); gl.localSeat = -1; }
     if (!gl.humans.empty()) {   // the seat order replaces the remotes list
         gl.seed = m.seed; gl.online = true;
         frontend::FlowTrace::emit("online.launchHumans", {{"humans", std::to_string(gl.humans.size())}, {"localSeat", std::to_string(gl.localSeat)}});
@@ -616,7 +620,7 @@ bool Application::wantsFrontendBoot() {
                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
                           "WFC_VEHTEST", "WFC_FOVTEST", "WFC_SCREENTEST", "WFC_TILETEST", "WFC_MODETEST", "WFC_CHASSISTEST",
-                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_CAMPAIGNAUDIOTEST", "WFC_UDPHOST", "WFC_UDPJOIN", "WFC_ONLINEFLOWTEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
+                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_CAMPAIGNAUDIOTEST", "WFC_UDPHOST", "WFC_UDPJOIN", "WFC_ONLINEFLOWTEST", "WFC_SOLOLAUNCHTEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
                           "WFC_SPAWNFILLTEST", "WFC_EXTRABODYTEST", "WFC_DOUBLEJUMPTEST",
                           "WFC_DETERMINISMTEST", "WFC_WEAPONAUDIT", "WFC_VEHFRAMETEST", "WFC_VEHICLEAUDIT", "WFC_QABOTTEST", "WFC_MARKERSTEST", "WFC_STUCKSPOT_BOT", "WFC_ASYNCSTEPTEST", "WFC_ENGAGETEST", "WFC_EVICTTEST", "WFC_BARRIERWALKTEST"})   // [integration 09c] Gameplay 26d / 26h / 26k harnesses
         if (std::getenv(v)) return false;
@@ -2027,4 +2031,61 @@ void core::Application::runOnlineFlowTest() {
     const bool left = pump(10.0, [&] { return b.sessionRole() == Role::Offline && a.onlineMembers().empty(); });
     check(left, "member quits: offline again, the host lists nobody else");
     LOG_INFO("ONLINEFLOWTEST SUMMARY: %d failure(s)", fails);
+}
+
+// WFC_SOLOLAUNCHTEST [Systems] (headless, no session): the frontend's launch of a private match hosted alone (one human slot, this
+// player's) through fillOnlineLaunch - no seat order and no lockstep driver (the local loop runs it) - then the same launch twice
+// with the same seed, 1400 steps of the local loop each (PlayerBot input): the two simStateHash streams must be equal. A launch with a
+// second human must keep the seat order (the driver path). One SUMMARY line; exit 0 = PASS.
+void core::Application::runSoloLaunchTest() {
+    int fails = 0;
+    auto check = [&fails](bool ok, const char* what) { LOG_INFO("SOLOLAUNCHTEST %s: %s", ok ? "PASS" : "FAIL", what); if (!ok) ++fails; };
+    const std::string url = "MP_IAC_Streets?GameModeTag=TDM?BotsFriendly=2?BotsEnemy=2?PointsToWin=1000";
+    frontend::MatchLaunch m;
+    m.seed = 0x5eed0042u; m.teamIndex = 0;
+    m.self.fingerprint = "WFC-SOLO-HOST";
+    frontend::SessionSlot me; me.kind = frontend::SessionSlot::Kind::Human; me.member = m.self; me.team = 0;
+    frontend::SessionSlot bot; bot.kind = frontend::SessionSlot::Kind::Bot; bot.team = 1;
+    m.onlineSlots = {me, bot};
+    auto build = [&](const frontend::MatchLaunch& ml) {
+        game::MatchLaunch gl;
+        game::MatchLaunch::fromURL(url, gl);
+        gl.map = world_.mapName();
+        gl.localTeam = ml.teamIndex;
+        fillOnlineLaunch(gl, ml);
+        return gl;
+    };
+    const game::MatchLaunch solo = build(m);
+    check(solo.humans.empty() && solo.localSeat < 0, "alone: no seat order (the pre-phase-2 local path)");
+    check(!(solo.online && !solo.humans.empty()), "alone: the launch starts no lockstep driver");
+    frontend::MatchLaunch two = m;
+    frontend::SessionSlot other; other.kind = frontend::SessionSlot::Kind::Human; other.member.fingerprint = "WFC-SOLO-PEER"; other.team = 1;
+    two.onlineSlots.push_back(other);
+    const game::MatchLaunch duo = build(two);
+    check(duo.online && duo.humans.size() == 2 && duo.localSeat == 0, "with a second human: the seat order (the driver path)");
+    const float step = clock_.stepSeconds();
+    auto run = [&](std::vector<uint64_t>& hashes) {
+        if (!world_.launchMatch(solo)) return false;
+        world_.match().requireCharacterSelection(world_.localMatchPlayer());
+        game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), cs);
+        for (int i = 0; i < 1400; ++i) {
+            platform::InputFrame input;
+            world_.playerBotInput(input, step);
+            world_.handleInput(input, step);
+            world_.tick(step);
+            gameMode_.tick(world_, step);
+            if ((i + 1) % 100 == 0) hashes.push_back(world_.simStateHash());
+        }
+        return true;
+    };
+    std::vector<uint64_t> h1, h2;
+    const bool ok1 = run(h1), ok2 = run(h2);
+    check(ok1 && ok2, "both launches accepted");
+    size_t firstDiff = h1.size();
+    for (size_t i = 0; i < h1.size() && i < h2.size(); ++i) if (h1[i] != h2[i]) { firstDiff = i; break; }
+    check(!h1.empty() && h1.size() == h2.size() && firstDiff == h1.size(), "same seed twice: equal simStateHash every 100 steps to 1400");
+    if (!h1.empty()) LOG_INFO("SOLOLAUNCHTEST hash at 1400: %016llx / %016llx", (unsigned long long)h1.back(), (unsigned long long)(h2.empty() ? 0 : h2.back()));
+    LOG_INFO("SOLOLAUNCHTEST SUMMARY: %s (%d failed)", fails ? "FAIL" : "PASS", fails);
+    exitCode_ = fails ? 1 : 0;
 }
