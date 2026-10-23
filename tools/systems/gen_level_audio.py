@@ -229,7 +229,7 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None, campaig
             continue
         if cl == 'SeqAct_PlayDialog':   # one dialog cue = a one-line conversation (Play / Stop in; Stopped / Finished out)
             nm = preset_name(p.get('DuckingMixerPreset'))
-            op.update(type='conversation', duck=nm, lines=[{'cue': p.get('SoundCue'), 'post_delay': 0.0, 'speaker': None, 'output': None}])
+            op.update(type='conversation', play_dialog=True, duck=nm, lines=[{'cue': p.get('SoundCue'), 'post_delay': 0.0, 'speaker': None, 'output': None}])
             if p.get('SoundCue'): cues.add(p['SoundCue'])
             if nm: presets[nm] = mixer_preset_dsp(nm)
             ops.append(op)
