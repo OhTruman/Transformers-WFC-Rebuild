@@ -3914,3 +3914,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 08:15 MERGED 287085e3 campaign runtime 6 (streaming via setChapterUnitVisible, ForceIntoForm, per-body AI pools, restart from
   checkpoint; wfc_fidelity link fix). AssetTools: 57 / 57 campaign AI bodies + 40 weapon records done (A1 factories
   unheld); chain on A2. Rendering's CAMPAIGN_STREAM (setMapActorTransform + stage 3) recut against 287085e3.
+2026-10-23 08:18 MERGED 312b0a3f campaign runtime 7 (moving nav cells for movers, ForceIntoForm per RE, Buddy var; A1 factories all
+  resolve). Next broad milestone: D5 + A1 from the menus, Off + Realistic, one ~8 min slot after Rendering's STREAM patch.
