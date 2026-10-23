@@ -3476,3 +3476,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   #10 / #13 Seed collision; Rendering #3 / #16 headlight flicker + shadows, #14 water; Systems #5 death smoke lifetime, #9 boost
   trails, #4 package side; RE the original values for #11 / #12 / #15 / #8 / #14; AssetTools #10 / #13 geometry, #14 textures,
   #4 package check. User-visible bugs go ahead of smoke; MP critical path (UdpSession) unchanged.
+2026-10-23 00:14 Escalation horde packaging DONE (AssetTools): 14 characters + 7 weapons in AssetTools\out\escalation_characters (136 MB, 161
+  slim rows staged); data facts: CQCDec vehicle has no anim set (authored), BruteDec / TitanDec vehicles 2 clips; the boss tank's
+  robot clips depend on out\campaign_anims (8 files, shipped by decision); 2 CeremonialStaffHolo cues without WAV (tracing).
