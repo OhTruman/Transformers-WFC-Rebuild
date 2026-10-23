@@ -473,7 +473,7 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     }
     if (fn == "Online.HostPrivateNow") { hostPrivateNow(); return {}; }   // lobby flow v2: Private Match
     if (fn == "Online.JoinGame") return onlineJoin(arg(0));   // PC EXTENSION: the Join Game prompt's code / address
-    // The player row's A (the original "View Gamercard": the Live gamercard, where muting lived): online, Mute / Unmute
+    // The player row's A (the original "View Gamercard": the Live gamercard, where muting lived): online, the PC player card
     if (fn == "Online.ShowGamerCardUI" && session_ && role_ != SessionRole::Offline) return showPlayerCard(arg(0));
     if (fn == "Online.IsHost") return role_ != SessionRole::Member;   // offline: the local player hosts the private match
     if (fn == "Online.GetLoginStatus") return 2;   // PARTIAL: LS_LoggedIn; no online service
