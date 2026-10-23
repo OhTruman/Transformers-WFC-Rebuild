@@ -1,0 +1,264 @@
+diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-23 07:36:42.660516700 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 07:36:43.067912700 -0500
+@@ -1658,6 +1658,7 @@
+     if (rtInfra_) {   // R1 sun swap data (Systems' tools/systems/vbake): WFC_RT_VBAKE=<dir> (<dir>/<map>/), else <render data>/vbake/
+         const char* vb = std::getenv("WFC_RT_VBAKE");
+         r1Dir_ = vb ? std::string(vb) + "/" + mapName : dataDir_ + "/vbake";
++        r1Sunless_ = false;
+         assets::Json F;
+         const std::string ft = readText(r1Dir_ + "/fit.json");
+         if (!ft.empty() && assets::Json::parse(ft, F)) {
+@@ -1668,6 +1669,7 @@
+             for (int c = 0; c < 3; ++c) r1Sun_[c] = s.arr.size() > (size_t)c ? s.arr[(size_t)c].asFloat(0.0f) : 0.0f;
+             // (the GL entry points are tested later, in r1CheckGl: a direct / package boot runs this before the GL load)
+             r1Map_ = r1Fit_[0] > 0.0f; r1GlChecked_ = false; r1StateLogged_ = false;
++            r1Sunless_ = F["sunless"].asBool(false);     // (an enclosed level, e.g. a campaign chapter: k 0, the lights fit still applies)
+             LOG_INFO("RT R1 sun swap data: %s (k %.3f, p %.2f, tangent y %+.0f, sun %.3f %.3f %.3f)%s", r1Dir_.c_str(), r1Fit_[0],
+                      r1Fit_[1], r1Fit_[2], r1Sun_[0], r1Sun_[1], r1Sun_[2], r1Map_ ? "" : " - unused (k <= 0)");
+         } else {
+@@ -9610,7 +9612,13 @@
+         if (nameOf[k].empty()) continue;
+         ImageData im;
+         // (vbake bakes only fit.json's pages: a page without its file keeps the bake's sun, counted, not logged per page)
+-        const std::string vf = r1Dir_ + "/vbake_" + nameOf[k] + ".png";
++        // (a chapter's merged unit: its page key is "<unit dir>|<page>"; its V_bake pages sit in <vbake dir>/<unit>/)
++        std::string vf = r1Dir_ + "/vbake_" + nameOf[k] + ".png";
++        if (const size_t bar = nameOf[k].find('|'); bar != std::string::npos) {
++            const std::string d = nameOf[k].substr(0, bar);
++            const size_t sl = d.find_last_of("/\\");
++            vf = r1Dir_ + "/" + (sl == std::string::npos ? d : d.substr(sl + 1)) + "/vbake_" + nameOf[k].substr(bar + 1) + ".png";
++        }
+         if (!std::ifstream(platform::longPath(vf))) { ++vbMissing; continue; }
+         if (!platform::decodeImage(vf, im) || !im.valid()) continue;
+         std::vector<uint8_t>& rg = rgOf[k];
+diff -ru a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h	2026-10-23 07:36:42.690620000 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-23 07:36:42.980613700 -0500
+@@ -611,6 +611,7 @@
+     bool r1Map_ = false, r1Built_ = false, r1WorldMrt_ = false, r1Suppress_ = false;
+     bool r1GlChecked_ = false, r1StateLogged_ = false;   // (the GL entry-point test runs after the GL load; one log per map)
+     float r1Fit_[4] = {0, 1, 1, 0};                    // k, p, tangent_y_sign
++    bool r1Sunless_ = false;                         // (fit.json "sunless": no sun share to swap, the GI calibration still valid)
+     float r1Sun_[3] = {0, 0, 0};                       // the sun's linear colour x brightness (fit.json sun_linear)
+     float r1SunDir_[3] = {0, 0, 1};                    // towards the sun (world)
+     std::string r1Dir_;
+diff -ru a/src/render/gl/WfcRtGi.cpp b/src/render/gl/WfcRtGi.cpp
+--- a/src/render/gl/WfcRtGi.cpp	2026-10-23 07:36:42.719217900 -0500
++++ b/src/render/gl/WfcRtGi.cpp	2026-10-23 07:36:43.075438400 -0500
+@@ -252,7 +252,7 @@
+     if (!giOn() || rtMode_ != 2 || giTexels_.empty()) return;
+     assets::Json FL;
+     const std::string fl = giReadText(r1Dir_ + "/fit_lights.json");
+-    if (r1Fit_[0] <= 0.0f || fl.empty() || !assets::Json::parse(fl, FL)) {
++    if ((r1Fit_[0] <= 0.0f && !r1Sunless_) || fl.empty() || !assets::Json::parse(fl, FL)) {
+         LOG_INFO("RT GI: no calibration for this map (%s/fit.json k %.3f, fit_lights.json %s) - Realistic keeps the bake",
+                  r1Dir_.c_str(), r1Fit_[0], fl.empty() ? "missing" : "unparsable");
+         return;
+@@ -267,7 +267,11 @@
+         size_t perPage = 0;
+         if (!ft.empty() && assets::Json::parse(ft, F))
+             for (const auto& pg : F["pages"].arr) {
+-                auto it = lmIndex_.find(pg["page"].asString());
++                // (a chapter: pages[] entries carry their unit - the merged unit's key is "<unit dir>|<page>")
++                std::string key = pg["page"].asString();
++                if (pg["unit"].isString())
++                    for (const SublevelRT& sl : sublevels_) if (sl.unit == pg["unit"].asString()) { key = sl.dir + "|" + key; break; }
++                auto it = lmIndex_.find(key);
+                 const float k = pg["k"].asFloat(-1.0f);
+                 if (it == lmIndex_.end() || it->second < 0 || (size_t)it->second >= pageK.size() || k < 0.0f) continue;
+                 pageK[(size_t)it->second] = k * (r1Fit_[0] / std::max(F["k"].asFloat(r1Fit_[0]), 1e-6f));   // (x WFC_RT_R1K's scale)
+diff -ru a/tools/systems/vbake/vbake_fit.py b/tools/systems/vbake/vbake_fit.py
+--- a/tools/systems/vbake/vbake_fit.py	2026-10-23 07:36:42.777919300 -0500
++++ b/tools/systems/vbake/vbake_fit.py	2026-10-23 07:36:42.882778800 -0500
+@@ -63,6 +63,17 @@
+     return int(w), int(h), cov, V, ndl, lt, comp
+ 
+ 
++
++def extra_lights():
++    """(campaign chapters, Rendering) --lights-from <lighting.json>, repeatable: the chapter's other units' lights (the sun and
++    the lamps of one bake that lit every unit)"""
++    out = []
++    for i, a in enumerate(sys.argv[:-1]):
++        if a == '--lights-from':
++            out += json.load(open(sys.argv[i + 1], encoding='utf-8')).get('lights', [])
++    return out
++
++
+ def main():
+     tdir, rdir = arg('--trace'), arg('--render')
+     if not tdir or not rdir:
+@@ -71,7 +82,7 @@
+     tr = json.load(open(os.path.join(tdir, 'vbake_trace.json'), encoding='utf-8'))
+     L = json.load(open(os.path.join(rdir, 'lighting.json'), encoding='utf-8'))
+     props = L['lightmaps']['props']
+-    sun = next(l for l in L['lights'] if l['name'] == tr['sun'])
++    sun = next(l for l in L['lights'] + extra_lights() if l['name'] == tr['sun'])
+     sun_lin = srgb_to_linear(np.array(sun['color_srgb8']) / 255.0) * float(sun['brightness'])
+     sun_lum = float(sun_lin @ LUM)
+     comps = tr['components']
+@@ -119,7 +130,18 @@
+                 pidx.append(np.full(int(ok.sum()), pi_))
+     if not deltas:
+         print('no lit / shadowed texel pairs: the trace found no sun boundaries on lightmapped surfaces')
+-        return 1
++        if '--sunless-ok' not in sys.argv:
++            return 1
++        # (campaign chapters, Rendering: an enclosed level - D5_OME's arena - has no sun share to fit; fit.json says k 0 so the
++        # runtime keeps its bake's sun and the lights fit still runs. The tangent handedness, normally fitted from the sun
++        # pairs, comes from --tangent-y (the lights fit is run both ways and the flatter one kept))
++        flip = float(arg('--tangent-y', '1'))
++        with open(os.path.join(tdir, 'fit.json'), 'w', encoding='utf-8') as f:
++            json.dump(dict(map_render_dir=rdir, sun=tr['sun'], sun_linear=list(map(float, sun_lin)), k=0.0, p=1.0, tangent_y_sign=flip,
++                           pairs=0, pages=[], sunless=True, basis='HL2 (lighting.json note)', cone_deg=tr['cone_deg'],
++                           supersample=tr['supersample']), f, indent=1)
++        print('fit.json: sunless (k 0, tangent y %+.0f)' % flip)
++        return 0
+     D = np.concatenate(deltas, axis=1)
+     LT = np.concatenate(lts, axis=0)
+     PI = np.concatenate(pidx)
+diff -ru a/tools/systems/vbake/vbake_lights_fit.py b/tools/systems/vbake/vbake_lights_fit.py
+--- a/tools/systems/vbake/vbake_lights_fit.py	2026-10-23 07:36:42.813541300 -0500
++++ b/tools/systems/vbake/vbake_lights_fit.py	2026-10-23 07:36:42.899837300 -0500
+@@ -83,6 +83,17 @@
+     return S, R
+ 
+ 
++
++def extra_lights():
++    """(campaign chapters, Rendering) --lights-from <lighting.json>, repeatable: the chapter's other units' lights (the sun and
++    the lamps of one bake that lit every unit)"""
++    out = []
++    for i, a in enumerate(sys.argv[:-1]):
++        if a == '--lights-from':
++            out += json.load(open(sys.argv[i + 1], encoding='utf-8')).get('lights', [])
++    return out
++
++
+ def main():
+     tdir, rdir, out = arg('--trace'), arg('--render'), arg('--out')
+     sf = json.load(open(arg('--sunfit'), encoding='utf-8'))
+@@ -91,7 +102,7 @@
+     audit = next((a for a in json.load(open(arg('--audit'), encoding='utf-8')) if a['map'] == mapname), None)
+     excluded = {x['name']: x for x in (audit['lighting_json_not_in_any_lightmap'] if audit else [])}
+     props = L['lightmaps']['props']
+-    lights = {l['name']: l for l in L['lights']}
++    lights = {l['name']: l for l in L['lights'] + extra_lights()}
+     tr = json.load(open(os.path.join(tdir, 'vbake_trace.json'), encoding='utf-8'))
+     lidx = json.load(open(os.path.join(tdir, 'lights_index.json'), encoding='utf-8'))
+     names = [x['name'] for x in lidx['lights']]
+diff -ru a/tools/systems/vbake/vbake_trace.cpp b/tools/systems/vbake/vbake_trace.cpp
+--- a/tools/systems/vbake/vbake_trace.cpp	2026-10-23 07:36:42.746812900 -0500
++++ b/tools/systems/vbake/vbake_trace.cpp	2026-10-23 07:36:42.863713200 -0500
+@@ -22,6 +22,10 @@
+ // Build (repo root): clang++ -O2 -std=c++17 -Isrc tools/systems/vbake/vbake_trace.cpp -o work/vbake/vbake_trace.exe
+ // Usage: vbake_trace --world <world.glb> --bsp <bsp.glb> --render <render map dir> --out <dir> [--cone 0.27] [--ss 4]
+ //        [--threads 2] [--bias 0.02] [--lights 4] [--sky-rays 64] [--light-range 1.5]
++// Campaign chapters (Rendering): one unit's receivers with the whole chapter around them - --occluder <another unit's
++// world.glb / bsp.glb> (repeatable; its components are not in this unit's lightmap table, so they only block), --bsp
++// optional (most units have none), --sun-from <lighting.json> (the chapter's sun when this unit's table has none),
++// --lights-from <lighting.json> (repeatable: the other units' point / spot lights for --lights - one bake lit them all).
+ #include "assets/Json.h"
+ 
+ #include <algorithm>
+@@ -251,7 +255,7 @@
+     return true;
+ }
+ 
+-struct Args { std::string world, bsp, render, out; float coneDeg = 0.27f, bias = 0.02f, lightRange = 1.5f; int ss = 4, threads = 2, lights = 0, skyRays = 64, lightShadows = 1; };
++struct Args { std::string world, bsp, render, out, sunFrom; std::vector<std::string> occluders, lightsFrom; float coneDeg = 0.27f, bias = 0.02f, lightRange = 1.5f; int ss = 4, threads = 2, lights = 0, skyRays = 64, lightShadows = 1; };
+ 
+ inline uint32_t hash32(uint32_t x) { x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x846ca68bU; x ^= x >> 16; return x; }
+ inline float rnd01(uint32_t& s) { s = hash32(s + 0x9e3779b9U); return (s >> 8) * (1.0f / 16777216.0f); }
+@@ -269,8 +273,10 @@
+         else if (k == "--threads") A.threads = std::max(1, std::atoi(v.c_str())); else if (k == "--bias") A.bias = (float)std::atof(v.c_str());
+         else if (k == "--lights") A.lights = std::max(0, std::atoi(v.c_str())); else if (k == "--sky-rays") A.skyRays = std::max(4, std::atoi(v.c_str()));
+         else if (k == "--light-range") A.lightRange = (float)std::atof(v.c_str()); else if (k == "--light-shadows") A.lightShadows = std::atoi(v.c_str());
++        else if (k == "--occluder") A.occluders.push_back(v); else if (k == "--sun-from") A.sunFrom = v;
++        else if (k == "--lights-from") A.lightsFrom.push_back(v);
+     }
+-    if (A.world.empty() || A.bsp.empty() || A.render.empty() || A.out.empty()) {
++    if (A.world.empty() || A.render.empty() || A.out.empty()) {
+         std::printf("usage: vbake_trace --world <world.glb> --bsp <bsp.glb> --render <render map dir> --out <dir> [--cone 0.27] [--ss 4] [--threads 2]\n");
+         return 2;
+     }
+@@ -281,8 +287,14 @@
+     if (!readFile(A.render + "/lighting.json", lj) || !Json::parse(lj, L)) { std::printf("lighting.json unreadable\n"); return 1; }
+     lj.clear(); lj.shrink_to_fit();
+     const Json* sun = nullptr;
+-    for (size_t i = 0; i < L["lights"].size(); ++i) {
+-        const Json& l = L["lights"][i];
++    Json SL;   // (--sun-from: another unit's lighting.json carries the chapter's sun)
++    if (!A.sunFrom.empty()) {
++        std::string sj;
++        if (!readFile(A.sunFrom, sj) || !Json::parse(sj, SL)) { std::printf("--sun-from %s unreadable\n", A.sunFrom.c_str()); return 1; }
++    }
++    const Json& LS = A.sunFrom.empty() ? L : SL;
++    for (size_t i = 0; i < LS["lights"].size(); ++i) {
++        const Json& l = LS["lights"][i];
+         if (l["class"].asString() != "DirectionalLightComponent" || !l["enabled"].asBool(true) || !l["built_into_lightmap"].asBool(false) ||
+             !l["cast_static_shadows"].asBool(true)) continue;
+         if (!sun || l["brightness"].asDouble() > (*sun)["brightness"].asDouble()) sun = &l;
+@@ -327,7 +339,9 @@
+             const Json& ex = nd["extras"];
+             if (!isBspFile && ex["kind"].asString() == "bsp") continue;            // (bsp.glb carries the BSP with lightmap UVs)
+             const std::string comp = ex["component"].asString(), meshName = lower(ex["mesh"].asString());
+-            const bool sky = meshName.find("sky") != std::string::npos;
++            // (the runtime TLAS rule, WfcRt.cpp rtBuildWorld: named sky / dome, or over 2 km - D5_OME's 9 km SpaceDome closed the
++            // arena in the trace while the runtime leaves it out: a "sunless" fit for an arena open to the sky)
++            const bool sky = meshName.find("sky") != std::string::npos || meshName.find("dome") != std::string::npos;
+             const bool shadow = !noShadow.count(comp) && !(ex.has("actor") && noShadow.count("actor:" + ex["actor"].asString()));
+             float M[16]; nodeMatrix(nd, M);
+             float sc[2] = {0, 0}, bi[2] = {0, 0};
+@@ -350,13 +364,19 @@
+                     WP[v] = xformP(M, V3{P[v * 3], P[v * 3 + 1], P[v * 3 + 2]});
+                     WN[v] = hasN ? xformN(M, V3{N[v * 3], N[v * 3 + 1], N[v * 3 + 2]}) : V3{0, 1, 0};
+                 }
++                bool skyPrim = sky;
++                if (!skyPrim && !WP.empty()) {
++                    V3 lo = WP[0], hi = WP[0];
++                    for (const V3& q : WP) { lo = V3{std::min(lo.x, q.x), std::min(lo.y, q.y), std::min(lo.z, q.z)}; hi = V3{std::max(hi.x, q.x), std::max(hi.y, q.y), std::max(hi.z, q.z)}; }
++                    skyPrim = std::max({hi.x - lo.x, hi.y - lo.y, hi.z - lo.z}) > 2000.0f;
++                }
+                 for (size_t t = 0; t + 2 < I.size(); t += 3) {
+                     const uint32_t i0 = I[t], i1 = I[t + 1], i2 = I[t + 2];
+                     if (i0 >= WP.size() || i1 >= WP.size() || i2 >= WP.size()) continue;
+                     const V3 a = WP[i0], b = WP[i1], c = WP[i2];
+                     if (!opaque) ++skippedBlend;
+                     else if (!shadow) ++skippedShadow;
+-                    else if (sky) ++skippedSky;
++                    else if (skyPrim) ++skippedSky;
+                     else { bvh.tris.push_back(Tri{a, b - a, c - a}); ++occTris; }
+                     if (ai < 0 || !opaque) continue;                              // ---- a lightmapped receiver
+                     if (!hasU1) { ++skippedNoUv; continue; }
+@@ -424,7 +444,9 @@
+         }
+         return true;
+     };
+-    if (!addFile(A.world, false) || !addFile(A.bsp, true)) return 1;
++    if (!addFile(A.world, false) || (!A.bsp.empty() && !addFile(A.bsp, true))) return 1;
++    for (const std::string& o : A.occluders)                                       // (chapter: the other units, blocking only)
++        if (!addFile(o, o.size() >= 7 && lower(o.substr(o.size() - 7)) == "bsp.glb")) return 1;
+     const auto t1 = std::chrono::steady_clock::now();
+     bvh.build();
+     const auto t2 = std::chrono::steady_clock::now();
+@@ -475,8 +497,16 @@
+     // ---- --lights: the sky and the point / spot lights on every stride-th covered texel (see the header)
+     if (A.lights > 0) {
+         std::vector<LightSrc> srcs;
+-        for (size_t i = 0; i < L["lights"].size(); ++i) {
+-            const Json& l = L["lights"][i];
++        std::vector<Json> LF(A.lightsFrom.size());                                 // (--lights-from: the chapter's other units)
++        for (size_t f = 0; f < LF.size(); ++f) {
++            std::string fj;
++            if (!readFile(A.lightsFrom[f], fj) || !Json::parse(fj, LF[f])) { std::printf("--lights-from %s unreadable\n", A.lightsFrom[f].c_str()); return 1; }
++        }
++        std::vector<const Json*> lightList;
++        for (size_t i = 0; i < L["lights"].size(); ++i) lightList.push_back(&L["lights"][i]);
++        for (const Json& J2 : LF) for (size_t i = 0; i < J2["lights"].size(); ++i) lightList.push_back(&J2["lights"][i]);
++        for (const Json* lp : lightList) {
++            const Json& l = *lp;
+             const std::string cls = l["class"].asString();
+             if ((cls != "PointLightComponent" && cls != "SpotLightComponent") || !l["enabled"].asBool(true)) continue;
+             LightSrc ls; ls.name = l["name"].asString(); ls.cls = cls;
