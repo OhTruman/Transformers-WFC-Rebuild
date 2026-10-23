@@ -609,7 +609,7 @@ void Application::runUdpSessionTest() {
     frontend::SessionSlot b; b.kind = frontend::SessionSlot::Kind::Bot; b.team = 0;
     lobby.slots = {s0, b, s1};
     hostS.publishLobby(lobby);
-    pump(3.0, [&] { return has(memEv, T::LobbyState); });
+    pump(3.0, [&] { const SessionEvent* e = find(memEv, T::LobbyState); return e && e->lobby.slots.size() == 3; });   // the published one
     { const SessionEvent* e = find(memEv, T::LobbyState);
       check(e && e->lobby.slots.size() == 3 && e->lobby.settings.count("PointsToWin") && e->lobby.mapId == 3, "member: LobbyState with the slots and settings"); }
 

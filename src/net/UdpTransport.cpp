@@ -166,7 +166,9 @@ public:
         sockaddr_in a{};
         if (seat < 0 || seat > 254 || !parseAddr(hostPort, a)) return false;
         auto it = peers_.find(seat);
-        if (it == peers_.end() || addrString(it->second) != hostPort) ch_.reset(seat);
+        // only a re-seat at another address starts the channel afresh: a new peer keeps what already arrived from it (a member seated
+        // after the host's first reliable message must not re-deliver its retransmission)
+        if (it != peers_.end() && addrString(it->second) != hostPort) ch_.reset(seat);
         peers_[seat] = a;
         return true;
     }
