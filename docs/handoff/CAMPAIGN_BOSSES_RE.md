@@ -211,3 +211,25 @@ parameters and the Kismet hooks (C, from TR_Trypticon_AI_p and the A5 kismet man
    - **Third Back Destroyed** → the end of the fight (3 remote events: outro).
 3. **Spiders** (27 factories) and TrypticonSentry groups (shoulder / tail sentries, SETPIECES §2) are spawned / woken by the stage
    sequences.
+
+---
+
+## D1_ORB: no boss; heavy "mini-boss" encounters (Neutral faction)
+
+D1 has no boss AI. Its set-piece heavies are **Neutral** (Autobot-team) variants that use the **same action, goal and sensor sets
+as Escalation**, so the behaviour is MP_ESCALATION §9.2 verbatim. Only the deltas are below (C).
+
+| Template | Health | Sets | Deltas vs Escalation |
+|---|---|---|---|
+| **Brute_Neutral_AICD** (BruteNeu_ROBODEF) | **100,000**: in practice only killable through the **backpack destructible** `RB_BruteNeu_Backpack_DES` (socket Destructible_C; targeting `BruteBackPack_Targeting`) + attached shield | Brute_AiActionSet / TR_AiGoalSet_Brute / Brute_AiSensorSet | melee override **WarHammer** (the set default is HalberdAxe). Ground pound 2000–5000 UU every 15–25 s, second smash ≤ 3000 every 15–20 s, BruteRocketLauncher (not at cloaked targets; enemy-on-ground cost) |
+| **Titan_Neutral_AICD** (TitanNeu_ROBODEF) | **1250** | Titan sets | primary override **GatlingGun** (the set default is HeavyPistol). Threat: Uber 5 within 1000, max range 7000, attackers −0.5, AI ×0.8 |
+| Soldier_Jet / Sniper / MG Neutral | per chassis | Escalation soldier sets | as §9.2 |
+
+**Kismet hooks (C):**
+- **Assembly brute** (Main_Sequence): spawn → combat-music state; all killed → `AUDIO_ASSEMBLY_BRUTE_FIGHT_OVER`, non-combat state,
+  `AIObjective_Assembly2`.
+- **Data Center brute** (robot form, no spawn anim): all spawned → `AUDIO_MAP_ROOM_BRUTE_APPEARS` + an intro matinee; killed →
+  `AUDIO_MAP_ROOM_BRUTE_KILLED`, **`UnlockTheBruteDoor`** (progression gate), `AIObjective_VentArea`.
+- **Exterior ruins brute:** move-to on spawn; deaths increment a counter.
+- **After_Ramp_2 Titan:** `DX_ENEMY_SPAWNED` / `DX_ENEMY_KILLED` dialogue cues; all killed → `BrutesDead`.
+- **No god-mode, HealthStatus or damage-threshold scripting** on any D1 heavy: they fight to death as in MP.
