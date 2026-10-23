@@ -33,6 +33,8 @@ struct SubMesh {
     uint32_t meshTriOffset = 0;       // first triangle of this primitive within that glTF mesh
     int gltfNode = -1;                // glTF node index (collision physmat node_overrides)
     bool hiddenGame = false;          // PrimitiveComponent.HiddenGame (world.glb extras.hidden_game): not drawn in game
+    std::string actorPath;            // the placed actor's full object path (world.glb extras.actor_path; short names repeat
+                                      // across a chapter's levels)
     TextureHandle lightmapTex = kInvalidTexture;
     float lmScale[2] = {1, 1};
     float lmBias[2] = {0, 0};

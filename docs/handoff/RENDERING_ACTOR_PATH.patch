@@ -1,0 +1,132 @@
+diff -ru a/src/assets/Gltf.cpp b/src/assets/Gltf.cpp
+--- a/src/assets/Gltf.cpp	2026-10-23 14:25:04.503845400 -0500
++++ b/src/assets/Gltf.cpp	2026-10-23 14:25:04.474243800 -0500
+@@ -269,6 +269,7 @@
+                 sm.sourceMesh = node["extras"]["mesh"].asString();
+                 sm.lightmapComponent = node["extras"]["lightmap_component"].asString();
+                 sm.hiddenGame = node["extras"]["hidden_game"].asBool(false);
++                sm.actorPath = node["extras"]["actor_path"].asString();
+                 sm.sourceSection = (int)pi;
+                 // (campaign TnTransformingWorldActors: AssetTools' bind-pose nodes name their SkeletalMeshComponent, but the game
+                 // addresses them by actor - setActorHidden while the World draws them posed, setMapActorTransform - and they
+diff -ru a/src/render/Mesh.h b/src/render/Mesh.h
+--- a/src/render/Mesh.h	2026-10-23 14:25:04.377411500 -0500
++++ b/src/render/Mesh.h	2026-10-23 14:25:04.357844900 -0500
+@@ -33,6 +33,8 @@
+     uint32_t meshTriOffset = 0;       // first triangle of this primitive within that glTF mesh
+     int gltfNode = -1;                // glTF node index (collision physmat node_overrides)
+     bool hiddenGame = false;          // PrimitiveComponent.HiddenGame (world.glb extras.hidden_game): not drawn in game
++    std::string actorPath;            // the placed actor's full object path (world.glb extras.actor_path; short names repeat
++                                      // across a chapter's levels)
+     TextureHandle lightmapTex = kInvalidTexture;
+     float lmScale[2] = {1, 1};
+     float lmBias[2] = {0, 0};
+diff -ru a/src/render/gl/WfcMovers.cpp b/src/render/gl/WfcMovers.cpp
+--- a/src/render/gl/WfcMovers.cpp	2026-10-23 14:25:04.709550400 -0500
++++ b/src/render/gl/WfcMovers.cpp	2026-10-23 14:25:04.682959100 -0500
+@@ -234,19 +234,37 @@
+ }
+ 
+ void Pipeline::setActorHidden(const std::string& actor, bool hidden) {
+-    auto it = actorKeyCache_.find(actor);            // memoized lower-case short name (called per actor per frame)
++    auto it = actorKeyCache_.find(actor);            // memoized lower-case short name / path (called per actor per frame)
+     if (it == actorKeyCache_.end()) {
+-        std::string a = actor.substr(actor.rfind('.') == std::string::npos ? 0 : actor.rfind('.') + 1);   // full path or name
++        const size_t dot = actor.rfind('.');
++        std::string a = actor.substr(dot == std::string::npos ? 0 : dot + 1);   // full path or name
+         std::transform(a.begin(), a.end(), a.begin(), ::tolower);
+-        it = actorKeyCache_.emplace(actor, std::move(a)).first;
++        std::string path;
++        if (dot != std::string::npos) { path = actor; std::transform(path.begin(), path.end(), path.begin(), ::tolower); }
++        it = actorKeyCache_.emplace(actor, std::make_pair(std::move(a), std::move(path))).first;
+     }
+-    auto h = actorHidden_.find(it->second);
+-    if (h != actorHidden_.end()) h->second = hidden; else actorHidden_[it->second] = hidden;
++    const std::string& shortKey = it->second.first;
++    // (a full object path: exact for subs that carry extras.actor_path - a chapter's levels repeat short names, authored
++    // hidden in one and visible in another; the short name still drives subs / props without a path, as before)
++    if (!it->second.second.empty()) {
++        actorHiddenPath_[it->second.second] = hidden;
++        if (!actorHidden_.count(shortKey)) actorHiddenViaPathOnly_.insert(shortKey);
++    } else {
++        actorHiddenViaPathOnly_.erase(shortKey);
++    }
++    auto h = actorHidden_.find(shortKey);
++    if (h != actorHidden_.end()) h->second = hidden; else actorHidden_[shortKey] = hidden;
+ }
+ 
+-bool Pipeline::actorHidden(const std::string& actorLower) const {
++bool Pipeline::actorHidden(const std::string& actorLower, const std::string& pathLower) const {
++    if (!pathLower.empty()) {
++        auto p = actorHiddenPath_.find(pathLower);
++        if (p != actorHiddenPath_.end()) return p->second;    // explicit Gameplay state for this exact actor
++    }
+     auto it = actorHidden_.find(actorLower);
+-    if (it != actorHidden_.end()) return it->second;           // explicit Gameplay state
++    // (a short-name entry written only through another actor's full path does not reach a sub that has a path of its own)
++    if (it != actorHidden_.end() && !(!pathLower.empty() && actorHiddenViaPathOnly_.count(actorLower)))
++        return it->second;                                     // explicit Gameplay state
+     static const bool show = std::getenv("WFC_SHOWHIDDEN") != nullptr;
+     if (show) return false;
+     auto g = ruleGatedActors_.find(actorLower);
+diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-23 14:25:04.820931800 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 14:25:04.790829000 -0500
+@@ -4029,7 +4029,11 @@
+         if (anyBsp && s.component.rfind("bsp:", 0) == 0) { g.drawsBsp = true; continue; }
+         std::string key = s.component;
+         std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+-        if (key.rfind("actor:", 0) == 0) d.actor = key.substr(6);
++        if (key.rfind("actor:", 0) == 0) {
++            d.actor = key.substr(6);
++            d.actorPath = s.actorPath;
++            std::transform(d.actorPath.begin(), d.actorPath.end(), d.actorPath.begin(), ::tolower);
++        }
+         // authored bHidden: actor-placed nodes stay resident (Gameplay may unhide them, e.g. SeqAct_ToggleHidden
+         // by game rule); collection components without an actor identity are dropped as before
+         // AssetTools world.glb extras.hidden_game (PrimitiveComponent.HiddenGame; e.g. Seed's 29 tubelight
+@@ -4886,7 +4890,7 @@
+             core::Mat4 subModel = model;
+             bool moving = false;
+             if (!s.actor.empty()) {
+-                if (actorHidden(s.actor)) continue;
++                if (actorHidden(s.actor, s.actorPath)) continue;
+                 auto mv = moverDelta_.find(s.actor);
+                 if (mv != moverDelta_.end()) { subModel = mv->second * model; moving = true; }
+             }
+diff -ru a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h	2026-10-23 14:25:04.608202900 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-23 14:25:04.581110200 -0500
+@@ -362,6 +362,7 @@
+         bool envReady = false;
+         LightEnv env;
+         std::string actor;        // lower-case actor name of actor-placed world nodes (movers / hidden state)
++        std::string actorPath;    // lower-case full actor path (extras.actor_path; empty in older data)
+     };
+     struct GpuMesh {
+         GLuint vao = 0, vbo = 0, ibo = 0;
+@@ -1312,7 +1313,8 @@
+     void setMapEffectState(const std::string& key, bool active, bool hidden);
+     struct EffKey { std::string w, role, shortName; };
+     std::unordered_map<std::string, EffKey> effKeyCache_;          // setMapEffectState key parses
+-    std::unordered_map<std::string, std::string> actorKeyCache_;   // setActorHidden key -> lower-case short name
++    std::unordered_map<std::string, std::pair<std::string, std::string>> actorKeyCache_;   // setActorHidden key -> (lower-case short
++                                                                                          // name, lower-case full path or empty)
+     void setActiveGameRules(const std::vector<std::string>& rules);   // Gameplay's active TnGameRules classes
+     void setMapClock(float t) { mapClock_ = t; hasMapClock_ = true; }  // Gameplay MapState clock
+     float mapTime() const { return hasMapClock_ ? mapClock_ : time_; }
+@@ -1564,11 +1566,13 @@
+     std::set<std::string> posesUnknown_;
+     std::unordered_map<std::string, core::Mat4> moverDelta_;
+     std::unordered_map<std::string, bool> actorHidden_;
++    std::unordered_map<std::string, bool> actorHiddenPath_;   // setActorHidden by full object path
++    std::set<std::string> actorHiddenViaPathOnly_;            // short names set only through a full path (not for path subs)
+     std::set<std::string> authoredHiddenActors_;
+     bool loadMovers(const std::string& path);
+     core::Mat4 moverDelta(const MoverRT& m, float t) const;
+     void updateMovers();
+-    bool actorHidden(const std::string& actorLower) const;
++    bool actorHidden(const std::string& actorLower, const std::string& pathLower = std::string()) const;
+     std::set<std::string> activeRules_;
+     std::map<std::string, std::vector<std::string>> ruleGatedActors_;   // actor -> rules that show it
+     bool ruleActive(const std::string& rule) const;

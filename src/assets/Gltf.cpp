@@ -269,6 +269,7 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
                 sm.sourceMesh = node["extras"]["mesh"].asString();
                 sm.lightmapComponent = node["extras"]["lightmap_component"].asString();
                 sm.hiddenGame = node["extras"]["hidden_game"].asBool(false);
+                sm.actorPath = node["extras"]["actor_path"].asString();
                 sm.sourceSection = (int)pi;
                 // (campaign TnTransformingWorldActors: AssetTools' bind-pose nodes name their SkeletalMeshComponent, but the game
                 // addresses them by actor - setActorHidden while the World draws them posed, setMapActorTransform - and they

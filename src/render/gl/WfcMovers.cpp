@@ -234,19 +234,37 @@ void Pipeline::updateMovers() {
 }
 
 void Pipeline::setActorHidden(const std::string& actor, bool hidden) {
-    auto it = actorKeyCache_.find(actor);            // memoized lower-case short name (called per actor per frame)
+    auto it = actorKeyCache_.find(actor);            // memoized lower-case short name / path (called per actor per frame)
     if (it == actorKeyCache_.end()) {
-        std::string a = actor.substr(actor.rfind('.') == std::string::npos ? 0 : actor.rfind('.') + 1);   // full path or name
+        const size_t dot = actor.rfind('.');
+        std::string a = actor.substr(dot == std::string::npos ? 0 : dot + 1);   // full path or name
         std::transform(a.begin(), a.end(), a.begin(), ::tolower);
-        it = actorKeyCache_.emplace(actor, std::move(a)).first;
+        std::string path;
+        if (dot != std::string::npos) { path = actor; std::transform(path.begin(), path.end(), path.begin(), ::tolower); }
+        it = actorKeyCache_.emplace(actor, std::make_pair(std::move(a), std::move(path))).first;
     }
-    auto h = actorHidden_.find(it->second);
-    if (h != actorHidden_.end()) h->second = hidden; else actorHidden_[it->second] = hidden;
+    const std::string& shortKey = it->second.first;
+    // (a full object path: exact for subs that carry extras.actor_path - a chapter's levels repeat short names, authored
+    // hidden in one and visible in another; the short name still drives subs / props without a path, as before)
+    if (!it->second.second.empty()) {
+        actorHiddenPath_[it->second.second] = hidden;
+        if (!actorHidden_.count(shortKey)) actorHiddenViaPathOnly_.insert(shortKey);
+    } else {
+        actorHiddenViaPathOnly_.erase(shortKey);
+    }
+    auto h = actorHidden_.find(shortKey);
+    if (h != actorHidden_.end()) h->second = hidden; else actorHidden_[shortKey] = hidden;
 }
 
-bool Pipeline::actorHidden(const std::string& actorLower) const {
+bool Pipeline::actorHidden(const std::string& actorLower, const std::string& pathLower) const {
+    if (!pathLower.empty()) {
+        auto p = actorHiddenPath_.find(pathLower);
+        if (p != actorHiddenPath_.end()) return p->second;    // explicit Gameplay state for this exact actor
+    }
     auto it = actorHidden_.find(actorLower);
-    if (it != actorHidden_.end()) return it->second;           // explicit Gameplay state
+    // (a short-name entry written only through another actor's full path does not reach a sub that has a path of its own)
+    if (it != actorHidden_.end() && !(!pathLower.empty() && actorHiddenViaPathOnly_.count(actorLower)))
+        return it->second;                                     // explicit Gameplay state
     static const bool show = std::getenv("WFC_SHOWHIDDEN") != nullptr;
     if (show) return false;
     auto g = ruleGatedActors_.find(actorLower);

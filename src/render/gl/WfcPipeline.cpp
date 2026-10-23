@@ -4029,7 +4029,11 @@ int Pipeline::upload(const MeshData& m) {
         if (anyBsp && s.component.rfind("bsp:", 0) == 0) { g.drawsBsp = true; continue; }
         std::string key = s.component;
         std::transform(key.begin(), key.end(), key.begin(), ::tolower);
-        if (key.rfind("actor:", 0) == 0) d.actor = key.substr(6);
+        if (key.rfind("actor:", 0) == 0) {
+            d.actor = key.substr(6);
+            d.actorPath = s.actorPath;
+            std::transform(d.actorPath.begin(), d.actorPath.end(), d.actorPath.begin(), ::tolower);
+        }
         // authored bHidden: actor-placed nodes stay resident (Gameplay may unhide them, e.g. SeqAct_ToggleHidden
         // by game rule); collection components without an actor identity are dropped as before
         // AssetTools world.glb extras.hidden_game (PrimitiveComponent.HiddenGame; e.g. Seed's 29 tubelight
@@ -4886,7 +4890,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
             core::Mat4 subModel = model;
             bool moving = false;
             if (!s.actor.empty()) {
-                if (actorHidden(s.actor)) continue;
+                if (actorHidden(s.actor, s.actorPath)) continue;
                 auto mv = moverDelta_.find(s.actor);
                 if (mv != moverDelta_.end()) { subModel = mv->second * model; moving = true; }
             }

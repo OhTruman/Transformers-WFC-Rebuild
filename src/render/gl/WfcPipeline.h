@@ -362,6 +362,7 @@ private:
         bool envReady = false;
         LightEnv env;
         std::string actor;        // lower-case actor name of actor-placed world nodes (movers / hidden state)
+        std::string actorPath;    // lower-case full actor path (extras.actor_path; empty in older data)
     };
     struct GpuMesh {
         GLuint vao = 0, vbo = 0, ibo = 0;
@@ -1312,7 +1313,8 @@ public:
     void setMapEffectState(const std::string& key, bool active, bool hidden);
     struct EffKey { std::string w, role, shortName; };
     std::unordered_map<std::string, EffKey> effKeyCache_;          // setMapEffectState key parses
-    std::unordered_map<std::string, std::string> actorKeyCache_;   // setActorHidden key -> lower-case short name
+    std::unordered_map<std::string, std::pair<std::string, std::string>> actorKeyCache_;   // setActorHidden key -> (lower-case short
+                                                                                          // name, lower-case full path or empty)
     void setActiveGameRules(const std::vector<std::string>& rules);   // Gameplay's active TnGameRules classes
     void setMapClock(float t) { mapClock_ = t; hasMapClock_ = true; }  // Gameplay MapState clock
     float mapTime() const { return hasMapClock_ ? mapClock_ : time_; }
@@ -1564,11 +1566,13 @@ private:
     std::set<std::string> posesUnknown_;
     std::unordered_map<std::string, core::Mat4> moverDelta_;
     std::unordered_map<std::string, bool> actorHidden_;
+    std::unordered_map<std::string, bool> actorHiddenPath_;   // setActorHidden by full object path
+    std::set<std::string> actorHiddenViaPathOnly_;            // short names set only through a full path (not for path subs)
     std::set<std::string> authoredHiddenActors_;
     bool loadMovers(const std::string& path);
     core::Mat4 moverDelta(const MoverRT& m, float t) const;
     void updateMovers();
-    bool actorHidden(const std::string& actorLower) const;
+    bool actorHidden(const std::string& actorLower, const std::string& pathLower = std::string()) const;
     std::set<std::string> activeRules_;
     std::map<std::string, std::vector<std::string>> ruleGatedActors_;   // actor -> rules that show it
     bool ruleActive(const std::string& rule) const;
