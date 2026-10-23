@@ -1487,7 +1487,13 @@ void Application::routeMatchToFrontend(float dt) {
         cs.customSlot = fc.name;
         fillFullSelection(cs, fc);
         if (netDriver_) netDriver_->chooseCharacter(cs);   // online: a tick-stamped event, applied on every peer at the same tick
-        else world_.submit([me, cs](game::World& w) { w.match().selectCharacter(me, cs); });
+        else world_.submit([me, cs](game::World& w) {
+            // The result is logged (playtest 2026-10-23 #17): Match refuses an iconic chassis another participant holds
+            // (GRI.ValidateCharacterSelection) and keeps the old selection - silent before.
+            const bool ok = w.match().selectCharacter(me, cs);
+            LOG_INFO("FLOW match.selectCharacterResult ok=%s player=%d chassis=%s custom=%s", ok ? "true" : "false", me, cs.chassisId.c_str(),
+                     cs.customSlot.c_str());
+        });
         const bool repick = selectionSentSerial_ != 0;
         selectionSentSerial_ = flow.selectionSerial();
         const int f = (size_t)me < pf.faction.size() && pf.faction[(size_t)me] == 1 ? 1 : 0;   // [integration M08] resolved faction (FFA: Decepticon)
