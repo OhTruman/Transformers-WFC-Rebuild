@@ -119,14 +119,14 @@ public:
     // per-player mutes (fingerprints, local only). [Voice], written only when something differs from the defaults.
     struct Voice {
         int mode = 1;                 // 0 Off, 1 Push to Talk (the user's default), 2 Open Mic
-        int audience = 3;             // 0 Team Radio, 1 All Radio, 2 Proximity, 3 Radio + Proximity (the proposed default)
+        int audience = 0;             // 0 Team Radio (the original: team-only voice, RE TnVoiceMuteHandler), 1 All Radio, 2 Proximity, 3 Radio + Proximity
         std::string device;           // "" = System Default
         std::string pttKey = "V";
         int volume = 70, proximityVolume = 70;
         std::vector<std::string> muted;
         std::vector<std::string> blocked;   // PC addition: the player card's Block (always muted; a local list, no server report)
         bool isDefault() const {
-            return mode == 1 && audience == 3 && device.empty() && pttKey == "V" && volume == 70 && proximityVolume == 70 && muted.empty() &&
+            return mode == 1 && audience == 0 && device.empty() && pttKey == "V" && volume == 70 && proximityVolume == 70 && muted.empty() &&
                    blocked.empty();
         }
     };

@@ -29,6 +29,11 @@ class INetTransport;
 class Lockstep;
 class VoiceSession;
 
+// The original's voice channels (TnVoiceMuteHandler, RE ONLINE_POSTMATCH_PARTY_VOICE_RE section 3): open (everyone hears everyone)
+// in a match without teams and from EndGame on; otherwise team-only. Both the listener (VoiceSession::setOpenChannel) and the host's
+// fan-out use it.
+bool voiceChannelOpen(const game::World& w);
+
 class NetMatchDriver {
 public:
     struct Config {

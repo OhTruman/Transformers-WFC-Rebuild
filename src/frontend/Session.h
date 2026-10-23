@@ -116,7 +116,7 @@ enum class SessionVoiceMode { Off, PushToTalk, OpenMic };
 enum class SessionVoiceAudience { TeamRadio, AllRadio, Proximity, RadioPlusProximity };
 struct SessionVoiceSettings {
     SessionVoiceMode mode = SessionVoiceMode::PushToTalk;   // the user's default
-    SessionVoiceAudience audience = SessionVoiceAudience::RadioPlusProximity;   // the proposed default
+    SessionVoiceAudience audience = SessionVoiceAudience::TeamRadio;   // the original: team-only voice (RE TnVoiceMuteHandler); proximity opt-in
     std::string device;                     // capture device name; "" = the system default
     int volume = 70;                        // playback 0-100
 };

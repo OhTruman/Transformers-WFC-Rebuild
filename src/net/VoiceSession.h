@@ -55,6 +55,10 @@ public:
     void setConfig(const Config& c);                      // live: volume, audience, open mic / push to talk (the Audio rows)
     // Local mute (the lobby / pause menu's Mute): a muted talker's frames are dropped before decoding (never played). Seat -> muted.
     void setMuted(std::function<bool(int seat)> f) { muted_ = std::move(f); }
+    // The original's gameplay channels (TnVoiceMuteHandler, RE ONLINE_POSTMATCH_PARTY_VOICE_RE section 3): in a team match each player's
+    // VoiceChannel is its team and other channels are muted both ways (team-only voice); no teams (FFA) and from EndGame on
+    // (ResetMuting) every channel is open - everyone hears everyone, 2D. Open = every talker heard as radio. Independent of setMuted.
+    void setOpenChannel(bool open) { open_ = open; }
     // TEST ONLY: every decoded (or concealed) frame of a talker, before routing (WFC_VOICETEST compares it with the source).
     void setPlayTap(std::function<void(int seat, const VoiceFrame& pcm, bool concealed)> f) { tap_ = std::move(f); }
     // The talking indicator (SessionEvent::MemberVoice HeadsetState): 0 no voice heard for 10 s, 1 voice on, 2 speaking (a frame in the
@@ -103,6 +107,7 @@ private:
     double lastPlayMs_ = 0.0;
     VoiceStats stats_;
     std::function<bool(int)> muted_;
+    bool open_ = false;
     std::function<void(int, const VoiceFrame&, bool)> tap_;
     struct Heard { double lastMs = -1e9; uint8_t via = 0; };
     std::map<int, Heard> heard_;       // per seat (this seat too: its own sends) - the indicators

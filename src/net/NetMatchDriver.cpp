@@ -122,6 +122,7 @@ NetMatchDriver::NetMatchDriver(game::World& world, INetTransport& transport, aud
             const int talker = im->player(talkerSeat), listener = im->player(listenerSeat);
             const auto& ps = w->match().players();
             if (talker < 0 || listener < 0 || (size_t)talker >= ps.size() || (size_t)listener >= ps.size()) return false;
+            if (voiceChannelOpen(*w)) return true;
             if ((flags & 1) && ps[(size_t)talker].team == ps[(size_t)listener].team && ps[(size_t)talker].team != 255) return true;
             if (!(flags & 2)) return false;
             const game::Character* x = w->participantPawn(talker);
@@ -169,6 +170,8 @@ int NetMatchDriver::frame(double dtSeconds) {
         const core::Vec3 right = core::normalize(core::cross(core::forwardFromYawPitch(yaw, 0.0f), core::Vec3{0, 1, 0}));
         const int self = m.player(m.cfg.self);
         Impl* im = &m;
+        // the original's channels: team-only in a team match; FFA and from EndGame on (MatchOver) everyone (TnVoiceMuteHandler)
+        m.voice->setOpenChannel(voiceChannelOpen(w));
         m.voice->update(m.talking,
                         [&w, im](int seat, core::Vec3& out) { const int p = im->player(seat); const game::Character* c = p >= 0 ? w.participantPawn(p) : nullptr; if (!c) return false; out = c->position() + core::Vec3{0, 1.8f, 0}; return true; },
                         [&w, im, self](int seat) { const int p = im->player(seat); const auto& ps = w.match().players(); return p >= 0 && self >= 0 && (size_t)p < ps.size() && (size_t)self < ps.size() && ps[(size_t)p].team == ps[(size_t)self].team && ps[(size_t)p].team != 255; },
@@ -242,6 +245,11 @@ int NetMatchDriver::delay() const { return impl_->ls->delay(); }
 float NetMatchDriver::rttMs() const { return impl_->ls->rttMs(); }
 VoiceSession* NetMatchDriver::voice() { return impl_->voice.get(); }
 void NetMatchDriver::setTalking(bool talking) { impl_->talking = talking; }
+
+bool voiceChannelOpen(const game::World& w) {
+    const game::Match& m = w.match();
+    return !m.settings().teamGame || m.state() == game::Match::State::MatchOver || m.state() == game::Match::State::Returned;
+}
 
 void NetMatchDriver::dropSeat(int seat) { impl_->ls->dropSeat(seat); }
 

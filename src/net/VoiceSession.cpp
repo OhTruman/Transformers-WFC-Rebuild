@@ -160,9 +160,10 @@ void VoiceSession::playTalker(int seat, Talker& t, const SeatPos& seatPos, const
     if (!have) return;
     if (tap_) tap_(seat, pcm, concealedFrame);
     (void)right;   // the mixer pans positional streams itself
-    // Who hears it: radio = the talker's team, 2D at the voice volume; proximity = anyone in earshot, as a 3D voice in the cue mix
-    // (falloff, pan, the listener's room reverb, occlusion); radio wins for teammates.
-    const bool radio = (t.lastFlags & kFlagRadio) && sameTeam && sameTeam(seat);
+    // Who hears it: radio = the talker's team, 2D at the voice volume; proximity (opt-in: the audience row) = anyone in earshot, as a
+    // 3D voice in the cue mix (falloff, pan, the listener's room reverb, occlusion); radio wins for teammates. An open channel (FFA,
+    // after EndGame: setOpenChannel) = everyone, 2D.
+    const bool radio = open_ || ((t.lastFlags & kFlagRadio) && sameTeam && sameTeam(seat));
     if (!radio) {
         core::Vec3 at;
         if (!(t.lastFlags & kFlagProximity) || !seatPos || !seatPos(seat, at)) { ++stats_.unheard; return; }   // not for this listener

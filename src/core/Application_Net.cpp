@@ -211,6 +211,7 @@ void Application::runNetMatch() {
         const auto& ps = world_.match().players();
         const int a = seatMp[(size_t)talker], b = seatMp[(size_t)listener];
         if (a < 0 || b < 0 || (size_t)a >= ps.size() || (size_t)b >= ps.size()) return false;
+        if (net::voiceChannelOpen(world_)) return true;   // FFA / after EndGame: everyone (the original's channels)
         if ((flags & 1) && ps[(size_t)a].team == ps[(size_t)b].team && ps[(size_t)a].team != 255) return true;   // radio
         if (!(flags & 2)) return false;
         const game::Character* x = world_.participantPawn(a);
@@ -248,6 +249,7 @@ void Application::runNetMatch() {
             const core::Vec3 lp = me ? me->position() + core::Vec3{0, 1.8f, 0} : core::Vec3{0, 0, 0};
             const float yaw = me ? me->yaw() : 0.0f;
             const core::Vec3 right = core::normalize(core::cross(core::forwardFromYawPitch(yaw, 0.0f), core::Vec3{0, 1, 0}));
+            voice->setOpenChannel(net::voiceChannelOpen(world_));
             voice->update(true, seatPos, sameTeam, occludedQ, roomQ, lp, right);
         }
         const uint32_t n = (uint32_t)world_.simTick() + 1;
