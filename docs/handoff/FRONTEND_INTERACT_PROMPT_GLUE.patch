@@ -1,0 +1,16 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 5b3911b5..b9e71ded 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -1858,6 +1858,11 @@ void Application::routeMatchToFrontend(float dt) {
+         hf.weaponSpread = o.weapon.spread;
+         hf.weaponMessage = o.weapon.message;
+         hf.contextualPrompts = o.contextual;
++        // [Frontend] campaign: an interact in reach (Gameplay HudGameState::cpInteract: buttons, terminals, detpacks, energon, the
++        // Omega batteries) -> the original's TransGame.ContextualCommands UseInteract ("^USE_INTERACT Interact"; the ^ token is
++        // the key / pad icon via the HUD's prompt translator)
++        if (!h.cpInteract.empty())
++            hf.contextualPrompts->push_back(frontend_->catalog().localize("TransGame", "ContextualCommands", "UseInteract"));
+         hf.cantTransformCount = o.cantTransformCount;
+         // scrambled / scoringMultiplier / downedHealth have no source yet: left unset (nothing sent).
+         // Damage direction: the ring turns with the view (-PlayerYaw) and each arrow keeps its world yaw, both in the HUD's
