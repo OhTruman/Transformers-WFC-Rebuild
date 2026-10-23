@@ -891,7 +891,8 @@ void GameFlow::selectCharacter(const SelectedCharacter& c) {
     selected_ = c;
     selected_.valid = true;
     ++selectionSerial_;
-    if (session_ && role_ == SessionRole::Member && level_ == LevelKind::GameLobby) sendMemberInfo(-1);
+    if (session_ && role_ == SessionRole::Member && (level_ == LevelKind::GameLobby || (level_ == LevelKind::Match && campaign())))
+        sendMemberInfo(-1);   // campaign co-op: the in-map pick claims the trio member for the others too
     auto list = [](const std::vector<std::string>& v) { std::string o; for (const auto& x : v) o += (o.empty() ? "" : ",") + x; return o; };
     auto col = [](const CharacterColorSel& k) {
         char b[48];
@@ -928,6 +929,9 @@ void GameFlow::quitToMainMenu() {
     p.title = "$UIText.MessagePrompts.LeaveLobby";
     // online host (PC EXTENSION): leaving ends the game for everyone (the original host ended it too, silently)
     p.message = role_ == SessionRole::Host && level_ != LevelKind::PartyLobby ? "$WfcPC.Online.HostLeaveConfirm" : "$UIText.MessagePrompts.LeaveLobbyConfirm";
+    // Escalation mid-match: TnSurvivalGame's quit message (RE ESCALATION_WAVES_RE 5)
+    if (level_ == LevelKind::Match && match_.modeTag == "SV" && (role_ != SessionRole::Host || onlineMembers_.empty()))
+        p.message = "$UIText.MessagePrompts.LeaveSurvivalConfirm";
     p.postConfirm = "$UIText.MessagePrompts.LeaveLobbyInProgressMessage";
     p.a = {"$UIText.ButtonHints.Yes", "quit", false};
     p.b = {"$UIText.ButtonHints.No", "", true};

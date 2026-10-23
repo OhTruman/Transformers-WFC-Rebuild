@@ -1908,8 +1908,11 @@ static void testCampaignCoopLobby() {
     const bool lobby = runUntil(*r.rt, [&] { return r.f().level() == LevelKind::GameLobby && !r.f().loading().active; });
     r.frames(2);
     const bool hosted = r.f().sessionRole() == GameFlow::SessionRole::Host && r.f().lobby().settings && r.f().lobby().settings->tag == "CP";
-    r.fake->inject(memberEv("WFC-AAAA-AAAA-1", "Alpha", false));
+    SessionEvent mj = memberEv("WFC-AAAA-AAAA-1", "Alpha", false);
+    mj.info.iconicCharacter = "Megatron";   // the member's trio pick: greyed for the host (CharacterSelect UpdateClaimedCharacters)
+    r.fake->inject(mj);
     r.frames(2);
+    const bool claimed = r.rt->dataStores().call("ReadValue", {"<CurrentGame:ClaimedIconicCharacters>"}).s == "Megatron";
     r.f().call("Online.SetSelectedMapID", {"105"});
     r.f().call("Game.SetGameDifficulty", {"2"});
     r.f().call("Online.BeginLobbyExitCountdown");
@@ -1917,8 +1920,8 @@ static void testCampaignCoopLobby() {
     const std::string url = lc ? lc->arg : std::string();
     const bool launch = url.find("?GameModeTag=CP") != std::string::npos && url.find("?MapId=105") != std::string::npos &&
                         url.find("?WfcDifficulty=2") != std::string::npos;
-    check(party && lobby && hosted && launch, "campaign.CO1_coop_lobby_launch",
-          std::to_string(party) + std::to_string(lobby) + std::to_string(hosted) + std::to_string(launch) + " " + url);
+    check(party && lobby && hosted && claimed && launch, "campaign.CO1_coop_lobby_launch",
+          std::to_string(party) + std::to_string(lobby) + std::to_string(hosted) + std::to_string(claimed) + std::to_string(launch) + " " + url);
 }
 
 static void testEscalationNoXp() {

@@ -138,7 +138,9 @@ void GameFlow::setPushToTalkHeld(bool held) {
 
 std::vector<std::string> GameFlow::claimedIconicCharacters() const {
     std::vector<std::string> out;
-    if (!iconicMode()) return out;
+    // iconic mode, and campaign co-op: a trio member another human holds is greyed in CharacterSelect (Gameplay refuses it)
+    const bool campaignLobby = level_ == LevelKind::GameLobby && lobby_.settings && isCampaignTag(lobby_.settings->tag);
+    if (!iconicMode() && !campaignLobby && !(level_ == LevelKind::Match && campaign())) return out;
     for (const OnlineMember& m : onlineMembers_) if (!m.info.iconicCharacter.empty()) out.push_back(m.info.iconicCharacter);
     return out;
 }
