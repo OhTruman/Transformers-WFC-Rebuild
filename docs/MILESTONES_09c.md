@@ -4152,3 +4152,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   no KillZ; mines / sentries run) + FINAL_BASE_ITEMS 11 (stray empty file removed 20608326). FINAL CODE 6d30fff2, PACKAGE
   HEAD 20608326. Experimental rebuilds arms final6 / 6d30fff2; Frontend runs handover5; Systems re-pointed. Then: the
   user's reboot -> PERF_HOLD timed gate -> cut word -> refresh.sh -> verify -> hand-over.
+2026-10-23 17:57 FINAL HAND-OVER RERUN PASS on 6d30fff2 (Frontend handover5/): 249 / 249, 6 / 6 clean, pressuntil exercised, weapons +
+  characters shaded in Realistic. Experimental arms final6 / 6d30fff2 built + dry-run clean. EVERY LANE DONE FOR THE
+  BUILD. Waiting only on the user's reboot -> timed gate -> cut.
