@@ -3986,3 +3986,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (final-gate.sh: pre = base + control + same-match + stability; gate = PERF_HOLD 10 maps x 2 res x base / head x 2 reps,
   ~90 min). Gameplay cuts FINAL_BASE_ITEMS (sim-only diffs vs af4d0731). AssetTools exports TnTransformingWorldActors
   (the A1 lift body) into the units' world.glb.
+2026-10-23 09:51 MERGED 66109cf5 A1 LIFT RIDE FIXED (the pod floor had no collision: pawns fell to the bottom before the ride; a riding
+  floor set + moving nav cells relinked at rest; the trio now rides y 1093 -> 406 m), robot hit reactions (RE §2; the
+  offline SIMHASH stayed IDENTICAL: presentation only; the commit message's 'changes as expected' is wrong), Escalation M10
+  (PlayerData values, 1 s horde melee). Gameplay left: Omega AI, H3, H5, M1, M5, M11, then FINAL_BASE_ITEMS.
