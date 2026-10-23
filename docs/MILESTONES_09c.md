@@ -3824,3 +3824,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   campaign RT item: per-map bake / fit). x43 plumes: root cause = the accumulation lived only in drawSprites, which the
   default sprite stream never calls; fix written (Pipeline::smokeVolumeAdd per batch), built after the package hold.
   RE_FINAL_AUDIT merged (66 open rows, none blocking). Internal package build in progress (Systems, be5b7cdc, pack D).
+2026-10-23 06:54 Internal package BUILT: Rebuild-Systems\work\playtest_slim_be5b7cdc (27.57 GB, 0 failures; overlay g 114 / 114; pack D
+  + M6; ESC nav extras 6; Release + PGO + RT + Opus), not promoted; verify boots on the card now. MERGED 06bd8aee voice
+  channels (Team Radio default; VOICETEST / UDP / FLOW pass) with the Frontend's player card (73997b0d) + checklist refresh.
+  CORRECTION: 06bd8aee's message says the frontend tests pass; on the head online.V2_voice_settings_and_ptt FAILS (246 pass)
+  -> Frontend fixes it against the Team Radio default. Compile hold lifted.
