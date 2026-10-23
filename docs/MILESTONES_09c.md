@@ -3922,3 +3922,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 08:27 MERGED 6ba69d58 campaign runtime 8 (SeqEvent_Touch from TriggerVolume brushes + Trigger cylinders; A1 517 / 637 armed)
   + the Escalation drop meshes (svDropMesh -> Rendering draws drops). Experimental retracted the fidelity link report (their
   tooling overlaid an old tools/fidelity CMake); broad pass #1 running on d3c3e1af.
+2026-10-23 08:33 MERGED e1084e63 all 10 chapters' level audio data + non-verbal dialog events (grunts per chassis, horde profiles), the
+  Escalation drops drawn (Rendering). AssetTools: chapter-root physics.json (audio touch zones) for A1 / D5 + the chain.
+  Rendering: all Escalation / campaign render items done except the eye pass; Systems: campaign audio complete for 10
+  chapters, matinee timeline hook next.
