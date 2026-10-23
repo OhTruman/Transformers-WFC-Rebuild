@@ -30,6 +30,8 @@ struct SubMesh {
     std::string lightmapComponent;    // static decals: the receiver whose texture lightmap they sample (extras.lightmap_component)
     int sourceSection = -1;           // primitive index within that mesh
     bool hiddenGame = false;          // PrimitiveComponent.HiddenGame (world.glb extras.hidden_game): not drawn in game
+    std::string actorPath;            // the placed actor's full object path (world.glb extras.actor_path; short names repeat
+                                      // across a chapter's levels)
     TextureHandle lightmapTex = kInvalidTexture;
     float lmScale[2] = {1, 1};
     float lmBias[2] = {0, 0};
