@@ -3713,3 +3713,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Systems join in progress (4 peers equal at 5101 ticks with 2 late joiners; TooFarAlong at 300 s). All harnesses pass on the
   head. OPEN (Systems, top): frontend-booted arms that differ only in render env reach different SIMHASH 1400 -> match-frame
   A/Bs not same-moment. Card: Frontend campaign-menu shots, then Rendering x34gi + x35remnant (PPV fog + Enhanced water).
+2026-10-23 03:22 MERGED 760257b9 smoke stage 1 + Enhanced water settings (setSmokeMode / setWaterMode; SETTINGSTEST 11 / 11 windowed;
+  Original byte-identical by construction; eye sheets pending), 901d1ee2 campaign runtime contract (RE), 65c7ccc8 leave +
+  Forfeit (Gameplay-gated; my reruns next build window), f99ef748 JIP frontend glue (+ patch staged). overlay_20261023e frozen
+  (= d + Seed v3). Card: Systems' async-step diagnosis (4 arms) -> Rendering x34gi + x35remnant -> Frontend campaign capture ->
+  two-exe JIP check. Campaign render data: D5_OME 5 / 6 sublevels compile, BASE_m traced; A1 next.
