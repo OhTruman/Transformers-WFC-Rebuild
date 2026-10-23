@@ -3537,3 +3537,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   IMT_UseBrokenTangentEval (no gap scaling) corrects the Matinee doc.
 2026-10-23 00:47 Flare views PASS (Experimental): draw on sun-aimed cameras, none when occluded; notes: halo strong on axis (shipped), 8-bit
   banding -> output dithering item for Rendering. Card -> Frontend 00:55 (7 min) -> Rendering (8 min).
+2026-10-23 00:48 RE campaign #1 Matinee native merged (two corrections: no tangent gap scaling; director restore = view-target blend of the
+  last cut's TransitionTime); AnimControl slot code + RelativeToInitial matrix still HIGH -> RE finishes those before #2.
