@@ -1681,6 +1681,10 @@ public:
     bool volumetricLighting() const override { return wfc_.volumetricLighting(); }
     void setLensFlareMode(int mode) override { wfc_.setLensFlareMode(mode); }
     int lensFlareMode() const override { return wfc_.lensFlareMode(); }
+    void setSmokeMode(int mode) override { wfc_.setSmokeMode(mode); }
+    int smokeMode() const override { return wfc_.smokeMode(); }
+    void setWaterMode(int mode) override { wfc_.setWaterMode(mode); }
+    int waterMode() const override { return wfc_.waterMode(); }
     bool volumetricLightingAvailable() const override { return wfc_.rtAvailable(); }
     bool rayTracingLoadedThisMap() const override { return wfc_.rtLoadedThisMap(); }
     bool hdTexturesAvailable() override { return wfc::Pipeline::hdTexturesAvailable(); }

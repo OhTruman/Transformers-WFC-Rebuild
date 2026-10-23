@@ -1362,6 +1362,8 @@ void Pipeline::release() {
     const int keepRtMode = rtMode_, keepRtAvail = rtAvailKnown_;   // (the Ray Tracing row / F9: Off at the next map before)
     const bool keepVol = volUser_;                     // (the Volumetric Lighting row)
     const int keepLf = lensFlareMode_;                 // (the Lens Flares row)
+    const int keepSmoke = smokeMode_;                  // (the Smoke row)
+    const int keepWater = waterMode_;                  // (the Water row)
     for (LensFlareRT& lf : lensFlares_) if (lf.query) DeleteQueries(1, &lf.query);
     if (lfBoxProg_) DeleteProgram(lfBoxProg_);
     if (lfBoxVbo_) DeleteBuffers(1, &lfBoxVbo_);
@@ -1369,6 +1371,8 @@ void Pipeline::release() {
     *this = Pipeline();
     volUser_ = keepVol;
     lensFlareMode_ = keepLf;
+    smokeMode_ = keepSmoke;
+    waterMode_ = keepWater;
     loadYield_ = std::move(keepYield);
     displayGamma_ = keepGamma;
     fsrScale_ = keepFsrScale; fsrSharpness_ = keepFsrSharp;
@@ -1390,13 +1394,17 @@ void Pipeline::runSettingsSelfTest() {
     const int rm = rtMode_;
     const bool vo = volUser_;
     const int lf = lensFlareMode_;
+    const int sm = smokeMode_;
+    const int wm = waterMode_;
     displayGamma_ = 2.0f; fsrScale_ = 0.5f; fsrSharpness_ = 0.3f; anisotropy_ = 8; hdTextures_ = true; fsr3On_ = true; modern_ = true;
-    rtMode_ = 2; volUser_ = false; lensFlareMode_ = 1;
+    rtMode_ = 2; volUser_ = false; lensFlareMode_ = 1; smokeMode_ = 1; waterMode_ = 1;
     release();
     check(rtMode_ == 2, "Ray Tracing mode");
     check(!volUser_, "Volumetric Lighting");
     check(lensFlareMode_ == 1, "Lens Flares");
-    rtMode_ = rm; volUser_ = vo; lensFlareMode_ = lf;
+    check(smokeMode_ == 1, "Smoke");
+    check(waterMode_ == 1, "Water");
+    rtMode_ = rm; volUser_ = vo; lensFlareMode_ = lf; smokeMode_ = sm; waterMode_ = wm;
     check(displayGamma_ == 2.0f, "display gamma"); check(fsrScale_ == 0.5f && fsrSharpness_ == 0.3f, "FSR scale / sharpness");
     check(anisotropy_ == 8, "anisotropy"); check(hdTextures_, "HD textures"); check(fsr3On_, "FSR 3.1"); check(modern_, "Modern materials");
     displayGamma_ = g; fsrScale_ = fs; fsrSharpness_ = fsh; anisotropy_ = an; hdTextures_ = hd; fsr3On_ = f3; modern_ = mo;
@@ -3131,7 +3139,19 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     r1CheckGl();
     const bool r1Text = r1Map_ && rtShadowAoOn() && !r1Suppress_;
     if (r1Text) r1ShaderText(fs, mainStart, lightmapped && !mainOverride_);
-    if (lit && !mainOverride_) {   // (item 4) the transient point lights, per pixel (UE3 point light: Lambert + Phong)
+    // (Water row) the water materials' programs carry the Enhanced pass behind uWaterOn - every variant drawn with the material's
+    // own main (MDI / instanced included); the key starts with the material name
+    const bool waterMain = !mainOverride_ && isWaterMaterial(key.substr(0, key.find('|')));
+    if (waterMain) {
+        const std::string call = "    MatOut o; wfcMaterial(m, o);\n";
+        const size_t at = fs.find(call, mainStart), ma = fs.find("void main() {", mainStart);
+        if (at != std::string::npos && ma != std::string::npos && at > ma) {
+            fs.insert(at + call.size(), "    wfcWaterEnhance(m, o, tbn);\n");
+            fs.insert(ma, kFSWaterEnhance);
+        }
+    }
+    const bool smokeMain = smokeBuild_ && mainOverride_ == kFSMainSmoke;   // (Smoke row, Enhanced: the lights scatter in the smoke)
+    if ((lit && !mainOverride_) || smokeMain) {   // (item 4) the transient point lights, per pixel (UE3 point light: Lambert + Phong)
         const std::string anchor = "    wfcTranslucentOut(c, o.Opacity);\n";
         const size_t at = fs.find(anchor, mainStart), ma = fs.find("void main() {", mainStart);
         if (at != std::string::npos && ma != std::string::npos && at > ma) {
@@ -3185,6 +3205,11 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
                           "        s += lit * uTLCol[k].rgb * att * (k < 4 ? tv[k] : 1.0);\n"
                           "    }\n    return s;\n}\n");
         }
+    }
+    if (smokeMain) {   // (Smoke row, Enhanced) light scatters in the smoke: the phase in place of the surface's N . L
+        const std::string ndl = "float ndl = max(dot(N, L), 0.0);";
+        for (size_t at = fs.find(ndl, mainStart); at != std::string::npos; at = fs.find(ndl, at))
+            fs.replace(at, ndl.size(), "float ndl = 0.5 * wfcSmokePhase(L);");
     }
     if (rtShadowAoOn() && lightmapped && !mainOverride_ && lit) {   // (item 2B: the decoded lightmap irradiance -> target 1)
         const std::string lAnchor = "vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];";
@@ -3424,6 +3449,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     P.blend = blend; P.twoSided = twoSided; P.lit = lit; P.clip = clip;
     P.sceneDepth = code.find("m.sceneDepth") != std::string::npos || code.find("wfcDepthBiasedAlpha(") != std::string::npos;
     P.sceneColor = code.find("wfcSceneColor(") != std::string::npos;
+    P.water = waterMain;                             // (Water row: uWaterOn + the Enhanced scene bindings per draw)
     if (slots.size() > 12) LOG_WARN("wfc: %s uses %zu texture slots (unit 12 is scene depth)", key.c_str(), slots.size());
     UseProgram(id);
     for (size_t k = 0; k < slots.size(); ++k) {
@@ -3492,6 +3518,7 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
     if (matName.empty()) matName = resolveBySourceName(gm);
     std::string key = (matName.empty() ? std::string("<gltf>") : matName) + (lightmapped ? "|LM" : "|UBER");
     if (modernActive_) key += "|PBR";                    // (M6 Modern: a separate program; non-pbr materials build as before)
+    if (smokeBuild_) key += "|SMOKE";                    // (Smoke row, Enhanced: the lit / flowing sprite variant)
     static const bool gltfOnly = std::getenv("WFC_GLTFMATERIALS") != nullptr;   // A/B: AssetTools bakes
     auto mit = (gltfOnly && !lightmapped) ? mats_.end() : mats_.find(matName);
     if (mit == mats_.end() && gm) {
@@ -4296,6 +4323,16 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         if (loc >= 0) Uniform1f(loc, soft ? softM * 100.0f : 0.0f);
     }
     if (P.sceneColor) { ensureSceneColor(); ActiveTexture(GL_TEXTURE0 + 16); glBindTexture(GL_TEXTURE_2D, sceneCopyTex_); }
+    if (P.water) {   // (Water row, WfcWater.cpp) Enhanced: the scene depth / colour its reflections and absorption read; Original: off,
+                     // and no scene copies made for it
+        const int wm = waterMode();
+        Uniform1i(ULOC(P, "uWaterOn"), wm);
+        if (wm == 1 && P.blend >= 2) {                 // (translucent / additive only: the scene is complete by then)
+            if (!P.sceneDepth) { ensureSceneDepth(); ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
+                                 Uniform1i(ULOC(P, "uHasSceneDepth"), 1); }
+            if (!P.sceneColor) { ensureSceneColor(); ActiveTexture(GL_TEXTURE0 + 16); glBindTexture(GL_TEXTURE_2D, sceneCopyTex_); }
+        }
+    }
     VertexAttrib4f(5, fxColor_[0], fxColor_[1], fxColor_[2], fxColor_[3]);   // current value when unbound
     for (const Program::Slot& s : P.slots) {
         ActiveTexture(GL_TEXTURE0 + s.unit);
@@ -4630,6 +4667,12 @@ void Pipeline::flushTranslucency() {
                 Sub& d = g.subs[0];
                 d.first = (uint32_t)(gr.quad0 * 6); d.count = (uint32_t)(gr.quads * 6); d.prog = gr.prog;
                 d.matName = b.mat;                                 // diagnostics (WFC_SKIPMAT)
+                if (progs_[(size_t)gr.prog].smoke) {               // (Smoke row, Enhanced) the group's centre: its light environment
+                    core::Vec3 c{0, 0, 0}; size_t cn = 0;
+                    for (size_t k = gr.i; k < gr.j; ++k)
+                        for (const Sprite& s : batchOf(k)->sprites) { c = c + (s.c[0] + s.c[2]) * 0.5f; ++cn; }
+                    smokeCenter_ = cn ? c * (1.0f / (float)cn) : c;
+                }
                 frameFx_ = true;
                 drawSubs(g, core::Mat4::identity(), true);
                 frameFx_ = false;
@@ -4795,6 +4838,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 continue;
             }
             bindCommon(P, subModel);
+            if (P.smoke) bindSmoke(P);                     // (Smoke row, Enhanced: the group's light environment, smokeCenter_)
             if (rtShadowAoOn()) {                          // (M7 RT, RT-on programs only: the masked-opacity atlas pass)
                 static const float zero[4] = {0, 0, 0, 0};
                 Uniform4fv(ULOC(P, "uRtUvSpace"), 1, rtUvAtlas_ ? rtUvSpace_ : zero);
@@ -4981,7 +5025,9 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 if (dynamicObject && skinMode_ != 0) ++gStats.instRejected;
                 int tlMask = 0xFF;
                 bool tlMask2Set = false;
-                if (tlAllN_ > 0 && P.uTLMask2 >= 0 && tlDataTex_ && tlTileTex_) {   // (tiled: the same per-draw cull over every light)
+                // (Smoke row: a sprite group has no sub bounds - the frame stream's one Sub sits at the origin - so the smoke
+                // programs keep every light; the screen tiles still cull per 32-pixel tile)
+                if (!P.smoke && tlAllN_ > 0 && P.uTLMask2 >= 0 && tlDataTex_ && tlTileTex_) {   // (tiled: the same per-draw cull over every light)
                     const core::Vec3 c = core::transformPoint(model, (s.bmin + s.bmax) * 0.5f);
                     const float rr = core::length(s.bmax - s.bmin) * 0.5f * 1.5f + 1.0f;
                     uint32_t m2[2] = {0u, 0u};
@@ -4991,7 +5037,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                     }
                     Uniform2ui(P.uTLMask2, m2[0], m2[1]);
                     tlMask2Set = true;
-                } else if (tlN_ > 0 && P.uTLMask >= 0) {          // (item 4) per-draw light cull, as the original's per-primitive light lists
+                } else if (!P.smoke && tlN_ > 0 && P.uTLMask >= 0) {   // (item 4) per-draw light cull, as the original's per-primitive light lists
                     const core::Vec3 c = core::transformPoint(model, (s.bmin + s.bmax) * 0.5f);
                     const float rr = core::length(s.bmax - s.bmin) * 0.5f * 1.5f + 1.0f;   // (loose: skinned subs move in their bounds)
                     tlMask = 0;
@@ -8292,6 +8338,23 @@ bool Pipeline::drawFx(int id, const core::Mat4& model, const float color[4]) {
 }
 
 int Pipeline::spriteProgram(const std::string& material) {
+    if (smokeMode() == 1 && isSmokeMaterial(material)) {   // (Smoke row, Enhanced: WfcSmoke.cpp; Original never gets here)
+        auto sit = spriteSmokeProg_.find(material);
+        if (sit == spriteSmokeProg_.end()) {
+            const std::string nm = resolveName(material);
+            int prog = -1;
+            if (!nm.empty()) {
+                smokeBuild_ = true; mainOverride_ = kFSMainSmoke;
+                prog = programFor(nm, nullptr, false);
+                mainOverride_ = nullptr; smokeBuild_ = false;
+                if (prog >= 0 && progs_[(size_t)prog].original) {
+                    progs_[(size_t)prog].smoke = true; progs_[(size_t)prog].smokeFlow = smokeFlowMaterial(material);
+                } else prog = -1;
+            }
+            sit = spriteSmokeProg_.emplace(material, prog).first;   // (-1: the variant failed; the authored program below)
+        }
+        if (sit->second >= 0) return sit->second;
+    }
     auto it = spriteProg_.find(material);
     if (it == spriteProg_.end()) {
         std::string nm = resolveName(material);
@@ -8775,7 +8838,11 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
     }
     if (spriteProgram(material) < 0) return false;
     spriteCoverage(material, sp, n);
-    auto it = spriteProg_.find(material);
+    if (smokeMode() == 1 && isSmokeMaterial(material)) {   // (Smoke row, Enhanced) the batch's centre: its light environment
+        core::Vec3 c{0, 0, 0};
+        for (size_t i = 0; i < n; ++i) c = c + (sp[i].c[0] + sp[i].c[2]) * 0.5f;
+        smokeCenter_ = c * (1.0f / (float)n);
+    }
     if (!spriteVao_) {
         GenVertexArrays(1, &spriteVao_);
         GenBuffers(1, &spriteVbo_); GenBuffers(1, &spriteCbo_); GenBuffers(1, &spriteIbo_);
@@ -8827,7 +8894,7 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
     g.vao = spriteVao_;
     if (g.subs.empty()) g.subs.emplace_back();
     Sub& d = g.subs[0];
-    d.first = 0; d.count = (uint32_t)idx.size(); d.prog = it->second;
+    d.first = 0; d.count = (uint32_t)idx.size(); d.prog = spriteProgram(material);   // (cached; the Smoke row's Enhanced variant where it applies)
     d.matName = material;                                  // diagnostics (WFC_SKIPMAT)
     frameFx_ = true;
     drawSubs(g, core::Mat4::identity(), true);

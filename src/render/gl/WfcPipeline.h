@@ -106,6 +106,8 @@ extern const float kRefiningSampleOffsets[24];  // 12 x float2 (0x83711EC0)
 // CubeSum(LightsSH) / (CubeSum(AmbientSH + LightsSH) + 0.001) per channel, w = 0.
 void directLightAmbientContribution(const core::Vec3 total[6], const core::Vec3 lights[6], float out[3]);
 
+extern const char* kFSMainSmoke;   // (WfcSmoke.cpp: the Smoke row's Enhanced sprites' main)
+extern const char* kFSWaterEnhance;   // (WfcWater.cpp: the Water row's Enhanced pass, injected into the water programs)
 // Lighting inputs of a dynamic (or unbuilt static) primitive, UE3 light-environment style.
 struct LightEnv {
     core::Vec3 cube[6];           // ambient cube irradiance: +X -X +Y -Y +Z -Z (glTF axes)
@@ -134,6 +136,9 @@ struct Program {
     int blend = 0;                // 0 opaque, 1 masked, 2 translucent, 3 additive, 4 modulate
     bool twoSided = false, lit = true;
     bool original = false;        // compiled from the original material graph (not the glTF fallback)
+    bool smoke = false;           // (Smoke row, Enhanced) the lit / flowing smoke variant of a sprite material (WfcSmoke.cpp)
+    bool smokeFlow = false;       // (its texture-coordinate flow: single-image sprites only)
+    bool water = false;           // (Water row) a water material: carries wfcWaterEnhance behind uWaterOn (WfcWater.cpp)
     bool fogShape = false;        // translucent bUsedWithFogVolumes material: never drawn as a surface (UE3 RenderFogVolume only)
     bool sceneDepth = false;      // reads scene depth (DepthBiasedAlpha / SceneDepth)
     bool sceneColor = false;      // reads the resolved scene colour (SceneTexture)
@@ -222,6 +227,14 @@ public:
     // artists' 0..1 ramps), 2 Original (the shipped evaluation at the raw camera distance: their last point); restart-free
     void setLensFlareMode(int m) { lensFlareMode_ = std::min(std::max(m, 0), 2); }
     int lensFlareMode() const;
+    // the Smoke row (user 2026-10-17): 0 Original (the authored sprites, byte-identical), 1 Enhanced (smoke lit by its surroundings,
+    // moving; Realistic: volumetric plumes); restart-free; WFC_SMOKE=0|1 overrides
+    void setSmokeMode(int m) { smokeMode_ = std::min(std::max(m, 0), 1); }
+    int smokeMode() const;
+    // the Water row (playtest 2026-10-23 #14): 0 Original (the authored water materials, byte-identical), 1 Enhanced; restart-free;
+    // WFC_WATER=0|1 overrides
+    void setWaterMode(int m) { waterMode_ = std::min(std::max(m, 0), 1); }
+    int waterMode() const;
     // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
     void flushPendingDraws() { flushWeaponQueue(); }
     // the queued characters (flushDynQueue), drawn now: before translucent GL work outside the Pipeline (the game-side
@@ -978,6 +991,20 @@ private:
     std::vector<LensFlareRT> lensFlares_;
     GLuint lfBoxProg_ = 0, lfBoxVao_ = 0, lfBoxVbo_ = 0;
     float lensFlareU_[4] = {0, 0, 0, 1}, lensFlareI_ = 1.0f;
+    int smokeMode_ = 0;                              // the Smoke row: 0 Original, 1 Enhanced (WFC_SMOKE overrides)
+    int waterMode_ = 0;                              // the Water row: 0 Original, 1 Enhanced (WFC_WATER overrides)
+    // (Smoke row, Enhanced; WfcSmoke.cpp) the smoke sprite variants per material, the build flag programFor / buildProgram read,
+    // the drawn group's centre (its light environment) and the map's reference irradiance the authored colours stand for
+    std::unordered_map<std::string, int> spriteSmokeProg_;
+    bool smokeBuild_ = false;
+    core::Vec3 smokeCenter_{0, 0, 0};
+    core::Vec3 smokeRef_{-1, -1, -1};
+    int smokeRefMode_ = -1;
+    static bool isSmokeMaterial(const std::string& material);
+    static bool smokeFlowMaterial(const std::string& material);
+    void bindSmoke(const Program& P);
+    static bool isWaterMaterial(const std::string& material);
+    void smokeLight(const core::Vec3& p, core::Vec3& amb, int& n, core::Vec3 dirL[3], core::Vec3 dirC[3]);
     int lensFlareMode_ = 2;                          // the Lens Flares row: 0 Off, 1 Subtle, 2 Original (WFC_LENSFLARE overrides)
     void loadLensFlares();
     void drawLensFlares();
