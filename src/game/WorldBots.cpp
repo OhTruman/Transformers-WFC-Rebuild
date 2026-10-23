@@ -896,7 +896,9 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
                     b.noWayLast = nowS;
                     static const bool noSuicide = std::getenv("WFC_NOSTRANDSUICIDE") != nullptr;   // regression A/B against older builds
                     // The Escalation horde never suicides (the original's AI does not; the unstick is a versus-bot PC adaptation).
-                    if (nowS - b.noWaySince >= 30.0f && !noSuicide && !match_.players()[(size_t)b.player].directorSpawned) b.suicideWish = true;
+                    if (nowS - b.noWaySince >= 30.0f && !noSuicide && !match_.players()[(size_t)b.player].directorSpawned) {
+                        if (cpSquadMember(b.player)) b.cpRecover = true; else b.suicideWish = true;   // the campaign squad: moved back, no suicide
+                    }
                 }
                 LOG_INFO("bots: p%d stranded off the mesh at t %.2f at (%.1f %.1f %.1f): %s", b.player, match_.matchTime(), pos.x, pos.y, pos.z,
                          b.hasRejoin ? "walking to the mesh" : "no way found");
@@ -1281,7 +1283,9 @@ void World::botOffMeshWatch(BotBrain& b, const Character& pc, float dt) {
             b.omEntrySinceVeh = now - b.lastVehT; b.omEntryJet = b.lastVehJet; b.omEntrySinceDmg = now - b.lastDamageTime;
         }
         static const bool noSuicide = std::getenv("WFC_NOSTRANDSUICIDE") != nullptr;
-        if ((b.offMeshRun += dt) >= 30.0f && !noSuicide && !b.suicideWish && !match_.players()[(size_t)b.player].directorSpawned) {
+        b.offMeshRun += dt;
+        if (b.offMeshRun >= 30.0f && !noSuicide && !b.suicideWish && cpSquadMember(b.player)) b.cpRecover = true;   // the campaign squad: moved back
+        else if (b.offMeshRun >= 30.0f && !noSuicide && !b.suicideWish && !match_.players()[(size_t)b.player].directorSpawned) {
             const core::Vec3 p = pc.position(), e = b.omEntryPos;
             LOG_INFO("bots: p%d stranded 30 s off the mesh with a path at t %.2f at (%.1f %.1f %.1f)", b.player, now, p.x, p.y, p.z);
             LOG_INFO("bots: p%d off-mesh entry (%s): t %.2f at (%.1f %.1f %.1f), life %.1f s, vel y %.1f, %.1f s after %s form, %.1f s after damage; "

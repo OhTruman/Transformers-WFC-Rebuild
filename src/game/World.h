@@ -1419,6 +1419,7 @@ private:
     const Character* cpLeader(int bot) const;
     bool cpSquadGoal(BotBrain& b, BotGoal& g);
     bool cpLeaderMoved(const BotBrain& b) const;
+    bool cpSquadMember(int p) const { return cp_.active && std::find(cp_.squad.begin(), cp_.squad.end(), p) != cp_.squad.end(); }
     void tickSurvival(float dt);
     float svZoneScore(int zone, int type) const;
     void svSort(int type);

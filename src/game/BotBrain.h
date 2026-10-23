@@ -95,6 +95,7 @@ struct BotBrain {
     core::Vec3 rejoin{0, 0, 0}; float rejoinUntil = 0.0f;
     // Stranded with no way back: since when (continuous: searches every 4 s, a gap over 6 s restarts it); 30 s -> suicide.
     float noWaySince = -1.0f, noWayLast = -1.0f; bool suicideWish = false;
+    bool cpRecover = false;    // campaign AI squad: stranded 30 s -> moved back beside its buddy (World::tickCampaign), never a suicide
     float offMeshRun = 0.0f;   // robot form, continuously off the mesh (0.5 m tolerance), path or no path
     // Off-mesh entry diagnostics (log only): how the current off-mesh run began.
     float lastVehT = -100.0f, lastOnMeshT = -100.0f; bool lastVehJet = false; core::Vec3 lastOnMeshPos{};
