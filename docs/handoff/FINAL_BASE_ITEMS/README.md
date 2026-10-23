@@ -42,3 +42,19 @@ git-apply-in-archive-noop), so use a checkout of af4d0731 itself, or `git init` 
 - GfxPresenter: the newer HUD pieces, e.g. Escalation / campaign widgets, are not drawn.
 - The campaign's render-side calls (setMapActorTransform, unloadChapterUnit, setCinematicView, ...) are no-ops in the base. The
   campaign simulation still runs.
+
+## 07: the campaign gate items (sim through 0865b1fc + roller mines 6427ffb6)
+
+`07_campaign_gate_items.patch`: the same paths, from 7f65db0e to 0865b1fc + GAMEPLAY_CAMPAIGN_MINES. Apply it after 01–06. It
+carries:
+- the campaign transforming world actors (TnSeqAct_TransformWorldProp, TransformingActors::loadChapter);
+- the pawn factories' death outputs and the sentries;
+- the chapter start at the first checkpoint;
+- the roller mines;
+- two neighbours that came in with those heads: Rendering's assets/Gltf.cpp actor-key fix (the bind-pose actor nodes keyed by actor)
+  and the Frontend's interact-prompt glue (core/Application_Frontend.cpp).
+
+Verified like 01–06:
+- the 01–07 chain applies to a fresh af4d0731 and reproduces the tested tree exactly;
+- headless against the head build (0865b1fc + MINES), the SIMHASH stream is identical at every step: Streets TDM 4,201, Remnant ESC
+  1,675, BrokenHope ESC 2,530.
