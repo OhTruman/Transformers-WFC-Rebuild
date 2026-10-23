@@ -1,6 +1,6 @@
 """Loopback test of lobby_service.py (127.0.0.1 only): a host and a joiner socket against a service started here for 10 s.
   python -I lobby_service_test.py      -> one PASS / FAIL line per check, then SUMMARY"""
-import json, os, socket, subprocess, sys, time
+import json, os, socket, struct, subprocess, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SVC = ("127.0.0.1", 14011)
@@ -104,6 +104,38 @@ try:
     except socket.timeout:
         pass
     check(leak is None, "relay refused for a sender that never looked a lobby up")
+    # The binary relay (SYSTEMS_RELAY.md): register / lookup carry the room token + the relay port; two ids forward through it.
+    room_hex, rport = r.get("room"), r.get("relay_port")
+    check(bool(room_hex) and len(room_hex) == 16 and rport == SVC[1] + 1, "register: the relay room token + relay port (%s, %s)" % (room_hex, rport))
+    e2 = ask(joiner, {"op": "lookup", "code": code}, "endpoints")
+    check(e2 and e2.get("room") == room_hex and e2.get("relay_port") == rport, "lookup: the same room + relay port")
+    RLY = ("127.0.0.1", rport or 0)
+    room = int(room_hex or "0", 16)
+    ra, rb = sock(), sock()
+    def wr(s, src, dst, payload=b"", rm=None):
+        s.sendto(b"WR" + struct.pack("<QII", room if rm is None else rm, src, dst) + payload, RLY)
+    def recv(s):
+        try:
+            d, _ = s.recvfrom(65536)
+            return d
+        except socket.timeout:
+            return None
+    wr(ra, 11, 0); wr(rb, 22, 0)   # register both ids
+    time.sleep(0.1)
+    wr(rb, 22, 11, b"lockstep")
+    got = recv(ra)
+    check(got is not None and got[:2] == b"WR" and struct.unpack_from("<QII", got, 2) == (room, 22, 11) and got[18:] == b"lockstep",
+          "relay: id 22 -> id 11 delivered whole (header names the sender)")
+    wr(ra, 11, 22, b"voice")
+    got = recv(rb)
+    check(got is not None and got[18:] == b"voice", "relay: and back (11 -> 22)")
+    rc = sock()
+    rc.sendto(b"WR" + struct.pack("<QII", room ^ 1, 33, 11) + b"x", RLY)
+    check(recv(ra) is None, "relay: a wrong room token is dropped")
+    host.sendto(b"WFCL" + json.dumps({"op": "unregister", "code": code}).encode(), SVC)
+    time.sleep(0.2)
+    wr(rb, 22, 11, b"late")
+    check(recv(ra) is None, "relay: the room ends with its lobby")
     host.sendto(b"WFCL" + json.dumps({"op": "unregister", "code": code}).encode(), SVC)
     time.sleep(0.2)
     g = ask(joiner, {"op": "list", "version": "p2a"}, "games")

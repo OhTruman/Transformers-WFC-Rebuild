@@ -21,12 +21,19 @@ Datagrams: b"WFCL" + one JSON object {"op": ..., ...}; every answer echoes "id" 
                                                  commands are ~5-15 KB/s per player)
   ping       {}                               -> {op: pong, seen}   (seen = the address the service sees for the sender)
 No accounts, nothing stored on disk; lobbies live in memory.
+
+The binary relay (docs/handoff/SYSTEMS_RELAY.md; the fallback between two symmetric NATs), its own UDP port (--relay-port, default the
+lobby port + 1): `registered`, `endpoints` and each `quick` candidate also carry `room` (16 hex digits: the lobby's relay token) and
+`relay_port` (the client reaches the relay at the service's IP + this port). Datagram: b"WR" | room u64 | src u32 | dst u32 | payload
+(little endian). The relay learns (room, src) -> the sender's address from every datagram and forwards the whole datagram to (room,
+dst)'s address; dst 0 = register / keepalive. Unknown rooms are dropped; a room ends with its lobby; ids idle 60 s are forgotten.
 """
-import argparse, asyncio, base64, json, random, sys, time
+import argparse, asyncio, base64, json, random, struct, sys, time
 
 MAGIC = b"WFCL"
 B32 = "ABCDEFGHJKMNPQRSTVWXYZ"   # codes: letters only, no I L O U (easy to read aloud)
 HOST_TTL, PEER_TTL = 15.0, 60.0
+RELAY_MAGIC, RELAY_HDR, RELAY_IDLE = b"WR", 2 + 8 + 4 + 4, 60.0
 
 
 class Service(asyncio.DatagramProtocol):
@@ -35,6 +42,7 @@ class Service(asyncio.DatagramProtocol):
         self.peers = {}      # addr -> last lookup time (relay allow-list)
         self.log = log
         self.transport = None
+        self.relay_port = 0  # set by main (0 = no relay)
 
     def connection_made(self, t):
         self.transport = t
@@ -47,6 +55,13 @@ class Service(asyncio.DatagramProtocol):
         print(line, flush=True)
         if self.log:
             self.log.write(line + "\n"); self.log.flush()
+
+    def relay_fields(self, code):
+        l = self.lobbies.get(code)
+        return {"room": "%016x" % l["room"], "relay_port": self.relay_port} if l and self.relay_port else {}
+
+    def room_alive(self, room):
+        return any(l.get("room") == room for l in self.lobbies.values())
 
     def new_code(self):
         while True:
@@ -87,8 +102,9 @@ class Service(asyncio.DatagramProtocol):
                 self.note("register", code, seen, m.get("name"), m.get("mode"), m.get("playlist"))
             info = {k: m.get(k) for k in ("name", "mode", "playlist", "map", "players", "max", "version", "region", "lan", "public",
                                            "state", "vote")}
-            self.lobbies[code] = {"host": addr, "info": info, "last": time.time()}
-            reply({"op": "registered", "code": code, "seen": seen})
+            room = self.lobbies[code]["room"] if code in self.lobbies else random.getrandbits(64) or 1
+            self.lobbies[code] = {"host": addr, "info": info, "last": time.time(), "room": room}
+            reply(dict({"op": "registered", "code": code, "seen": seen}, **self.relay_fields(code)))
         elif op == "unregister":
             l = self.lobbies.get(m.get("code"))
             if l and l["host"] == addr:
@@ -117,6 +133,7 @@ class Service(asyncio.DatagramProtocol):
                     h = self.lobbies[g["code"]]["host"]
                     g["host_public"] = "%s:%d" % h
                     g["host_lan"] = self.lobbies[g["code"]]["info"].get("lan")
+                    g.update(self.relay_fields(g["code"]))
                     self.send(h, {"op": "punch", "peer_public": seen, "peer_lan": m.get("lan")})
                 self.peers[addr] = time.time()
                 reply({"op": "quick", "candidates": games})
@@ -126,7 +143,8 @@ class Service(asyncio.DatagramProtocol):
                 reply({"op": "endpoints", "code": m.get("code"), "error": "unknown"})
                 return
             host = "%s:%d" % l["host"]
-            reply({"op": "endpoints", "code": m.get("code"), "host_public": host, "host_lan": l["info"].get("lan")})
+            reply(dict({"op": "endpoints", "code": m.get("code"), "host_public": host, "host_lan": l["info"].get("lan")},
+                       **self.relay_fields(str(m.get("code", "")).upper())))
             self.send(l["host"], {"op": "punch", "peer_public": seen, "peer_lan": m.get("lan")})
             self.peers[addr] = time.time()
             self.note("lookup", m.get("code"), "by", seen, "-> host", host)
@@ -143,10 +161,41 @@ class Service(asyncio.DatagramProtocol):
                 self.send(dst, {"op": "relayed", "from": seen, "data": m.get("data", "")})
 
 
+class Relay(asyncio.DatagramProtocol):
+    """The binary relay: forwards b"WR" datagrams between the ids of one room (see the module doc)."""
+    def __init__(self, svc):
+        self.svc = svc
+        self.ids = {}        # (room, id) -> [addr, last seen]
+        self.transport = None
+        self.forwarded = 0
+
+    def connection_made(self, t):
+        self.transport = t
+
+    def datagram_received(self, data, addr):
+        if len(data) < RELAY_HDR or not data.startswith(RELAY_MAGIC):
+            return
+        room, src, dst = struct.unpack_from("<QII", data, 2)
+        now = time.time()
+        if (room, src) not in self.ids and not self.svc.room_alive(room):
+            return   # only clients the service gave the token to
+        if src:
+            self.ids[(room, src)] = [addr, now]
+        if dst:
+            d = self.ids.get((room, dst))
+            if d and now - d[1] <= RELAY_IDLE and self.svc.room_alive(room):
+                self.transport.sendto(data, d[0])
+                self.forwarded += 1
+        if random.random() < 0.01:   # forget idle ids now and then
+            for k in [k for k, v in self.ids.items() if now - v[1] > RELAY_IDLE]:
+                del self.ids[k]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bind", default="0.0.0.0:14010")
     ap.add_argument("--log", default=None)
+    ap.add_argument("--relay-port", type=int, default=-1, help="the binary relay's UDP port (-1 = the lobby port + 1, 0 = no relay)")
     ap.add_argument("--secs", type=float, default=0, help="stop after this long (tests); 0 = run until killed")
     a = ap.parse_args()
     host, port = a.bind.rsplit(":", 1)
@@ -155,6 +204,13 @@ def main():
     svc = Service(log)
     t, _ = loop.run_until_complete(loop.create_datagram_endpoint(lambda: svc, local_addr=(host, int(port))))
     svc.note("lobby service on", a.bind)
+    rt = None
+    rport = int(port) + 1 if a.relay_port < 0 else a.relay_port
+    if rport:
+        relay = Relay(svc)
+        rt, _ = loop.run_until_complete(loop.create_datagram_endpoint(lambda: relay, local_addr=(host, rport)))
+        svc.relay_port = rport
+        svc.note("relay on %s:%d" % (host, rport))
     try:
         if a.secs:
             loop.run_until_complete(asyncio.sleep(a.secs))
@@ -163,6 +219,8 @@ def main():
     except KeyboardInterrupt:
         pass
     t.close()
+    if rt:
+        rt.close()
 
 
 if __name__ == "__main__":
