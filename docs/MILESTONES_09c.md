@@ -3503,3 +3503,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   at World.cpp:2988; the user played Scientist). #16 second cause (Rendering rt2 8a6e1d67): transient shadow rays ended 0.05 m
   short of the lamp and hit the owner's hull -> self-shadowing under / in front of the car; now WFC_TLCLEAR 0.5 m. Candidate
   work/cand_hl = c86a56cf + fefd136b + 8a6e1d67; x24slot.sh ~12 min next on the card.
+2026-10-23 00:24 X7 (RE read): keep 2x; Gorge 'lane' darkening = a 2x chart-bleed / gutter artefact (hard edge, teal cast) -> Rendering fixes
+  gutter / dilation + compares vs Authentic before it merges; Debris reflective truer at 2x.
