@@ -4069,3 +4069,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 11:57 EYE PASS on 903b2ab7: Off clean everywhere; A1 pod draws. One Realistic-only pre-existing defect: a character near the
   camera drawn pure black (D5 Megatron; likely zero ambient from an unusable RT probe cell). DECISION: fix now (the gate
   waits on the reboot anyway; headline mode): Rendering falls back to the bake's ambient; one D5 Realistic confirm shot.
+2026-10-23 12:05 MERGED dffcf31f Realistic probe-dark fix (characters no longer lit by near-black RT probes; Off unchanged) + e4549909
+  build_lighting decal-tail fix (D1_ORB_Crash2_ART rerun). CANDIDATE = e4549909 (code dffcf31f). D1 shipped (6 / 10).
+  Pending: the Frontend's D5 Realistic confirm, Experimental pre, chapters D2 / D3A / D3B / A5 (~14:30), the user's reboot.
