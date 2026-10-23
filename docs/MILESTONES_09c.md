@@ -3570,3 +3570,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   UdpSession match exists (2957 ticks equal; member HostLost crash being fixed). Card -> Rendering 01:05 (7 min) -> Frontend.
 2026-10-23 01:06 NET.identity PASS on 4bcfde3d (phase 2 head, WFC_NET_* row). Float after-soak building on the dodge cap with the refined detector.
 2026-10-23 01:07 RE campaign #4 streaming notifies merged; RE -> #5 save-data body serializer.
+2026-10-23 01:11 MILESTONE MERGED f1d4a1d2: the menus run on the real UdpSession end to end (two-runtime loopback flow test 13 / 13: host by code,
+  join, lobby, start, load gate, match, quit). Design confirmed: Find Match = Quick Match (public), offline bots = Private
+  Match. Remaining: a two-window menu match on this PC (windowed), then the user's two-PC test.
