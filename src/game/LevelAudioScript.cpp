@@ -119,6 +119,7 @@ int LevelAudioScript::load(const assets::Json& k) {
         } else if (t == "conversation") {
             op.type = Type::Conversation;
             op.preset = j["duck"].asString();
+            op.playDialog = j["play_dialog"].asBool(false);
             for (size_t l = 0; l < j["lines"].size(); ++l) {
                 const assets::Json& ln = j["lines"][l];
                 auto ai = actorIndex.find(ln["speaker"].asString());
@@ -272,6 +273,13 @@ void LevelAudioScript::input(Op& op, int idx, SoundCues& cues, MusicPlayer* musi
         break;
     }
     case Type::Conversation:
+        if (idx == 0 && op.playDialog && (op.lines.empty() || op.lines[0].cue.empty())) {
+            // SeqAct_PlayDialog without a SoundCue [CONF bytecode, RE 8ee277d]: HmDialogComponentImpl.PlayInternal's first check calls
+            // DialogEventCallback(1) -> Stopped, synchronously in this Kismet tick; no ducking, no Finished, the emitter untouched.
+            if (logOn()) LOG_INFO("LEVELAUDIO %s play dialog: no cue - Stopped", op.id.c_str());
+            out(op, "Stopped", cues, music, listener);
+            break;
+        }
         if (idx == 0) {                                              // Play (0x8276EE00)
             if (op.lineIdx >= 0 && op.lineInst >= 0) cues.stop(op.lineInst, 0.0f);
             const bool wasActive = op.lineIdx >= 0;

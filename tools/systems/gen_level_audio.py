@@ -94,6 +94,10 @@ def reverb_preset(name):
 SINK_OPS = {'SeqAct_PlaySound', 'SeqAct_PlayPlayerPositionalSound', 'SeqAct_PlayFlybySound', 'SeqAct_Reverb',
             'SeqAct_Mixer', 'SeqAct_PlayMusic', 'SeqAct_StopMusic', 'SeqAct_AmbientAudioZone', 'SeqAct_Delay', 'SeqAct_Gate'}
 STATEFUL = {'SeqAct_AmbientAudioZone', 'SeqAct_Delay', 'SeqAct_Gate', 'SeqEvent_Touch'}   # their outputs are runtime events
+# Dialog ops (any level: the Escalation maps' Round Begin / End chains, the campaign): SeqAct_Conversation (lines), SeqAct_PlayDialog
+# (one dialog cue: Play / Stop, Stopped / Finished, a ducking preset - exported as a one-line conversation), SeqAct_RandomSwitch
+# (UE3: a random enabled 'Link N' per input; bAutoDisableLinks disables the used one, bLooping re-enables all once none is left).
+DIALOG_OPS = {'SeqAct_Conversation', 'SeqAct_PlayDialog', 'SeqAct_RandomSwitch'}
 PASS_THROUGH = {'SeqAct_ActivateRemoteEvent', 'SeqAct_Toggle', 'SeqAct_Log', 'SeqAct_DialogGroup', 'SeqAct_Mixer'}
 D_FLYBY = cls_default('HM_Engine.Default__SeqAct_PlayFlybySound')
 D_DELAY = cls_default('Engine.Default__SeqAct_Delay')
@@ -195,7 +199,7 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None, campaig
             elif cl == 'GFxEvent_FsCommand': out.append('FsCommand:' + p.get('FsCommand', ''))
             elif cl == 'SeqAct_MoviePlayer' and desc == 'Stopped': out.append('MovieStopped:' + p.get('MovieName', ''))
             elif cl == 'SeqAct_Interp' and src in timelines: out.append('Timeline:%s:%s' % (sid(src), desc))
-            elif cl in STATEFUL or (campaign and cl == 'SeqAct_Conversation'): out.append('Out:%s:%s' % (sid(src), desc))
+            elif cl in STATEFUL or cl in DIALOG_OPS: out.append('Out:%s:%s' % (sid(src), desc))
             elif cl == 'SeqEvent_SequenceActivated':
                 seq = src.rsplit('.', 1)[0]
                 for i, il in enumerate(objs.get(seq, (None, {}))[1].get('InputLinks') or []):
@@ -214,9 +218,24 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None, campaig
     def preset_name(ref):
         return objs.get(ref, (None, {}))[1].get('PresetName') or row(ref or '')[1].get('PresetName')
     for o, (cl, p) in sorted(objs.items()):
-        if cl not in SINK_OPS and cl != 'SeqEvent_Touch' and not (campaign and cl == 'SeqAct_Conversation'): continue
+        if cl not in SINK_OPS and cl != 'SeqEvent_Touch' and cl not in DIALOG_OPS: continue
         op = {'id': sid(o)}
         n_inputs = 2
+        if cl == 'SeqAct_RandomSwitch':
+            op.update(type='random_switch', links=int(p.get('LinkCount', 1)), looping=bool(p.get('bLooping', False)),
+                      auto_disable=bool(p.get('bAutoDisableLinks', False)))
+            ops.append(op)
+            for t in triggers(o, 0): links.append({'from': t, 'to': op['id'], 'input': 0})
+            continue
+        if cl == 'SeqAct_PlayDialog':   # one dialog cue = a one-line conversation (Play / Stop in; Stopped / Finished out)
+            nm = preset_name(p.get('DuckingMixerPreset'))
+            op.update(type='conversation', play_dialog=True, duck=nm, lines=[{'cue': p.get('SoundCue'), 'post_delay': 0.0, 'speaker': None, 'output': None}])
+            if p.get('SoundCue'): cues.add(p['SoundCue'])
+            if nm: presets[nm] = mixer_preset_dsp(nm)
+            ops.append(op)
+            for inp in range(2):
+                for t in triggers(o, inp): links.append({'from': t, 'to': op['id'], 'input': inp})
+            continue
         if cl == 'SeqAct_Conversation':   # [campaign] Lines [{SoundCue, PostDelayTime}] in order; Play / Stop; Played / Finished
             nm = preset_name(p.get('DuckingMixerPreset'))
             # RE CAMPAIGN_DIALOG_TIMING_RE: outputs 0 Played / 1 Stopped / 2 Finished, then one per line (3 + i); variable links
@@ -356,6 +375,44 @@ if len(sys.argv) > 1 and sys.argv[1] == '--campaign':
     audio_pkg = [x for x in subs if 'audio' in x.lower()]
     doc = level(chap, subs, geo, frozenset(am['cues']), audio_pkg[0] if audio_pkg else None, campaign=True)
     doc['campaign'] = True
+    # Subtitles (CAMPAIGN_AUDIO_DIALOG section 3): every localized wave the chapter's cues play -> its subtitle lines per language,
+    # from the chapter's own _LOC packages (SoundNodeWaveEx Subtitles [{Text, Time, UseSubtitles}], Duration). UseSubtitles false =
+    # authored not to show (kept, flagged: the HUD skips it). int = the English text; FRA where the chapter has it.
+    waves = set()
+    def walk(n):
+        if n.get('class') == 'SoundNodeWaveEx' and n.get('loc'): waves.add(n['node'])
+        for ch in n.get('children') or []: walk(ch)
+    for cd in doc['cues'].values(): walk(cd.get('tree') or {})
+    subs = {}
+    # AssetTools sidecars (manifests/campaign/*_loc_int_subtitles.json): the cooked _LOC_int copy of waves whose authored.db row is the
+    # French one (one row per object path, the FRA copy won the dedup) - the English source for those, read first.
+    import glob
+    int_override = {}
+    for sc in glob.glob('F:/Transformers Rebuild/AssetTools/manifests/campaign/*_loc_int_subtitles.json'):
+        for wv, v in (json.load(io.open(sc, encoding='utf-8')).get('waves') or {}).items():
+            lines = []
+            for st in v.get('Subtitles') or []:   # raw struct: [{name, type, value}, ...]
+                f = {x.get('name'): x.get('value') for x in st}
+                if f.get('Text'): lines.append({'time': round(f.get('Time', 0.0) or 0.0, 3), 'text': f['Text'], 'show': bool(f.get('UseSubtitles', True))})
+            if lines: int_override[wv] = {'duration': round(v.get('Duration', 0.0) or 0.0, 3), 'int': lines}
+    for wv in sorted(waves):
+        if wv in int_override:
+            subs.setdefault(wv, {'duration': int_override[wv]['duration']})['int'] = int_override[wv]['int']
+        for lang, suffix in (('int', '_LOC_int'), ('fra', '_LOC_FRA')):
+            if lang == 'int' and wv in int_override: continue   # the sidecar's cooked INT copy wins
+            rows = c.execute("select package, props from objects where opath=? and class='SoundNodeWaveEx' and package like ?",
+                             (wv, chap + '%' + suffix)).fetchall()
+            if not rows:   # a wave shared with another chapter: its _LOC copy there (e.g. D5_OME's MGTRON_LK001521 sits in D3B's)
+                rows = c.execute("select package, props from objects where opath=? and class='SoundNodeWaveEx' and package like ? order by package",
+                                 (wv, '%' + suffix)).fetchall()
+            if not rows: continue
+            p = json.loads(rows[0][1] or '{}')
+            lines = [{'time': round(x.get('Time', 0.0), 3), 'text': x.get('Text', ''), 'show': bool(x.get('UseSubtitles', True))}
+                     for x in p.get('Subtitles') or [] if x.get('Text')]
+            if lines: subs.setdefault(wv, {'duration': round(p.get('Duration', 0.0), 3)})[lang] = lines
+    doc['subtitles'] = subs
+    print('%s: subtitles for %d of %d localized waves (%d with French)' % (chap, len(subs), len(waves),
+                                                                         sum(1 for v in subs.values() if 'fra' in v)))
     io.open(dst, 'w', encoding='utf-8', newline='\n').write(json.dumps(doc, separators=(',', ':')))
     sys.exit(0)
 

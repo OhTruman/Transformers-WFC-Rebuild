@@ -142,6 +142,7 @@ private:
         int lineIdx = -1, lineInst = -1;
         float postTimer = -1.0f;
         bool lineStarted = false;
+        bool playDialog = false;   // SeqAct_PlayDialog (one cue): no cue -> Stopped at once, no ducking (RE PLAYDIALOG_NO_CUE_RE)
         // random switch: LinkCount outputs "Link 1".."Link N"; bAutoDisableLinks / bLooping; the used links
         int linkCount = 1;
         bool rsLooping = false, rsAutoDisable = false;
