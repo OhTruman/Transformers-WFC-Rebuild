@@ -3464,3 +3464,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 16:17 MERGED 66e9b275 lens-flare Subtle = first points + Base_SUN alpha x 0.25. X7: Rendering corrects itself: the 1x gain IS right at 2x
   (a 2x fit is ill-conditioned); Gorge lane's darker plate is spatial -> RE's truer-vs-different read on x7q_sheet.png, no card.
   Card queue: Frontend (to ~16:30) -> Experimental 15 min -> Rendering 6 min (Subtle re-shoot).
+2026-10-23 00:11 RELAUNCH after the credit stop (2026-10-17 16:20 -> 2026-10-23 00:08). User (10-17 16:2x): "is there a build I can play until my
+  credits reset?" -> package 6 (Rebuild-Systems\work\playtest_slim\Play.bat) is the playable build; no package 7 cut by decision.
+  User (10-23 00:09): "read the messages that didn't get done, assess, continue, all cylinders"; "I'm going to bed, make decisions
+  for yourself". Merged the stranded lane commits: Systems 83ef6f42 + 292a69b9 (matchmaking design + lobby_service.py), Frontend
+  f32235dd (lobby v2 steps 1-4; build OK, tests pass, SIMHASH identical), Experimental views-only.sh. Relaunch briefs sent to
+  all 7 lanes (new names in memory). Integration = rebuild-84.
