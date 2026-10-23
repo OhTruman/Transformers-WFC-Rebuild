@@ -383,6 +383,8 @@ private:
     struct TransientLight { core::Vec3 pos, color; float radius = 0.0f, falloff = 1.0f; core::Vec3 dir{0, 0, 0}; float cosI = 1.0f, cosO = -2.0f; bool worldOnly = false; };
     int tlWorldOnly_ = 0;   // bits of the applied 8: world-only lights (forced-dynamic map lights; characters get them via the DLE)
     std::vector<TransientLight> tlights_, tlightsDraw_;   // (item 4) collected / applied this frame
+    struct TLPrev { core::Vec3 pos, color; int slot; };
+    std::vector<TLPrev> tlPrev_;                         // (Realistic) last frame's selection: stable ranking + shadow slots
     float tlPos_[8][4] = {}, tlCol_[8][4] = {}; int tlN_ = 0;
     float tlCut_[8] = {};
     float tlDir_[8][4] = {}, tlCosI_[8] = {};   // (v3 row 3) spot axis (xyz), cos(outer) (w; -2 = a point light); cos(inner)   // (item 4) per light: (d / radius)^2 beyond which its falloff is < 1/512 (the cull sphere)   // (item 4) the applied lights as uniforms

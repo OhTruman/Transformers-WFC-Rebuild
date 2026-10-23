@@ -8417,12 +8417,59 @@ void Pipeline::selectTransientLights() {
     }
     std::sort(rank.begin(), rank.end());
     const int cap = tlTiledOn() ? (rtMode_ == 2 ? kTLMax : 8) : 8;   // (Off / Faithful: the original's 8)
+    // (Realistic) temporal stability - user playtest 2026-10-23 #3 / #16: vehicle headlights and their shadows flickered. The
+    // ranking is rebuilt every frame and only the first 4 lights get traced shadows (tv[k], k < 4), so moving vehicles and the
+    // muzzle flashes that come and go reshuffled the top: a headlight's shadow switched on and off. A light matching one this
+    // selection held last frame (one-to-one, nearest within 2 m, colour within 15 %) keeps its place unless clearly outranked
+    // (score x 1.5), and a light that held one of the 4 shadow slots keeps that slot index. WFC_TLSTABLE=0 = off (A/B)
+    std::vector<int> order;                              // indices into rank, in slot order
+    static const bool stable = !(std::getenv("WFC_TLSTABLE") && std::getenv("WFC_TLSTABLE")[0] == '0');
+    if (rtMode_ == 2 && stable && !rank.empty()) {
+        std::vector<int> prevSlot(rank.size(), -1);
+        std::vector<char> used(tlPrev_.size(), 0);
+        for (size_t k = 0; k < rank.size(); ++k) {       // (rank order: the strongest claims its match first)
+            const TransientLight& L = tlightsDraw_[rank[k].second];
+            int best = -1; float bd = 4.0f;              // (2 m squared)
+            for (size_t p = 0; p < tlPrev_.size(); ++p) {
+                if (used[p]) continue;
+                const core::Vec3 d = L.pos - tlPrev_[p].pos;
+                const float d2 = core::dot(d, d);
+                const float cs = L.color.x + L.color.y + L.color.z, ps = tlPrev_[p].color.x + tlPrev_[p].color.y + tlPrev_[p].color.z;
+                if (d2 < bd && std::fabs(cs - ps) <= 0.15f * std::max(cs, ps)) { bd = d2; best = (int)p; }
+            }
+            if (best >= 0) { used[(size_t)best] = 1; prevSlot[k] = tlPrev_[(size_t)best].slot; rank[k].first *= 1.5f; }
+        }
+        std::vector<int> idx(rank.size());
+        for (size_t k = 0; k < idx.size(); ++k) idx[k] = (int)k;
+        std::stable_sort(idx.begin(), idx.end(), [&](int a, int b) { return rank[(size_t)a].first < rank[(size_t)b].first; });
+        const size_t take = std::min(idx.size(), (size_t)cap);
+        order.assign(take, -1);
+        std::vector<char> placed(take, 0);
+        for (size_t j = 0; j < take; ++j) {              // the shadow slots keep their light
+            const int s = prevSlot[(size_t)idx[j]];
+            if (j < 4 && s >= 0 && s < 4 && (size_t)s < take && order[(size_t)s] < 0) { order[(size_t)s] = idx[j]; placed[j] = 1; }   // (only while still a top-4 light: a close newcomer 1.5x stronger takes a slot)
+        }
+        size_t w = 0;
+        for (size_t j = 0; j < take; ++j) {
+            if (placed[j]) continue;
+            while (w < take && order[w] >= 0) ++w;
+            if (w < take) order[w] = idx[j];
+        }
+        tlPrev_.clear();
+        for (size_t s = 0; s < order.size(); ++s)
+            if (order[s] >= 0) tlPrev_.push_back({tlightsDraw_[rank[(size_t)order[s]].second].pos, tlightsDraw_[rank[(size_t)order[s]].second].color, (int)s});
+    } else {
+        tlPrev_.clear();
+        for (size_t k = 0; k < rank.size(); ++k) order.push_back((int)k);
+    }
     // (v3 row 4, Realistic) the transient lights on the RT lightmap's energy basis: one gain over every muzzle / death /
     // effect light (the static lamps went through the RT calibration; these kept the original's raw values).
     // WFC_RT_TLGAIN=<x>; Off / Faithful always 1 (the original's values).
     const float tlGain = rtdef::tlGain();
     const float gain = rtMode_ == 2 ? tlGain : 1.0f;
-    for (const auto& r : rank) {
+    for (int oi : order) {
+        if (oi < 0) continue;
+        const auto& r = rank[(size_t)oi];
         if (tlAllN_ >= cap) break;
         const TransientLight& L = tlightsDraw_[r.second];
         {
@@ -8442,6 +8489,25 @@ void Pipeline::selectTransientLights() {
         tlCosI_[tlN_] = L.cosI;
         if (L.worldOnly) tlWorldOnly_ |= 1 << tlN_;
         ++tlN_;
+    }
+    {   // (diagnostics, WFC_TLDIAG=1) how often a shadow slot (0..3) changes its light - the flicker measure, either selection
+        static const bool diag = std::getenv("WFC_TLDIAG") != nullptr;
+        if (diag && rtMode_ == 2) {
+            static core::Vec3 prev[4]; static bool had[4] = {false, false, false, false};
+            static long frames = 0, changes = 0, occupied = 0;
+            for (int s = 0; s < 4; ++s) {
+                const bool has = s < tlN_;
+                const core::Vec3 p{has ? tlPos_[s][0] : 0.0f, has ? tlPos_[s][1] : 0.0f, has ? tlPos_[s][2] : 0.0f};
+                if (has) ++occupied;
+                if (has != had[s] || (has && core::length(p - prev[s]) > 2.0f)) ++changes;
+                prev[s] = p; had[s] = has;
+            }
+            if (++frames == 600) {
+                LOG_INFO("TLDIAG: 600 frames, shadow-slot light changes %ld (%.2f per frame), slots occupied %.2f per frame, stable %s",
+                         changes, changes / 600.0, occupied / 600.0, stable ? "on" : "off");
+                frames = 0; changes = 0; occupied = 0;
+            }
+        }
     }
     if (tlTiledOn()) tlBuildTiles();
     else tlAllN_ = 0;
