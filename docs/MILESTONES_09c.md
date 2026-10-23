@@ -3606,3 +3606,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (needs bots in the shot); #10 / #13 data done (Gameplay check); #18 (A) audit pending.
 2026-10-23 01:35 CAMPAIGN_GAMEPLAY_SYSTEMS_RE merged (per-chapter bosses / mechanics / classes). RE next: the A1 / A2 boss + minion action
   decode (Escalation §9 style), then the rest chapter by chapter.
+2026-10-23 01:37 MERGED 5ca8fe3a Frontend desync fix (host picks its team before setLaunch; every world builds the match from the one launch
+  record; flow test 15 / 15 + team checks) -> two-window retest queued after Systems. UdpSession-path NET.identity PASS on
+  221e7b83 in all five profiles (Experimental); net tools synced by path. ONLINE: every layer now proven on one PC except the
+  windowed menu match retest.
