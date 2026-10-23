@@ -1846,6 +1846,23 @@ static void testCampaignC2C5() {
     std::remove("wfc_profile.ini");
 }
 
+static void testSmokeWaterRows() {
+    // the Graphics rows Smoke / Water (PC EXTENSION, Rendering setSmokeMode / setWaterMode): default 0 Original, written only
+    // when Enhanced, round-trip through the data store and the profile
+    std::remove("wfc_profile.ini");
+    FrontendRuntime rt;
+    if (!rt.init()) { check(false, "settings.smoke_water_rows", "init"); return; }
+    DataStores& ds = rt.dataStores();
+    const bool defaults = ds.call("ReadValue", {"<PCSettings:Smoke>"}).s == "0" && ds.call("ReadValue", {"<PCSettings:Water>"}).s == "0";
+    ds.call("WriteValue", {"<PCSettings:Smoke>", "1"});
+    ds.call("WriteValue", {"<PCSettings:Water>", "5"});
+    rt.flow().profile().save();
+    LocalProfile back; back.load();
+    check(defaults && back.display.smoke == 1 && back.display.water == 1, "settings.smoke_water_rows",
+          std::to_string(defaults) + std::to_string(back.display.smoke) + std::to_string(back.display.water));
+    std::remove("wfc_profile.ini");
+}
+
 static void testLobbyFlowV2() {
     // LV1: Private Match hosts at once (offline: the same lobby with bots), with the profile's last mode (new profile: TDM)
     {
@@ -2161,6 +2178,7 @@ int main() {
     testCampaignC1C4();
     testCampaignC3();
     testCampaignC2C5();
+    testSmokeWaterRows();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);

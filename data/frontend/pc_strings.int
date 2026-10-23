@@ -41,6 +41,10 @@ LensFlares=Lens Flares
 LensFlaresDesc=The sun's lens flare on outdoor maps.
 LensFlaresSubtle=Subtle
 LensFlaresOriginal=Original
+Smoke=Smoke
+SmokeDesc=Enhanced: smoke lit by its surroundings and drifting.
+Water=Water
+WaterDesc=Enhanced: moving water with reflections and depth.
 VolumetricRealisticOnly=Realistic only
 [Voice]
 VoiceChat=Voice Chat
