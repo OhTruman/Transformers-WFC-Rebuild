@@ -57,6 +57,7 @@ struct RtFrame {
     // (item 4) up to 4 transient lights (xyz, w radius), traced against everything (world + characters): LightVis channel k
     // bit 1 (bit 0 = shadow light k) - each channel holds (static visible ? 1 : 0) + (transient visible ? 2 : 0), / 255
     float transLights[4][4] = {}; int transLightN = 0;
+    float transClear = 0.05f;   // (user playtest 2026-10-23 #16) the lamp-side end of a transient shadow ray (m): the owner's hull
     float transColors[4][4] = {};   // (v3 row 6) their linear colour x brightness (rgb) and falloff exponent (w)
     // (item 3) the previous frame's view-projection (GL column-major) of RtTargets::prevColor; prevValid = it holds a frame
     float prevVP[16] = {}; bool prevValid = false;
