@@ -4093,3 +4093,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 13:30 AssetTools fixes landed for D3A / A2 / A4 (new streaming units CourtTrans_VIG + DRIVE3_Trans_Design, persistent Base
   units with the whole-chapter gameplay.json). Gameplay D3A rerun: 9 units at start incl. Base, pickups 8 factories load,
   340 transforming actors all with nodes, no crash. D3B / A5 get the same on shipping.
+2026-10-23 13:33 GO (AssetTools): ~890 skeletal world actors drawn nowhere (set dressing: neither transforming nor matinee-driven; D5 3,
+  A1 62, A2 106, A3 203, A4 126, D1 258, D2 48, D3A 81) become bind-pose nodes via extra_skeletal_actors.json, minus the
+  sentry spawn bodies (Gameplay draws those). Light, ~1 min per chapter.
