@@ -58,3 +58,13 @@ Verified like 01–06:
 - the 01–07 chain applies to a fresh af4d0731 and reproduces the tested tree exactly;
 - headless against the head build (0865b1fc + MINES), the SIMHASH stream is identical at every step: Streets TDM 4,201, Remnant ESC
   1,675, BrokenHope ESC 2,530.
+
+## 08: the campaign ToggleHidden / Destroy (dffcf31f -> 59cb3162)
+
+`08_campaign_hide_destroy.patch`: `git diff --binary 903b2ab7 59cb3162` over the same paths. 903b2ab7 equals the 01–07 tree (checked by
+file), and the diff is GAMEPLAY_CAMPAIGN_HIDE (Campaign.h, World.h, WorldCampaign.cpp, WorldCampaignRuntime.cpp). Apply it after 07.
+
+Verified:
+- the 01–08 chain applies to a fresh af4d0731 and reproduces the tested tree exactly;
+- headless against the 59cb3162 head build, the SIMHASH stream is identical at every step: Streets TDM 4,201, Remnant ESC 1,675,
+  BrokenHope ESC 2,530, and A1_IAC campaign 60 s (3,749 steps), so the base is exact for the campaign too.
