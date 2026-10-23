@@ -17,9 +17,10 @@ must be on the **same home network**.
 ## 2. A private match by code (PC A hosts)
 
 1. **Both PCs:** Multiplayer.
-2. **PC A:** **Private Match**. You are in the game lobby at once. The right column shows **Join code: WFC-XXXX-XXXX**; press
-   **C** to copy it, or read it out.
-3. **PC B:** **Join Game**, type the code (or PC A's address, e.g. `192.168.1.20`), press Enter. "Joining game..." then PC B is in
+2. **PC A:** **Private Match**. You are in the game lobby at once. The right column shows **Join code: 3Z000-02DNG** (two groups
+   of five letters and digits on a home network) and **Address: 192.168.x.x:14000** under it; press **C** to copy the code, or
+   read it out.
+3. **PC B:** **Join Game**, type the code (upper or lower case) or PC A's address, press Enter. "Joining game..." then PC B is in
    PC A's lobby. Both lobbies list both players.
 4. **PC A:** pick a map and start. Both PCs load, then the match starts together (Choose Character on each).
 5. Play a few minutes: move, shoot, transform, die, respawn. Both screens should agree: the same scores, the same kills, each
@@ -27,12 +28,15 @@ must be on the **same home network**.
 
 ## 3. Join in progress (a public match)
 
-1. **PC A:** Multiplayer, **Find Match**, **Quick Match**, pick Team Deathmatch. With no lobby server it finds nothing and hosts a
-   public lobby ("Creating lobby..."); note the **Join code**.
-2. **PC B:** **Join Game** with that code. With two players in, the lobby countdown (45 s) starts by itself; let the match begin.
-3. After a minute of play, **PC B:** pause, **Leave Match**. PC A plays on (PC B's robot leaves the match).
-4. **PC B:** **Join Game** with the same code. It goes straight into the running match: the loading screen shows "Joining the
-   match in progress... n%", then Choose Character, and PC B spawns on the team with fewer players. It should take a few seconds.
+1. **PC A:** Multiplayer, **Find Match**, **Team Deathmatch**. With no lobby server and no game on the network it hosts a public
+   lobby; it shows "Finding 1 more player" and the same Join code / Address as a private lobby.
+2. **PC B:** Multiplayer, **Find Match**, **Team Deathmatch** (it finds PC A's lobby on the network), or **Join Game** with the code.
+   With two players in, the 45 s countdown starts by itself (Start Game is off in public lobbies, as in the original); the map vote
+   closes at 10 s and the match loads.
+3. After a minute of play, **PC B:** pause, **Quit Game**, answer **Yes** to "Leave Lobby". PC B is back in the party lobby; PC A
+   plays on (PC B's robot leaves the match).
+4. **PC B:** **Join Game** with PC A's code. It goes straight into the running match: the loading screen shows "Joining the match
+   in progress... n%", then Choose Character, and PC B spawns on the team with fewer players. It should take a few seconds.
 5. Play on for a couple of minutes: both screens should agree again.
 
 ## 4. What counts as a pass
@@ -41,9 +45,10 @@ must be on the **same home network**.
 - Section 3: PC B leaves without ending PC A's match, joins again mid-match, and both agree afterwards.
 - Neither PC shows "the matches went out of sync" (a desync message) or drops back to the menu by itself.
 
-If something goes wrong: the code is refused ("That is not a join code or an address.") - check it was typed in full; "Join Game
-Failed" - PC A's lobby closed or the firewall blocked it (allow wfc_rebuild.exe, Private network); "match too far along" - joining
-a running public match is limited to its first 5 minutes; wait for the next match.
+If something goes wrong: "That is not a join code or an address." - check it was typed in full; "Join Game Failed" - PC A's
+lobby closed or the firewall blocked it (allow wfc_rebuild.exe, Private network); "Match in Progress: The match is too far along
+to join" - joining a running public match is limited to its first 5 minutes (or "The match is full"): PC B stays in the lobby and
+joins the next match when it starts, as in the original.
 
 ## 5. Send back from **each** PC
 

@@ -365,8 +365,22 @@ if len(sys.argv) > 1 and sys.argv[1] == '--campaign':
         for ch in n.get('children') or []: walk(ch)
     for cd in doc['cues'].values(): walk(cd.get('tree') or {})
     subs = {}
+    # AssetTools sidecars (manifests/campaign/*_loc_int_subtitles.json): the cooked _LOC_int copy of waves whose authored.db row is the
+    # French one (one row per object path, the FRA copy won the dedup) - the English source for those, read first.
+    import glob
+    int_override = {}
+    for sc in glob.glob('F:/Transformers Rebuild/AssetTools/manifests/campaign/*_loc_int_subtitles.json'):
+        for wv, v in (json.load(io.open(sc, encoding='utf-8')).get('waves') or {}).items():
+            lines = []
+            for st in v.get('Subtitles') or []:   # raw struct: [{name, type, value}, ...]
+                f = {x.get('name'): x.get('value') for x in st}
+                if f.get('Text'): lines.append({'time': round(f.get('Time', 0.0) or 0.0, 3), 'text': f['Text'], 'show': bool(f.get('UseSubtitles', True))})
+            if lines: int_override[wv] = {'duration': round(v.get('Duration', 0.0) or 0.0, 3), 'int': lines}
     for wv in sorted(waves):
+        if wv in int_override:
+            subs.setdefault(wv, {'duration': int_override[wv]['duration']})['int'] = int_override[wv]['int']
         for lang, suffix in (('int', '_LOC_int'), ('fra', '_LOC_FRA')):
+            if lang == 'int' and wv in int_override: continue   # the sidecar's cooked INT copy wins
             rows = c.execute("select package, props from objects where opath=? and class='SoundNodeWaveEx' and package like ?",
                              (wv, chap + '%' + suffix)).fetchall()
             if not rows:   # a wave shared with another chapter: its _LOC copy there (e.g. D5_OME's MGTRON_LK001521 sits in D3B's)
