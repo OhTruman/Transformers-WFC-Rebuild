@@ -3819,3 +3819,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   team 1, plays; leaves at 4561 -> a bot takes the slot; 0 desyncs, clean exits. INTERNAL PACKAGE WORD GIVEN to Systems
   (refresh.sh on ba9d1dcb, overlay_20261023g, WFC_OPUS=1; internal only, not the user's final build).
   RE: Escalation waves (no player-count / difficulty scaling; end screen 15 s, 0 XP); loot from the spawn-list row.
+2026-10-23 06:43 x44 D5_OME chapter view PASS for loading: the merged chapter renders lit from AssetTools' real layout (lightmaps,
+  lamps, emissives, Omega's arena); Realistic differs (warmer bounce, mean 29 -> 38) but runs without D5 calibration (later
+  campaign RT item: per-map bake / fit). x43 plumes: root cause = the accumulation lived only in drawSprites, which the
+  default sprite stream never calls; fix written (Pipeline::smokeVolumeAdd per batch), built after the package hold.
+  RE_FINAL_AUDIT merged (66 open rows, none blocking). Internal package build in progress (Systems, be5b7cdc, pack D).
