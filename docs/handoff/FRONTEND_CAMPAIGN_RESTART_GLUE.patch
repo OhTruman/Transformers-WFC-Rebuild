@@ -1,0 +1,19 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 5b3911b5..4a228fbc 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -1751,8 +1751,12 @@ void Application::routeMatchToFrontend(float dt) {
+         default: break;
+         }
+     }
+-    // [Frontend C6] Restart From Last Checkpoint: until Gameplay's in-place RestartFromActiveCheckpoint, relaunch at the active checkpoint
+-    if (flow.takeCampaignRestartRequest()) flow.campaignRelaunchAt(pf.hud.cpCheckpoint);
++    // [Frontend C6] Restart From Last Checkpoint: Gameplay's in-place RestartFromActiveCheckpoint (the respawn closes MISSION FAILED);
++    // online the host relaunches at the active checkpoint so every member follows the new launch record
++    if (flow.takeCampaignRestartRequest()) {
++        if (netDriver_) flow.campaignRelaunchAt(pf.hud.cpCheckpoint);
++        else world_.submit([](game::World& w) { w.cpRestartFromCheckpoint(); });
++    }
+     // RUNTIME-EVENTS: timer, once per change of GRI.RemainingTime while the match runs
+     if (pf.matchState == (int)game::Match::State::InProgress && pf.remainingTime != lastLoggedRemaining_) {
+         lastLoggedRemaining_ = pf.remainingTime;
