@@ -1,7 +1,16 @@
 diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
-index 95723455..fd95c9a0 100644
+index 95723455..ed38bec3 100644
 --- a/src/core/Application_Frontend.cpp
 +++ b/src/core/Application_Frontend.cpp
+@@ -909,7 +909,7 @@ void Application::attachPresenter() {
+     frontend_->script().qaHook = [this](const std::string& cmd) {
+         std::string why;
+         if (cmd != "die") why = "unknown qa command";
+-        else if (netDriver_ || frontend_->flow().sessionRole() != frontend::GameFlow::SessionRole::Offline) why = "online match";
++        else if (netDriver_) why = "online match";   // a lockstep match (a solo Private Match host runs no driver: allowed)
+         else if (!world_.matchActive() || world_.presented().matchState != (int)game::Match::State::InProgress) why = "no match in progress";
+         else if (world_.localPlayerDead()) why = "the local pawn is dead";
+         if (!why.empty()) { frontend::FlowTrace::emit("script.qa", {{"cmd", cmd}, {"result", "skipped"}, {"why", why}}); return; }
 @@ -1344,6 +1344,9 @@ void Application::runFrontend() {
          } else if (automated && !std::getenv("WFC_CHARSELECT")) {
              // Same contract as Customize.SelectCharacter (the first custom slot), not a second derivation.
