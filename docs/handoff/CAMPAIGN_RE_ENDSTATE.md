@@ -26,7 +26,7 @@ The status column says what the build should do today.
 
 | Area | Item | Label | Build assumption | Doc |
 |---|---|---|---|---|
-| Matinee | IMF_RelativeToInitial matrix order (VMX code) | H (operands C) | InitialTM × BaseTM, then KeyTM × RefTM. It matters only for **307 of 4,197** RelativeToInitial groups (actors with a Base). With stock InitTrackInst (InitialTM = ActorTM × BaseTM⁻¹), only this order reproduces the actor's start pose. | MATINEE_NATIVE §10 |
+| Matinee | IMF_RelativeToInitial matrix order (VMX code) | **C** (pass 5) | Row-vector convention: **InitialTM = KeyTM(t0)⁻¹ × (ActorTM × BaseTM⁻¹)**, RemoveScaling; **RefTM = InitialTM × BaseTM**, RemoveScaling; **World = KeyTM(t) × RefTM** | MATINEE_NATIVE §10, ENDSTATE pass 5 |
 | Matinee | slerp shortest-path for bUseQuatInterpolation | **C (0x82B82FA8)** | shortest path: second weight negated when dot < 0; plain lerp weights (1 − α, α) when \|dot\| ≥ 0.9999 (0x3F7FF972); no renormalize before the quat → rotator (0x82B8A0F0). A1 uses it on 311 move tracks | MATINEE_NATIVE §2 |
 | Matinee | Lookup-key end tangents | **C (0x82BFFD80)** | first / last key → tangents zeroed (memset 12 bytes); interior keys Catmull-Rom with (1 − Tension) · 0.5 | MATINEE_NATIVE §3 |
 | Matinee | groups bound to empty SeqVar_Objects (165) | C mechanism / H cause | actor tracks no-op; sound / event / fade tracks still run | MATINEE_NATIVE §7, PROVISIONALS_CLOSED §5 |
@@ -192,3 +192,41 @@ in Ghidra and following the static / skeletal proxy element fills.
 - **the HUD anchor clips** (Frontend).
 
 Everything closed in passes 2–3 applies to all chapters.
+
+## Pass 5 (2026-10-23): IMF_RelativeToInitial matrix order (C, VMX128 decoded)
+
+**Method:** `tools/vmx128dis.py` is a minimal VMX128 decoder for the blocks Ghidra marks "bad instruction data" (lvx128 / stvx128,
+vmrghw128 / vmrglw128, vdot4fp128 = vmsum4fp128, plus the common integer / float ops), following the public Xenia opcode tables.
+- Each product was checked by **symbolic execution** of the decoded block: named matrix elements in, the stored results read back.
+- Every product has the same shape: a 4×4 transpose of the right operand by two merge passes, then 16 dot4 of the left operand's rows
+  against those columns, then merges back to rows. That is `Out[i][j] = Σk L[i][k]·R[k][j]`, i.e. **Out = L × R**, row-major,
+  row vectors (UE3 FMatrix).
+
+**The three steps** (offsets: actor Location +0xD8, Rotation +0xE4; track instance InitialTM +0x50, InitialQuat +0x90):
+
+1. **CalcInitialTransform 0x82C3B260** (the instance setup; Ghidra has no function there, found by a raw `bl` scan):
+   - `ActorTM = RotTrans(Actor.Rotation, Actor.Location)` (0x827913B8);
+   - `BaseTM` = 0x82BF2478 (the Base actor, or its bone, with scaling removed; identity without a Base);
+   - `A = ActorTM × BaseTM⁻¹` (0x827912B8 = inverse);
+   - the track's **local key at time t0** through the vtable +0x144 (GetKeyframe position / rotation). **t0 = 0 when bForceStartPos,
+     else the SeqAct_Interp's current Position** (+0xCC), 0 with no SeqAct;
+   - `InitialTM = KeyTM(t0)⁻¹ × A`, then **RemoveScaling (1e-8)** (0x82791350: normalizes rows 0–2 when |row|² > 1e-8);
+   - `InitialQuat = FQuat(InitialTM)` (0x82B82738) → +0x90.
+2. **GetMoveRefFrame 0x82C010B8** (vtable +0x14C):
+   - IMF_World → `RefTM = BaseTM` (no RemoveScaling);
+   - **IMF_RelativeToInitial → `RefTM = InitialTM × BaseTM`, then RemoveScaling (1e-8)**.
+3. **Key → world 0x82C00CC0** (vtable +0x150): `KeyTM(t) = RotTrans(key rot (rotator → quat 0x82B82078), key pos)`;
+   **`World = KeyTM(t) × RefTM`**. The location and rotation are then extracted from World.
+
+**Consequences (C):**
+- At t = t0 the actor stays exactly where it was: `KeyTM(t0) × KeyTM(t0)⁻¹ × ActorTM × BaseTM⁻¹ × BaseTM = ActorTM`.
+- The keys are applied **in the actor's initial local frame**, so a key translation (x, 0, 0) moves along the actor's initial
+  forward axis, and key rotations compose before (to the left of) the initial rotation.
+- With a Base, the frame follows the base's current transform every evaluation (BaseTM is re-read in GetMoveRefFrame), so an attached
+  actor's relative animation rides on a moving base.
+- **Key times aren't rebased:** a Matinee started mid-way (the SeqAct Position isn't 0, without ForceStartPos) captures InitialTM so
+  that the current pose equals the key at that position.
+
+This closes the last chapter-independent H in the Matinee move path. No runtime capture is needed. If Gameplay wants a regression
+check anyway: at Matinee start, record an actor's Location / Rotation, the Base transform, and the first evaluated world transform of a
+RelativeToInitial group with a Base (A1 DecoInt robot arm). The world transform must equal the start pose.
