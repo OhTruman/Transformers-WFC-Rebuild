@@ -51,6 +51,9 @@
 //                    start - no cue / refused - aborts: pop, "Stopped"); the cue's end -> PostDelayTimer = PostDelayTime
 //                    and the line's own output (3 + i). Stop -> the line stops, pop, "Stopped". The speaker is the line's
 //                    first variable link [the dialog plays from that actor; none / unresolved = at the listener].
+//   random_switch    SeqAct_RandomSwitch [HIGH, stock UE3]: each input fires one random enabled 'Link N'; bAutoDisableLinks disables
+//                    the used link, bLooping re-enables all once none is left (else the switch goes quiet). Presentation randomness
+//                    (audio only). The Escalation maps' Round End dialog picks (SeqAct_PlayDialog = a one-line conversation).
 //   timeline sounds  InterpTrackSound keys on a campaign matinee: the key's cue plays at the group actor when the position
 //                    passes it, the same forward walk as the event keys [HIGH, stock UE3]; Volume / Pitch not applied.
 // Triggers ("links" from): GameplayStarted (fired by AmbientAudio on the level's first tick), FsCommand:<cmd> and
@@ -59,6 +62,7 @@
 // e.g. Game:TnSeqEvent_SurvivalEvents:Round Begin - fired by Gameplay through World::levelAudioEvent). Sub-sequences,
 // remote events and pass-through actions are flattened by the generator.
 #pragma once
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -101,13 +105,15 @@ public:
     int conversationsPlaying() const;
     float timelinePosition() const;       // the first timeline's position (s), -1 if none
     int oneShots() const { return oneShots_; }
+    // A conversation line started (cue, its sound instance): the subtitle hook (CampaignSubtitles resolves the text; the HUD shows it).
+    void setDialogListener(std::function<void(const std::string& cue, int instance)> f) { dialogListener_ = std::move(f); }
     int soundKeysFired() const { return keysFired_; }   // timeline sound keys passed (played or not: a culled cue counts)
     int fired() const { return fired_; }
     // Test hook (WFC_CAMPAIGNAUDIOTEST): every trigger fired since load(), linked or not.
     bool hasFired(const std::string& t) const { return firedSet_.count(t) != 0; }
 
 private:
-    enum class Type { PlaySound, Pool, Reverb, PlayMusic, StopMusic, Timeline, Touch, Zone, Delay, Gate, Mixer, Flyby, Conversation };
+    enum class Type { PlaySound, Pool, Reverb, PlayMusic, StopMusic, Timeline, Touch, Zone, Delay, Gate, Mixer, Flyby, Conversation, RandomSwitch };
     struct Event { float time; std::string trigger; };
     struct SoundKey { float time; std::string cue; int actor; };          // timeline InterpTrackSound key (campaign)
     struct Line { std::string cue; float postDelay; int speaker; std::string output; };   // conversation line
@@ -136,6 +142,10 @@ private:
         int lineIdx = -1, lineInst = -1;
         float postTimer = -1.0f;
         bool lineStarted = false;
+        // random switch: LinkCount outputs "Link 1".."Link N"; bAutoDisableLinks / bLooping; the used links
+        int linkCount = 1;
+        bool rsLooping = false, rsAutoDisable = false;
+        std::vector<char> rsUsed;
         // touch
         std::vector<core::Vec3> tris;     // triangle soup (glTF)
         core::Vec3 bmin{0, 0, 0}, bmax{0, 0, 0};
@@ -176,6 +186,7 @@ private:
     int touches_ = 0;
     int links_ = 0, oneShots_ = 0, fired_ = 0, depth_ = 0, keysFired_ = 0;
     std::string musicStart_;
+    std::function<void(const std::string&, int)> dialogListener_;
     std::unordered_set<std::string> firedSet_;
 };
 

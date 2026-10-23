@@ -110,6 +110,12 @@ int LevelAudioScript::load(const assets::Json& k) {
             }
             std::stable_sort(op.soundKeys.begin(), op.soundKeys.end(), [](const SoundKey& a, const SoundKey& b) { return a.time < b.time; });
             std::stable_sort(op.events.begin(), op.events.end(), [](const Event& a, const Event& b) { return a.time < b.time; });
+        } else if (t == "random_switch") {
+            op.type = Type::RandomSwitch;
+            op.linkCount = std::max(1, j["links"].asInt(1));
+            op.rsLooping = j["looping"].asBool(false);
+            op.rsAutoDisable = j["auto_disable"].asBool(false);
+            op.rsUsed.assign((size_t)op.linkCount, 0);
         } else if (t == "conversation") {
             op.type = Type::Conversation;
             op.preset = j["duck"].asString();
@@ -254,6 +260,17 @@ void LevelAudioScript::input(Op& op, int idx, SoundCues& cues, MusicPlayer* musi
         break;
     case Type::Touch:
         break;
+    case Type::RandomSwitch: {
+        std::vector<int> open;
+        for (int k = 0; k < op.linkCount; ++k) if (!op.rsUsed[(size_t)k]) open.push_back(k);
+        if (open.empty() && op.rsLooping) { std::fill(op.rsUsed.begin(), op.rsUsed.end(), 0); for (int k = 0; k < op.linkCount; ++k) open.push_back(k); }
+        if (open.empty()) break;
+        const int k = open[(size_t)std::min((int)open.size() - 1, (int)(frand() * (float)open.size()))];
+        if (op.rsAutoDisable) op.rsUsed[(size_t)k] = 1;
+        if (logOn()) LOG_INFO("LEVELAUDIO %s random switch -> Link %d", op.id.c_str(), k + 1);
+        out(op, ("Link " + std::to_string(k + 1)).c_str(), cues, music, listener);
+        break;
+    }
     case Type::Conversation:
         if (idx == 0) {                                              // Play (0x8276EE00)
             if (op.lineIdx >= 0 && op.lineInst >= 0) cues.stop(op.lineInst, 0.0f);
@@ -385,6 +402,7 @@ void LevelAudioScript::tick(float dt, const core::Vec3& listener, SoundCues& cue
                 continue;
             }
             op.lineStarted = true;
+            if (dialogListener_) dialogListener_(ln.cue, op.lineInst);
             if (logOn()) LOG_INFO("LEVELAUDIO %s line %d %s on %d", op.id.c_str(), op.lineIdx, ln.cue.c_str(), ln.speaker);
         } else if (op.postTimer < 0.0f && !cues.playing(op.lineInst)) {   // DialogEventCallback Finished
             op.postTimer = ln.postDelay;

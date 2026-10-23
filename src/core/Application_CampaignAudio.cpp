@@ -8,6 +8,8 @@
 #include "core/Config.h"
 #include "core/Log.h"
 #include "assets/Json.h"
+#include "game/AmbientAudio.h"
+#include "game/CampaignSubtitles.h"
 #include "game/LevelAudioScript.h"
 #include "game/SoundCues.h"
 
@@ -20,12 +22,13 @@
 namespace core {
 
 void Application::runCampaignAudioTest() {
+    // A chapter JSON path, or a compiled-in level manifest's name (e.g. MP_ESC_BrokenHope: the MP / Escalation level audio).
     const char* path = std::getenv("WFC_CAMPAIGNAUDIOTEST");
-    std::ifstream f(path, std::ios::binary);
-    std::ostringstream ss; ss << f.rdbuf();
-    const std::string text = ss.str();
+    std::string text;
+    if (const char* compiled = game::AmbientAudio::manifestJson(path)) text = compiled;
+    else { std::ifstream f(path, std::ios::binary); std::ostringstream ss; ss << f.rdbuf(); text = ss.str(); }
     assets::Json doc;
-    if (!f || !assets::Json::parse(text.data(), text.size(), doc)) { LOG_ERROR("CAMPAIGNAUDIO: cannot read %s", path); std::exit(2); }
+    if (text.empty() || !assets::Json::parse(text.data(), text.size(), doc)) { LOG_ERROR("CAMPAIGNAUDIO: cannot read %s", path); std::exit(2); }
     if (!audio_) { LOG_ERROR("CAMPAIGNAUDIO: no audio device (WFC_NULLRENDER_AUDIO=1)"); std::exit(2); }
     const char* ar = std::getenv("WFC_ASSETS");
     const std::string content = std::string(ar ? ar : config::kAssetRootDefault) + "/../content/";
@@ -35,10 +38,43 @@ void Application::runCampaignAudioTest() {
     game::LevelAudioScript script;
     const assets::Json& k = doc["kismet"];
     script.load(k);
+    game::CampaignSubtitles subtitles;
+    const int subCues = subtitles.load(doc);
+    int linesStarted = 0, linesWithText = 0;
+    auto listen = [&](const std::string& cue, int) {
+        ++linesStarted;
+        if (const auto* l = subtitles.lines(cue, "int")) {
+            ++linesWithText;
+            if (!l->empty()) LOG_INFO("CAMPAIGNAUDIO subtitle %s @%.2f: %s%s", cue.c_str(), (*l)[0].time, (*l)[0].text.c_str(), (*l)[0].show ? "" : " (hidden)");
+        }
+    };
     LOG_INFO("CAMPAIGNAUDIO %s: %d cues, %d ops, %d links", doc["map"].asString().c_str(), nCues, script.opCount(), script.linkCount());
     const core::Vec3 listener{0, 0, 0};
     // Drive each op through a private trigger: a test link per op ("Test:<id>:<input>") added to a copy of the script.
     int fail = 0, convs = 0, finished = 0, stopped = 0, timelines = 0, keys = 0;
+    // WFC_CAMPAIGNAUDIO_FIRE=<trigger>: fire that gameplay trigger (e.g. Game:TnSeqEvent_SurvivalEvents:Round End) 4 times, 12 s apart at
+    // real time, with every op live (no per-op isolation): what the level's chains play, logged. Authored silences count (a RandomSwitch
+    // with empty links: BrokenHope's Round End has 11 of 20): PASS = the trigger reaches the graph and some fire starts a dialog line,
+    // or the trigger has no audio chain at all (reported).
+    if (const char* fire = std::getenv("WFC_CAMPAIGNAUDIO_FIRE")) {
+        script.setDialogListener(listen);
+        int reachedAny = 0;
+        for (int round = 0; round < 4; ++round) {
+            const int before = linesStarted;
+            const int reached = script.fire(fire, cues, nullptr, listener);
+            for (float t = 0.0f; t < 12.0f; t += 1.0f / 60.0f) {
+                script.tick(1.0f / 60.0f, listener, cues, nullptr);
+                cues.setListener(listener); cues.tick(1.0f / 60.0f); audio_->update();
+                std::this_thread::sleep_for(std::chrono::microseconds(16667));
+            }
+            LOG_INFO("CAMPAIGNAUDIO fire %s #%d: %d op inputs reached, %d dialog line(s) started", fire, round + 1, reached, linesStarted - before);
+            reachedAny += reached;
+        }
+        const bool ok = reachedAny == 0 || linesStarted > 0;
+        LOG_INFO("CAMPAIGNAUDIO RESULT %s: trigger %s, %d dialog lines over 4 fires%s", ok ? "PASS" : "FAIL", fire, linesStarted,
+                 reachedAny == 0 ? " (no audio chain on this trigger)" : "");
+        std::exit(ok ? 0 : 1);
+    }
     const assets::Json& ops = k["ops"];
     for (size_t i = 0; i < ops.size(); ++i) {
         const std::string type = ops[i]["type"].asString(), id = ops[i]["id"].asString();
@@ -51,6 +87,7 @@ void Application::runCampaignAudioTest() {
         link.obj["input"].type = assets::Json::Type::Number; link.obj["input"].numVal = 0;
         one.obj["links"].arr.push_back(link);
         script.load(one);
+        script.setDialogListener(listen);
         script.fire("Test:play", cues, nullptr, listener);
         const int shots0 = script.soundKeysFired();
         bool done = false;
@@ -85,6 +122,7 @@ void Application::runCampaignAudioTest() {
         }
         cues.stopAll();
     }
+    LOG_INFO("CAMPAIGNAUDIO subtitles: %d cues with text; %d of %d started dialog lines resolved to a subtitle", subCues, linesWithText, linesStarted);
     LOG_INFO("CAMPAIGNAUDIO RESULT %s: %d conversations (%d finished, %d stopped), %d timelines (%d keys), %d failures",
              fail ? "FAIL" : "PASS", convs, finished, stopped, timelines, keys, fail);
     std::exit(fail ? 1 : 0);
