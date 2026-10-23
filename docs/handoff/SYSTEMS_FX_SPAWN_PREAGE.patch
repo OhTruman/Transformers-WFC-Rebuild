@@ -1,6 +1,6 @@
 diff -ruN a/src/render/gl/WfcMapFx.cpp b/src/render/gl/WfcMapFx.cpp
 --- a/src/render/gl/WfcMapFx.cpp	2026-10-23 01:23:36.264241500 -0500
-+++ b/src/render/gl/WfcMapFx.cpp	2026-10-23 01:23:36.305884300 -0500
++++ b/src/render/gl/WfcMapFx.cpp	2026-10-23 01:24:41.538928100 -0500
 @@ -877,8 +877,10 @@
              const float etime = rt.time;
              int spawn = 0;
@@ -12,7 +12,7 @@ diff -ruN a/src/render/gl/WfcMapFx.cpp b/src/render/gl/WfcMapFx.cpp
              rt.spawnFrac -= std::floor(rt.spawnFrac);
              spawn += rt.forceSpawn;
              rt.forceSpawn = 0;
-@@ -1168,6 +1170,21 @@
+@@ -1168,6 +1170,22 @@
                          if (ia != m.dists.end()) { ia->second.eval(0.0f, in.rng, as); q.color[3] *= as[0]; }
                      }
                  }
@@ -27,10 +27,11 @@ diff -ruN a/src/render/gl/WfcMapFx.cpp b/src/render/gl/WfcMapFx.cpp
 +                    const float inc = 1.0f / rate[0];
 +                    const float spawnTime = std::max(0.0f, dt - (1.0f - oldLeftover) * inc - (float)s * inc);
 +                    if (spawnTime > 0.0f) {
-+                        if (q.oneOverLife > 0.0f) q.relTime = std::min(0.999f, q.relTime + spawnTime * q.oneOverLife);
++                        if (q.oneOverLife > 0.0f) q.relTime += spawnTime * q.oneOverLife;
 +                        for (int c = 0; c < 3; ++c) q.pos[c] += q.vel[c] * spawnTime;
 +                    }
 +                }
++                if (q.oneOverLife > 0.0f && q.relTime >= 1.0f) continue;   // born and dead within the step (UE3 kills RelativeTime > 1)
                  rt.parts.push_back(q);
              }
          }
