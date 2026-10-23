@@ -716,8 +716,8 @@ def decals(repo, out, mapname=None, lm_keys=None):
         o = 4
         P_, N_, UV_, I_ = [], [], [], []
         recv_prims = []                                       # (lightmap key, P, N, UV, SUV, I) per lightmapped receiver
-        # (D1_ORB_Crash2_ART: one component's receiver tail reads garbage counts / offsets - such a decal is skipped and
-        # counted [PARTIAL] instead of ending the step)
+        # (a receiver tail that still reads out-of-range counts / offsets: the decal is skipped and counted [PARTIAL]
+        # instead of ending the step)
         try:
           for _ in range(struct.unpack_from('>i', tail, 0)[0]):
             comp, stride, cnt = struct.unpack_from('>iii', tail, o); o += 12
@@ -725,7 +725,15 @@ def decals(repo, out, mapname=None, lm_keys=None):
             verts = tail[o:o + stride * cnt]; o += stride * cnt
             es, ic = struct.unpack_from('>ii', tail, o); o += 8
             if es < 0 or ic < 0 or o + es * ic > len(tail): raise ValueError('receiver indices out of range')
-            idx = struct.unpack_from('>%dH' % ic, tail, o); o += es * ic + 8
+            idx = struct.unpack_from('>%dH' % ic, tail, o); o += es * ic
+            # [NumTriangles][receiver lightmap type]: 1 = a vertex lightmap (LightMap1D) on the receiver follows -
+            # [NumLightGuids] x 16-byte GUIDs, [int][bulk: flags, count, size, offset] + size bytes of samples, 40 bytes
+            # (D1_ORB_Crash2_ART: 4 decals; every placed decal of 30 levels parses to the exact tail end with it)
+            lmtype = struct.unpack_from('>i', tail, o + 4)[0]; o += 8
+            if lmtype == 1:
+                nguid = struct.unpack_from('>i', tail, o)[0]; o += 4 + 16 * nguid
+                o += 20 + struct.unpack_from('>i', tail, o + 12)[0] + 40
+            elif lmtype != 0: raise ValueError('receiver lightmap type %d' % lmtype)
             M = receiver_matrix(comp) if comp > 0 else None
             if M is None: skipped += 1; continue
             if cnt == 0 or not idx: continue
