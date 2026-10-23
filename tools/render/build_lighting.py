@@ -23,7 +23,7 @@ LIGHT_DEFAULTS = {'Brightness': 1.0, 'LightColor': [255, 255, 255, 0], 'bEnabled
 POINT_DEFAULTS = {'Radius': 1024.0, 'FalloffExponent': 2.0, 'ShadowFalloffExponent': 2.0}
 SPOT_DEFAULTS = {'OuterConeAngle': 44.0, 'InnerConeAngle': 0.0}
 CHANNEL_DEFAULTS = {'BSP': True, 'Static': True, 'Dynamic': True, 'CompositeDynamic': True}
-VS_MAPS = r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps'
+VS_MAPS = os.environ.get('WFC_VS_ROOT', r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice') + '/Maps'  # WFC_VS_ROOT: campaign VerticalSlice root (AssetTools/work/campaign_pilot/VerticalSlice); unset = ExtractedAssets (MP unchanged)
 FOG_DEFAULTS = {'bEnabled': True, 'Density': 5e-05, 'LightBrightness': 0.1, 'LightColor': [255, 255, 255, 0],
                 'ExtinctionDistance': 100000000.0, 'StartDistance': 0.0, 'Height': 0.0}
 
@@ -99,7 +99,7 @@ def component_flags(mapname):
     archetype chain): hidden actors (bHidden, not drawn in game) and components that receive no light
     (bAcceptsLights False or an empty LightingChannels set: UE3 lights only affect overlapping channels), and the
     shadow-casting exceptions (no_shadow: CastShadow False; dynamic_shadow: bCastDynamicShadow True). Keyed by component path and by 'actor:<Actor>' (world.glb tags actor-placed nodes that way)."""
-    p = os.path.join('F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps', mapname, 'props_authored.json')
+    p = os.path.join(VS_MAPS, mapname, 'props_authored.json')
     if not os.path.exists(p):
         return {}
     out = {}
@@ -943,7 +943,16 @@ def main():
     decals(repo, out, mapname, lm_keys=set(props))   # (texture-lightmap keys: decals sample their receiver's)
     atl = sorted({a for r in props.values() for a in r['coeffs']})
     copied = 0
+    # (campaign chapters: the umodel dir is chapter-wide, one folder per level package, and LightMapTexture2D_<n> names repeat
+    # across packages - D5 1, A1 27, A2 30 - so only this map's own packages' pages are copied: <level> and <level>_LM.
+    # A dir without per-package folders (the MP maps) is walked whole, as before)
+    own = {os.path.splitext(p)[0].lower() for p in pkgs}
+    own |= {o + '_lm' for o in own}
+    tops = [d for d in os.listdir(umodel_dir) if os.path.isdir(os.path.join(umodel_dir, d))] if os.path.isdir(umodel_dir) else []
+    restrict = any(d.lower() in own for d in tops)
     for root, _, files in os.walk(umodel_dir):
+        if restrict and os.path.relpath(root, umodel_dir).split(os.sep)[0].lower() not in own:
+            continue
         for fn in files:
             if fn.startswith('LightMapTexture2D_') and fn.endswith('.png'):
                 shutil.copyfile(os.path.join(root, fn), os.path.join(out, 'lightmaps', fn)); copied += 1
