@@ -3554,3 +3554,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   formula decompile running in the background).
 2026-10-23 00:58 Float soak before-count: 6 cases / 20 runs, all Scout dodges; replayable (seed 7). Phase 2 identity row building; a two-process
   UdpSession entry asked of Systems (UDPSESSIONTEST is in-process).
+2026-10-23 00:59 Rendering CARD FREE: #16 drive arms ran (sheet pending); the 6 waterfall arms did not launch (runner regex) -> 4 min after
+  Systems. Card -> Systems 00:59 (#5 / #9 FX live-instance log).
