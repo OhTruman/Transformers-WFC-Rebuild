@@ -1,5 +1,10 @@
 // Clean-room reconstruction — bot AI data tables (see BotBrain.h).
 #include "game/BotBrain.h"
+#include "assets/Json.h"
+#include "core/Log.h"
+#include "frontend/DataPaths.h"
+#include <fstream>
+#include <sstream>
 #include <algorithm>
 #include <cstring>
 
@@ -41,11 +46,29 @@ const BotSkill& botSkill(int difficulty) {
     //                          react turn  err  fov   sight mem  strafe burst pause
     // EXPERT (PC EXTENSION, user decision 2026-10-09): HARD pushed further on every knob - reaction 0.22 -> 0.15 s, turn 620 -> 800
     // deg/s, aim error 2.0 -> 1.2 deg, FOV 160 -> 175 deg, sight 70 -> 80 m, memory 6 -> 8 s, pause between bursts x0.85.
-    static const BotSkill s[4] = {{0.80f, 220.0f, 7.0f, 110.0f, 50.0f, 2.0f, 0.45f, 0.6f, 1.5f},    // EASY
-                                  {0.45f, 380.0f, 4.0f, 130.0f, 60.0f, 4.0f, 0.75f, 0.85f, 1.15f},  // MEDIUM
-                                  {0.22f, 620.0f, 2.0f, 160.0f, 70.0f, 6.0f, 1.0f, 1.0f, 1.0f},     // HARD
+    // Playtest 2026-10-23 #12: aim error x3 / x2.75 / x2.75 / x1 (AIDUEL, about 15 / 30 / 45 % hits at 25-50 m). The live values come
+    // from data/frontend/bot_skill.json (read once; per-field fallback to this table).
+    static const BotSkill s[4] = {{0.8f, 220.0f, 21.0f, 110.0f, 50.0f, 2.0f, 0.45f, 0.6f, 1.5f},    // EASY
+                                  {0.45f, 380.0f, 11.0f, 130.0f, 60.0f, 4.0f, 0.75f, 0.85f, 1.15f},  // MEDIUM
+                                  {0.22f, 620.0f, 5.5f, 160.0f, 70.0f, 6.0f, 1.0f, 1.0f, 1.0f},     // HARD
                                   {0.15f, 800.0f, 1.2f, 175.0f, 80.0f, 8.0f, 1.0f, 1.0f, 0.85f}};   // EXPERT (PC EXTENSION)
-    return s[std::clamp(difficulty, 0, kMaxBotDifficulty)];
+    static const BotSkill* table = [] {   // thread-safe once (the parallel steering pass calls this)
+        static BotSkill t[4]; for (int i = 0; i < 4; ++i) t[i] = s[i];
+        std::ifstream f(frontend::frontendDataFile("bot_skill.json"), std::ios::binary);
+        std::stringstream ss; ss << f.rdbuf(); assets::Json j;
+        if (!f.good() || !assets::Json::parse(ss.str(), j) || !j["difficulties"].isArray()) { LOG_WARN("bot_skill.json missing or invalid: compiled bot skill"); return (const BotSkill*)t; }
+        const assets::Json& d = j["difficulties"];
+        for (size_t i = 0; i < 4 && i < d.size(); ++i) {
+            BotSkill& b = t[i]; const assets::Json& r = d[i];
+            b.reaction = r["reaction"].asFloat(b.reaction); b.turnRateDeg = r["turnRateDeg"].asFloat(b.turnRateDeg);
+            b.aimErrorDeg = r["aimErrorDeg"].asFloat(b.aimErrorDeg); b.fovDeg = r["fovDeg"].asFloat(b.fovDeg);
+            b.sightM = r["sightM"].asFloat(b.sightM); b.memory = r["memory"].asFloat(b.memory); b.strafe = r["strafe"].asFloat(b.strafe);
+            b.burstScale = r["burstScale"].asFloat(b.burstScale); b.pauseScale = r["pauseScale"].asFloat(b.pauseScale);
+        }
+        LOG_INFO("bot skill: data/frontend/bot_skill.json (aim error %.1f / %.1f / %.1f / %.1f deg)", t[0].aimErrorDeg, t[1].aimErrorDeg, t[2].aimErrorDeg, t[3].aimErrorDeg);
+        return (const BotSkill*)t;
+    }();
+    return table[std::clamp(difficulty, 0, kMaxBotDifficulty)];
 }
 
 const char* botGoalName(BotGoalKind k) {

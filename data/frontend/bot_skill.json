@@ -1,0 +1,9 @@
+{
+  "_note": "Bot skill per difficulty (PC ADAPTATION: the original MP had no bot difficulty). Read once at start; a missing or broken file falls back to the same compiled values (src/game/BotBrain.cpp). aimErrorDeg tuned 2026-10-23 on AIDUEL to about 15 / 30 / 45 % hitscan hits at 25-50 m (Easy / Medium / Hard).",
+  "difficulties": [
+    {"name": "EASY", "reaction": 0.8, "turnRateDeg": 220, "aimErrorDeg": 21, "fovDeg": 110, "sightM": 50, "memory": 2, "strafe": 0.45, "burstScale": 0.6, "pauseScale": 1.5},
+    {"name": "MEDIUM", "reaction": 0.45, "turnRateDeg": 380, "aimErrorDeg": 11, "fovDeg": 130, "sightM": 60, "memory": 4, "strafe": 0.75, "burstScale": 0.85, "pauseScale": 1.15},
+    {"name": "HARD", "reaction": 0.22, "turnRateDeg": 620, "aimErrorDeg": 5.5, "fovDeg": 160, "sightM": 70, "memory": 6, "strafe": 1, "burstScale": 1, "pauseScale": 1},
+    {"name": "EXPERT", "reaction": 0.15, "turnRateDeg": 800, "aimErrorDeg": 1.2, "fovDeg": 175, "sightM": 80, "memory": 8, "strafe": 1, "burstScale": 1, "pauseScale": 0.85}
+  ]
+}
