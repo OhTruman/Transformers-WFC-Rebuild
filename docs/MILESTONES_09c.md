@@ -4018,3 +4018,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 10:41 PACKAGE HEAD e967efd4 (a5d088db + build_slim ships the campaign manifests; code unchanged 3476b84c). Systems ready, cut
   command fixed (SPLIT_HD=1 NOPROMOTE=1 JOBS=4 refresh.sh e967efd4 ...; base ~15 GB + HD pack ~21.7 GB). Waiting: Frontend
   milestone run, Experimental pre, AssetTools chapters (~16:30), then the timed gate.
+2026-10-23 10:57 AssetTools: A3_COR shipped (46 units). Nav fixes after shipping (unsuffixed NavigationCell sort key; floor lowering on
+  empty collision glbs: A2 re-lowered; bounded off-nav fill 60 m per seed); MP / Escalation nav identical by construction;
+  A2 / A3 air nav rebuilt by a waiter. GATE HOLD: nonpaged pool 9.8 GB; the timed gate waits for the user's reboot /
+  Malwarebytes decision (put to the user ~10:50); the headless pre stage continues.
