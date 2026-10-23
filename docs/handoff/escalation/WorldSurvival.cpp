@@ -52,6 +52,7 @@ bool SurvivalData::load(const std::string& map, SurvivalData& out) {
             x.minCount = (int)r["minCount"].asFloat(0); x.maxCount = (int)r["maxCount"].asFloat(0);
             x.cost = (int)r["cost"].asFloat(0); x.spawnType = std::clamp((int)r["spawnType"].asFloat(0), 0, kSvTypes - 1);
             x.power = r["power"].asFloat(0);
+            x.loot = r["loot"].asString();
             x.chassis = r["chassis"].asString(); x.health = r["health"].asFloat(150.0f);
             for (size_t k = 0; k < r["robotWeapons"].size(); ++k) x.robotWeapons.push_back(r["robotWeapons"][k].asString());
             for (size_t k = 0; k < r["vehicleWeapons"].size(); ++k) x.vehicleWeapons.push_back(r["vehicleWeapons"][k].asString());
@@ -498,10 +499,13 @@ void World::svApplyHordeStats(Character& c, int player) {
     }
 }
 
-// E3b: a Brute carries the backpack (its only kill path) [C, RE ESCALATION_HORDE_AI section 2]; set at each spawn.
+// E3b: a Brute carries the backpack (its only kill path) [C, RE ESCALATION_HORDE_AI section 2]; a Soldier Jet its boosters (section 4);
+// set at each spawn.
 static void svArmBackpack(SurvivalState::Slot& sl, const SurvivalData& d) {
     const bool brute = d.enemies[(size_t)sl.enemy].type.rfind("Brute_", 0) == 0;
     sl.bpStage = brute ? 0 : -1; sl.bpHealth = brute ? 25.0f : 0.0f; sl.bpCritical = -1.0f; sl.bpLastHitter = -1;
+    sl.jet = d.enemies[(size_t)sl.enemy].type.rfind("Soldier_Jet", 0) == 0;
+    sl.boosterHealth = sl.jet ? 125.0f : 0.0f; sl.hoverCooldown = 1.0f;
 }
 
 // WFC_ESCTEST: one horde entry of that type spawned now (outside the wave budget).
@@ -524,6 +528,22 @@ int World::svTestSpawn(const std::string& prefix) {
 // Each stage's overflow does not carry (H stock). Returns true when the backpack took the hit (the pawn takes nothing).
 bool World::svBackpackHit(int victim, int instigator, float amount, const std::string& damageType) {
     for (SurvivalState::Slot& s : sv_.slots) {
+        if (s.player == victim && s.jet) {   // the Jet's boosters [C, RE section 4]: powered down while walking (no damage link: the body),
+                                             // powered up while hovering: 125, AI x0.5, destroyed -> TnKillAttachedPawn (RobotBooster).
+            const Character* jc = participantPawn(victim);   // PROV hit test: every hit on a hovering jet lands on a booster
+            if (!jc || jc->hoverState_ != 2 || s.boosterHealth <= 0.0f || instigator < 0 || instigator == victim) return false;
+            float dmg = amount;
+            if ((size_t)instigator < match_.players().size() && match_.players()[(size_t)instigator].kind == ParticipantKind::Bot) dmg *= 0.5f;
+            s.bpLastHitter = instigator;
+            if ((s.boosterHealth -= dmg) > 0.0f) return true;
+            ++sv_.boosterKills;
+            const int killer = !match_.sameTeam(instigator, victim) ? instigator : -1;
+            svKillingBrute_ = true;
+            noteHitDir(core::Vec3{0, 1, 0});
+            applyMatchDamage(victim, killer, 1.0e9f, false, "TransGame.TnDamageTypeRobotBooster");
+            svKillingBrute_ = false;
+            return true;
+        }
         if (s.player != victim || s.bpStage < 0) continue;
         if (s.bpStage == 1 || s.bpStage == 4 || s.bpStage == 2) return false;   // critical / exploding / gone: no health to take
         const Character* bc = participantPawn(victim);
@@ -582,6 +602,38 @@ void World::svBackpackExplode(SurvivalState::Slot& s) {
     noteHitDir(core::Vec3{0, 1, 0});
     applyMatchDamage(s.player, killer, 1.0e9f, false, type);
     svKillingBrute_ = false;
+}
+
+// E3b part 2: loot on a horde death [C, RE ESCALATION_HORDE_AI section 5 + the ESCALATION_WAVES correction]: the spawn-list row's
+// LootClassification - Soldier / CQC rows 4 TnAbilityResourcePickups, Brute / Titan 7, the boss Tank 12 plus a 50 % rare GatlingGun /
+// HeavyRocketTurret (1 : 1); GENERIC (the Jet row), SpiderDec, HoloBrute nothing; every kill +1, +1 for melee, +1 for an explosion
+// (+5 headshot: no headshot state yet, PROV). The pickups scatter around the body (PROV ring) and live 60 s (PROV).
+void World::svDropLoot(const KillFeedEntry& e) {
+    for (const SurvivalState::Slot& s : sv_.slots) {
+        if (s.player != e.victim) continue;
+        const std::string& lc = svData_.enemies[(size_t)s.enemy].loot;
+        int n = 0;
+        if (lc == "SoldierDec" || lc == "SoldierAut") n = 4;
+        else if (lc == "BruteDec" || lc == "BruteAut" || lc == "TitanDec" || lc == "TitanAut") n = 7;
+        else if (lc == "SoldierTankDec") n = 12;
+        n += 1;
+        if (e.damageType.find("Melee") != std::string::npos) n += 1;
+        if (e.damageType.find("Rocket") != std::string::npos || e.damageType.find("Grenade") != std::string::npos ||
+            e.damageType.find("Explo") != std::string::npos || e.damageType.find("Plasma") != std::string::npos) n += 1;
+        const core::Vec3 at = match_.playerLocation(e.victim);
+        for (int k = 0; k < n; ++k) {
+            const float a = 6.2831853f * (float)k / (float)n;
+            SurvivalState::Loot l; l.pos = at + core::Vec3{std::cos(a) * 1.5f, 0.0f, std::sin(a) * 1.5f}; l.life = 60.0f;
+            sv_.loot.push_back(l);
+        }
+        sv_.lootDropped += n;
+        if (lc == "SoldierTankDec" && match_.drawFloat() < 0.5f)
+            if (const WeaponDef* d = findWeaponDef(match_.drawInt(2) == 0 ? "GatlingGun" : "HeavyRocketTurret")) {
+                SurvivalState::Drop dr; dr.w = svPickupWeapon(*d); dr.pos = at; dr.life = 120.0f;
+                sv_.drops.push_back(dr); ++sv_.rareDrops;
+            }
+        return;
+    }
 }
 
 // The wave buffs on damage: a horde victim's DecreaseDamageTaken, a horde instigator's IncreaseDamage.
@@ -886,6 +938,7 @@ void World::tickSurvival(float dt) {
             for (const SurvivalState::Slot& s : sv_.slots) if (s.player == e.victim) victim = svData_.enemies[(size_t)s.enemy].type;
             LOG_INFO("ESCLOG kill %s by p%d %s t %.1f", victim.c_str(), e.killer, e.damageType.c_str(), match_.matchTime());
         }
+        svDropLoot(e);
         if (e.killer < 0 || (size_t)e.killer >= P.size() || P[(size_t)e.killer].kind == ParticipantKind::Bot) continue;
         for (const SurvivalState::Slot& s : sv_.slots)
             if (s.player == e.victim) sv_.power[(size_t)e.killer] = std::min(9999.0f, sv_.power[(size_t)e.killer] + svData_.enemies[(size_t)s.enemy].power);
@@ -944,6 +997,33 @@ void World::tickSurvival(float dt) {
         for (int z : was) if (std::find(now.begin(), now.end(), z) == now.end()) svTouch(z, -1);
         for (int z : now) if (std::find(was.begin(), was.end(), z) == was.end()) svTouch(z, +1);
         was = now;
+    }
+    // E3b part 2: the Jet's HoverFromTactical (<= 6 s; ShootingStrafeFromHover every 2-3 s) [C actions, PROV trigger]: a horde jet with a
+    // target jumps into a hover when its timer runs out; the hover itself is the chassis' (HoverJumpHeight / HoverDuration).
+    for (SurvivalState::Slot& s : sv_.slots) {
+        if (!s.inUse || !s.jet || (s.hoverCooldown -= dt) > 0.0f) continue;
+        const Character* jc = participantPawn(s.player);
+        for (BotBrain& br : bots_)
+            if (br.player == s.player && jc && jc->onGround() && br.target >= 0) {
+                br.pendingHover = true; ++sv_.hovers;
+                s.hoverCooldown = 6.0f + 2.0f + match_.drawFloat();
+            }
+    }
+    // Loot: a player pawn touching a pickup (1.5 m) takes +3 ability resource; unclaimed pickups expire.
+    for (size_t k = 0; k < sv_.loot.size();) {
+        SurvivalState::Loot& l = sv_.loot[k];
+        bool taken = false;
+        for (size_t q = 0; q < P.size() && !taken; ++q) {
+            if (P[q].kind == ParticipantKind::Bot) continue;
+            const Character* c = participantPawn((int)q);
+            if (!c) continue;
+            const core::Vec3 d = c->position() - l.pos;
+            if (d.x * d.x + d.z * d.z < 1.5f * 1.5f && std::fabs(d.y) < 3.0f) {
+                if (sv_.abilityResource.size() < P.size()) sv_.abilityResource.resize(P.size(), 0.0f);
+                sv_.abilityResource[q] += 3.0f; ++sv_.lootTaken; taken = true;
+            }
+        }
+        if (taken || (l.life -= dt) <= 0.0f) { l = sv_.loot.back(); sv_.loot.pop_back(); } else ++k;
     }
     for (SurvivalState::Slot& s : sv_.slots)   // E3b: the backpack's critical state explodes after 3.0 s (or with the extinguish anim's end: PROV 3 s)
         if (s.inUse && s.bpStage == 1 && (s.bpCritical -= dt) <= 0.0f) svBackpackExplode(s);

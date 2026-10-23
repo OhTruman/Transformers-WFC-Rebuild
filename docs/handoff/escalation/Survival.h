@@ -28,7 +28,8 @@ struct SurvivalData {
     struct Wave { int budget = 0, budgetAlive = 0, deficit = 0; int decreaseTaken = -1, increaseDealt = -1; };   // buff levels (-1 none)
     std::vector<Wave> waves;
     struct Enemy { std::string type; int minWave = 0, maxWave = 0, minCount = 0, maxCount = 0, cost = 0, spawnType = 0; float power = 0.0f;
-                   std::string chassis; std::vector<std::string> robotWeapons, vehicleWeapons; float health = 150.0f; };   // E3a: the body
+                   std::string chassis; std::vector<std::string> robotWeapons, vehicleWeapons; float health = 150.0f;   // E3a: the body
+                   std::string loot; };   // E3b: the row's LootClassification (TR_Escalation_m.Loot_Table key)
     std::vector<Enemy> enemies;
     struct Zone {
         std::string id;
@@ -97,7 +98,9 @@ struct SurvivalState {
     struct Slot { int player = -1; int enemy = -1; bool inUse = false; float takenMul = 1.0f, dealtMul = 1.0f;   // the horde participants, one per entry x MaxCount
                   // E3b: the Brute's backpack (RB_Brute*_Backpack_DES): the state chain 0 (25) -> 5 (50) -> 3 (75) -> 1 critical (3 s) -> 4
                   // explode; bpStage -1 = no backpack. bpLastHitter = LastHitInstigator (the explosion's instigator).
-                  int bpStage = -1; float bpHealth = 0.0f, bpCritical = -1.0f; int bpLastHitter = -1; };
+                  int bpStage = -1; float bpHealth = 0.0f, bpCritical = -1.0f; int bpLastHitter = -1;
+                  // E3b part 2: the Soldier Jet's boosters (RB_SoldierJetDec_DES, 125, powered up only while hovering) and its hover timer
+                  bool jet = false; float boosterHealth = 0.0f, hoverCooldown = 0.0f; };
     std::vector<Slot> slots;
     // Spawn finder: per zone UniversalScoreAdjustment, CurrentScore[type], the round-robin SpawnPointIndex; per type the sorted
     // zone order (re-sorted only for the types a touch names: the original's stale-order behaviour, RE C).
@@ -140,6 +143,12 @@ struct SurvivalState {
     std::vector<Drop> drops;
     std::vector<uint8_t> pickupPress;
     int weaponTakes = 0, ammoTakes = 0, tosses = 0;
+    // E3b part 2: loot (TR_Escalation_m.Loot_Table): TnAbilityResourcePickups on the ground, +3 ability resource each to the player who
+    // touches it; per match player the resource gathered (PROV: the abilities do not spend it yet).
+    struct Loot { core::Vec3 pos{0, 0, 0}; float life = 0.0f; };
+    std::vector<Loot> loot;
+    std::vector<float> abilityResource;
+    int lootDropped = 0, lootTaken = 0, rareDrops = 0, boosterKills = 0, hovers = 0;
     int bpHits = 0, bpRefused = 0, bpExplosions = 0;   // E3b backpack diagnostics (hits taken, hits refused by the gates)
     int spawns = 0, failedSpawns = 0;
     std::vector<int> spawnOrder;               // the enemy entry of every spawn (tests)
