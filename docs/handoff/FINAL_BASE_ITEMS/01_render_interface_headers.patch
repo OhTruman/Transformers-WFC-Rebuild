@@ -1,0 +1,150 @@
+diff --git a/src/render/Camera.h b/src/render/Camera.h
+index e87ee794..4776aad4 100644
+--- a/src/render/Camera.h
++++ b/src/render/Camera.h
+@@ -9,6 +9,10 @@ struct Camera {
+     core::Vec3 pos{0, 3, 10};
+     float yaw = 0.0f;     // radians, around Y
+     float pitch = 0.0f;   // radians, around X
++    // radians about the view axis, after yaw and pitch (UE Rotator.Roll sense: positive rolls the camera right, so the
++    // horizon tilts counter-clockwise on screen); 0 = the yaw / pitch view exactly. Every view matrix comes from view()
++    // (main, TAA / motion previous view, RT, shadow fitting, HUD markers); the audio listener keeps yaw / pitch only.
++    float roll = 0.0f;
+     // WFC authors FOV as HORIZONTAL degrees (UE3 convention). Vertical FOV is derived per aspect.
+     float fovXDeg = 75.0f;
+     float aspect = 16.0f / 9.0f;
+@@ -23,7 +27,8 @@ struct Camera {
+     }
+     core::Mat4 view() const {
+         core::Vec3 fwd = core::forwardFromYawPitch(yaw, pitch);
+-        return core::Mat4::lookAt(pos, pos + fwd, core::Vec3{0, 1, 0});
++        const core::Mat4 v = core::Mat4::lookAt(pos, pos + fwd, core::Vec3{0, 1, 0});
++        return roll != 0.0f ? core::Mat4::rotateZ(roll) * v : v;   // (roll 0: the same matrix, no multiply)
+     }
+ };
+ 
+diff --git a/src/render/Mesh.h b/src/render/Mesh.h
+index c72b9f9e..89b21973 100644
+--- a/src/render/Mesh.h
++++ b/src/render/Mesh.h
+@@ -29,6 +29,9 @@ struct SubMesh {
+     std::string nodeName;             // glTF node name (placed actor, e.g. StaticInterpActor_15810)
+     std::string lightmapComponent;    // static decals: the receiver whose texture lightmap they sample (extras.lightmap_component)
+     int sourceSection = -1;           // primitive index within that mesh
++    int gltfMesh = -1;                // glTF mesh index of the node (collision physmat runs are per mesh)
++    uint32_t meshTriOffset = 0;       // first triangle of this primitive within that glTF mesh
++    int gltfNode = -1;                // glTF node index (collision physmat node_overrides)
+     bool hiddenGame = false;          // PrimitiveComponent.HiddenGame (world.glb extras.hidden_game): not drawn in game
+     TextureHandle lightmapTex = kInvalidTexture;
+     float lmScale[2] = {1, 1};
+diff --git a/src/render/Renderer.h b/src/render/Renderer.h
+index 5fb5cb59..198aa273 100644
+--- a/src/render/Renderer.h
++++ b/src/render/Renderer.h
+@@ -159,6 +159,30 @@ public:
+     // left, cinematic cut): temporal upscaling / frame generation drop their history. reason: a short static string
+     // for the log. Large jumps are also detected from the camera itself; this covers the cuts it cannot see.
+     virtual void notifyCameraCut(const char* reason) { (void)reason; }
++    // Campaign post-process (RE CAMPAIGN_POSTPROCESS_RE.md). A chapter's PostProcessVolumes come with its render data
++    // (<chapter>/postprocess_volumes.json, tools/render/build_campaign_pp.py); Kismet toggles them by actor name
++    // (SeqAct_Toggle on a (Dynamic)PostProcessVolume: "PostProcessVolume_15759").
++    virtual void setPostProcessVolumeEnabled(const std::string& volume, bool on) { (void)volume; (void)on; }
++    // A matinee cutscene's per-frame view (Gameplay's SeqAct_Interp playback): the camera itself goes through the normal
++    // camera and notifyCameraCut("matinee") on director cuts; this carries the rest. Unset fields keep the defaults.
++    struct PostOverride {                 // the CameraActor's CamOverridePostProcess (UE3 FPostProcessSettings fields)
++        bool bloom = true, dof = false, sceneEffect = true;
++        float bloomScale = 1.0f, bloomThreshold = 1.0f;
++        float dofFocusDistance = 0.0f, dofNearFalloff = 2000.0f, dofFarFalloff = 2000.0f, dofFalloffExponent = 4.0f;
++        float dofMaxNearBlur = 1.0f, dofMaxFarBlur = 1.0f;
++        float shadows[3] = {0, 0, 0}, highlights[3] = {1, 1, 1}, midtones[3] = {1, 1, 1};
++        float desaturation = 0.0f;
++        std::string lut;                  // ColorCorrectionTexture object path ("" none)
++    };
++    struct CinematicView {
++        bool active = false;              // false: the plain game view (the rest ignored)
++        float aspect = 0.0f;              // > 0: letterboxed to this aspect (CameraActor bConstrainAspectRatio / AspectRatio)
++        float fade[4] = {0, 0, 0, 0};     // the director's Fade track / camera fade: rgb + amount (1 = the colour alone)
++        float colorScale[3] = {1, 1, 1};  // matinee ColorScale (scene colour multiplier)
++        float ppAlpha = 0.0f;             // CamOverridePostProcess blend (0 = the volumes' result, 1 = pp alone)
++        PostOverride pp;
++    };
++    virtual void setCinematicView(const CinematicView& view) { (void)view; }
+     // FSR 3 frame generation (PC ADAPTATION, M5 C; off by default, never chosen by auto-detect). It presents through a
+     // D3D12 swapchain that must exist before the window's first GL present, so it is decided at start-up:
+     // render::setFrameGenerationAtStartup(on) before createGLRenderer (a changed setting applies at the next launch).
+@@ -193,6 +217,21 @@ public:
+     virtual int rayTracingMode() const { return 0; }
+     // Applied live (the next frame); false = unavailable or an invalid mode (the mode stays as it was).
+     virtual bool setRayTracingMode(int mode) { (void)mode; return false; }
++    // X3 volumetric lighting (Settings > Graphics, shown with Ray Tracing = Realistic): applies from the next frame, survives
++    // map changes; WFC_X3=0 forces it off over the setting. Available = Realistic is possible on this GPU.
++    virtual void setVolumetricLighting(bool on) { (void)on; }
++    virtual bool volumetricLighting() const { return false; }
++    // the Lens Flares row: 0 Off, 1 Subtle, 2 Original (the shipped look, default)
++    virtual void setLensFlareMode(int mode) { (void)mode; }
++    virtual int lensFlareMode() const { return 2; }
++    // the Smoke row: 0 Original (default, the authored sprites), 1 Enhanced (lit by its surroundings, moving; Realistic: volumetric)
++    virtual void setSmokeMode(int mode) { (void)mode; }
++    virtual int smokeMode() const { return 0; }
++    // the Water row: 0 Original (default, the authored water materials), 1 Enhanced (animated normals, screen-space reflections,
++    // refraction depth tint; user playtest 2026-10-23 #14, approved by Integration)
++    virtual void setWaterMode(int mode) { (void)mode; }
++    virtual int waterMode() const { return 0; }
++    virtual bool volumetricLightingAvailable() const { return false; }
+     // True when the current map loaded with the ray-tracing scene (switches are live); false = Faithful / Realistic take
+     // effect from the next map load (the row shows "(next map)").
+     virtual bool rayTracingLoadedThisMap() const { return false; }
+@@ -215,6 +254,15 @@ public:
+     // directional lightmaps, static lights and height fog produced by tools/render/*.py.
+     // Returns false when unavailable; the renderer then keeps its legacy fixed-function path.
+     virtual bool loadMapRenderData(const std::string& mapName) { (void)mapName; return false; }
++    // (campaign chapters, stage 1: docs/handoff/RENDERING_CHAPTER_LOADER.md) after loadMapRenderData(persistent level): merge
++    // the chapter's other units (<render root>/<unit>/, the sublevel URL names) and draw their world.glb with the game's world
++    // mesh. Static: everything stays loaded until unloadMapRenderData. Returns the number of units merged.
++    // chapterDir: <campaign root>/<chapter>/ (the units are read from there, never copied into the render data root)
++    // (campaign chapters, stage 3) a loaded unit shown / hidden by the chapter's streaming state (Gameplay calls it per changed unit)
++    // (campaign chapters, stage 3) free a unit's render data when its streaming state hides it (Gameplay; loadChapterUnits({unit}) loads it again)
++    virtual void unloadChapterUnit(const std::string& unit) { (void)unit; }
++    virtual void setChapterUnitVisible(const std::string& unit, bool visible) { (void)unit; (void)visible; }
++    virtual int loadChapterUnits(const std::string& chapterDir, const std::vector<std::string>& units) { (void)chapterDir; (void)units; return 0; }
+     // Level travel: release every GPU resource of the loaded map render data (meshes, textures, programs, targets).
+     // The renderer stays usable; a later loadMapRenderData() rebuilds everything for the next map.
+     virtual void unloadMapRenderData() {}
+@@ -224,6 +272,10 @@ public:
+     // Any chassis works: the robot / vehicle / weapon role comes from the mesh's material packages (*_ROBO_p,
+     // *_VEH_p, WEP_*), never from character names.
+     virtual void setDrawOwner(int ownerId) { (void)ownerId; }
++    // Transforming world actors (doors / bridges): the next skinned draws are lit by this actor's two baked light-map captures
++    // (lighting.json 'interpolated_lightmaps', RE INTERPOLATED_LIGHTMAP_RE.md) blended by lerp = the transform's normalized
++    // position, instead of a light environment; nullptr ends it.
++    virtual void setDrawInterpolatedLightmap(const char* actor, float lerp) { (void)actor; (void)lerp; }
+     // UE3 Client DisplayGamma (default 2.2): the scene resolve and Canvas material tiles apply pow(1 / DisplayGamma).
+     // The profile Brightness maps to it in HmProfileSettings.GetGammaSetting (decompiled script, CONFIRMED):
+     //   DisplayGamma = 2.2 + Lerp(-0.95, 0.95, Clamp(GammaSetting / 100, 0, 1))   (0..100, default 50 -> 2.2)
+@@ -307,6 +359,10 @@ public:
+     virtual void preparePreviewBody(const std::string& robotGltf, const std::vector<std::string>& animSets) {
+         (void)robotGltf; (void)animSets;
+     }
++    // (playtest 2026-10-23 #1) start parsing AnimSets ("Package.Set") on worker threads now - from a frontend scene load, for the
++    // class list's chassis - so preparePreviewBody / loadPreviewBody find them parsed instead of parsing on a frame (party lobby:
++    // 190-270 ms, 601 ms cold, per body). Sets already parsed or in flight are skipped.
++    virtual void prefetchAnimSets(const std::vector<std::string>& animSets) { (void)animSets; }
+     virtual int loadPreviewBody(const std::string& robotGltf, const std::vector<std::string>& animSets, const std::string& anim) {
+         (void)robotGltf; (void)animSets; (void)anim; return -1;
+     }
+@@ -446,6 +502,15 @@ public:
+     // Gameplay-authoritative visibility of an authored map actor (world.glb actor name, e.g. "InterpActor_6165").
+     // Authored bHidden actors start hidden; Kismet-driven state (SeqAct_ToggleHidden by game rule) is pushed here.
+     virtual void setActorHidden(const std::string& actor, bool hidden) { (void)actor; (void)hidden; }
++    // A dropped weapon this frame (Escalation / campaign: TnDroppedPickupWeapon, RE PICKUP_IDLE_MOTION_RE.md): its pickup mesh
++    // (content-relative glTF), where it lies (UE; the renderer settles it on the floor below), its remaining life (s, from
++    // 120: the spin phase), mines (KamikazeMines: no tilt, scale 1.2). Drawn tilted 16.48 deg, spinning 54.93 deg/s.
++    virtual void drawDroppedPickup(const std::string& gltf, const core::Vec3& posUE, float lifeLeft, bool mines) {
++        (void)gltf; (void)posUE; (void)lifeLeft; (void)mines;
++    }
++    // Gameplay-authoritative pose of an authored map actor moved by a campaign matinee (an InterpActor: world.glb actor name), UE
++    // units / rotator degrees (pitch, yaw, roll), absolute. Actors never sent keep their authored pose. [Gameplay; Rendering implements]
++    virtual void setMapActorTransform(const std::string& actor, const core::Vec3& posUE, const core::Vec3& rotUEdeg) { (void)actor; (void)posUE; (void)rotUEdeg; }
+     // Activate / deactivate an authored map particle component (owner actor name or component path). Components
+     // start in their authored bAutoActivate state (pickup factories toggle their effects at runtime).
+     virtual void setMapEffectActive(const std::string& ownerOrComponent, bool active) { (void)ownerOrComponent; (void)active; }
