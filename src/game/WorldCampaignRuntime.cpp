@@ -347,20 +347,33 @@ bool World::cpObjectiveGoal(BotBrain& b, BotGoal& g) {
 
 // ---- streaming (SeqAct_SetStreamingState) ----
 
-// The visible units of a LevelStreamingState (chapter.json visible_in_states; the persistent unit always): every unit is loaded at the
-// start (Rendering preloads them; the collision of every unit is merged, PROV), so a state change is a visibility change, Started and
-// Finished at once [C op semantics, RE CAMPAIGN_STREAMING section 3; PROV: no load time].
+// The visible units of a LevelStreamingState (chapter.json visible_in_states; the persistent unit always). Streaming for real
+// (Integration + Rendering 2026-10-23): a unit becoming visible is loaded then (loadChapterUnits({unit}): a hitch, accepted) unless it
+// is already, one becoming hidden is hidden and unloaded (unloadChapterUnit). Collision stays preloaded for every unit (PROV).
+// Started and Finished fire at once [C op semantics; PROV: the load time is the hitch, not a latent wait].
 void World::cpApplyStreamingState(const std::string& state) {
     cp_.streamingState = state;
+    int loaded = 0, unloaded = 0;
     for (const std::string& u : cpChapter_.allUnits) {
+        if (u == cpChapter_.persistentDir) continue;
         auto it = cpChapter_.unitStates.find(u);
-        const bool vis = u == cpChapter_.persistentDir || (it != cpChapter_.unitStates.end() && std::find(it->second.begin(), it->second.end(), state) != it->second.end());
+        const bool vis = it != cpChapter_.unitStates.end() && std::find(it->second.begin(), it->second.end(), state) != it->second.end();
+        const bool isLoaded = cpUnitLoaded_.count(u) != 0;
+        if (vis && !isLoaded) {
+            if (renderer_) renderer_->loadChapterUnits(cpChapter_.dir, std::vector<std::string>{u});
+            cpUnitLoaded_.insert(u); ++loaded;
+        }
         auto was = cp_.unitVisible.find(u);
-        if (was != cp_.unitVisible.end() && was->second == vis) continue;
-        cp_.unitVisible[u] = vis;
-        if (renderer_) renderer_->setChapterUnitVisible(u, vis);
+        if (was == cp_.unitVisible.end() || was->second != vis) {
+            cp_.unitVisible[u] = vis;
+            if (renderer_ && (vis || isLoaded)) renderer_->setChapterUnitVisible(u, vis);
+        }
+        if (!vis && isLoaded) {
+            if (renderer_) renderer_->unloadChapterUnit(u);
+            cpUnitLoaded_.erase(u); ++unloaded;
+        }
     }
-    LOG_INFO("campaign: streaming state %s", state.c_str());
+    LOG_INFO("campaign: streaming state %s (%d units loaded, %d unloaded, %zu resident)", state.c_str(), loaded, unloaded, cpUnitLoaded_.size());
 }
 
 bool World::cpSetStreamingState(KismetVM& vm, int op) {

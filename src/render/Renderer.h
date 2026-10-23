@@ -259,6 +259,8 @@ public:
     // mesh. Static: everything stays loaded until unloadMapRenderData. Returns the number of units merged.
     // chapterDir: <campaign root>/<chapter>/ (the units are read from there, never copied into the render data root)
     // (campaign chapters, stage 3) a loaded unit shown / hidden by the chapter's streaming state (Gameplay calls it per changed unit)
+    // (campaign chapters, stage 3) free a unit's render data when its streaming state hides it (Gameplay; loadChapterUnits({unit}) loads it again)
+    virtual void unloadChapterUnit(const std::string& unit) { (void)unit; }
     virtual void setChapterUnitVisible(const std::string& unit, bool visible) { (void)unit; (void)visible; }
     virtual int loadChapterUnits(const std::string& chapterDir, const std::vector<std::string>& units) { (void)chapterDir; (void)units; return 0; }
     // Level travel: release every GPU resource of the loaded map render data (meshes, textures, programs, targets).

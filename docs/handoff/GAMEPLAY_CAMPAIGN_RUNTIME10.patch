@@ -1,0 +1,85 @@
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index e79c9a34..7d4ae395 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -322,7 +322,8 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
+     int chapterUnitsDrawn = 0;
+     if (campaignMap_) {
+         std::vector<std::string> others;
+-        for (const std::string& u : cpChapter_.allUnits) if (u != cpChapter_.persistentDir) others.push_back(u);   // every unit (streaming)
++        cpUnitLoaded_.clear();
++        for (const std::string& u : cpChapter_.units) if (u != cpChapter_.persistentDir) { others.push_back(u); cpUnitLoaded_.insert(u); }   // the initial state's units (streaming loads the rest)
+         chapterUnitsDrawn = renderer.loadChapterUnits(cpChapter_.dir, others);
+     }
+     core::loadYield("World: map render data");   // [frontend] the loading screen presents between load steps
+diff --git a/src/game/World.h b/src/game/World.h
+index 3c870f2e..1fe88696 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1439,6 +1439,7 @@ private:
+     void cpTickFactories(float dt);
+     void cpSyncPicks();
+     void cpApplyStreamingState(const std::string& state);
++    std::set<std::string> cpUnitLoaded_;          // the chapter units whose render data is loaded (kept across launches: loaded with the map)
+     bool cpSetStreamingState(KismetVM& vm, int op);
+     bool cpForceIntoForm(KismetVM& vm, int op);
+     void cpTickForms();
+diff --git a/src/game/WorldCampaignRuntime.cpp b/src/game/WorldCampaignRuntime.cpp
+index 07ea78d0..46bc7c79 100644
+--- a/src/game/WorldCampaignRuntime.cpp
++++ b/src/game/WorldCampaignRuntime.cpp
+@@ -347,20 +347,33 @@ bool World::cpObjectiveGoal(BotBrain& b, BotGoal& g) {
+ 
+ // ---- streaming (SeqAct_SetStreamingState) ----
+ 
+-// The visible units of a LevelStreamingState (chapter.json visible_in_states; the persistent unit always): every unit is loaded at the
+-// start (Rendering preloads them; the collision of every unit is merged, PROV), so a state change is a visibility change, Started and
+-// Finished at once [C op semantics, RE CAMPAIGN_STREAMING section 3; PROV: no load time].
++// The visible units of a LevelStreamingState (chapter.json visible_in_states; the persistent unit always). Streaming for real
++// (Integration + Rendering 2026-10-23): a unit becoming visible is loaded then (loadChapterUnits({unit}): a hitch, accepted) unless it
++// is already, one becoming hidden is hidden and unloaded (unloadChapterUnit). Collision stays preloaded for every unit (PROV).
++// Started and Finished fire at once [C op semantics; PROV: the load time is the hitch, not a latent wait].
+ void World::cpApplyStreamingState(const std::string& state) {
+     cp_.streamingState = state;
++    int loaded = 0, unloaded = 0;
+     for (const std::string& u : cpChapter_.allUnits) {
++        if (u == cpChapter_.persistentDir) continue;
+         auto it = cpChapter_.unitStates.find(u);
+-        const bool vis = u == cpChapter_.persistentDir || (it != cpChapter_.unitStates.end() && std::find(it->second.begin(), it->second.end(), state) != it->second.end());
++        const bool vis = it != cpChapter_.unitStates.end() && std::find(it->second.begin(), it->second.end(), state) != it->second.end();
++        const bool isLoaded = cpUnitLoaded_.count(u) != 0;
++        if (vis && !isLoaded) {
++            if (renderer_) renderer_->loadChapterUnits(cpChapter_.dir, std::vector<std::string>{u});
++            cpUnitLoaded_.insert(u); ++loaded;
++        }
+         auto was = cp_.unitVisible.find(u);
+-        if (was != cp_.unitVisible.end() && was->second == vis) continue;
+-        cp_.unitVisible[u] = vis;
+-        if (renderer_) renderer_->setChapterUnitVisible(u, vis);
++        if (was == cp_.unitVisible.end() || was->second != vis) {
++            cp_.unitVisible[u] = vis;
++            if (renderer_ && (vis || isLoaded)) renderer_->setChapterUnitVisible(u, vis);
++        }
++        if (!vis && isLoaded) {
++            if (renderer_) renderer_->unloadChapterUnit(u);
++            cpUnitLoaded_.erase(u); ++unloaded;
++        }
+     }
+-    LOG_INFO("campaign: streaming state %s", state.c_str());
++    LOG_INFO("campaign: streaming state %s (%d units loaded, %d unloaded, %zu resident)", state.c_str(), loaded, unloaded, cpUnitLoaded_.size());
+ }
+ 
+ bool World::cpSetStreamingState(KismetVM& vm, int op) {
+diff --git a/src/render/Renderer.h b/src/render/Renderer.h
+index ef76261d..198aa273 100644
+--- a/src/render/Renderer.h
++++ b/src/render/Renderer.h
+@@ -259,6 +259,8 @@ public:
+     // mesh. Static: everything stays loaded until unloadMapRenderData. Returns the number of units merged.
+     // chapterDir: <campaign root>/<chapter>/ (the units are read from there, never copied into the render data root)
+     // (campaign chapters, stage 3) a loaded unit shown / hidden by the chapter's streaming state (Gameplay calls it per changed unit)
++    // (campaign chapters, stage 3) free a unit's render data when its streaming state hides it (Gameplay; loadChapterUnits({unit}) loads it again)
++    virtual void unloadChapterUnit(const std::string& unit) { (void)unit; }
+     virtual void setChapterUnitVisible(const std::string& unit, bool visible) { (void)unit; (void)visible; }
+     virtual int loadChapterUnits(const std::string& chapterDir, const std::vector<std::string>& units) { (void)chapterDir; (void)units; return 0; }
+     // Level travel: release every GPU resource of the loaded map render data (meshes, textures, programs, targets).

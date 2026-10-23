@@ -322,7 +322,8 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     int chapterUnitsDrawn = 0;
     if (campaignMap_) {
         std::vector<std::string> others;
-        for (const std::string& u : cpChapter_.allUnits) if (u != cpChapter_.persistentDir) others.push_back(u);   // every unit (streaming)
+        cpUnitLoaded_.clear();
+        for (const std::string& u : cpChapter_.units) if (u != cpChapter_.persistentDir) { others.push_back(u); cpUnitLoaded_.insert(u); }   // the initial state's units (streaming loads the rest)
         chapterUnitsDrawn = renderer.loadChapterUnits(cpChapter_.dir, others);
     }
     core::loadYield("World: map render data");   // [frontend] the loading screen presents between load steps

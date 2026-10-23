@@ -1439,6 +1439,7 @@ private:
     void cpTickFactories(float dt);
     void cpSyncPicks();
     void cpApplyStreamingState(const std::string& state);
+    std::set<std::string> cpUnitLoaded_;          // the chapter units whose render data is loaded (kept across launches: loaded with the map)
     bool cpSetStreamingState(KismetVM& vm, int op);
     bool cpForceIntoForm(KismetVM& vm, int op);
     void cpTickForms();
