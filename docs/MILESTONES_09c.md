@@ -3499,3 +3499,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   exist (runtime check in the Frontend's next slot). RE #14: MP liquids = the energon waterfalls only (additive unlit, two-speed
   panned colour / normal, cube reflection, depth-biased alpha x vertex R, distortion x20); RE #11 follow-up: our spread uses a
   +-1 square where the original uses UE3's disc AddSpread (~+-0.5 x spread) = ~2x too wide; shotguns fixed patterns.
+2026-10-23 00:23 #8 closed as authentic (RE a17f442: only a Scientist viewer sees ally health bars, through walls, no distance cap; ours matches
+  at World.cpp:2988; the user played Scientist). #16 second cause (Rendering rt2 8a6e1d67): transient shadow rays ended 0.05 m
+  short of the lamp and hit the owner's hull -> self-shadowing under / in front of the car; now WFC_TLCLEAR 0.5 m. Candidate
+  work/cand_hl = c86a56cf + fefd136b + 8a6e1d67; x24slot.sh ~12 min next on the card.
