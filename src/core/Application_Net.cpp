@@ -404,10 +404,6 @@ template <class W> void seatLeft(W& w, int seat, uint32_t untilTick, bool toBot)
     if constexpr (HasQueueLeave<W>::value) w.queueLeave(seat, untilTick);
     else LOG_WARN("online: World::queueLeave missing in this build - seat %d's participant stays (idle) after tick %u", seat, untilTick);
 }
-template <class W> bool hasBotFill(const W& w) {
-    for (const auto& p : w.match().players()) if (p.kind == game::ParticipantKind::Bot) return true;
-    return false;
-}
 template <class W, class = void> struct HasSmallerTeam : std::false_type {};
 template <class W> struct HasSmallerTeam<W, std::void_t<decltype(std::declval<const W&>().smallerTeam())>> : std::true_type {};
 template <class W> int smallerTeamOf(const W& w) {
@@ -464,7 +460,7 @@ void Application::startNetDriver(const std::string& launchUrl, uint32_t seed, in
     c.keepHistory = localSeat == 0 && std::find(c.activeFrom.begin(), c.activeFrom.end(), 0u) != c.activeFrom.end();
     c.pickJoinTeam = [this](int) { return smallerTeamOf(world_); };
     c.seatPlayer = [this](int seat) { return seatPlayerOf(world_, seat); };
-    c.leaveToBot = [this](int) { return hasBotFill(world_); };
+    c.leaveToBot = [](int) { return true; };   // D16 (Integration 2026-10-23): a leaver's slot always goes to a bot, public and private
     c.onSeatLeave = [this](int seat, uint32_t until, bool toBot) { seatLeft(world_, seat, until, toBot); };
     c.onSeatJoin = [this](int seat, int team, bool local, uint32_t atTick) {
         game::RemoteSeat r;
@@ -626,7 +622,7 @@ void Application::runUdpSessionMatch() {
     c.keepHistory = self == 0 && std::find(activeFrom.begin(), activeFrom.end(), 0u) != activeFrom.end();
     c.pickJoinTeam = [this](int) { return smallerTeamOf(world_); };
     c.seatPlayer = [this](int seat) { return seatPlayerOf(world_, seat); };
-    c.leaveToBot = [this](int) { return std::getenv("WFC_UDPLEAVE_TOBOT") != nullptr; };   // the harness: empty by default
+    c.leaveToBot = [](int) { return std::getenv("WFC_UDPLEAVE_EMPTY") == nullptr; };   // as the game (D16: a bot); WFC_UDPLEAVE_EMPTY=1: empty + Forfeit
     c.onSeatLeave = [this](int seat, uint32_t until, bool toBot) {
         LOG_INFO("UDPMATCH seat %d leaves at tick %u (%s)", seat, until, toBot ? "to a bot" : "empty");
         seatLeft(world_, seat, until, toBot);
