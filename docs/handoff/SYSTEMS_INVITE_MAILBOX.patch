@@ -1,0 +1,127 @@
+diff -ruN a/src/frontend/Session.h b/src/frontend/Session.h
+--- a/src/frontend/Session.h	2026-10-23 07:53:06.932930100 -0500
++++ b/src/frontend/Session.h	2026-10-23 07:53:06.949988300 -0500
+@@ -149,6 +149,10 @@
+         MemberVoice,       // member, headsetState (0 no voice / 1 voice on / 2 speaking): PlayerList_GFX HeadsetState;
+                            // voiceVia: 1 radio / 2 proximity while speaking (both: radio), for the talker cue
+         CatchUpProgress,   // late join: catchUpTick / catchUpTarget while the joiner replays the host's input log
++        // [Systems] the invite mailbox (ONLINE_MP_PHASE2_FLOWS I2, D13; the lobby service, no accounts):
++        InviteReceived,    // member.fingerprint = the sender, info.displayName = its name, joinCode = the code to join
++        InviteSent,        // member.fingerprint = the receiver; value 1 delivered, 0 the receiver is not online, -1 no lobby service
++        OnlineStatus,      // online = the asked fingerprints that are online now (queryOnline)
+     } type = Type::LobbyState;
+     double time = 0.0;
+     std::string joinCode, address;
+@@ -175,12 +179,13 @@
+     bool lateJoin = false;
+     int lateSeat = -1;                        // [Systems] lateJoin: this joiner's match seat (a Reserved slot of `lobby`) = the launch's localSeat
+     int catchUpTick = 0, catchUpTarget = 0;   // CatchUpProgress
++    std::vector<std::string> online;          // OnlineStatus
+ };
+ inline const char* sessionEventName(SessionEvent::Type t) {
+     static const char* const k[] = {"HostOpened", "HostFailed", "JoinProgress", "Joined", "JoinFailed", "MatchInProgress",
+                                     "LobbyState", "MemberJoined", "MemberLeft", "CountdownStarted", "PeerLoaded", "AllLoaded",
+                                     "PeerDropped", "HostLost", "ConnectionLost", "Desync", "Kicked", "GameList", "SearchProgress",
+-                                    "SearchCancelled", "MemberVoice", "CatchUpProgress"};
++                                    "SearchCancelled", "MemberVoice", "CatchUpProgress", "InviteReceived", "InviteSent", "OnlineStatus"};
+     const int i = (int)t;
+     return i >= 0 && i < (int)(sizeof k / sizeof k[0]) ? k[i] : "?";
+ }
+@@ -226,6 +231,12 @@
+     // [Systems] Host, before requestStart: the catch-up limit in seconds of match time (0 = joining a running match refused ->
+     // JoinFailed{Full}; past it -> JoinFailed{TooFarAlong}). The seats are the launch roster's Reserved slots.
+     virtual void setLateJoinLimit(double maxMatchSeconds) { (void)maxMatchSeconds; }
++    // [Systems] The invite mailbox (D13) through the lobby service: while a session is up (a party or game lobby) this player is
++    // reachable by its fingerprint. sendInvite posts `code` (the current game / party code) to that player -> InviteSent; an
++    // invite to us -> InviteReceived. queryOnline -> OnlineStatus (the Friends List's Online text; at most 64 asked). No service:
++    // InviteSent{-1} (the clipboard path stays the fallback).
++    virtual void sendInvite(const std::string& fingerprint, const std::string& code) { (void)fingerprint; (void)code; }
++    virtual void queryOnline(const std::vector<std::string>& fingerprints) { (void)fingerprints; }
+ };
+ 
+ // Match-side plumbing for WFC_SESSIONTEST (Gameplay's harness, ONLINE_MP_FRONTEND_TESTS.md section 4); declared here so
+diff -ruN a/src/net/UdpSession.cpp b/src/net/UdpSession.cpp
+--- a/src/net/UdpSession.cpp	2026-10-23 07:53:07.002668500 -0500
++++ b/src/net/UdpSession.cpp	2026-10-23 07:53:07.020229300 -0500
+@@ -1034,6 +1034,11 @@
+             LOG_INFO("session: lobby service %s -> %s", serviceName_.c_str(), serviceAddr_.empty() ? "(unresolved)" : serviceAddr_.c_str());
+         }
+     }
++    // The invite mailbox (D13): this player is reachable by its fingerprint while a session is up (the service forgets it after 60 s).
++    if (t_ && !serviceAddr_.empty() && !self_.id.fingerprint.empty() && now_ - lastPresence_ >= 20.0) {
++        lastPresence_ = now_;
++        sendService("{\"op\":\"presence\",\"fp\":\"" + jsonEsc(self_.id.fingerprint) + "\",\"name\":\"" + jsonEsc(self_.displayName) + "\"}");
++    }
+     // The host registers its lobby every 5 s (public: listed for Quick Match; private: its 6-letter code works).
+     if (role_ == Role::Host && t_ && !serviceAddr_.empty() && now_ - lastRegister_ >= 5.0) {
+         lastRegister_ = now_;
+@@ -1053,12 +1058,49 @@
+     if (hostPending_ && (!disc_ || discDone_) && (!serviceCode_.empty() || serviceAddr_.empty() || now_ - hostStart_ >= 1.5)) finishHostOpened();
+ }
+ 
++void UdpSession::sendInvite(const std::string& fingerprint, const std::string& code) {
++    if (!t_ || serviceAddr_.empty()) {
++        SessionEvent e; e.type = SessionEvent::Type::InviteSent; e.member.fingerprint = fingerprint; e.value = -1; emit(e);
++        return;
++    }
++    if (now_ - lastPresence_ >= 1.0) { lastPresence_ = -1e9; tickService(); }   // the service must know the sender first
++    sendService("{\"op\":\"invite\",\"to\":\"" + jsonEsc(fingerprint) + "\",\"from\":\"" + jsonEsc(self_.id.fingerprint) +
++                "\",\"name\":\"" + jsonEsc(self_.displayName) + "\",\"code\":\"" + jsonEsc(code) + "\"}");
++    LOG_INFO("session: invite %s to %s", code.c_str(), fingerprint.c_str());
++}
++
++void UdpSession::queryOnline(const std::vector<std::string>& fingerprints) {
++    if (!t_ || serviceAddr_.empty()) return;
++    std::string j = "{\"op\":\"online\",\"fps\":[";
++    for (size_t i = 0; i < fingerprints.size() && i < 64; ++i) j += (i ? ",\"" : "\"") + jsonEsc(fingerprints[i]) + "\"";
++    sendService(j + "]}");
++}
++
+ void UdpSession::handleService(const std::string& from, const std::vector<uint8_t>& d) {
+     if (from != serviceAddr_) return;
+     assets::Json m;
+     if (!assets::Json::parse(std::string((const char*)d.data() + 4, d.size() - 4), m)) return;
+     serviceReplied_ = true;
+     const std::string op = m["op"].asString();
++    if (op == "invited") {   // the mailbox: someone invites us to their game / party code
++        SessionEvent e; e.type = SessionEvent::Type::InviteReceived;
++        e.member.fingerprint = m["from"].asString(); e.info.displayName = m["name"].asString(); e.joinCode = m["code"].asString();
++        LOG_INFO("session: invite from %s (%s) to %s", e.info.displayName.c_str(), e.member.fingerprint.c_str(), e.joinCode.c_str());
++        emit(e);
++        return;
++    }
++    if (op == "invite_sent") {
++        SessionEvent e; e.type = SessionEvent::Type::InviteSent; e.member.fingerprint = m["to"].asString(); e.value = m["ok"].asBool(false) ? 1 : 0;
++        emit(e);
++        return;
++    }
++    if (op == "online") {
++        SessionEvent e; e.type = SessionEvent::Type::OnlineStatus;
++        for (size_t i = 0; i < m["fps"].size(); ++i) e.online.push_back(m["fps"][i].asString());
++        emit(e);
++        return;
++    }
++    if (op == "presence_ok") return;
+     if (op == "registered") {
+         const bool first = serviceCode_.empty();
+         serviceCode_ = m["code"].asString();
+diff -ruN a/src/net/UdpSession.h b/src/net/UdpSession.h
+--- a/src/net/UdpSession.h	2026-10-23 07:53:06.967046500 -0500
++++ b/src/net/UdpSession.h	2026-10-23 07:53:06.985108500 -0500
+@@ -69,6 +69,8 @@
+     void cancelSearch() override;
+     void setLobbyService(const std::string& address) override;
+     bool supportsLateJoin() const override { return true; }
++    void sendInvite(const std::string& fingerprint, const std::string& code) override;
++    void queryOnline(const std::vector<std::string>& fingerprints) override;
+     void joinRunningMatch() override;
+     void setLateJoinLimit(double maxMatchSeconds) override { lateJoinLimitS_ = maxMatchSeconds; }
+     bool simHeld() const override { return held_; }
+@@ -194,6 +196,7 @@
+     std::shared_ptr<struct ServiceResolve> serviceResolve_;
+     bool serviceReplied_ = false, serviceWanted_ = false;
+     double lastRegister_ = -1e9, serviceAskedAt_ = 0.0, registeredAt_ = -1.0;
++    double lastPresence_ = -1e9;   // the invite mailbox: presence every 20 s while a session transport is up
+     frontend::SessionHostSettings hostSettings_;
+     Search search_ = Search::None;
+     frontend::SessionGameQuery searchQuery_;
