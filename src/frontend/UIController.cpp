@@ -22,6 +22,7 @@ const char* uiStateName(UIState s) {
     case UIState::Spectating: return "Spectating";
     case UIState::Paused: return "Paused";
     case UIState::PausedSpectating: return "PausedSpectating";
+    case UIState::CampaignGameOver: return "CampaignGameOver";
     case UIState::WaitingOnNextRound: return "WaitingOnNextRound";
     case UIState::GameEnded: return "GameEnded";
     }
@@ -35,6 +36,7 @@ const char* uiControllerClassName(UIControllerClass c) {
     case UIControllerClass::PartyLobby: return "TnUIControllerPartyLobby";
     case UIControllerClass::GameLobby: return "TnUIControllerGameLobby";
     case UIControllerClass::Multiplayer: return "TnUIControllerMultiplayer";
+    case UIControllerClass::Coop: return "TnUIControllerCoop";
     }
     return "?";
 }
@@ -45,11 +47,19 @@ std::string UIController::lobbyUI() const {
     if (cls_ == UIControllerClass::GameLobby) return "UI_GFxLobbies_p.GameLobby_GFX_1";
     return "";
 }
-std::string UIController::inGameLobbyUI() const { return cls_ == UIControllerClass::Multiplayer ? "UI_GFxCustomize_p.CustomTransformers_GFX_1" : ""; }
+// TnUIControllerCoop (campaign): InGameLobbyUI = CharacterSelect_GFX (the chapter's iconic trio), no pre-game countdown screen,
+// the pause menu, EndGameStats (CCP after a mission), CampaignGameOverUI = CampaignGameOver_GFX [RE CAMPAIGN_RUNTIME_EVENTS_RE].
+std::string UIController::inGameLobbyUI() const {
+    if (cls_ == UIControllerClass::Coop) return "UI_GFxCharacterSelect_p.CharacterSelect_GFX_1";
+    return cls_ == UIControllerClass::Multiplayer ? "UI_GFxCustomize_p.CustomTransformers_GFX_1" : "";
+}
+std::string UIController::campaignGameOverUI() const { return cls_ == UIControllerClass::Coop ? "UI_GFxGameOver_p.CampaignGameOver_GFX_1" : ""; }
 std::string UIController::gameStartUI() const { return cls_ == UIControllerClass::Multiplayer ? "UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1" : ""; }
-std::string UIController::pauseUI() const { return cls_ == UIControllerClass::Multiplayer ? "UI_GFxPause_p.PauseMenu_GFX_1" : ""; }
+std::string UIController::pauseUI() const { return cls_ == UIControllerClass::Multiplayer || cls_ == UIControllerClass::Coop ? "UI_GFxPause_p.PauseMenu_GFX_1" : ""; }
 std::string UIController::spectatingUI() const { return cls_ == UIControllerClass::Multiplayer ? "UI_GFxRespawn_p.MultiplayerRespawn_GFX_1" : ""; }
-std::string UIController::endGameUI() const { return cls_ == UIControllerClass::Multiplayer ? "UI_GFxEndGameStats_p.EndGameStats_GFX_1" : ""; }
+std::string UIController::endGameUI() const {
+    return cls_ == UIControllerClass::Multiplayer || cls_ == UIControllerClass::Coop ? "UI_GFxEndGameStats_p.EndGameStats_GFX_1" : "";
+}
 
 void UIController::initialize(UIControllerClass cls, OpenFn open, CloseFn close, HudFn hud, StateFn onState, bool inGameLobby) {
     cls_ = cls; open_ = std::move(open); close_ = std::move(close); hud_ = std::move(hud); onState_ = std::move(onState);
@@ -60,7 +70,7 @@ void UIController::initialize(UIControllerClass cls, OpenFn open, CloseFn close,
     LOG_INFO("FLOW uicontroller Initialize %s", uiControllerClassName(cls));
     // StartingState: NotInGame (base); InLobby (party/game lobby); WaitingOnGameStart (multiplayer).
     if (cls == UIControllerClass::PartyLobby || cls == UIControllerClass::GameLobby) gotoState(UIState::InLobby);
-    else if (cls == UIControllerClass::Multiplayer) gotoState(UIState::WaitingOnGameStart);
+    else if (cls == UIControllerClass::Multiplayer || cls == UIControllerClass::Coop) gotoState(UIState::WaitingOnGameStart);
 }
 
 void UIController::openUI(const std::string& movie) {
@@ -104,6 +114,7 @@ void UIController::gotoState(UIState s) {
         break;
     case UIState::InGame: setHudVisible(false); break;
     case UIState::Spectating: setHudVisible(false); closeCurrentUI(); break;
+    case UIState::CampaignGameOver: closeCurrentUI(); break;
     case UIState::Paused: case UIState::PausedSpectating:
         if (!pausedTo) { closeCurrentUI(); LOG_INFO("FLOW ui SetPause(false)"); }
         break;
@@ -127,6 +138,7 @@ void UIController::gotoState(UIState s) {
         break;
     case UIState::WaitingOnNextRound: openUI(gameStartUI()); break;
     case UIState::GameEnded: setHudVisible(false); openUI(endGameUI()); break;
+    case UIState::CampaignGameOver: setHudVisible(false); openUI(campaignGameOverUI()); break;
     case UIState::NotInGame: closeCurrentUI(); break;
     }
     if (onState_) onState_(from, s);
@@ -134,6 +146,17 @@ void UIController::gotoState(UIState s) {
 
 void UIController::onUIEvent(int code) {
     LOG_INFO("FLOW uievent %d %s in %s", code, uiEventName(code), uiStateName(state_));
+    // TnUIControllerCoop: OnCampaignGameOver (14) from any in-match state -> CampaignGameOver; a restart's respawn (5) leaves
+    // it for InGame; a mission's end (9) for GameEnded.
+    if (code == 14 && cls_ == UIControllerClass::Coop && state_ != UIState::CampaignGameOver &&
+        (state_ == UIState::InGame || state_ == UIState::Spectating || state_ == UIState::Paused || state_ == UIState::PausedSpectating ||
+         state_ == UIState::WaitingOnGameStart)) { gotoState(UIState::CampaignGameOver); return; }
+    if (state_ == UIState::CampaignGameOver) {
+        if (code == 5) gotoState(UIState::InGame);
+        else if (code == 9) gotoState(UIState::GameEnded);
+        else if (code == 11) gotoState(UIState::NotInGame);
+        return;
+    }
     if (code == 12) { hideHud_ = true; setHudVisible(false); return; }
     if (code == 13) { hideHud_ = false; setHudVisible(true); return; }
     switch (state_) {

@@ -227,6 +227,12 @@ public:
     static bool isCampaignTag(const std::string& tag) { return tag == "SOLO" || tag == "CP" || tag == "CCP"; }
     static bool inCampaignTrio(const MapInfo& m, const std::string& characterName);   // case-insensitive CharacterName match
     bool campaign() const { return campaignForced_ || isCampaignTag(match_.modeTag); }
+    // C6 (RE CAMPAIGN_RUNTIME_EVENTS_RE): the frontend half of the chapter events. The Application calls them from
+    // Gameplay's campaign runtime (ClientReachedCheckpoint / CampaignGameOver after its 1 s / ClientCompleteMission).
+    void campaignCheckpointReached(int mapId, int index);   // index -1 (not a menu checkpoint): nothing changes
+    void campaignGameOver();                                 // UI event 14 -> MISSION FAILED
+    void campaignMissionComplete(int mapId, int difficulty); // profile CompleteMission + save; CCP stats 10 s / the lobby
+    bool takeCampaignRestartRequest() { bool r = campaignRestart_; campaignRestart_ = false; return r; }   // RestartFromActiveCheckpoint
     void setCampaignForTest(bool on) { campaignForced_ = on; }
     CampaignObjectives& objectives() { return objectives_; }
     const CampaignObjectives& objectives() const { return objectives_; }
@@ -500,6 +506,9 @@ private:
     std::map<std::string, std::map<std::string, int>> settingValues_;   // class -> field -> value index
     MatchLaunch match_;
     bool campaignForced_ = false;
+    bool campaignRestart_ = false;     // the host chose Restart From Last Checkpoint (the Application hands it to Gameplay)
+    float campaignReturnIn_ = 0.0f;    // CCP: MissionCompleteCountdown 10 s of EndGameStats, then ReturnToGameLobby
+    int resumeFaction_ = -1;           // the next match load shows ResumeAutobot / ResumeDecepticon (a restart)
     CampaignObjectives objectives_;
     bool pendingMatch_ = false, unloadWorld_ = false, quit_ = false;
 
