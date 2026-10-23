@@ -36,8 +36,8 @@ if [ "$PH" = pre ]; then
   if [ -z "$FINAL_SKIP_BASE" ]; then   # FINAL_SKIP_BASE=1: no base yet (FINAL_BASE_ITEMS pending) - head, control and stability only
   [ -f $BASE/build-release/bin/wfc_rebuild.exe ] || run "BASE_REF=af4d0731 bash tools/fidelity/gate-base.sh $BN $ITEMS > $O/build_base.out 2>&1"
   [ $WHATIF = 1 ] || [ -f $BASE/build-release/bin/wfc_rebuild.exe ] || { st "base build failed ($O/build_base.out)"; exit 1; }
-  st "same match (headless): Streets TDM + Remnant ESC, base vs head; negative control = the hover-only base"
-  for m in 508 506; do run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/samematch-$m -Map $m -Arms 'base|$BASE|WFC_NULLRENDER=1;;head|$HEAD|WFC_NULLRENDER=1;;neg|$NEG|WFC_NULLRENDER=1' -Steps 9600 -From 600 -PlayerBot 1 -Reps 1 -Seed 1234 > $O/samematch-$m.out 2>&1"
+  st "same match (headless): Streets TDM + Remnant ESC + BrokenHope ESC, base vs head; negative control = the hover-only base"
+  for m in 508 506 505; do run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/samematch-$m -Map $m -Arms 'base|$BASE|WFC_NULLRENDER=1;;head|$HEAD|WFC_NULLRENDER=1;;neg|$NEG|WFC_NULLRENDER=1' -Steps 9600 -From 600 -PlayerBot 1 -Reps 1 -Seed 1234 > $O/samematch-$m.out 2>&1"
     sm=$(grep -oE "lockstep\.head\.r1: head: steps [0-9]+ \([0-9-]+\), same match as 'base' [A-Za-z]+" $O/samematch-$m.out 2>/dev/null); ng=$(grep -oE "lockstep\.neg\.r1: neg: steps [0-9]+ \([0-9-]+\), same match as 'base' [A-Za-z]+" $O/samematch-$m.out 2>/dev/null)
     st "map $m same match: ${sm:-?}; negative control: ${ng:-?}"
     [ $WHATIF = 1 ] || case "$sm" in *True) ;; *) st "STOP: the base does not play the head's match on $m - not gating (a sim-only diff is missing)"; exit 2;; esac
