@@ -166,7 +166,40 @@ The 15 Escalation templates are:
 - GENERIC is empty. Health 100 %, Ammo 100 %, Overshield 10 % and ResourceCache 16 × are classifications for other sources, not
   horde deaths.
 
+## 6. The two open rows, now closed (C, script; 2026-10-23)
+
+**Armour hit absorption: yes, and there's no pass-through.**
+- `TnDestructibleActor.AttachToPawn` hard-attaches each armour or weak-point actor to the pawn's socket with
+  **SetCollision(CollideActors true, BlockActors false)**. So weapon traces and projectiles **hit the armour actor first**.
+- Its `TakeDamage` applies the hit to the destructible only:
+  - `AdjustDamage` × the damage type's `DestructibleDamageScale`, which is 1.0 for every type except TnDamageTypeOmegaRocket 0.25;
+  - then the blueprint modifiers (AI × 0.5 on the tank armour).
+  - **Nothing is forwarded to the pawn's health.**
+  - Hits from the pawn itself or its own team are ignored (`ShouldIgnoreDamageFromPawnBase`).
+- So the tank's chest and back are shielded until their pieces break. A broken piece leaves only flying physics debris, so the area is
+  exposed (H: the final state has no static mesh).
+- **Splash damage still reaches the pawn:** HurtRadius visits every colliding actor. The armour doesn't block the radius trace, since
+  it's not world geometry (the trace uses world-only flags 1 | 32).
+- The same rule covers the Brute backpack and the Jet boosters.
+- **⚠ Direction gate** (`HmDestructibleActorBase.TakeDamage`): a hit is ignored when the attacker is more than `DamageAngle` from the
+  destructible's facing. That's `dot(normal(attacker − destructible), destructible.Rotation) < cos(DamageAngle)`.
+  - Backpack: DamageAngle 100° → cos −0.17, so **shots from the Brute's front ~160° arc can't damage the backpack**.
+  - Blueprints without DamageAngle take hits from any direction.
+
+**Backpack explosion friendly fire:**
+- `HmRadialDamageDestructionEffect` → `HurtRadius(500, 4000, BruteBackpack, 600000, origin, none, **InstigatedBy = the backpack's
+  LastHitInstigator**, bDoFullDamage false)`.
+- That instigator is the controller of the last hit, normally the player who broke it (AI damage × 0 to the backpack, but an AI hit
+  still sets LastHitInstigator).
+- **Falloff:** `scale = (1 − clamp(dist − victimRadius, 0, R) / R)²`. Victims need an unobstructed world trace from the origin; there's
+  no height limit.
+- **Who is hurt:**
+  - **horde AI** (the enemy team of the instigator): full falloff damage;
+  - **the instigating player himself: yes.** Self-damage isn't filtered for players;
+  - **other players: no.** `TnPlayerPawn.TakeDamage` drops any same-team damage that isn't TnDamageTypeAOE, and BruteBackpack derives
+    from TnDamageType, not AOE. They get NotifyHitByFriendlyFire only;
+  - if the last hitter was a horde AI: the horde is immune (same team), and players take damage.
+- The Brute itself is killed by TnKillAttachedPawn regardless.
+
 ## Open
-- The armour hit-absorption on the robot tank (H).
-- The backpack radial explosion's friendly-fire rules (H).
-- The exact native invulnerability gate (H; the campaign only).
+- None of substance. Remaining H: the exact broken-armour collision.
