@@ -1,0 +1,104 @@
+diff --git a/src/game/Character.h b/src/game/Character.h
+index 85f2201e..84544465 100644
+--- a/src/game/Character.h
++++ b/src/game/Character.h
+@@ -193,6 +193,9 @@ public:
+     core::Vec3 overrideAccel_{0, 0, 0}; unsigned forcedDirTouch_ = 0;
+     // Dodging (TnAcrobaticsManager state 5): PHYS_Flying at DodgeSpeed for DodgeTime; CanDodge = landed since the last dodge.
+     float dodgeRemain_ = 0.0f;
++    // AI dodges (TnAiActionDodge*): MaxDodgeDistance from the nav WalkLine (0 = none: a human dodge); armed by the bot, taken at the
++    // dodge start; the start position for HasExceededMaxDodgeDistance.
++    float pendingMaxDodge_ = 0.0f, maxDodgeDist_ = 0.0f; core::Vec3 dodgeStart_{0, 0, 0};
+     bool landedSinceDodge_ = true;
+     // Killstreak buffs: TnBuffHealthRegenKillStreak (FloatModifier 2, 30 s), TnBuffFastAbilityCooldown (x5, 30 s),
+     // TnBuffLockAmmoClip (10 s: shots cost no clip ammo) [CONF authored buff defaults; effect placement HIGH].
+diff --git a/src/game/CharacterMovement.cpp b/src/game/CharacterMovement.cpp
+index f0f40afe..8afa1b61 100644
+--- a/src/game/CharacterMovement.cpp
++++ b/src/game/CharacterMovement.cpp
+@@ -796,6 +796,7 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld*
+         core::Vec3 d = in.dodgeDir == 3 ? X : in.dodgeDir == 4 ? X * -1.0f : in.dodgeDir == 2 ? Y : Y * -1.0f;
+         v = d * RPd.dodgeSpeed;
+         c.dodgeRemain_ = RPd.dodgeTime;
++        c.maxDodgeDist_ = c.pendingMaxDodge_; c.pendingMaxDodge_ = 0.0f; c.dodgeStart_ = c.position();   // AI dodge cap (0: none)
+         c.landedSinceDodge_ = false;
+         c.setOnGround(false);
+         hv = core::Vec3{v.x, 0, v.z};
+@@ -832,6 +833,10 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld*
+         v.x += dv.x; v.z += dv.z; v.y = 0.0f;
+         hv = core::Vec3{v.x, 0, v.z};
+     } else if (dodging) {
++        if (c.maxDodgeDist_ > 0.0f) {   // HasExceededMaxDodgeDistance (AI dodges)
++            const core::Vec3 dd = c.position() - c.dodgeStart_;
++            if (std::sqrt(dd.x * dd.x + dd.z * dd.z) >= c.maxDodgeDist_) c.dodgeRemain_ = 0.0f;
++        }
+         c.dodgeRemain_ -= dt;   // PHYS_Flying: no gravity, the velocity carries (Acceleration = Normal(Velocity))
+     } else if (lunging) {
+         // velocity set above
+@@ -895,6 +900,7 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld*
+         float l = core::length(h);
+         if (l > cap && l > 1e-4f) h = h * (cap / l);
+         v = core::Vec3{h.x, 0.0f, h.z};
++        if (c.maxDodgeDist_ > 0.0f) { v = core::Vec3{0, 0, 0}; c.maxDodgeDist_ = 0.0f; }   // an AI dodge stops dead (EndState)
+     }
+ 
+     // --- Ground resolution ---
+diff --git a/src/game/World.h b/src/game/World.h
+index 942bdc00..88ada572 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -915,6 +915,8 @@ public:
+         return o && o->spawned() ? &o->intent() : nullptr;
+     }
+     bool ensureBotNav();
++    // TnAiActionDodgePlanningUtil.CheckDodgeAvailable: the walkable fraction of 18 m along the pawn's left (1) / right (2) on the nav.
++    float botDodgeClear(const Character& pc, int side) const;
+     // Per-step bot cost (diagnostics; WFC_BOTTEST / perf).
+     double botMsAverage() const { return botTicks_ ? botMsAccum_ / (double)botTicks_ : 0.0; }
+     double botMsMax() const { return botMsMax_; }
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index 15f08077..922dd961 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -624,7 +624,20 @@ bool World::botTryAbility(BotBody o, BotBrain& b, const char* id) {
+             if (pc.isMeleeing()) return false;
+             startMeleeFor(pc, o.matchPlayer(), true, b.yaw);
+             if (!pc.isMeleeing()) return false;
+-        } else if (a.id == "Dodge") b.pendingDodge = b.frand() < 0.5f ? 1 : 2;
++        } else if (a.id == "Dodge") {
++            // TnAiActionDodgePlanningUtil [CONF RE playtest #18]: left / right (random first) with the nav WalkLine clear >= 0.3;
++            // MaxDodgeDistance = clear x 18 m - the collision radius; neither side clear: no dodge (no cooldown).
++            const int first = b.frand() < 0.5f ? 1 : 2;
++            int side = 0; float clear = 0.0f;
++            for (int k = 0; k < 2 && side == 0; ++k) {
++                const int s = k == 0 ? first : 3 - first;
++                const float cl = botDodgeClear(pc, s);
++                if (cl >= 0.3f) { side = s; clear = cl; }
++            }
++            if (side == 0) return false;
++            b.pendingDodge = side;
++            pc.pendingMaxDodge_ = std::max(0.01f, clear * 18.0f - pc.cylinderRadius(Form::Robot));
++        }
+         else if (a.id == "Cloaking") pc.cloakRemain_ = 20.0f;                     // AddBuff(TnBuffCloak)
+         else if (a.id == "Hover") { b.pendingHover = true; pc.hoverRequested_ = true; }
+         else if (a.id == "Warcry") applyWarcry(pc, o.matchPlayer());
+@@ -642,6 +655,19 @@ bool World::botTryAbility(BotBody o, BotBrain& b, const char* id) {
+     return false;
+ }
+ 
++float World::botDodgeClear(const Character& pc, int side) const {
++    if (!botNav_.valid()) return 1.0f;   // no nav: the original's cap cannot be computed (the dodge runs its time)
++    const core::Vec3 X = core::forwardFromYawPitch(pc.yaw(), 0.0f);
++    core::Vec3 Y = core::normalize(core::cross(X, core::Vec3{0, 1, 0}));
++    if (side == 1) Y = Y * -1.0f;
++    BotNav::Agent ag; ag.radius = pc.cylinderRadius(Form::Robot);
++    const core::Vec3 p = pc.position();
++    if (botNav_.directWalkable(p, p + Y * 18.0f, ag)) return 1.0f;
++    float lo = 0.0f, hi = 18.0f;   // the WalkLine stop point: the longest walkable prefix
++    for (int i = 0; i < 8; ++i) { const float m = 0.5f * (lo + hi); if (botNav_.directWalkable(p, p + Y * m, ag)) lo = m; else hi = m; }
++    return lo / 18.0f;
++}
++
+ void World::botPathFailed(BotBrain& b, bool vehicle) {
+     ++b.noPaths;
+     b.path.clear(); b.wp = 0;
