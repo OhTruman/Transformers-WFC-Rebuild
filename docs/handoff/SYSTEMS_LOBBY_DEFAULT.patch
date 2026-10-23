@@ -1,0 +1,42 @@
+diff -ruN a/data/frontend/online_service.json b/data/frontend/online_service.json
+--- a/data/frontend/online_service.json	1969-12-31 18:00:00.000000000 -0600
++++ b/data/frontend/online_service.json	2026-10-23 07:46:04.255519000 -0500
+@@ -0,0 +1,4 @@
++{
++ "comment": "The lobby service the game uses when the profile names none (Systems; docs/handoff/LOBBY_VPS_SETUP.md). Empty = no service: LAN and direct address joins only. Set to <VPS IPv4>:14010 once the server is up.",
++ "lobby_service": ""
++}
+diff -ruN a/src/frontend/GameFlow_Online.cpp b/src/frontend/GameFlow_Online.cpp
+--- a/src/frontend/GameFlow_Online.cpp	2026-10-23 07:46:04.218894100 -0500
++++ b/src/frontend/GameFlow_Online.cpp	2026-10-23 07:46:04.236454000 -0500
+@@ -3,6 +3,11 @@
+ // ISession (Session.h) is Systems'; tests drive these flows with FakeSession. Popup texts are the original's INT texts
+ // where one exists (ONLINE_MP_UI_STRINGS.md), else the rebuild's own ($WfcPC.Online).
+ #include "frontend/GameFlow.h"
++#include <sstream>
++#include <fstream>
++#include "frontend/OpenPath.h"
++#include "frontend/DataPaths.h"
++#include "assets/Json.h"
+ 
+ #include <algorithm>
+ #include <cctype>
+@@ -240,7 +245,17 @@
+     }
+     if (role_ != SessionRole::Offline) syncVoiceSettings();
+     else voiceSent_.clear();
+-    if (!lobbyServiceSent_) { session_->setLobbyService(profile_.lobbyService); lobbyServiceSent_ = true; }
++    if (!lobbyServiceSent_) {   // the profile's LobbyService, else the shipped default (data/frontend/online_service.json) [Systems]
++        std::string svc = profile_.lobbyService;
++        if (svc.empty()) {
++            std::ifstream f(openPath(frontendDataFile("online_service.json")), std::ios::binary);
++            std::stringstream ss; ss << f.rdbuf();
++            assets::Json j;
++            if (f.good() && assets::Json::parse(ss.str(), j)) svc = j["lobby_service"].asString();
++        }
++        session_->setLobbyService(svc);
++        lobbyServiceSent_ = true;
++    }
+     if (!pendingEndTitle_.empty() && !travelPending_ && !loading_.active) {   // the session-end message, after the travel
+         showMessage(pendingEndTitle_, pendingEndMessage_);
+         pendingEndTitle_.clear();
