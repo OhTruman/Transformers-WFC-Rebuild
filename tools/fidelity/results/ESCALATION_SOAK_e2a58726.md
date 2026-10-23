@@ -81,3 +81,14 @@ and they come exactly 3 s apart (t 45.0, 48.1, 51.1, 54.1, 57.1, then 78.1, 81.1
 director's 3 s spawn recheck. So Remnant's 'waves 1-2 cleared' are the director culling its own horde (a stuck / unreachable cull, a
 kill volume at the spawn zones 11696 / 1584 / 9840, or a respawn that suicides the previous body), not combat. Buys / takes 0 as
 Gameplay expects headless (no Interact). VOICETEST on bfee6521: PASS. Logs work/stabsoak/esc_bfee/.
+
+## Rerun on 7272c4ac (horde exempt from strand-suicide + on-nav spawn substitution) - 2026-10-23 06:17
+
+| Run | Waves | ESCLOG kills (weapon / world) | Suicides | Substitutions logged | End |
+|---|---|---|---|---|---|
+| Remnant seed 7 | 1 / 0 | 7 / 0 | 0 | 12 | game over 69 s: Player by Soldier_MachineGun_Autobot_AICD 2 (AssaultRifle) |
+| Remnant seed 1234 | 1 / 0 | 6 / 0 | 0 | 9 | game over 50 s |
+| BrokenHope seed 7 | 1 / 0 | 12 / 0 | 0 | 2 | game over 63 s |
+| BrokenHope seed 1234 | 1 / 0 | 5 / 0 | 0 | 3 | game over 46 s |
+
+**As expected**: 0 suicides, every kill a weapon kill, substitutions 2-12 (expected about 8 on Remnant); Remnant's horde now reaches and kills the lone player (the earlier 300 s survival was the strand suicides). Exits 0, no crash.
