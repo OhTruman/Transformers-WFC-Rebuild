@@ -17,7 +17,7 @@ Per map (seed 7 / seed 1234): Berth 1 / 1, Debris 2 / 1, Streets 1 / 0; the othe
 
 - Seed 7 reproduces Gameplay's own four hits exactly (Streets t 230.15 p3 Car2, Berth t 203.54 p3 Car2, Debris t 46.52 / 234.89 p6 Car4): deterministic, replayable.
 - Every case is a Car (Scout) chassis, the Dodge class: consistent with Gameplay's trace (bot Dodge = 0.5 s PHYS_Flying at DodgeSpeed, no gravity, off a ledge; the original caps AI dodges by a nav-mesh WalkLine).
-- In every case y is BELOW the detector's groundY (by 1.8 to 11.9 m): the pawn has gone off a ledge / under the walkable surface the ground probe finds, i.e. it reads as 'under geometry' in play. (The 'under:' actor list is AABB-only - Gameplay: not proof of penetration.)
+- In every case y is BELOW the detector's groundY (by 0.4 to 11.9 m; 5 of 6 by more than 6 m): the pawn has gone off a ledge / under the walkable surface the ground probe finds, i.e. it reads as 'under geometry' in play. (The 'under:' actor list is AABB-only - Gameplay: not proof of penetration.)
 
 ## (A) above-visual (grounded > 0.6 m above collision.glb for 60 steps)
 
