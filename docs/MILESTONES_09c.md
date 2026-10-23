@@ -3664,3 +3664,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 02:10 MERGED 7404e98e vote lobby fixes (rows under the preview, no Veto, "Finding n more players", focus; host's real member id) +
   718efdee the flow test's team / member-id checks (16 / 16). Frontend next: public auto-start >= 2 / 45 s + hidden Start,
   Escalation EndGameStats + directorSpawned filter, XP for public, join in progress.
+2026-10-23 02:11 UdpSession identity PASS on 2528df5e incl. the exit path (Experimental). Retest checklist drafted
+  (docs/handoff/USER_RETEST_CHECKLIST_2026-10-23.md). Escalation soak building on effecacc. Rendering CARD FREE (analysis pending).
