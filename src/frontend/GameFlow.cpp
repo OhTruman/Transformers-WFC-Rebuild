@@ -376,6 +376,32 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     if (fn == "Online.EditGameMode") { editGameMode(arg(0)); return {}; }
     if (fn == "Online.EditPlaylist") { editPlaylist(argi(0)); return {}; }
     if (fn == "Online.PlayPrivateGame") { playPrivateGame(arg(0)); return {}; }
+    // ---- campaign (CAMPAIGN_FRONTEND_PLAN C1 / C4; RE CAMPAIGN_FRONTEND_FLOW_RE) ----
+    // FrontEnd_GFX Solo -> Mission Select: the SOLO campaign lobby (TnOnlineGameSettingsCPSolo: TnGameLobbyGameSolo on
+    // UI_CampaignLobby_m; no invites, never online).
+    if (fn == "Online.OpenCampaignGameLobby") {
+        const GameSettings* gs = cat_->settings("TnOnlineGameSettingsCPSolo");
+        if (!gs) { LOG_WARN("FLOW OpenCampaignGameLobby: no TnOnlineGameSettingsCPSolo"); return {}; }
+        lobby_.playlistId = -1;
+        FlowTrace::emit("campaign.lobby", {{"mode", gs->tag}, {"provenance", "CONFIRMED AS (FrontEnd_GFX Solo menu)"}});
+        hostOnlineGame(gs);
+        return {};
+    }
+    // DifficultySelect_GFX: the host's profile setting 12 (0 Easy, 1 Medium default, 2 Hard; non-hosts read 0).
+    if (fn == "Game.GetGameDifficulty") return role_ == SessionRole::Member ? 0 : profile_.campaign.difficulty;
+    if (fn == "Game.SetGameDifficulty") {
+        if (role_ == SessionRole::Member) return {};
+        profile_.campaign.difficulty = std::clamp(argi(0), 0, 2);
+        FlowTrace::emit("campaign.difficulty", {{"value", std::to_string(profile_.campaign.difficulty)}});
+        return {};
+    }
+    // The Solo menu's Resume Autobot / Resume Decepticon rows: a checkpoint save of that faction (index 0 / 1). The saves are
+    // Gameplay's (C6); until they exist there is none, so the menu offers Mission Select only.
+    if (fn == "Game.GetCheckpointFileStatus") return false;
+    if (fn == "Game.LoadSavedCheckpoint") {
+        FlowTrace::emit("campaign.loadSavedCheckpoint", {{"faction", arg(0)}, {"result", "no checkpoint saves yet (C6)"}});
+        return {};
+    }
     if (fn == "Online.PlayPlaylist") { playPlaylist(argi(0), arg(1) == "true" || arg(1) == "1"); return {}; }
     if (fn == "Online.SetSelectedMapID" && role_ == SessionRole::Member) {   // the host chooses (online member)
         FlowTrace::emit("online.memberIgnored", {{"fn", fn}, {"mapId", arg(0)}});

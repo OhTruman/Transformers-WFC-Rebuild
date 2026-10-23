@@ -111,6 +111,8 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<PCSettings:Anisotropy>") return std::to_string(flow_.profile().display.anisotropy);  // PC EXTENSION
     if (markup.rfind("<OnlinePlayerData:ProfileData.", 0) == 0 && markup.size() > 31) {
         std::string field = markup.substr(30, markup.size() - 31);
+        std::string cv;
+        if (flow_.profile().campaignField(field, cv)) return cv;   // CampaignSelect's chapter unlock / difficulty / checkpoint
         if (LocalProfile::isOriginalField(field)) return flow_.profile().get(field);
     }
     if (markup == "<CurrentGame:GameModeFriendlyName>") return tag.empty() ? "" : cat_.modeFriendlyName(tag);

@@ -28,6 +28,9 @@ public:
 
     // <OnlinePlayerData:ProfileData.Field> (original fields; unknown fields are stored but traced).
     std::string get(const std::string& field) const;
+    // The campaign's ProfileData fields CampaignSelect reads: "<A1..A5|D1..D5>Available / Difficulty / Checkpoint" (false
+    // for any other field).
+    bool campaignField(const std::string& field, std::string& value) const;
     void set(const std::string& field, const std::string& value);
     bool getBool(const std::string& field) const { return get(field) == "True"; }
     int getInt(const std::string& field) const;
@@ -81,6 +84,21 @@ public:
     // each type once per profile; CAMPAIGN_HUD_PLAN.md E5, C4 decided: profile-scoped). [Tutorials] Shown=, only written
     // when not empty, so versus profiles are unchanged.
     std::vector<std::string> tutorialsShown;
+    // Campaign progress (TnProfileSettings; RE CAMPAIGN_DIFFICULTY_RE 2.3 / 3, CAMPAIGN_FRONTEND_FLOW_RE 3). Chapter index =
+    // MapId - 96: A1..A5 = 96..100 (Autobot VI-X), D1..D5 = 101..105 (Decepticon I-V; D4 = D3B). [Campaign], written only
+    // when it differs from a new profile's, so versus profiles are unchanged.
+    struct Campaign {
+        static constexpr int kChapters = 10, kFirstMapId = 96;
+        int difficulty = 1;                     // setting 12: 0 Easy / 1 Medium (default) / 2 Hard
+        bool available[kChapters] = {true, false, false, false, false, true, false, false, false, false};   // H: each faction's first
+        bool complete[kChapters] = {};          // setting MapId
+        int bestDifficulty[kChapters] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1};   // MapId + 32, -1 = never completed
+        int checkpoint[kChapters] = {};         // MapId + 16: the highest checkpoint reached (thumb n enabled iff >= n)
+        int resumeMap[2] = {-1, -1};            // 55 Autobot / 56 Decepticon: the faction's resume chapter
+        static const char* key(int i) { static const char* k[] = {"A1", "A2", "A3", "A4", "A5", "D1", "D2", "D3", "D4", "D5"}; return i >= 0 && i < kChapters ? k[i] : ""; }
+        bool isDefault() const;
+    };
+    Campaign campaign;
     // [Online] FirstRunShown: the one-time "Online Play" prompt was answered (ONLINE_MP_FIRST_RUN.md step 2); written only
     // when set, so offline profiles are unchanged.
     bool onlineFirstRunShown = false;
