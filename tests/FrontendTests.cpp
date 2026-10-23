@@ -1726,6 +1726,33 @@ static void testLensFlaresSetting() {
           rt.catalog().localizeKey("$WfcPC.Settings.LensFlares") == "Lens Flares", "settings.lens_flares_row");
 }
 
+static void testRespawnUiLifetime() {
+    // User playtest 2026-10-23 #2: the respawn screen exists only while dead and spectating.
+    std::vector<std::string> open;
+    UIController ui;
+    ui.initialize(UIControllerClass::Multiplayer, [&](const std::string& m) { open.push_back(m); }, [&] { if (!open.empty()) open.pop_back(); },
+                  [](bool) {}, nullptr, false);
+    ui.setGRIAvailable(true);
+    ui.onUIEvent(5);                                   // first spawn -> InGame
+    const std::string respawn = ui.spectatingUI();
+    auto has = [&](const std::string& m) { return std::find(open.begin(), open.end(), m) != open.end(); };
+    ui.onUIEvent(4);                                   // dead -> Spectating: the respawn screen
+    const bool shown = ui.state() == UIState::Spectating && has(respawn);
+    ui.onUIEvent(6);                                   // pause while dead
+    ui.onUIEvent(5);                                   // respawned under the pause menu
+    ui.onUIEvent(7);                                   // resume
+    const bool resumedAlive = ui.state() == UIState::InGame && !has(respawn);
+    ui.onUIEvent(6);                                   // pause while alive
+    ui.onUIEvent(4);                                   // killed under the pause menu
+    ui.onUIEvent(7);                                   // resume -> spectating with the respawn screen
+    const bool resumedDead = ui.state() == UIState::Spectating && has(respawn);
+    ui.onUIEvent(5);
+    const bool closed = ui.state() == UIState::InGame && !has(respawn);
+    ui.onUIEvent(4); ui.onUIEvent(6); ui.onUIEvent(9);  // the match ends under the pause menu
+    check(shown && resumedAlive && resumedDead && closed && ui.state() == UIState::GameEnded && !has(respawn), "ui.respawn_screen_lifetime",
+          std::to_string(shown) + std::to_string(resumedAlive) + std::to_string(resumedDead) + std::to_string(closed));
+}
+
 static void testLobbyFlowV2() {
     // LV1: Private Match hosts at once (offline: the same lobby with bots), with the profile's last mode (new profile: TDM)
     {
@@ -1949,6 +1976,7 @@ int main() {
     testLobbyWaitingOne();
     testLensFlaresSetting();
     testLobbyFlowV2();
+    testRespawnUiLifetime();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);

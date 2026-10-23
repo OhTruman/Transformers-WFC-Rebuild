@@ -165,7 +165,13 @@ void UIController::onUIEvent(int code) {
         else if (code == 6) gotoState(UIState::PausedSpectating);
         break;
     case UIState::Paused: case UIState::PausedSpectating:
-        if (code == 11) gotoState(UIState::NotInGame);
+        // A respawn (5) or a death (4) while the pause menu is up changes the state behind it, so Resume returns to the
+        // right one (user playtest 2026-10-23 #2: dead -> pause -> respawned -> resume reopened the respawn timer over live
+        // play, and the respawn event was gone). The pause screen itself stays.
+        if (code == 5 && state_ == UIState::PausedSpectating) { state_ = UIState::Paused; LOG_INFO("FLOW uistate PausedSpectating -> Paused (respawned)"); if (onState_) onState_(UIState::PausedSpectating, state_); }
+        else if (code == 4 && state_ == UIState::Paused) { state_ = UIState::PausedSpectating; LOG_INFO("FLOW uistate Paused -> PausedSpectating (died)"); if (onState_) onState_(UIState::Paused, state_); }
+        else if (code == 9) gotoState(UIState::GameEnded);   // the match ended under the pause menu
+        else if (code == 11) gotoState(UIState::NotInGame);
         else if (code == 7) gotoState(state_ == UIState::Paused ? UIState::InGame : UIState::Spectating);
         // [RECONSTRUCTION, playtest 2026-10-13 P0 #4] The MP world keeps running under the pause menu (bPauseable false), so the
         // pawn can spawn or die while it is open. OnRespawn / OnSpectating were dropped here: a respawn under the menu (e.g.

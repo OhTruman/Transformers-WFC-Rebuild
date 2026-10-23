@@ -310,9 +310,28 @@ void GfxPresenter::extendedKillFeed(const Args& a) {
                                                     {"minGapSoFar", feedMinGapSeen_ > 1e8f ? std::string("-") : std::to_string(feedMinGapSeen_)}});
 }
 
+bool GfxPresenter::isUiControllerMovie(const std::string& movie) {
+    // the UI controller's screens (UIController: spectating / pause / end game / in-game lobby / game start), any class
+    for (const char* k : {"MultiplayerRespawn_GFX", "PauseMenu_GFX", "EndGameStats_GFX", "PreGameCountdown_GFX", "CustomTransformers_GFX",
+                          "CharacterSelect_GFX", "GameLobby_GFX", "PartyLobby_GFX", "FrontEnd_GFX"})
+        if (movie.find(k) != std::string::npos) return true;
+    return false;
+}
+
+GfxMovie* GfxPresenter::openMovieNamed(const std::string& movie) {
+    for (Open& o : movies_) if (o.object == movie) return o.movie.get();
+    for (Extra& e : extras_) if (e.object == movie) return e.movie.get();
+    return nullptr;
+}
+
 void GfxPresenter::movieCall(const std::string& movie, const std::string& fn, const std::vector<frontend::BridgeValue>& args) {
+    // An open movie (the flow's or an extra) takes the call where it is. A flow / UI-controller movie is never opened here:
+    // the flow may have opened it this frame (the respawn screen's SetSpectateTarget comes on the first Spectating frame,
+    // before syncMovies presents it), so the call waits a few frames for it and is dropped if it never comes. Opening a
+    // copy instead was the stuck respawn timer (user playtest 2026-10-23 #2): nothing ever closed the copy.
+    if (openMovieNamed(movie)) { pendingCalls_.push_back({movie, fn, args, true}); return; }
+    if (flowMovieNames_.count(movie) || isUiControllerMovie(movie)) { pendingCalls_.push_back({movie, fn, args, false, 4}); return; }
     bool open = false;
-    for (const Extra& e : extras_) open = open || e.object == movie;
     if (!open) {
         Extra e;
         e.object = movie;
@@ -697,6 +716,17 @@ void GfxPresenter::fsCommand(GfxMovie& m, const std::string& cmd, const std::str
 void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
     // Copy: opening a movie runs its first frame, which may open / close movies through the flow (fscommands).
     const std::vector<std::string> want = flow.openMovies();
+    for (const std::string& m : want) flowMovieNames_.insert(m);
+    if (flow.level() != lastLevel_) {   // a new level: no extra copy of a flow / UI movie survives it
+        lastLevel_ = flow.level();
+        for (size_t i = extras_.size(); i-- > 0;)
+            if (flowMovieNames_.count(extras_[i].object) || isUiControllerMovie(extras_[i].object)) {
+                frontend::FlowTrace::emit("gfx.extraClosedByLevel", {{"movie", extras_[i].object}});
+                rt_.dataStores().forgetMovie(extras_[i].object);
+                extras_.erase(extras_.begin() + (long)i);
+                shapesStale_ = true;
+            }
+    }
     // Close movies the flow no longer has open.
     for (size_t i = movies_.size(); i-- > 0;) {
         if (std::find(want.begin(), want.end(), movies_[i].object) == want.end()) {
@@ -1805,13 +1835,17 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     for (Extra& e : extras_) e.movie->advance(dt);
     for (size_t i = 0; i < pendingCalls_.size();) {   // movieCall: once the (new) movie has run a frame
         PendingCall& pc = pendingCalls_[i];
-        Extra* target = nullptr;
-        for (Extra& e : extras_) if (e.object == pc.movie) target = &e;
-        if (!target) { pendingCalls_.erase(pendingCalls_.begin() + (long)i); continue; }
+        GfxMovie* target = openMovieNamed(pc.movie);   // the flow's movie or an extra; closed meanwhile -> dropped
+        if (!target && pc.waitFrames-- > 0) { ++i; continue; }
+        if (!target) {
+            frontend::FlowTrace::emit("gfx.movieCallDropped", {{"movie", pc.movie}, {"fn", pc.fn}, {"why", "movie not open"}});
+            pendingCalls_.erase(pendingCalls_.begin() + (long)i);
+            continue;
+        }
         if (!pc.advanced) { pc.advanced = true; ++i; continue; }
         Args a;
-        for (const frontend::BridgeValue& b : pc.args) a.push_back(toValue(target->movie->player().vm(), b));
-        target->movie->invoke(pc.fn, a);
+        for (const frontend::BridgeValue& b : pc.args) a.push_back(toValue(target->player().vm(), b));
+        target->invoke(pc.fn, a);
         frontend::FlowTrace::emit("gfx.movieCall", {{"movie", pc.movie}, {"fn", pc.fn}});
         pendingCalls_.erase(pendingCalls_.begin() + (long)i);
     }
