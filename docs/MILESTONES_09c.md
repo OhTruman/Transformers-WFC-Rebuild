@@ -3950,3 +3950,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 08:56 MERGED c8e6850d campaign runtime 10: real streaming on the game side (initial state's units only at load: A1 6 + 1 of
   47; load at Started / unload at hidden via IRenderer::unloadChapterUnit). Rendering implements the unload + RT add /
   remove next. GameplayStarted checkpoint rule confirmed C by RE.
+2026-10-23 08:57 Systems: LOBBY_DEPLOY_CHECKLIST (every command; dry run PASS on loopback; the SSH key is made at deploy time) +
+  PACKAGE_SIZE_ESTIMATE (27.84 GB today; campaign_render 98 % duplicate lightmaps: 10 chapters ~17 GB -> ~6.5 GB with
+  one lightmaps/ per chapter). DECISIONS: HD stays the optional pack; campaign in the base once deduplicated (AssetTools
+  exporter + Rendering loader read <chapter>/lightmaps/); the campaign's outside assets join slim_files.tsv.
