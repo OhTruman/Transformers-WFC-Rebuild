@@ -3698,3 +3698,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 02:46 REGRESSION (Rendering): private menu launches now start the NetMatchDriver with 1 seat -> matchSteps never advances (SHOTMATCH
   0 shots) and same-seed arms differ: every lockstep match-frame runner is broken. DECISION: no net driver without a remote
   seat (Systems, top priority). JIP RE doc + overlay soak (20 / 20 clean; 18 fall-through candidates to AssetTools) merged.
+2026-10-23 02:54 MERGED 888abf4d solo launches take the local loop again (Systems; the 1-seat driver regression; SOLOLAUNCHTEST 5 / 5);
+  ea73ac61 late seats (Gameplay; LATESEATTEST 15 / 15); 078c9eb4 campaign C2 / C5 (C1-C5 complete headless); the first-visit
+  lever. UDPSESSIONTEST PASS on the head (Gameplay's failures = Systems' port 14100 collision, moved to 24100+). Experimental:
+  E2a rerun stable, 0 spawn-finder failures; Remnant headless never spawns (boot-path difference, Gameplay). Card: Rendering
+  x33 + x34gi relay next, then the Frontend's campaign-menu shots, then Rendering's PPV fog Remnant pair.
