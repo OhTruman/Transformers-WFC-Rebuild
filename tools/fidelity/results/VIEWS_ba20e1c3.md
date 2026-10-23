@@ -37,3 +37,11 @@
 - Views contrast on Rust + Debris (10 views): Realistic 1.54, + Enhanced 1.58 - above the package 6 floors (1.42 / 1.45).
 - Lens-flare views: NOT captured (0 / 10 per map and mode) - the flare list was passed as a relative path the exe's working directory
   could not resolve; fixed in views-only.sh / eyepass.sh (absolute path); a 5-min rerun of the flare views is needed.
+
+## Lens-flare views (rerun 00:4x, ba20e1c3 exe, default Original setting; 20 sun-aimed views x Off / Realistic / Realistic + HD 2,
+## all 10 / 10 captured; review pairs results/flare_ba20e1c/flare_review.png)
+- Rust sun_lane / sun_reflective: the flare draws in Off and Realistic alike - a large ring halo (pink-violet) round the sun with a
+  light core and shaft; occupies about half the frame height; reads strong rather than "faint" on these on-axis cameras.
+- Debris sun_dark: halo ring + a horizontal anamorphic streak at the rock edge, in both modes.
+- Debris sun_street: the sun is behind structure - no flare (occlusion cull works).
+- Observation for Rendering: the halo shows visible 8-bit banding steps in its rings on the 2560x1440 captures.
