@@ -72,5 +72,3 @@ GameSettingsDesc=Game mode, limits, bots and the other match options.
 GameModeDesc=The kind of match. Each mode keeps its own settings.
 NoPublicGames=No public games found.
 LanOnly=Public matches need the lobby service. LAN games only.
-BrowseGames=Browse Games
-BrowseGamesDesc=See the open public games and pick one.

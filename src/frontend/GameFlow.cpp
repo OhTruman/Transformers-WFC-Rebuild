@@ -497,6 +497,25 @@ void GameFlow::setLobbyService(const std::string& address) {
     FlowTrace::emit("online.lobbyService", {{"address", address}});
 }
 
+bool GameFlow::quickMatch(int playlistId) {
+    const Playlist* pl = cat_->playlistById(playlistId);
+    const GameSettings* gs = pl ? cat_->settings(pl->settingsClass) : nullptr;
+    if (!session_ || !gs || onlinePending_ != OnlinePending::None) return false;
+    currentSettings_ = gs;              // a hosted result is a public lobby for this playlist
+    lobby_.settings = gs; lobby_.gameModeTag = gs->tag; lobby_.playlistId = playlistId;
+    onlinePending_ = OnlinePending::Searching;
+    Popup p;
+    p.title = txt("$UIText.MessagePrompts.SearchForGameTitle");   // "Finding Game"
+    p.message = txt("$UIText.MessagePrompts.SearchingMessage");   // "Searching..."
+    p.icon = 1;
+    p.b = PopupButton{txt("$UIText.MessagePrompts.GenericCancelButton"), "cancelSearch", false};
+    p.showDefaultButtons = false;
+    showPopup(p);
+    session_->quickMatch(std::to_string(playlistId));
+    FlowTrace::emit("online.quickMatch", {{"playlist", std::to_string(playlistId)}, {"mode", gs->tag}});
+    return true;
+}
+
 void GameFlow::hostPrivateNow() {
     // ONLINE_LOBBY_FLOW_V2 2.1: straight into the game lobby with the last-used mode (a new profile: Team Deathmatch);
     // the settings live in the lobby's Game Settings (no mode list / options pre-screens).
@@ -541,6 +560,7 @@ void GameFlow::playPrivateGame(const std::string& settingsName) {
 }
 
 void GameFlow::playPlaylist(int playlistId, bool forceHost) {
+    if (session_ && !forceHost && quickMatch(playlistId)) return;   // online: the original search (ONLINE_LOBBY_FLOW_V2 4)
     // PlayPlaylistInternal: settings = PlaylistManager.GetGameSettings(PlaylistId, 0); HostType 1 -> host, otherwise a
     // VERSUS search -> FindingGames -> join or ReservingSpace.HostPlaylist. No online search exists offline: the
     // rebuild hosts the playlist game (the search's no-result path) [PARTIAL].
@@ -922,6 +942,11 @@ void GameFlow::popupButton(char which) {
         FlowTrace::emit("online.join", {{"result", "cancelled"}});
     }
     if (btn.action == "pttCancel") endPttCapture("");
+    if (btn.action == "cancelSearch" && session_ && onlinePending_ == OnlinePending::Searching) {   // CancelSearchMessage
+        session_->cancelSearch();
+        showPopup([this] { Popup p; p.title = txt("$UIText.MessagePrompts.SearchForGameTitle"); p.message = txt("$UIText.MessagePrompts.CancelSearchMessage");
+                           p.icon = 1; p.showDefaultButtons = false; return p; }());
+    }
     if (btn.action.rfind("fr", 0) == 0) answerFirstRun(btn.action);
     if (btn.action == "quit") quitPending_ = true;
     else if (btn.action == "exit") { quit_ = true; FlowTrace::emit("exit", {}); }
