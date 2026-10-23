@@ -3958,3 +3958,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   streaming (unload frees RT sets / meshes / pages; load at Started; A1 = 7 units at load) + shared <chapter>/lightmaps/
   (A1 2.17 GB -> 45 MB; AssetTools removes the unit copies on my go). Campaign milestone run #2 (Frontend) + broad pass #2
   (Experimental) on d48f995d now. Gameplay -> pawn-group AnimControl, Omega AI, hit reactions, destructible collision.
+2026-10-23 09:03 build_slim ships all chapters + the outside assets (Systems): base estimate ~15 GB with 10 chapters deduped (today
+  ~12 GB), HD optional pack brings it to ~37 GB.
