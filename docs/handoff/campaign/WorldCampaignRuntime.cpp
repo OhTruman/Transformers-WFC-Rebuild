@@ -126,6 +126,7 @@ bool World::cpPawnFactoryActivate(KismetVM& vm, int op, int input) {
             F.spawnedDes.clear();
             return true;
         }
+        if (F.cls == "TnActorFactorySentryAI") return cpSentryFactoryActivate(vm, op, input, F);
         if (input != 0) return true;   // Stop / other inputs: nothing to do yet
         if (desFactory && !F.points.empty()) {   // a destructible factory: the blueprint at its spawn point
             // named after its sequence + op (the four D5 battery sequences share the op name), the Spawned variable = "des:<i>"
@@ -165,10 +166,15 @@ void World::cpTickFactories(float dt) {
         match_.restartPlayerAt(p, at, yaw);
         if (F.vehicle) cp_.formPending.push_back(p);
         ++F.spawned; ++cp_.enemiesSpawned;
+        F.live.push_back(p);
         LOG_INFO("campaign: factory %s spawned p%d %s at (%.1f %.1f %.1f)", afterDot(F.action).c_str(), p, F.chassis.c_str(), at.x, at.y, at.z);
         if (!F.spawnedVar.empty())
             for (int v = 0; v < cp_.vm.varCount(); ++v)
                 if (KismetVM::Var* var = cp_.vm.var(v); var && var->varName == F.spawnedVar) var->obj = "pawn:" + std::to_string(p);
+        if (F.op >= 0) {   // the factory's Spawned variable + its "Spawned" output for each pawn
+            for (int v : cp_.vm.varLink(F.op, "Spawned")) if (KismetVM::Var* var = cp_.vm.var(v)) var->obj = "pawn:" + std::to_string(p);
+            if (std::find(F.outputs.begin(), F.outputs.end(), "Spawned") != F.outputs.end()) cp_.vm.output(F.op, "Spawned");
+        }
         if (--F.pending > 0) { F.timer = F.delay; continue; }
         if (F.op >= 0) {
             const bool all = std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Spawned") != F.outputs.end();
@@ -690,6 +696,216 @@ void World::cpTickTransformOps() {
         cp_.vm.finishLatent(cp_.transformOps[k].first, "Finished");
         cp_.transformOps.erase(cp_.transformOps.begin() + (long)k);
     }
+}
+
+} // namespace game
+
+namespace game {
+
+// ---- SeqAct_TnPawnFactory death outputs: "Single Pawn Killed" per spawned pawn's death, "All Pawns Killed" once none of its spawns
+// lives (and none is pending) [C op outputs; the A1 / A2 / A3 encounters wait on them] ----
+void World::cpTickFactoryKills() {
+    const auto& kh = match_.killHistory();
+    if (cp_.factoryKillsSeen > kh.size()) cp_.factoryKillsSeen = 0;
+    for (; cp_.factoryKillsSeen < kh.size(); ++cp_.factoryKillsSeen) {
+        const int v = kh[cp_.factoryKillsSeen].victim;
+        for (CampaignFactory& F : cp_.factories) cpFactoryPawnDied(F, v);
+    }
+}
+
+void World::cpFactoryPawnDied(CampaignFactory& F, int victim) {
+    auto it = std::find(F.live.begin(), F.live.end(), victim);
+    if (it == F.live.end()) return;
+    F.live.erase(it);
+    if (F.op < 0) return;
+    if (std::find(F.outputs.begin(), F.outputs.end(), "Single Pawn Killed") != F.outputs.end()) cp_.vm.output(F.op, "Single Pawn Killed");
+    if (F.live.empty() && F.pending <= 0 && std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Killed") != F.outputs.end()) {
+        cp_.vm.output(F.op, "All Pawns Killed");
+        LOG_INFO("campaign: factory %s: All Pawns Killed", afterDot(F.action).c_str());
+    }
+}
+
+// ---- sentries (TnActorFactorySentryAI + a TURRETDEF: AssetTools out/campaign_characters/spawnables.json) ----
+// A TURRETDEF turns the placed turret body at the spawn point into a stationary AI sentry: it turns toward the nearest living enemy
+// in SightRadius at LagDegreesPerSecond and fires its weapon within MaxAttackRange when aimed (AimedAtTargetThreshold) with a line
+// of sight; it is a destructible (its hit box at the body) and dies at 0 HP -> the factory's Single / All Pawns Killed; the body hides
+// after LifeSpanAfterDeath. HP and fire from AssetTools' sentry DES and weapon fire blocks; PROV: the repair sentry does not repair.
+namespace {
+struct SentryFire { const char* weapon; bool hitscan; float damage, interval, speed, radius; bool homing; const char* type; };
+const SentryFire kSentryFire[] = {   // AssetTools weapon.json fire blocks (AI cadence = FireIntervalModifier.IntervalRange; metres)
+    {"TnWeaponSentryLight", true, 5.0f, 0.16f, 0, 0, false, "TnDamageTypeSentryLight"},
+    {"TnWeaponSentryRocket", false, 85.0f, 1.5f, 60.0f, 5.0f, false, "TnDamageTypeSentryRocket"},
+    {"TnWeaponSentryHomingRocket", false, 75.0f, 2.75f, 50.0f, 5.0f, true, "TnDamageTypeSentryRocket"},
+    {"TnWeaponWarshipHomingRocketSentry", false, 15.0f, 3.0f, 42.5f, 3.5f, true, "TnDamageTypeSentryRocket"},
+    {"TnWeaponSentryDeathBeam", true, 24.0f, 0.03f, 0, 0, false, "TnDamageTypeSentryDeathBeam"},   // DamagePerSecond 800
+    {"TnWeaponOmegaShipMG", false, 10.0f, 0.1f, 80.0f, 1.0f, false, "TnDamageTypeOmegaShipMG"},
+    {"TnWeaponOmegaShipRocket", false, 40.0f, 3.5f, 40.0f, 10.0f, false, "TnDamageTypeOmegaRocket"},
+    {"TnWeaponSentryRepair", true, 0.0f, 1.0f, 0, 0, false, "TnDamageTypeRepairEnemy"},   // repairs the AI's side: no attack (PROV)
+};
+std::string tailS(const std::string& s) { const size_t k = s.find_last_of('.'); return k == std::string::npos ? s : s.substr(k + 1); }
+}
+
+void World::cpLoadSentryDefs() {
+    cp_.sentryFactories.clear(); cp_.sentryDefs.clear(); cp_.sentries.clear();
+    assets::Json j;
+    if (!readJsonFile("F:/Transformers Rebuild/AssetTools/out/campaign_characters/spawnables.json", j)) return;
+    const assets::Json& ss = j["sentries"];
+    for (size_t i = 0; i < ss.size(); ++i) {
+        const assets::Json& v = ss[i]["values"];
+        CampaignSentryDef D;
+        D.turretdef = tailS(ss[i]["turretdef"].asString());
+        D.weapon = tailS(ss[i]["weapon"]["class"].asString());
+        D.range = v["MaxAttackRange"].asFloat(8000.0f) * 0.01f;
+        D.sight = v["SightRadius"].asFloat(10000.0f) * 0.01f;
+        D.lagDeg = v["LagDegreesPerSecond"].asFloat(90.0f);
+        D.aimDeg = v["AimedAtTargetThreshold"].asFloat(3.0f);
+        D.deathLife = v["LifeSpanAfterDeath"].asFloat(1.0f);
+        // the Destructible's first state's InitialHealth (AssetTools destructibles/<name>.json): Blaster / Rocket / Repair 125,
+        // SentryBall 135, the invisible death-beam ball 1000, the warship ball 10000 (no death state authored)
+        const std::string des = v["Destructible"].asString();
+        D.hp = des.find("Invis") != std::string::npos ? 1000.0f : des.find("Warship") != std::string::npos ? 10000.0f :
+               des.find("SentryBall") != std::string::npos ? 135.0f : 125.0f;
+        const int di = (int)cp_.sentryDefs.size();
+        cp_.sentryDefs.push_back(D);
+        const assets::Json& fs = ss[i]["factories"];
+        for (size_t f = 0; f < fs.size(); ++f) {
+            if (fs[f]["chapter"].asString() != cpChapter_.chapter) continue;
+            CampaignState::SentryFactory SF;
+            SF.def = di;
+            SF.count = std::max(1, fs[f]["spawn_count"].asInt(1));
+            for (size_t k = 0; k < fs[f]["spawn_points"].size(); ++k) {
+                const assets::Json& sp = fs[f]["spawn_points"][k];
+                const assets::Json& L = sp["location_gltf"];
+                if (L.size() < 3) continue;
+                SF.points.push_back(core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()});
+                SF.bodies.push_back(tailS(sp["object"].asString()));
+            }
+            cp_.sentryFactories[fs[f]["action"].asString()] = SF;
+        }
+    }
+    LOG_INFO("campaign: %zu sentry factories (%zu TURRETDEFs)", cp_.sentryFactories.size(), cp_.sentryDefs.size());
+}
+
+bool World::cpSentryFactoryActivate(KismetVM& vm, int op, int input, CampaignFactory& F) {
+    const int fi = (int)(&F - &cp_.factories[0]);
+    auto it = cp_.sentryFactories.find(F.action);
+    if (input == 4) {   // Kill All
+        for (CampaignSentry& s : cp_.sentries) if (s.factory == fi && !s.dead) { s.dead = true; s.deadT = 0.0f; cpRemoveDestructible(s.des); }
+        F.liveSentries.clear();
+        return true;
+    }
+    if (input != 0) return true;
+    if (it == cp_.sentryFactories.end() || it->second.points.empty()) {
+        LOG_INFO("campaign: sentry factory %s: no data", afterDot(F.action).c_str());
+        if (std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Spawned") != F.outputs.end()) vm.output(op, "All Pawns Spawned");
+        return true;
+    }
+    const CampaignState::SentryFactory SF = it->second;
+    const CampaignSentryDef D = cp_.sentryDefs[(size_t)SF.def];
+    for (int c = 0; c < SF.count; ++c) {
+        const size_t k = (size_t)c % SF.points.size();
+        CampaignSentry S;
+        S.def = SF.def; S.factory = fi; S.body = SF.bodies[k]; S.pos = SF.points[k];
+        // its hit box: a destructible with one 'alive' state (HP) that GenericDamage takes to 'dead'
+        CampaignDestructible d;
+        d.name = "sentry_" + S.body; d.pos = S.pos; d.block = false;
+        d.posUE = core::Vec3{S.pos.x * 100.0f, S.pos.z * 100.0f, S.pos.y * 100.0f};
+        CampaignDestructible::Piece P; P.name = "Turret";
+        CampaignDestructible::State alive; alive.handle = 0; alive.name = "Alive"; alive.health = D.hp;
+        alive.links.push_back({1, std::string("HmGenericDamageDestructionTrigger")});
+        CampaignDestructible::State dead; dead.handle = 1; dead.name = "Dead";
+        P.states.push_back(alive); P.states.push_back(dead); P.cur = 0; P.health = D.hp;
+        d.pieces.push_back(P);
+        d.fixedBounds = true; d.lo = S.pos - core::Vec3{1.0f, 1.0f, 1.0f}; d.hi = S.pos + core::Vec3{1.0f, 1.0f, 1.0f};
+        cp_.destructibles.push_back(d);
+        S.des = (int)cp_.destructibles.size() - 1;
+        cp_.sentries.push_back(S);
+        const int si = (int)cp_.sentries.size() - 1;
+        F.liveSentries.push_back(si);
+        for (int v : vm.varLink(op, "Spawned")) if (KismetVM::Var* var = vm.var(v)) var->obj = "sentry:" + std::to_string(si);
+        if (std::find(F.outputs.begin(), F.outputs.end(), "Spawned") != F.outputs.end()) vm.output(op, "Spawned");
+        if (renderer_) renderer_->setActorHidden(S.body, false);
+    }
+    LOG_INFO("campaign: sentry factory %s spawned %d %s (%s)", afterDot(F.action).c_str(), SF.count, D.turretdef.c_str(), D.weapon.c_str());
+    if (std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Spawned") != F.outputs.end()) vm.output(op, "All Pawns Spawned");
+    return true;
+}
+
+void World::cpTickSentries(float dt) {
+    for (size_t si = 0; si < cp_.sentries.size(); ++si) {
+        CampaignSentry& S = cp_.sentries[si];
+        const CampaignSentryDef& D = cp_.sentryDefs[(size_t)S.def];
+        if (S.dead) {
+            if (S.deadT >= 0.0f && (S.deadT += dt) >= D.deathLife) { S.deadT = -1.0f; if (renderer_) renderer_->setActorHidden(S.body, true); }
+            continue;
+        }
+        CampaignDestructible& d = cp_.destructibles[(size_t)S.des];
+        if (d.gone || d.pieces.empty() || d.pieces[0].cur != 0) {   // destroyed
+            S.dead = true; S.deadT = 0.0f;
+            cpRemoveDestructible(S.des);
+            LOG_INFO("campaign: sentry %s destroyed", S.body.c_str());
+            CampaignFactory& F = cp_.factories[(size_t)S.factory];
+            F.liveSentries.erase(std::remove(F.liveSentries.begin(), F.liveSentries.end(), (int)si), F.liveSentries.end());
+            if (F.op >= 0) {
+                if (std::find(F.outputs.begin(), F.outputs.end(), "Single Pawn Killed") != F.outputs.end()) cp_.vm.output(F.op, "Single Pawn Killed");
+                if (F.liveSentries.empty() && std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Killed") != F.outputs.end()) cp_.vm.output(F.op, "All Pawns Killed");
+            }
+            continue;
+        }
+        if (S.dormant || match_.state() != Match::State::InProgress) continue;
+        // the target: SeqAct_TnAiSentryForceTarget's, else the nearest living enemy (the AI's other side) in SightRadius with LOS
+        const int team = cp_.factories[(size_t)S.factory].team;
+        const core::Vec3 eye = S.pos + core::Vec3{0.0f, 0.5f, 0.0f};
+        int tgt = -1; float best = D.sight;
+        for (size_t q = 0; q < match_.players().size(); ++q) {
+            const MatchPlayer& mp = match_.players()[q];
+            if (!mp.alive || mp.team == team) continue;
+            const Character* c = participantPawn((int)q);
+            if (!c) continue;
+            const float L = core::length(c->actorLocation() - eye);
+            if ((S.forced >= 0 && (int)q != S.forced) || L > best) continue;
+            if (!botLineOfSight(eye, c->actorLocation())) continue;
+            best = L; tgt = (int)q;
+        }
+        if (tgt < 0) continue;
+        const core::Vec3 aim = participantPawn(tgt)->actorLocation() - eye;
+        const float want = std::atan2(-aim.x, -aim.z);
+        float dy = std::remainder(want - S.yaw, 6.2831853f);
+        const float step = D.lagDeg * 0.0174533f * dt;
+        S.yaw += std::clamp(dy, -step, step);
+        dy = std::remainder(want - S.yaw, 6.2831853f);
+        if ((S.cool -= dt) > 0.0f || best > D.range || std::fabs(dy) > D.aimDeg * 0.0174533f) continue;
+        const SentryFire* sf = nullptr;
+        for (const SentryFire& x : kSentryFire) if (D.weapon == x.weapon) sf = &x;
+        if (!sf || sf->damage <= 0.0f) { S.cool = 1.0f; continue; }
+        S.cool = sf->interval;
+        if (sf->hitscan) applyMatchDamage(tgt, -1, sf->damage, false, sf->type);
+        else {
+            Weapon w;
+            w.projSpeed = sf->speed; w.projDamage = sf->damage; w.projRadiusM = sf->radius; w.rangeM = D.range; w.damageType = sf->type;
+            w.projHoming = sf->homing; w.homingForce = sf->homing ? 200.0f : 0.0f;   // HomingForce 20000 UU/s^2 w.projMaxSpeed = sf->speed; w.lockRobots = true;
+            spawnProjectile(eye, core::normalize(aim) * sf->speed, w, -1);
+            if (sf->homing) projectiles_.back().target = tgt;
+        }
+    }
+}
+
+// SeqAct_TnAiSentryForceTarget (the sentries attack this target only) / SeqAct_TnAiSentrySetDormant (On: dormant).
+bool World::cpSentryOpActivate(KismetVM& vm, int op, int input) {
+    const KismetVM::Op& o = vm.op(op);
+    if (o.cls != "SeqAct_TnAiSentryForceTarget" && o.cls != "SeqAct_TnAiSentrySetDormant") return false;
+    std::vector<int> ss;
+    for (int v : vm.varLink(op, "Target")) {
+        const KismetVM::Var* var = vm.var(v);
+        if (var && var->named >= 0) var = vm.var(var->named);
+        if (var && var->obj.rfind("sentry:", 0) == 0) ss.push_back(std::atoi(var->obj.c_str() + 7));
+    }
+    if (o.cls == "SeqAct_TnAiSentryForceTarget") {
+        const std::vector<int> t = cpTargets(vm, op, "Force Target");
+        for (int i : ss) if (i >= 0 && (size_t)i < cp_.sentries.size()) cp_.sentries[(size_t)i].forced = t.empty() ? -1 : t.front();
+    } else for (int i : ss) if (i >= 0 && (size_t)i < cp_.sentries.size()) cp_.sentries[(size_t)i].dormant = input == 0;
+    if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
+    return true;
 }
 
 } // namespace game
