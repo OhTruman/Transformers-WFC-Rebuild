@@ -4123,3 +4123,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 14:27 Set-dressing look on 78caf2bc PASS (Frontend setdress3/): A1 509 / A2 242 authored hidden sent as expected; A1 identical
   to the baseline except the lift's black band now gone (the pod mesh is authored hidden) and a pose offset; nothing
   vanished wrongly. Pending: Gameplay's path-send patch (+ FINAL_BASE_ITEMS 10), AssetTools actor_path + D3B + outside list.
+2026-10-23 14:30 MERGED c72b7638 campaign hides keyed by object path + FINAL_BASE_ITEMS 10 (A1 539 / A2 249, exact). FINAL CODE c72b7638.
+  actor_path done for 9 chapters (150,044 nodes). D3B late (~16:20; air queue PAUSED to free CPU; outside list ~16:30).
+  Experimental rebuilds arms final5 / c72b7638; the Frontend runs the final hand-over set (handover3 + A2 arm).
