@@ -4155,3 +4155,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 17:57 FINAL HAND-OVER RERUN PASS on 6d30fff2 (Frontend handover5/): 249 / 249, 6 / 6 clean, pressuntil exercised, weapons +
   characters shaded in Realistic. Experimental arms final6 / 6d30fff2 built + dry-run clean. EVERY LANE DONE FOR THE
   BUILD. Waiting only on the user's reboot -> timed gate -> cut.
+2026-10-23 17:57 Render verdict on handover5: SHIP (A1's p30 / p60 fell inside the intro FMV because pressuntil enters earlier; A1 in-game
+  render covered by handover4 on the same render code). HAND-OVER SET = handover5 (+ handover4 for A1 in-game frames).
