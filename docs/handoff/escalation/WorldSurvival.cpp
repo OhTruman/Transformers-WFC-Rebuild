@@ -492,8 +492,96 @@ void World::svApplyHordeStats(Character& c, int player) {
         for (const std::string& w : E.robotWeapons) if (const WeaponDef* d = findWeaponDef(w)) robot.push_back(Weapon::fromDef(*d));
         if (!robot.empty() || !E.vehicleWeapons.empty()) c.setLoadout(robot, E.vehicleWeapons.empty() ? c.vehicleWeapons() : E.vehicleWeapons);
         c.health().max = E.health; c.health().current = E.health;
+        // The Brute chassis' Health 100,000: body damage is irrelevant, the backpack is the kill path [C, RE section 2]
+        if (s.bpStage >= 0) { c.health().max = 100000.0f; c.health().current = 100000.0f; }
         return;
     }
+}
+
+// E3b: a Brute carries the backpack (its only kill path) [C, RE ESCALATION_HORDE_AI section 2]; set at each spawn.
+static void svArmBackpack(SurvivalState::Slot& sl, const SurvivalData& d) {
+    const bool brute = d.enemies[(size_t)sl.enemy].type.rfind("Brute_", 0) == 0;
+    sl.bpStage = brute ? 0 : -1; sl.bpHealth = brute ? 25.0f : 0.0f; sl.bpCritical = -1.0f; sl.bpLastHitter = -1;
+}
+
+// WFC_ESCTEST: one horde entry of that type spawned now (outside the wave budget).
+int World::svTestSpawn(const std::string& prefix) {
+    for (size_t k = 0; k < sv_.slots.size(); ++k) {
+        SurvivalState::Slot& sl = sv_.slots[k];
+        if (sl.inUse || svData_.enemies[(size_t)sl.enemy].type.rfind(prefix, 0) != 0) continue;
+        if (!svSpawn((int)k)) return -1;
+        sl.inUse = true;
+        svArmBackpack(sl, svData_);
+        return sl.player;
+    }
+    return -1;
+}
+
+// E3b: a hit on a Brute (applyMatchDamage, before the pawn's own multipliers): the backpack is an attached TnDestructibleActor, so a
+// hit from behind lands on it and nothing reaches the pawn [C, RE section 6]. PROV hit test: our traces stop at the pawn cylinder, so
+// the direction gate stands in for the attach actor: an attacker within DamageAngle 100 deg of the backpack's facing (the Brute's back)
+// hits the backpack, any other hit the body (100,000). Modifiers: AI x0 (still the LastHitInstigator), melee x0.5, radius x0.25.
+// Each stage's overflow does not carry (H stock). Returns true when the backpack took the hit (the pawn takes nothing).
+bool World::svBackpackHit(int victim, int instigator, float amount, const std::string& damageType) {
+    for (SurvivalState::Slot& s : sv_.slots) {
+        if (s.player != victim || s.bpStage < 0) continue;
+        if (s.bpStage == 1 || s.bpStage == 4 || s.bpStage == 2) return false;   // critical / exploding / gone: no health to take
+        const Character* bc = participantPawn(victim);
+        if (!bc || instigator < 0 || instigator == victim) return false;
+        const core::Vec3 from = match_.playerLocation(instigator);
+        core::Vec3 d = from - bc->position(); d.y = 0.0f;
+        const core::Vec3 back = core::forwardFromYawPitch(bc->yaw(), 0.0f) * -1.0f;
+        const float l = core::length(d);
+        if (l < 1e-3f || core::dot(d * (1.0f / l), back) < std::cos(100.0f * 3.14159265f / 180.0f)) { ++sv_.bpRefused; return false; }   // the body
+        s.bpLastHitter = instigator;
+        float dmg = amount;
+        if ((size_t)instigator < match_.players().size() && match_.players()[(size_t)instigator].kind == ParticipantKind::Bot) dmg = 0.0f;   // AI x 0
+        if (damageType.find("Melee") != std::string::npos) dmg *= 0.5f;
+        if (svRadiusHit_) dmg *= 0.25f;
+        ++sv_.bpHits;
+        if (dmg <= 0.0f) return true;
+        if ((s.bpHealth -= dmg) > 0.0f) return true;
+        static const int next[6] = {5, -1, -1, 1, -1, 3};   // 0 -> 5 -> 3 -> 1
+        const int ns = next[s.bpStage];
+        s.bpStage = ns;
+        if (ns == 5) s.bpHealth = 50.0f;            // first damage (smoke)
+        else if (ns == 3) s.bpHealth = 75.0f;       // overloading: DeathImminent L1 (React_To_Backpack_Damage)
+        else if (ns == 1) s.bpCritical = 3.0f;      // critical: DeathImminent L2 (ExtinguishBackpack); auto explode after 3.0 s
+        static const bool slog = std::getenv("WFC_ESCLOG") != nullptr;
+        if (slog) LOG_INFO("ESCLOG backpack p%d stage %d (hit by p%d)", victim, ns, instigator);
+        return true;
+    }
+    return false;
+}
+
+// The backpack explosion: HmRadialDamageDestructionEffect -> HurtRadius(500, 4000 UU, TnDamageTypeBruteBackpack, momentum 600,000,
+// InstigatedBy = LastHitInstigator), falloff (1 - clamp(d - r, 0, R) / R)^2, an unobstructed trace; then TnKillAttachedPawn [C, RE 2 / 6].
+// The usual team rule applies (BruteBackpack is not TnDamageTypeAOE): the horde and the instigator are hurt, other players are not.
+void World::svBackpackExplode(SurvivalState::Slot& s) {
+    const Character* bc = participantPawn(s.player);
+    s.bpStage = 4;
+    if (!bc) { s.bpStage = 2; return; }
+    const core::Vec3 at = bc->actorLocation();
+    const std::string type = "TransGame.TnDamageTypeBruteBackpack";
+    const float R = 40.0f;
+    for (size_t q = 0; q < match_.players().size(); ++q) {
+        if ((int)q == s.player) continue;
+        const Character* c = participantPawn((int)q);
+        if (!c) continue;
+        const float dd = std::clamp(core::length(c->actorLocation() - at) - c->cylinderRadius(c->moveForm()), 0.0f, R);
+        const float k = (1.0f - dd / R) * (1.0f - dd / R);
+        if (k > 0.0f && radiusVisible(at, c->actorLocation())) { noteHitDir(c->actorLocation() - at); applyMatchDamage((int)q, s.bpLastHitter, 500.0f * k, false, type); }
+    }
+    ++sv_.bpExplosions;
+    static const bool slog = std::getenv("WFC_ESCLOG") != nullptr;
+    if (slog) LOG_INFO("ESCLOG backpack p%d explodes (instigator p%d)", s.player, s.bpLastHitter);
+    // TnKillAttachedPawn: the Brute dies by the backpack, credited to the last hitter (a horde hitter: no killer)
+    const int killer = s.bpLastHitter >= 0 && !match_.sameTeam(s.bpLastHitter, s.player) ? s.bpLastHitter : -1;
+    s.bpStage = 2;
+    svKillingBrute_ = true;
+    noteHitDir(core::Vec3{0, 1, 0});
+    applyMatchDamage(s.player, killer, 1.0e9f, false, type);
+    svKillingBrute_ = false;
 }
 
 // The wave buffs on damage: a horde victim's DecreaseDamageTaken, a horde instigator's IncreaseDamage.
@@ -857,6 +945,8 @@ void World::tickSurvival(float dt) {
         for (int z : now) if (std::find(was.begin(), was.end(), z) == was.end()) svTouch(z, +1);
         was = now;
     }
+    for (SurvivalState::Slot& s : sv_.slots)   // E3b: the backpack's critical state explodes after 3.0 s (or with the extinguish anim's end: PROV 3 s)
+        if (s.inUse && s.bpStage == 1 && (s.bpCritical -= dt) <= 0.0f) svBackpackExplode(s);
     // PROV (E3, until the GOAP sets): the original's threat sensor keeps every player known (SeeEnemy at spawn, RE §9.1); the Classic
     // brain forgets an unseen target after its memory, so once a second each horde bot is told where the nearest player is.
     if (simTick_ % 60 == 0)
@@ -960,6 +1050,7 @@ void World::tickSurvival(float dt) {
             if (slot < 0) break;
             if (!svSpawn(slot)) { ++sv_.failedSpawns; LOG_INFO("escalation: Failed to find a place to spawn a dude (%s)", svData_.enemies[(size_t)e].type.c_str()); break; }
             sv_.slots[(size_t)slot].inUse = true;
+            svArmBackpack(sv_.slots[(size_t)slot], svData_);
             {   // the wave's buffs, applied at spawn: DecreaseDamageTaken L0-4 x0.9..0.5, IncreaseDamage L0-4 x1.25..2.25 [RE §2]
                 const SurvivalData::Wave& wv = svData_.waves[(size_t)sv_.currentWave];
                 sv_.slots[(size_t)slot].takenMul = wv.decreaseTaken >= 0 ? 0.9f - 0.1f * (float)wv.decreaseTaken : 1.0f;

@@ -94,7 +94,10 @@ struct SurvivalState {
     int usedThisWave = 0;                      // TotalUsedThisWave
     bool filling = false;
     float fillTimer = 0.0f;
-    struct Slot { int player = -1; int enemy = -1; bool inUse = false; float takenMul = 1.0f, dealtMul = 1.0f; };   // the horde participants, one per entry x MaxCount
+    struct Slot { int player = -1; int enemy = -1; bool inUse = false; float takenMul = 1.0f, dealtMul = 1.0f;   // the horde participants, one per entry x MaxCount
+                  // E3b: the Brute's backpack (RB_Brute*_Backpack_DES): the state chain 0 (25) -> 5 (50) -> 3 (75) -> 1 critical (3 s) -> 4
+                  // explode; bpStage -1 = no backpack. bpLastHitter = LastHitInstigator (the explosion's instigator).
+                  int bpStage = -1; float bpHealth = 0.0f, bpCritical = -1.0f; int bpLastHitter = -1; };
     std::vector<Slot> slots;
     // Spawn finder: per zone UniversalScoreAdjustment, CurrentScore[type], the round-robin SpawnPointIndex; per type the sorted
     // zone order (re-sorted only for the types a touch names: the original's stale-order behaviour, RE C).
@@ -137,6 +140,7 @@ struct SurvivalState {
     std::vector<Drop> drops;
     std::vector<uint8_t> pickupPress;
     int weaponTakes = 0, ammoTakes = 0, tosses = 0;
+    int bpHits = 0, bpRefused = 0, bpExplosions = 0;   // E3b backpack diagnostics (hits taken, hits refused by the gates)
     int spawns = 0, failedSpawns = 0;
     std::vector<int> spawnOrder;               // the enemy entry of every spawn (tests)
 };
