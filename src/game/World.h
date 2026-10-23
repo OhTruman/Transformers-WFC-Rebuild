@@ -899,6 +899,8 @@ public:
     const CampaignState& campaign() const { return cp_; }
     int cpTestFireFactory(int k);   // WFC_CAMPAIGNTEST: Spawn Actor into factory k (its pool size, or -1)
     bool cpKismetActivate(KismetVM& vm, int op, int input);   // the level Kismet's host ops
+    int cpAudioActivate(KismetVM& vm, int op, int input);      // [Systems] its audio ops: 0 not audio, 1 done (VM default out), 2 async
+    void cpAudioBind();                                        // [Systems] map the VM's audio ops to the level audio (hosted)
     void cpKismetLatent(KismetVM& vm, int op, float dt);
     // The map's transforming actors (Rendering: draw each actor's glb at matrix with its clip at t, unless hidden).
     const TransformingActors& transformingActors() const { return transforming_; }

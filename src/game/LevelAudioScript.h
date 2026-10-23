@@ -54,6 +54,8 @@
 //   random_switch    SeqAct_RandomSwitch [HIGH, stock UE3]: each input fires one random enabled 'Link N'; bAutoDisableLinks disables
 //                    the used link, bLooping re-enables all once none is left (else the switch goes quiet). Presentation randomness
 //                    (audio only). The Escalation maps' Round End dialog picks (SeqAct_PlayDialog = a one-line conversation).
+//   play_stinger     SeqAct_PlayStinger [C, RE CAMPAIGN_KISMET_WFC_CLASSES_RE 6]: HmWorldInfo._MusicPlayer.PlayStinger(Stinger), output
+//                    0 at once (MusicPlayer::playStinger: refused while a stinger of the same or higher root Priority plays).
 //   timeline sounds  InterpTrackSound keys on a campaign matinee: the key's cue plays at the group actor when the position
 //                    passes it, the same forward walk as the event keys [HIGH, stock UE3]; Volume / Pitch not applied.
 // Triggers ("links" from): GameplayStarted (fired by AmbientAudio on the level's first tick), FsCommand:<cmd> and
@@ -61,6 +63,10 @@
 // Timeline:<op>:<event> and Out:<op>:<output> (internal), Game:<event class>:<output> (gameplay-owned Kismet events,
 // e.g. Game:TnSeqEvent_SurvivalEvents:Round Begin - fired by Gameplay through World::levelAudioEvent). Sub-sequences,
 // remote events and pass-through actions are flattened by the generator.
+// HOSTED (campaign chapters): the chapter's Kismet VM (Gameplay, game/Kismet.h) runs the whole graph and forwards each audio op's
+// inputs here (hostedInput, by op id = "<level>|<path under Main_Sequence>"); every output an op makes (Played, Finished, a line's
+// output, Scene k Begun, Touched, a timeline event key) goes back to the VM through the sink, which routes the links. The script's
+// own triggers and links are not used then (GameplayStarted and the like are the VM's).
 #pragma once
 #include <functional>
 #include <string>
@@ -83,6 +89,16 @@ public:
     void resetMatch();                    // Kismet Reset: positional pools IsPlaying false (sounds keep playing)
     // An authored trigger (see above). Returns the number of op inputs it reached (0 = unknown trigger).
     int fire(const std::string& trigger, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener);
+    // Hosted mode (above). The sink gets (op id, output name); set before the VM begins. clearHosted() returns to the script's links.
+    void setHostSink(std::function<void(const std::string& opId, const std::string& output)> sink) { hostSink_ = std::move(sink); }
+    void clearHosted() { hostSink_ = nullptr; }
+    bool hosted() const { return (bool)hostSink_; }
+    // What the VM should do with an op's input after hostedInput: Unknown = not an audio op here (the VM's own default / host);
+    // Immediate = done, the VM fires its default output now (Play Sound, music, stinger, reverb, mixer, pools); Async = the op's
+    // outputs come later through the sink (a conversation: latent until Finished / Stopped; a zone's scenes; a timeline's keys).
+    enum class Hosted { Unknown, Immediate, Async };
+    Hosted hostedInput(const std::string& opId, int input, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener);
+    bool hasOp(const std::string& opId) const { return opById_.count(opId) != 0; }
     // `pawn` = the local player's pawn origin (touch volumes, "player" sources); `pawnAlive` false = no / dead pawn.
     void tick(float dt, const core::Vec3& listener, SoundCues& cues, MusicPlayer* music,
               const core::Vec3* pawn = nullptr, bool pawnAlive = true);
@@ -113,7 +129,8 @@ public:
     bool hasFired(const std::string& t) const { return firedSet_.count(t) != 0; }
 
 private:
-    enum class Type { PlaySound, Pool, Reverb, PlayMusic, StopMusic, Timeline, Touch, Zone, Delay, Gate, Mixer, Flyby, Conversation, RandomSwitch };
+    enum class Type { PlaySound, Pool, Reverb, PlayMusic, StopMusic, Timeline, Touch, Zone, Delay, Gate, Mixer, Flyby, Conversation, RandomSwitch,
+                      PlayStinger };
     struct Event { float time; std::string trigger; };
     struct SoundKey { float time; std::string cue; int actor; };          // timeline InterpTrackSound key (campaign)
     struct Line { std::string cue; float postDelay; int speaker; std::string output; };   // conversation line
@@ -189,6 +206,8 @@ private:
     std::string musicStart_;
     std::function<void(const std::string&, int)> dialogListener_;
     std::unordered_set<std::string> firedSet_;
+    std::unordered_map<std::string, int> opById_;
+    std::function<void(const std::string&, const std::string&)> hostSink_;
 };
 
 } // namespace game

@@ -110,6 +110,8 @@ int LevelAudioScript::load(const assets::Json& k) {
             }
             std::stable_sort(op.soundKeys.begin(), op.soundKeys.end(), [](const SoundKey& a, const SoundKey& b) { return a.time < b.time; });
             std::stable_sort(op.events.begin(), op.events.end(), [](const Event& a, const Event& b) { return a.time < b.time; });
+        } else if (t == "play_stinger") {
+            op.type = Type::PlayStinger;
         } else if (t == "random_switch") {
             op.type = Type::RandomSwitch;
             op.linkCount = std::max(1, j["links"].asInt(1));
@@ -131,6 +133,7 @@ int LevelAudioScript::load(const assets::Json& k) {
             continue;
         }
         opIndex[op.id] = (int)ops_.size();
+        opById_[op.id] = (int)ops_.size();
         ops_.push_back(op);
     }
     const assets::Json& links = k["links"];
@@ -149,6 +152,8 @@ int LevelAudioScript::load(const assets::Json& k) {
 
 void LevelAudioScript::unload() {
     ops_.clear();
+    opById_.clear();
+    hostSink_ = nullptr;   // hosted mode ends with the level (the next level's own links)
     actors_.clear();
     byTrigger_.clear();
     sounds_.clear();
@@ -178,6 +183,16 @@ core::Vec3 LevelAudioScript::actorPos(int a, const core::Vec3& listener) const {
 
 int LevelAudioScript::fire(const std::string& trigger, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener) {
     firedSet_.insert(trigger);
+    if (hostSink_) {   // hosted: an op's output (Out:<id>:<output>) or a timeline event key (Timeline:<id>:<event>) goes to the VM
+        const bool isOut = trigger.rfind("Out:", 0) == 0, isTl = trigger.rfind("Timeline:", 0) == 0;
+        if (!isOut && !isTl) return 0;   // the script's own level triggers belong to the VM
+        const size_t a = trigger.find(':'), b = trigger.rfind(':');
+        if (b <= a) return 0;
+        if (logOn()) LOG_INFO("LEVELAUDIO hosted %s -> VM", trigger.c_str());
+        const auto sink = hostSink_;     // copy: the VM may re-enter (an output linked straight back to an audio op)
+        sink(trigger.substr(a + 1, b - a - 1), trigger.substr(b + 1));
+        return 1;
+    }
     auto it = byTrigger_.find(trigger);
     if (it == byTrigger_.end()) return 0;
     if (++depth_ > 8) { --depth_; LOG_WARN("level audio: trigger depth exceeded at %s", trigger.c_str()); return 0; }
@@ -189,8 +204,27 @@ int LevelAudioScript::fire(const std::string& trigger, SoundCues& cues, MusicPla
     return (int)targets.size();
 }
 
+LevelAudioScript::Hosted LevelAudioScript::hostedInput(const std::string& opId, int input, SoundCues& cues, MusicPlayer* music,
+                                                       const core::Vec3& listener) {
+    auto it = opById_.find(opId);
+    if (it == opById_.end()) return Hosted::Unknown;
+    Op& op = ops_[(size_t)it->second];
+    if (logOn()) LOG_INFO("LEVELAUDIO hosted input %s #%d", opId.c_str(), input);
+    this->input(op, input, cues, music, listener);
+    switch (op.type) {
+    case Type::Conversation: case Type::Zone: case Type::Timeline: case Type::Touch: return Hosted::Async;
+    default: return Hosted::Immediate;
+    }
+}
+
 void LevelAudioScript::input(Op& op, int idx, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener) {
     switch (op.type) {
+    case Type::PlayStinger:
+        if (idx == 0 && music) {
+            const bool played = music->playStinger(op.cue.c_str());
+            if (logOn()) LOG_INFO("LEVELAUDIO %s stinger %s%s", op.id.c_str(), op.cue.c_str(), played ? "" : " (refused: priority)");
+        }
+        break;
     case Type::PlaySound: {
         std::vector<int> src = op.targets;
         if (src.empty()) src.push_back(-1);

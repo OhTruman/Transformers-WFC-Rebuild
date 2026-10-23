@@ -14,6 +14,17 @@ install -d -o wfclobby -g wfclobby -m 750 /var/log/wfc-lobby
 install -o root -g root -m 644 /tmp/lobby_service.py /opt/wfc-lobby/lobby_service.py
 install -o root -g root -m 644 /tmp/wfc-lobby.service /etc/systemd/system/wfc-lobby.service
 rm -f /tmp/lobby_service.py /tmp/wfc-lobby.service
+# the log rotates daily, 7 days kept (copytruncate: the service keeps its file open)
+cat > /etc/logrotate.d/wfc-lobby <<'ROT'
+/var/log/wfc-lobby/lobby.log {
+    daily
+    rotate 7
+    compress
+    missingok
+    notifempty
+    copytruncate
+}
+ROT
 systemctl daemon-reload
 systemctl enable --now wfc-lobby
 systemctl restart wfc-lobby
@@ -21,3 +32,7 @@ sleep 1
 systemctl --no-pager --lines=5 status wfc-lobby
 EOF
 echo "deployed to $TARGET: UDP 14010 (lobby) + 14011 (relay) - open both in the VPS firewall"
+# the health check from this PC (lobby ping, a test lobby, a lookup, the relay, unregister); needs the firewall open
+IP="${TARGET#*@}"
+PY="${PY:-F:/Transformers Rebuild/AssetTools/bin/py/python.exe}"
+"$PY" -I "$HERE/lobby_check.py" "$IP:14010" || echo "health check FAILED: is UDP 14010 + 14011 open in the Hetzner firewall?"

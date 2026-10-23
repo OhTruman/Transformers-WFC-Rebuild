@@ -2,6 +2,7 @@
 #include "core/WorkerPool.h"
 #include "core/SimRandom.h"
 #include "game/World.h"
+#include "frontend/DataPaths.h"
 #include <utility>
 #include <set>
 #include "core/LoadYield.h"
@@ -993,7 +994,14 @@ void World::setAudio(audio::IAudio* a, bool loadSliceMap) {
 bool World::loadMapAudio(const std::string& level) {
     joinStep();   // [integration 09c] async step: no background part may play into the cue tables while they change (Systems review)
     if (!levelAudio_.level().empty()) unloadMapAudio();
-    const bool ok = levelAudio_.load(level);
+    // [Systems] a campaign chapter: its generated audio (tools/systems/gen_level_audio.py --campaign) from data/campaign beside the
+    // frontend data (WFC_CAMPAIGN_AUDIO=<dir> overrides); the chapter's Kismet VM drives it (cpAudioBind, hosted)
+    std::string chapterAudio;
+    if (campaignMap_ && level == cpChapter_.chapter) {
+        const char* d = std::getenv("WFC_CAMPAIGN_AUDIO");
+        chapterAudio = (d ? std::string(d) : frontend::frontendDataDir() + "/../campaign") + "/" + level + "_audio.json";
+    }
+    const bool ok = chapterAudio.empty() ? levelAudio_.load(level) : levelAudio_.load(level, chapterAudio);
     if (ok) {                                                         // level-owned
         CharacterAudio::loadCues(cues_, audioProfile());
         CharacterAudio::loadWeaponCues(cues_, weaponClass_);

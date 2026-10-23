@@ -63,6 +63,11 @@ struct CampaignState {
     std::vector<std::string> trioChassis;     // CampaignCharacters' chassis, trio order
     std::string humanChassis;                 // the human's current pick (the squad is the trio minus it)
     KismetVM vm;
+    // [Systems] the VM's audio ops (LevelAudioScript hosted): VM op -> its audio op id ("<level>|<path under Main_Sequence>"; "" = not
+    // audio) and back. Built once the level audio and the VM are both loaded.
+    std::vector<std::string> audioId;
+    std::map<std::string, int> audioOp;
+    int audioOps = 0;
 };
 
 } // namespace game

@@ -42,6 +42,14 @@ public:
     // Unloads any loaded level first. `manifestPath` overrides <root>/Maps/<level>/audio.json (tools / tests).
     bool load(const std::string& level, const std::string& manifestPath = std::string());
     void unload();
+    // The campaign chapter's Kismet VM drives the level's audio ops (LevelAudioScript HOSTED): inputs in by op id, outputs back
+    // through the sink. Unknown when no audio device / no such op (the VM's own stand-in then).
+    void setHostSink(std::function<void(const std::string&, const std::string&)> sink) { ambient_.hostedScript().setHostSink(std::move(sink)); }
+    void clearHosted() { ambient_.hostedScript().clearHosted(); }
+    bool hasHostedOp(const std::string& opId) const { return audio_ && ambient_.script().hasOp(opId); }
+    LevelAudioScript::Hosted hostedInput(const std::string& opId, int input, const core::Vec3& listener) {
+        return audio_ ? ambient_.hostedScript().hostedInput(opId, input, cues_, &music_, listener) : LevelAudioScript::Hosted::Unknown;
+    }
     int event(const std::string& trigger, const core::Vec3& listener) {
         return audio_ ? ambient_.fireEvent(trigger, cues_, listener) : 0;
     }

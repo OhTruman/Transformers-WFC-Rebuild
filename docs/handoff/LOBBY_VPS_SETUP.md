@@ -12,7 +12,8 @@ the voice relay). The match itself still runs **directly between the players' PC
 
 | protocol | port | from | why |
 |---|---|---|---|
-| **UDP** | **14010** | any | the lobby service: matchmaking, the hole punch, the relay and voice relay - all on this one port |
+| **UDP** | **14010** | any | the lobby service: matchmaking, private codes, the hole punch |
+| **UDP** | **14011** | any | the relay: players whose routers cannot connect directly (their match and voice go through it) |
 | TCP | 22 | your home IP (or any) | SSH, for deploying / updating |
 
   Nothing else inbound. Outbound: allow all (default). The service uses no TCP port and no web page.
@@ -25,12 +26,36 @@ the voice relay). The match itself still runs **directly between the players' PC
 ## 3. Deploy (we do this, from this PC, with your key)
 
 `bash tools/net/deploy_lobby.sh root@<ip>` copies `lobby_service.py` and a systemd unit, creates a system user `wfclobby` (no login,
-no shell), starts the service on boot, logs to `/var/log/wfc-lobby/lobby.log`. Updates are the same command. Nothing else is installed
-(Ubuntu's own Python 3, standard library only). To stop it: `ssh root@<ip> systemctl disable --now wfc-lobby`.
+no shell), starts the service on boot, logs to `/var/log/wfc-lobby/lobby.log` (rotated daily, 7 days kept). Updates are the same
+command. Nothing else is installed (Ubuntu's own Python 3, standard library only). To stop it: `ssh root@<ip> systemctl disable --now wfc-lobby`.
+
+At the end the script runs the health check from this PC, `tools/net/lobby_check.py <ip>:14010`: the lobby answers, a private test
+lobby registers and is found by its code, the relay forwards a datagram, the test lobby is removed (nothing left behind). Six lines
+ending `LOBBYCHECK SUMMARY: PASS`. A FAIL on the first line or on the relay line almost always means the firewall (section 1).
 
 ## 4. In the game
 
-Settings -> the Lobby Service entry (Browse / Quick Match screen): `<ip>:14010`. Empty = LAN / private codes only.
+The address ships in the game data: `Rebuild/data/frontend/online_service.json`, `"lobby_service": "<ip>:14010"` (we set it once you send
+the IP; the next package carries it). A profile's own `LobbyService=` line in `wfc_profile.ini` overrides it (testing another server).
+Empty = no service: LAN and direct-address joins only. There is no in-game entry for it (none is needed).
+
+## 5. Ready checklist (what is done, what waits)
+
+| item | state |
+|---|---|
+| the service (lobbies, Quick Match, codes, hole punch, the binary relay) | done; 18 + limit tests pass on loopback |
+| public-internet limits (per-IP rate, lobbies per IP, total lobbies, list size, relay room / packet caps) | done |
+| deploy script (user, unit, hardening, log rotation, health check) | done |
+| the game's default address (online_service.json) | done, empty until the IP |
+| the server itself, the firewall, your SSH key | **waits for you** (sections 1 and 2) |
+| deploy + health check + one internet test match | **we do it**, on your go |
+
+## Limits (abuse protection)
+
+Each sender IP may send 50 requests a second (burst 100), host at most 16 lobbies (generous: many players can share one IP behind a
+mobile / carrier NAT), and the server holds at most 4096 lobbies; a public-list answer carries at most 32 games. The relay takes at most
+32 players per lobby, 1400-byte packets and 1500 packets a second per IP. Over a limit the request is dropped silently (no bigger answer
+bounces back at a forged address), so the server cannot be used to flood someone.
 
 ## Cost and load
 

@@ -74,6 +74,7 @@ public:
     // A frontend-owned Kismet trigger of the loaded level ("FsCommand:enterFrontEnd", "MovieStopped:FMV_intro").
     int fireEvent(const std::string& trigger, SoundCues& cues, const core::Vec3& listener);
     const LevelAudioScript& script() const { return script_; }
+    LevelAudioScript& hostedScript() { return script_; }   // the campaign VM's audio ops (LevelAudioScript hosted mode)
     const std::string& levelName() const { return level_; }
     // The compiled-in Systems level manifests.
     static bool hasLevelManifest(const std::string& level);

@@ -74,7 +74,7 @@ ASSETTOOLS_TREES = ['AssetTools/out/escalation_characters',   # + the campaign c
                     'AssetTools/out/campaign_anims']   # animation sets character.json files point at (ESC_Soldier_Tank_Decepticon's Shared_ROBO_ANIM)
 # the head's own data folders (this repo): every file ships from the head being packaged, at Rebuild/<dir>/ (slim_files.tsv listed 7
 # of data/frontend's 9 files - iconic_presets.json and bot_skill.json were missing - and sources them from the live Rebuild tree)
-HEAD_DATA_DIRS = ['data/frontend', 'data/gameplay']
+HEAD_DATA_DIRS = ['data/frontend', 'data/gameplay', 'data/campaign']   # + the chapters' generated audio (SYSTEMS_CAMPAIGN_AUDIO_HOSTED)
 
 
 def arg(name, default=None):

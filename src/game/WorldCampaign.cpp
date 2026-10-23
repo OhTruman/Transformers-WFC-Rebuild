@@ -229,6 +229,7 @@ void World::setupCampaign(const MatchLaunch& l) {
         cp_.vm.setHost(cpHost_.get());
         cp_.vm.log = std::getenv("WFC_KISMETLOG") != nullptr;
         LOG_INFO("campaign: Kismet %s (%zu ops)", cp_.kismetLoaded ? "loaded" : "MISSING", cp_.vm.opCount());
+        if (cp_.kismetLoaded) cpAudioBind();
         cpLoadFactories();
     }
     LOG_INFO("campaign: %s (MapId %d) %s, difficulty %d, the human as %s, squad %zu", cpChapter_.chapter.c_str(), cpChapter_.mapId,
@@ -240,6 +241,7 @@ void World::setupCampaign(const MatchLaunch& l) {
 bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
     KismetVM::Op& o = vm.op(op);
     const std::string& c = o.cls;
+    if (const int a = cpAudioActivate(vm, op, input)) return a == 2;   // [Systems] the chapter's audio ops (level audio, hosted)
     if (c == "SeqAct_SetActiveCheckpoint") {
         std::string cpPath = vm.objectOf(op, "Checkpoint");
         const CampaignChapter::Checkpoint* cp = cpChapter_.checkpoint(cpPath);
@@ -270,6 +272,44 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
     if (c == "SeqAct_Interp" || c == "SeqAct_MoviePlayer" || c == "SeqAct_TnAiMoveToActor" ||
         c == "SeqAct_TnForceIntoForm" || c == "SeqAct_ActorFactory" || c == "SeqAct_ActorFactoryEx") { o.latent = true; o.timer = -1.0f; return true; }
     return false;
+}
+
+// [Systems] The chapter's audio ops run in the level audio (LevelAudioScript HOSTED, data/campaign/<CH>_audio.json): the VM forwards
+// their inputs, their outputs come back through the sink and follow the VM's links. Without an audio device (headless) or an op the
+// chapter audio lacks, the stand-ins below stay (a conversation takes 3 s).
+void World::cpAudioBind() {
+    cp_.audioId.assign(cp_.vm.opCount(), std::string());
+    cp_.audioOp.clear(); cp_.audioOps = 0;
+    for (size_t i = 0; i < cp_.vm.opCount(); ++i) {
+        const std::string& p = cp_.vm.op((int)i).path;
+        const size_t k = p.find(".Main_Sequence.");
+        if (k == std::string::npos) continue;
+        const std::string id = p.substr(0, p.find('.')) + "|" + p.substr(k + 15);
+        if (!levelAudio_.hasHostedOp(id)) continue;
+        cp_.audioId[i] = id; cp_.audioOp[id] = (int)i; ++cp_.audioOps;
+    }
+    if (cp_.audioOps == 0) { levelAudio_.clearHosted(); LOG_INFO("campaign: no hosted audio ops (no audio / no chapter audio)"); return; }
+    levelAudio_.setHostSink([this](const std::string& id, const std::string& output) {
+        auto it = cp_.audioOp.find(id);
+        if (it == cp_.audioOp.end()) return;
+        const int vop = it->second;
+        KismetVM::Op& o = cp_.vm.op(vop);
+        if (o.cls.rfind("SeqEvent_", 0) == 0) cp_.vm.fireEvent(vop, output);                         // a touch volume
+        else if (o.latent && (output == "Finished" || output == "Stopped")) cp_.vm.finishLatent(vop, output);   // a conversation's end
+        else cp_.vm.output(vop, output);                                                            // Played, a line, a scene, a key
+    });
+    LOG_INFO("campaign: %d Kismet audio ops hosted by the level audio", cp_.audioOps);
+}
+
+int World::cpAudioActivate(KismetVM& vm, int op, int input) {
+    if ((size_t)op >= cp_.audioId.size() || cp_.audioId[(size_t)op].empty()) return 0;
+    KismetVM::Op& o = vm.op(op);
+    const auto r = levelAudio_.hostedInput(cp_.audioId[(size_t)op], input, listenerPos_);
+    if (r == LevelAudioScript::Hosted::Unknown) return 0;
+    if (o.cls == "SeqAct_Interp") return 0;   // its sounds / event keys only: the matinee itself stays Gameplay's (held latent)
+    if (r == LevelAudioScript::Hosted::Immediate) return 1;
+    if (o.cls == "SeqAct_Conversation" || o.cls == "SeqAct_PlayDialog") o.latent = true;   // until Finished / Stopped
+    return 2;
 }
 
 void World::cpKismetLatent(KismetVM& vm, int op, float dt) {

@@ -570,6 +570,14 @@ void Application::runHeadlessMatch() {
         gameMode_.tick(world_, step);
         if (frontend_) { driveLifecycleTest(step); routeMatchToFrontend(step); }
         ++steps;
+        // TEST ONLY [Systems]: WFC_HEADLESS_REALTIME=1 paces the loop to wall time and pumps the audio device (with
+        // WFC_NULLRENDER_AUDIO): sounds end in real time, so audio-timed logic (campaign conversations) runs as in the game
+        static const bool realtime = std::getenv("WFC_HEADLESS_REALTIME") != nullptr;
+        if (realtime) {
+            if (audio_) audio_->update();
+            const auto due = t0 + std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double>((double)steps * step));
+            std::this_thread::sleep_until(due);
+        }
     }
     const double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     LOG_INFO("HEADLESS done: %ld steps (%.1f s simulated) in %.1f s wall", steps, steps * step, s);
