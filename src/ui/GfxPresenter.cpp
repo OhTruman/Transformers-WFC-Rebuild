@@ -1692,20 +1692,24 @@ void GfxPresenter::syncVoteRows(gfx::Player& p, frontend::GameFlow& flow) {
     gfx::avm1::Object* menu = cc->parent->script;
     constexpr int kRows = 4;   // 3 options + None of these (round 2: 3, the last row hidden)
     if (!vm.get(menu, "wfcVote0_mc").isObject()) {
+        // Select Map is the map preview tile; the menu rows follow it at one pitch (Create a Character's distance below it).
+        // The vote rows take the slots right under the tile and every row below moves down by them (captures 2026-10-23:
+        // row 0 at the tile's own y hid under the preview; a pitch from other sibling clips stacked the rows on one line).
         const double smY = vm.toNumber(vm.get(sm->script, "_y")), ccY = vm.toNumber(vm.get(cc->script, "_y"));
-        const double pitch = std::fabs(ccY - smY) > 1.0 ? std::fabs(ccY - smY) : 31.0;
-        for (auto& [depth, child] : cc->parent->children) {   // the rows below Select Map make room for the extra rows
+        const double pitch = ccY - smY > 1.0 && ccY - smY < 80.0 ? ccY - smY : 31.0;
+        const double top = smY + pitch;
+        for (auto& [depth, child] : cc->parent->children) {
             auto* mc = dynamic_cast<gfx::MovieClip*>(child.get());
             if (!mc || !mc->script || mc == sm) continue;
             const double y = vm.toNumber(vm.get(mc->script, "_y"));
-            if (y > smY + 1.0) vm.set(mc->script, "_y", V(y + pitch * (kRows - 1)));
+            if (y > smY + 1.0) vm.set(mc->script, "_y", V(y + pitch * kRows));
         }
-        vm.set(sm->script, "_visible", V(false));
-        const V above = vm.get(sm->script, "focusUp"), below = vm.get(sm->script, "focusDown");
+        // Select Map (the preview tile) stays: it shows the leading option; its focus now leads into the vote rows
+        const V above = V(std::string("selectMap_mc")), below = vm.get(sm->script, "focusDown");
         for (int i = 0; i < kRows; ++i) {
             const std::string name = "wfcVote" + std::to_string(i) + "_mc";
             gfx::avm1::Object* init = vm.newPlain();
-            vm.set(init, "_y", V(smY + pitch * i));
+            vm.set(init, "_y", V(top + pitch * i));
             gfx::MovieClip* dup = p.duplicate(cc, name, 960 + i, init);
             if (!dup || !dup->script) return;
             gfx::avm1::Object* o = dup->script;
@@ -1722,8 +1726,9 @@ void GfxPresenter::syncVoteRows(gfx::Player& p, frontend::GameFlow& flow) {
                 return V();
             }, "onClick", 0)));
         }
-        if (above.isString()) { const V a = vm.get(menu, vm.toString(above)); if (a.isObject()) vm.set(a.o, "focusDown", V(std::string("wfcVote0_mc"))); }
+        vm.set(sm->script, "focusDown", V(std::string("wfcVote0_mc")));
         if (below.isString()) { const V b = vm.get(menu, vm.toString(below)); if (b.isObject()) vm.set(b.o, "focusUp", V("wfcVote" + std::to_string(kRows - 1) + "_mc")); }
+        vm.set(menu, "currentFocus", V(std::string("wfcVote0_mc")));   // the vote is the lobby's first business
         frontend::FlowTrace::emit("lobby.voteRows", {{"built", "true"}, {"rows", std::to_string(kRows)}});
     }
     // labels: "<map>   <votes>", the own vote marked, the winner once closed
