@@ -3770,3 +3770,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   render_index_extra, c45317a3 smoke stage 1 tuning: x40 confirm PASS by eye -> Enhanced smoke SHIPS in all modes (Frontend
   un-hides the row); water closed dev-only. RE: FMV speaker routing C (FL FR SL SR LFE C). Card: Frontend pt9 rerun on
   8d7c0cab -> on PASS the internal package word to Systems. Rendering -> chapter loader stage 1, then froxel plumes.
+2026-10-23 04:28 MERGED Kismet VM (Gameplay; KISMETTEST 9 / 9 incl. D5_OME's real 898-op graph; not wired yet). Experimental: voice +
+  five profiles PASS on 8b1cd99e. README: Opus / DXC fetch note. Rendering: chapter loader stage 1 built on a hand-made
+  D5_OME layout; x41 boot after pt9.
