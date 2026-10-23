@@ -3189,6 +3189,17 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     r1CheckGl();
     const bool r1Text = r1Map_ && rtShadowAoOn() && !r1Suppress_;
     if (r1Text) r1ShaderText(fs, mainStart, lightmapped && !mainOverride_);
+    // (Water row) the water materials' programs carry the Enhanced pass behind uWaterOn - every variant drawn with the material's
+    // own main (MDI / instanced included); the key starts with the material name
+    const bool waterMain = !mainOverride_ && isWaterMaterial(key.substr(0, key.find('|')));
+    if (waterMain) {
+        const std::string call = "    MatOut o; wfcMaterial(m, o);\n";
+        const size_t at = fs.find(call, mainStart), ma = fs.find("void main() {", mainStart);
+        if (at != std::string::npos && ma != std::string::npos && at > ma) {
+            fs.insert(at + call.size(), "    wfcWaterEnhance(m, o, tbn);\n");
+            fs.insert(ma, kFSWaterEnhance);
+        }
+    }
     const bool smokeMain = smokeBuild_ && mainOverride_ == kFSMainSmoke;   // (Smoke row, Enhanced: the lights scatter in the smoke)
     if ((lit && !mainOverride_) || smokeMain) {   // (item 4) the transient point lights, per pixel (UE3 point light: Lambert + Phong)
         const std::string anchor = "    wfcTranslucentOut(c, o.Opacity);\n";
@@ -3497,6 +3508,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     P.blend = blend; P.twoSided = twoSided; P.lit = lit; P.clip = clip;
     P.sceneDepth = code.find("m.sceneDepth") != std::string::npos || code.find("wfcDepthBiasedAlpha(") != std::string::npos;
     P.sceneColor = code.find("wfcSceneColor(") != std::string::npos;
+    P.water = waterMain;                             // (Water row: uWaterOn + the Enhanced scene bindings per draw)
     if (slots.size() > 12) LOG_WARN("wfc: %s uses %zu texture slots (unit 12 is scene depth)", key.c_str(), slots.size());
     UseProgram(id);
     for (size_t k = 0; k < slots.size(); ++k) {
@@ -4414,6 +4426,16 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         if (loc >= 0) Uniform1f(loc, soft ? softM * 100.0f : 0.0f);
     }
     if (P.sceneColor) { ensureSceneColor(); ActiveTexture(GL_TEXTURE0 + 16); glBindTexture(GL_TEXTURE_2D, sceneCopyTex_); }
+    if (P.water) {   // (Water row, WfcWater.cpp) Enhanced: the scene depth / colour its reflections and absorption read; Original: off,
+                     // and no scene copies made for it
+        const int wm = waterMode();
+        Uniform1i(ULOC(P, "uWaterOn"), wm);
+        if (wm == 1 && P.blend >= 2) {                 // (translucent / additive only: the scene is complete by then)
+            if (!P.sceneDepth) { ensureSceneDepth(); ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
+                                 Uniform1i(ULOC(P, "uHasSceneDepth"), 1); }
+            if (!P.sceneColor) { ensureSceneColor(); ActiveTexture(GL_TEXTURE0 + 16); glBindTexture(GL_TEXTURE_2D, sceneCopyTex_); }
+        }
+    }
     VertexAttrib4f(5, fxColor_[0], fxColor_[1], fxColor_[2], fxColor_[3]);   // current value when unbound
     for (const Program::Slot& s : P.slots) {
         ActiveTexture(GL_TEXTURE0 + s.unit);

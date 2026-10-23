@@ -107,6 +107,7 @@ extern const float kRefiningSampleOffsets[24];  // 12 x float2 (0x83711EC0)
 void directLightAmbientContribution(const core::Vec3 total[6], const core::Vec3 lights[6], float out[3]);
 
 extern const char* kFSMainSmoke;   // (WfcSmoke.cpp: the Smoke row's Enhanced sprites' main)
+extern const char* kFSWaterEnhance;   // (WfcWater.cpp: the Water row's Enhanced pass, injected into the water programs)
 // Lighting inputs of a dynamic (or unbuilt static) primitive, UE3 light-environment style.
 struct LightEnv {
     core::Vec3 cube[6];           // ambient cube irradiance: +X -X +Y -Y +Z -Z (glTF axes)
@@ -137,6 +138,7 @@ struct Program {
     bool original = false;        // compiled from the original material graph (not the glTF fallback)
     bool smoke = false;           // (Smoke row, Enhanced) the lit / flowing smoke variant of a sprite material (WfcSmoke.cpp)
     bool smokeFlow = false;       // (its texture-coordinate flow: single-image sprites only)
+    bool water = false;           // (Water row) a water material: carries wfcWaterEnhance behind uWaterOn (WfcWater.cpp)
     bool fogShape = false;        // translucent bUsedWithFogVolumes material: never drawn as a surface (UE3 RenderFogVolume only)
     bool sceneDepth = false;      // reads scene depth (DepthBiasedAlpha / SceneDepth)
     bool sceneColor = false;      // reads the resolved scene colour (SceneTexture)
@@ -1005,6 +1007,7 @@ private:
     static bool isSmokeMaterial(const std::string& material);
     static bool smokeFlowMaterial(const std::string& material);
     void bindSmoke(const Program& P);
+    static bool isWaterMaterial(const std::string& material);
     void smokeLight(const core::Vec3& p, core::Vec3& amb, int& n, core::Vec3 dirL[3], core::Vec3 dirC[3]);
     int lensFlareMode_ = 2;                          // the Lens Flares row: 0 Off, 1 Subtle, 2 Original (WFC_LENSFLARE overrides)
     void loadLensFlares();
