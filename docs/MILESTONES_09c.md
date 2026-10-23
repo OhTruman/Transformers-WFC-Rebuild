@@ -3539,3 +3539,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   banding -> output dithering item for Rendering. Card -> Frontend 00:55 (7 min) -> Rendering (8 min).
 2026-10-23 00:48 RE campaign #1 Matinee native merged (two corrections: no tangent gap scaling; director restore = view-target blend of the
   last cut's TransitionTime); AnimControl slot code + RelativeToInitial matrix still HIGH -> RE finishes those before #2.
+2026-10-23 00:50 #18 (B) traced (Gameplay): the "hovering" is Dodging = PHYS_Flying for 0.5 s with no gravity, so a Scout bot dodging off a
+  ledge flies flat ~14 m over the drop; "inside geometry" was the detector's coarse bounds. RE answers whether the original
+  exits to Falling when the floor goes; fix follows (bot-side no-dodge-toward-drop if authentic; floor exit for all if not).
