@@ -3793,3 +3793,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   subtitles for 10 chapters, escalation_weapons.json, ESC nav v2 (reach specs -> links, both maps one piece), Streets stuck
   candidates revertA / revertB for Gameplay's A/B; A1 lighting + materials rerun running. Card: Rendering x41 + x42 -> Frontend
   pt9 on d0d5a3c7 (fresh build verified by the diag string).
+2026-10-23 06:22 MERGED daf03569 relay fallback (game side + lobby_service relay; blocked-direct headless proof hash-equal 3001 ticks),
+  29343d08 cue-less PlayDialog + sidecar-first generator, 5949cb3f horde AI RE, campaign C6 frontend half (Smoke row visible).
+  x41: the chapter loader merges all D5_OME units (GLB_ART 334 lightmapped comps / 91 lights, ART 1060 / 167); crash at
+  frame 0 in VehicleFx::draw after the World fell back to the graybox (-> Gameplay: campaign boot instead of a TDM match;
+  canonicalMapName rejects D5_OME_BASE); AssetTools: absolute texture paths into the old _m/tex dirs, empty decals.glb.
+  x42 plume volume: inconclusive (interior, no sun) -> x43 at 10x density. DECISIONS: overlay g = f + Streets revertA;
+  ESC nav v3 typed links. Card: Frontend pt9 on the diag head (fresh exe verified).
