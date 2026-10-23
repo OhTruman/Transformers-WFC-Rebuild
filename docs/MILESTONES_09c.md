@@ -3749,3 +3749,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   RE D5_OME pass: AnimNodeSlot skip flag HIGH, FMV outro 10 tracks (selection UNKNOWN -> Ghidra job), RandomSeed default 0.
 2026-10-23 04:06 MERGED 1615196f voice chat step 1 (in-match mic + Audio rows + mute + talking indicators + Opus in refresh.sh;
   VOICETEST PASS). RE: Bink FMV track rule C (tracks 0-4 bed + 5 + Lang; English = 0-5) -> Systems wires the FMV player.
+2026-10-23 04:09 MERGED 8b1cd99e voice step 2 (lobby lane, host relay; VOICETEST lobby PASS) + two-PC doc voice step. Experimental:
+  leave arms PASS on ae9bbb6e (bot takes the slot at one tick; humans-only 1v1 Forfeit at 1.51 s). RE: per-chapter campaign
+  pass complete (no chapter-specific open rows). FMV track rule was already on the head (M07; WFC_LANGUAGE, not a profile
+  setting). OPEN QUESTION for the user: a Language row in Settings (INT / FRA)?
