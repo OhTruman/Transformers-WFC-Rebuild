@@ -229,7 +229,13 @@ public:
     bool campaign() const { return campaignForced_ || isCampaignTag(match_.modeTag); }
     // C6 (RE CAMPAIGN_RUNTIME_EVENTS_RE): the frontend half of the chapter events. The Application calls them from
     // Gameplay's campaign runtime (ClientReachedCheckpoint / CampaignGameOver after its 1 s / ClientCompleteMission).
-    void campaignCheckpointReached(int mapId, int index);   // index -1 (not a menu checkpoint): nothing changes
+    // index -1 (not a menu checkpoint): the profile is unchanged; a checkpoint path also writes the faction's checkpoint save
+    void campaignCheckpointReached(int mapId, int index, const std::string& checkpointPath = std::string());
+    // The faction's checkpoint save (TnCheckpointManager CheckPoint0.sav Autobot / CheckPoint1.sav Decepticon; the header fields
+    // [RE CAMPAIGN_CHECKPOINT_DATA_RE 1, 3]): what Resume Autobot / Resume Decepticon loads.
+    struct CheckpointSave { bool ok = false; int mapId = -1, difficulty = 1; std::string map, checkpoint; };
+    static CheckpointSave readCheckpointSave(int faction);
+    static std::string checkpointSaveFile(int faction) { return faction == 1 ? "wfc_checkpoint1.sav" : "wfc_checkpoint0.sav"; }
     void campaignGameOver();                                 // UI event 14 -> MISSION FAILED
     void campaignMissionComplete(int mapId, int difficulty); // profile CompleteMission + save; CCP stats 10 s / the lobby
     bool takeCampaignRestartRequest() { bool r = campaignRestart_; campaignRestart_ = false; return r; }   // RestartFromActiveCheckpoint
@@ -516,7 +522,8 @@ private:
     bool campaignForced_ = false;
     bool campaignRestart_ = false;     // the host chose Restart From Last Checkpoint (the Application hands it to Gameplay)
     float campaignReturnIn_ = 0.0f;    // CCP: MissionCompleteCountdown 10 s of EndGameStats, then ReturnToGameLobby
-    int resumeFaction_ = -1;           // the next match load shows ResumeAutobot / ResumeDecepticon (a restart)
+    int resumeFaction_ = -1;
+    CheckpointSave resumePending_;     // Game.LoadSavedCheckpoint: launch this save once the campaign lobby is up           // the next match load shows ResumeAutobot / ResumeDecepticon (a restart)
     CampaignObjectives objectives_;
     bool pendingMatch_ = false, unloadWorld_ = false, quit_ = false;
 

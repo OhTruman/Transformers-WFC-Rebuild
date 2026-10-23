@@ -2108,7 +2108,22 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
             };
     }
     // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).
-    for (const auto& iv : rt_.flow().takeUiInvokes()) deferred_.push_back({iv.first, iv.second, {}});
+    for (const auto& iv : rt_.flow().takeUiInvokes()) {   // "fn|arg|arg": true / false become booleans, the rest strings
+        Deferred d{iv.first, iv.second, {}};
+        const size_t bar = d.fn.find('|');
+        if (bar != std::string::npos) {
+            std::string rest = d.fn.substr(bar + 1);
+            d.fn.resize(bar);
+            for (size_t at = 0; at <= rest.size();) {
+                size_t e = rest.find('|', at);
+                if (e == std::string::npos) e = rest.size();
+                const std::string a = rest.substr(at, e - at);
+                if (a == "true" || a == "false") d.args.push_back(gfx::avm1::Value(a == "true")); else d.args.push_back(gfx::avm1::Value(a));
+                at = e + 1;
+            }
+        }
+        deferred_.push_back(std::move(d));
+    }
     std::vector<Deferred> due;
     due.swap(deferred_);
     for (Deferred& d : due) {

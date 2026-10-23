@@ -1919,6 +1919,8 @@ static void testCampaignC6() {
     // the profile, -1 does not); CampaignGameOver -> UI 14 -> MISSION FAILED; Restart From Last Checkpoint -> the restart request,
     // the respawn closes the screen; ClientCompleteMission -> CompleteMission saved + back to the lobby (CP / SOLO).
     std::remove("wfc_profile.ini");
+    std::remove(GameFlow::checkpointSaveFile(0).c_str());
+    std::remove(GameFlow::checkpointSaveFile(1).c_str());
     FrontendRuntime rt;
     if (!rt.init()) { check(false, "campaign.C6_runtime_events", "init"); return; }
     GameFlow& f = rt.flow();
@@ -1946,8 +1948,10 @@ static void testCampaignC6() {
     const bool inGame = f.ui().state() == UIState::InGame && trioPick;
     f.campaignCheckpointReached(101, -1);
     const bool notIndexed = f.profile().campaign.checkpoint[5] == 0;
-    f.campaignCheckpointReached(101, 3);
-    const bool indexed = f.profile().campaign.checkpoint[5] == 3;
+    f.campaignCheckpointReached(101, 3, "D1_ORB_Base_m.TheWorld|PersistentLevel.Checkpoint_5199");
+    // the Decepticon checkpoint save (CheckPoint1.sav): the Solo menu's Resume Decepticon row
+    const bool indexed = f.profile().campaign.checkpoint[5] == 3 && f.call("Game.GetCheckpointFileStatus", {"1"}).b &&
+                         !f.call("Game.GetCheckpointFileStatus", {"0"}).b;
     f.campaignGameOver();
     const bool failed = f.ui().state() == UIState::CampaignGameOver && f.ui().openMovie() == "UI_GFxGameOver_p.CampaignGameOver_GFX_1";
     f.call("Game.RestartPlayerFromLastCheckpoint", {});
@@ -1958,7 +1962,12 @@ static void testCampaignC6() {
     LocalProfile back; back.load();
     const bool complete = back.campaign.complete[5] && back.campaign.available[6] && back.campaign.bestDifficulty[5] == 1 &&
                           back.campaign.checkpoint[5] == 3;
-    const bool toLobby = runUntil(rt, [&] { if (f.wantsWorldUnload()) f.worldUnloaded(); return f.level() == LevelKind::GameLobby; }, 60 * 20);
+    bool toLobby = runUntil(rt, [&] { if (f.wantsWorldUnload()) f.worldUnloaded(); return f.level() == LevelKind::GameLobby; }, 60 * 20);
+    // Resume Decepticon: LoadSavedCheckpoint(1) -> the SOLO lobby -> the save's chapter and checkpoint, launched
+    f.call("Game.LoadSavedCheckpoint", {"1"});
+    runUntil(rt, [&] { if (f.wantsWorldUnload()) f.worldUnloaded(); return f.lobby().mapId == 101 && f.lobby().checkpoint.find("Checkpoint_5199") != std::string::npos; }, 60 * 20);
+    toLobby = toLobby && f.lobby().mapId == 101 && f.lobby().checkpoint.find("Checkpoint_5199") != std::string::npos;
+    std::remove(GameFlow::checkpointSaveFile(1).c_str());
     check(coop && inGame && notIndexed && indexed && failed && asked && restarted && complete && toLobby, "campaign.C6_runtime_events",
           std::to_string(coop) + std::to_string(inGame) + std::to_string(notIndexed) + std::to_string(indexed) + std::to_string(failed) +
           std::to_string(asked) + std::to_string(restarted) + std::to_string(complete) + std::to_string(toLobby) + " " + coopWhy);

@@ -401,9 +401,8 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
         FlowTrace::emit("campaign.difficulty", {{"value", std::to_string(profile_.campaign.difficulty)}});
         return {};
     }
-    // The Solo menu's Resume Autobot / Resume Decepticon rows: a checkpoint save of that faction (index 0 / 1). The saves are
-    // Gameplay's (C6); until they exist there is none, so the menu offers Mission Select only.
-    if (fn == "Game.GetCheckpointFileStatus") return false;
+    // The Solo menu's Resume Autobot / Resume Decepticon rows: a checkpoint save of that faction (index 0 / 1).
+    if (fn == "Game.GetCheckpointFileStatus") return readCheckpointSave(argi(0)).ok;
     // CampaignGameOver_GFX (host only; the movie confirmed "Load Checkpoint" first): Restart From Last Checkpoint -> Gameplay's
     // RestartFromActiveCheckpoint in place; Restart Chapter -> reloadmap (the same launch without ?Checkpoint=).
     if (fn == "Game.RestartPlayerFromLastCheckpoint") {
@@ -421,8 +420,9 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     // DecepticonCheckpointExists) -> the Solo menu (mc_menuSolo). No saves yet (C6): both absent, so the menu offers Mission
     // Select only [CONFIRMED AS, FrontEnd_GFX].
     if (fn == "Online.CheckCheckpointSaves") {
-        uiInvokes_.push_back({ui_.openMovie(), "_global.ProceedToSoloPlay"});
-        FlowTrace::emit("campaign.checkpointSaves", {{"autobot", "false"}, {"decepticon", "false"}});
+        const bool a = readCheckpointSave(0).ok, d = readCheckpointSave(1).ok;
+        uiInvokes_.push_back({ui_.openMovie(), std::string("_global.ProceedToSoloPlay|") + (a ? "true" : "false") + "|" + (d ? "true" : "false")});
+        FlowTrace::emit("campaign.checkpointSaves", {{"autobot", FlowTrace::boolean(a)}, {"decepticon", FlowTrace::boolean(d)}});
         return {};
     }
     // CampaignSelect's checkpoint stage: GRI.SelectedCheckpoint (host only; ModifyURL adds ?Checkpoint= when not empty).
@@ -432,9 +432,16 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
         FlowTrace::emit("campaign.checkpoint", {{"path", lobby_.checkpoint.empty() ? "(chapter start)" : lobby_.checkpoint}});
         return {};
     }
+    // LoadAndRestartFromCheckpoint(index): the save's chapter at its checkpoint, the "Resume Autobot / Decepticon" loading
+    // title; here through the SOLO campaign lobby, launched as soon as it is up.
     if (fn == "Game.LoadSavedCheckpoint") {
-        FlowTrace::emit("campaign.loadSavedCheckpoint", {{"faction", arg(0)}, {"result", "no checkpoint saves yet (C6)"}});
-        return {};
+        const int faction = argi(0) == 1 ? 1 : 0;
+        CheckpointSave c = readCheckpointSave(faction);
+        FlowTrace::emit("campaign.loadSavedCheckpoint", {{"faction", std::to_string(faction)}, {"ok", FlowTrace::boolean(c.ok)},
+                                                         {"mapId", std::to_string(c.mapId)}, {"checkpoint", c.checkpoint}});
+        if (!c.ok) return {};
+        resumePending_ = c;
+        return call("Online.OpenCampaignGameLobby", {});
     }
     if (fn == "Online.PlayPlaylist") { playPlaylist(argi(0), arg(1) == "true" || arg(1) == "1"); return {}; }
     if (fn == "Online.SetSelectedMapID" && role_ == SessionRole::Member) {   // the host chooses (online member)
@@ -1305,6 +1312,18 @@ void GameFlow::voteTick() {
 }
 
 void GameFlow::gameLobbyTick(float dt) {
+    if (resumePending_.ok && !loading_.active && lobby_.settings && isCampaignTag(lobby_.settings->tag)) {
+        const CheckpointSave c = resumePending_;
+        resumePending_ = CheckpointSave{};
+        setMapId(c.mapId);
+        lobby_.checkpoint = c.checkpoint;
+        profile_.campaign.difficulty = c.difficulty;
+        const MapInfo* mi = cat_->mapById(c.mapId);
+        resumeFaction_ = mi ? mi->faction : 0;
+        FlowTrace::emit("campaign.resume", {{"mapId", std::to_string(c.mapId)}, {"checkpoint", c.checkpoint}});
+        startLevel();
+        return;
+    }
     if (!lobby_.countingDown) return;
     // GRI.ResetCountdown: a 1 s repeating DecrementCountdown timer.
     lobby_.countdownTimer += dt;
@@ -1365,7 +1384,34 @@ std::string GameFlow::buildLaunchUrl() const {
     return url;
 }
 
-void GameFlow::campaignCheckpointReached(int mapId, int index) {
+GameFlow::CheckpointSave GameFlow::readCheckpointSave(int faction) {
+    CheckpointSave c;
+    std::ifstream in(checkpointSaveFile(faction));
+    for (std::string line; std::getline(in, line);) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        const std::string k = line.substr(0, eq), v = line.substr(eq + 1);
+        if (k == "MapId") c.mapId = std::atoi(v.c_str());
+        else if (k == "Map") c.map = v;
+        else if (k == "Checkpoint") c.checkpoint = v;
+        else if (k == "Difficulty") c.difficulty = std::clamp(std::atoi(v.c_str()), 0, 2);
+    }
+    c.ok = c.mapId >= 0 && !c.checkpoint.empty();
+    return c;
+}
+
+void GameFlow::campaignCheckpointReached(int mapId, int index, const std::string& checkpointPath) {
+    // SaveActiveCheckpoint(faction): the header (CheckpointVersion 1, map, checkpoint path) to the faction's file. PROV: written
+    // on every new active checkpoint; the original saves when the level's Kismet SeqAct_SaveActiveCheckpoint runs.
+    const int ci = LocalProfile::Campaign::index(mapId);
+    if (!checkpointPath.empty() && ci >= 0) {
+        const MapInfo* mi = cat_ ? cat_->mapById(mapId) : nullptr;
+        std::ofstream out(checkpointSaveFile(ci < 5 ? 0 : 1), std::ios::trunc);
+        out << "CheckpointVersion=1\nMap=" << (mi ? mi->mapFilename : std::string()) << "\nMapId=" << mapId << "\nCheckpoint=" << checkpointPath
+            << "\nDifficulty=" << profile_.campaign.difficulty << "\n";
+        FlowTrace::emit("campaign.checkpointSaved", {{"file", checkpointSaveFile(ci < 5 ? 0 : 1)}, {"checkpoint", checkpointPath}});
+    }
     // ClientReachedCheckpoint(CP, MapId, index): only the menu list's checkpoints have an index; -1 does not advance
     if (index < 0) { FlowTrace::emit("campaign.checkpointReached", {{"mapId", std::to_string(mapId)}, {"index", "-1"}, {"profile", "unchanged"}}); return; }
     profile_.campaign.reachedCheckpoint(mapId, index);
