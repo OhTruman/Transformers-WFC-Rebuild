@@ -1,0 +1,271 @@
+diff -ru a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+--- a/src/core/Application_Frontend.cpp	2026-10-23 01:59:14.368043100 -0500
++++ b/src/core/Application_Frontend.cpp	2026-10-23 01:59:14.704194300 -0500
+@@ -833,6 +833,18 @@
+             drawFrontendFrame();
+         });
+         setRendererYield(renderer_, true);
++        // (playtest 2026-10-23 #1) the class list's chassis AnimSets parse on worker threads from the first frontend scene load
++        // (the boot main menu) on, so the lobby's preview bodies find them parsed (no-op for sets parsed or in flight)
++        if (renderer_) {
++            std::set<std::string> done;
++            std::vector<std::string> sets;
++            for (const auto& c : frontend_->roster().customCharacters())
++                for (const std::string& id : c.chassis) {
++                    const frontend::ChassisInfo* ci = frontend_->roster().chassis(id);
++                    if (ci && done.insert(id).second) sets.insert(sets.end(), ci->robotAnimSets.begin(), ci->robotAnimSets.end());
++                }
++            renderer_->prefetchAnimSets(sets);
++        }
+         load();
+         setRendererYield(renderer_, false);
+         core::setLoadYield(nullptr);
+diff -ru a/src/render/Renderer.h b/src/render/Renderer.h
+--- a/src/render/Renderer.h	2026-10-23 01:59:14.533108800 -0500
++++ b/src/render/Renderer.h	2026-10-23 01:59:14.710717100 -0500
+@@ -319,6 +319,10 @@
+     virtual void preparePreviewBody(const std::string& robotGltf, const std::vector<std::string>& animSets) {
+         (void)robotGltf; (void)animSets;
+     }
++    // (playtest 2026-10-23 #1) start parsing AnimSets ("Package.Set") on worker threads now - from a frontend scene load, for the
++    // class list's chassis - so preparePreviewBody / loadPreviewBody find them parsed instead of parsing on a frame (party lobby:
++    // 190-270 ms, 601 ms cold, per body). Sets already parsed or in flight are skipped.
++    virtual void prefetchAnimSets(const std::vector<std::string>& animSets) { (void)animSets; }
+     virtual int loadPreviewBody(const std::string& robotGltf, const std::vector<std::string>& animSets, const std::string& anim) {
+         (void)robotGltf; (void)animSets; (void)anim; return -1;
+     }
+diff -ru a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
+--- a/src/render/gl/GLRenderer.cpp	2026-10-23 01:59:14.409686300 -0500
++++ b/src/render/gl/GLRenderer.cpp	2026-10-23 01:59:14.737308000 -0500
+@@ -11,6 +11,8 @@
+ #include <fstream>
+ #include <random>
+ #include <thread>
++#include <future>
++#include <list>
+ #include <array>
+ #include <windows.h>
+ #endif
+@@ -711,6 +713,8 @@
+ 
+     // ---- frontend scenes ----
+     MeshHandle sceneMesh_ = kInvalidMesh;
++    static constexpr size_t kFrontendGlbKeep = 3;          // (playtest 2026-10-23 #1) parsed frontend world.glb kept, by scene
++    std::list<std::pair<std::string, MeshData>> frontendGlb_;
+     std::string sceneDir_;
+     bool loadFrontendScene(const std::vector<std::string>& levels) override {
+         unloadFrontendScene();
+@@ -737,11 +741,26 @@
+             LOG_ERROR("frontend scene: NO RENDER DATA (legacy presentation) for any of %zu levels", levels.size());
+             return false;
+         }
+-        MeshData world;
++        // (playtest 2026-10-23 #1) the last kFrontendGlbKeep scenes' parsed world.glb stay in memory: returning to a screen skips
++        // the read (main menu: one 408k-vertex mesh, 524 ms cold); most recent first
+         auto tw = std::chrono::steady_clock::now();
+-        bool okWorld = assets::loadGlb(assets + "/Maps/" + dir + "/world.glb", world);
+-        LOG_INFO("frontend scene %s: world.glb read %.0f ms", dir.c_str(),
++        bool okWorld = false, cachedWorld = false;
++        auto hit = std::find_if(frontendGlb_.begin(), frontendGlb_.end(), [&](const auto& e) { return e.first == dir; });
++        if (hit != frontendGlb_.end()) {
++            frontendGlb_.splice(frontendGlb_.begin(), frontendGlb_, hit);
++            okWorld = cachedWorld = true;
++        } else {
++            MeshData w;
++            okWorld = assets::loadGlb(assets + "/Maps/" + dir + "/world.glb", w);
++            if (okWorld) {
++                frontendGlb_.emplace_front(dir, std::move(w));
++                while (frontendGlb_.size() > kFrontendGlbKeep) frontendGlb_.pop_back();
++            }
++        }
++        LOG_INFO("frontend scene %s: world.glb %s %.0f ms", dir.c_str(), cachedWorld ? "kept" : "read",
+                  std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tw).count());
++        static const MeshData kNoWorld;
++        const MeshData& world = okWorld ? frontendGlb_.front().second : kNoWorld;
+         wfc_.yieldLoad();
+         if (!okWorld) {
+             LOG_WARN("frontend scene %s: world.glb missing", dir.c_str());
+@@ -756,6 +775,7 @@
+         sceneMesh_ = uploadMesh(world);
+         uploadingFrontendWorld_ = false;
+         wfc_.prewarmPlacedFx();              // M58: its emitters' programs / textures / meshes, under the loading screen
++        wfc_.setFrontendScene(true);         // (playtest 2026-10-23 #1) its textures stay pooled for a revisit
+         sceneDir_ = dir;
+         LOG_INFO("frontend scene %s loaded (%zu submeshes)", dir.c_str(), world.subs.size());
+         return sceneMesh_ != kInvalidMesh;
+@@ -782,21 +802,50 @@
+     bool loadingFrontendScene_ = false;
+     bool matchMap_ = false;                  // a match map's render data is loaded (not a menu scene)
+     bool uploadingFrontendWorld_ = false;
++    // (playtest 2026-10-23 #1) AnimSets parsing on worker threads (prefetchAnimSets); a null result = the parse failed
++    std::map<std::string, std::future<std::unique_ptr<assets::AnimFile>>> animPending_;
+     const assets::AnimFile* animFile(const std::string& path) {   // M69 parsed AnimSet, cached by path
+         auto cached = animFileCache_.find(path);
+         if (cached == animFileCache_.end()) {
+-            assets::AnimFile f;
+-            if (!assets::loadAnimationFile(path, f)) return nullptr;
+-            cached = animFileCache_.emplace(path, std::move(f)).first;
++            auto pend = animPending_.find(path);
++            if (pend != animPending_.end()) {             // in flight: wait for it, the loading screen still presenting
++                const auto t0 = std::chrono::steady_clock::now();
++                while (pend->second.wait_for(std::chrono::milliseconds(4)) != std::future_status::ready) wfc_.yieldLoad();
++                std::unique_ptr<assets::AnimFile> f = pend->second.get();
++                animPending_.erase(pend);
++                const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
++                if (ms > 1.0) LOG_INFO("anim prefetch: waited %.1f ms for %s", ms, path.c_str());
++                if (!f) return nullptr;
++                cached = animFileCache_.emplace(path, std::move(*f)).first;
++            } else {
++                assets::AnimFile f;
++                if (!assets::loadAnimationFile(path, f)) return nullptr;
++                cached = animFileCache_.emplace(path, std::move(f)).first;
++            }
+         }
+         return &cached->second;
+     }
++    void prefetchAnimSets(const std::vector<std::string>& sets) override {
++        int started = 0;
++        for (const std::string& s : sets) {
++            const std::string p = animSetPath(s);
++            if (p.empty() || animFileCache_.count(p) || animPending_.count(p)) continue;
++            animPending_.emplace(p, std::async(std::launch::async, [p] {
++                auto f = std::make_unique<assets::AnimFile>();
++                if (!assets::loadAnimationFile(p, *f)) f.reset();
++                return f;
++            }));
++            ++started;
++        }
++        if (started) LOG_INFO("anim prefetch: %d AnimSet(s) parsing on worker threads", started);
++    }
+     std::string animSetPath(const std::string& s) const {          // "Package.Set" -> content/Package/Set.anim.gltf
+         size_t dot = s.find('.');
+         return dot == std::string::npos ? std::string() : wfc::Pipeline::contentRoot() + s.substr(0, dot) + "/" + s.substr(dot + 1) + ".anim.gltf";
+     }
+     void preparePreviewBody(const std::string& gl, const std::vector<std::string>& sets) override {
+         const auto t0 = std::chrono::steady_clock::now();
++        prefetchAnimSets(sets);                   // (all of this body's sets in parallel; already prefetched ones are skipped)
+         for (const std::string& s : sets) { std::string p = animSetPath(s); if (!p.empty()) animFile(p); wfc_.yieldLoad(); }
+         if (wfc_.active()) {
+             std::string rel = gl.rfind("content/", 0) == 0 ? gl.substr(8) : gl;
+@@ -1174,6 +1223,8 @@
+         matchMap_ = ok && !loadingFrontendScene_;
+         if (ok) glDisable(GL_FOG);   // fog is evaluated per vertex in the shader path (UE3 height fog)
+         if (ok && !loadingFrontendScene_) {
++            for (auto& kv : animPending_) kv.second.wait();   // (prefetches still parsing finish first: they own their data)
++            animPending_.clear();
+             animFileCache_.clear();          // M69: menu-only data, not held during a match
+             wfc_.requestMaterialPrewarm();   // M54: after the world upload, yielding
+             for (const MeshData& r : prewarmRequests_) wfc_.prewarmDynamic(r);   // M59: replayed per map load
+diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-23 01:59:14.451328300 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 01:59:14.744834500 -0500
+@@ -1046,6 +1046,16 @@
+     static const size_t n = std::getenv("WFC_PROGCACHEMAX") ? (size_t)std::atol(std::getenv("WFC_PROGCACHEMAX")) : 1500;
+     return n;
+ }
++// (playtest 2026-10-23 #1) frontend-scene textures survive the scene's release: a menu screen revisited (main menu / party /
++// game lobby) finds its ~150 textures uploaded instead of decoding them again. Keyed as Pipeline::texture plus the HD-texture
++// state; bounded (least recently used beyond the cap deleted); cleared with the program cache. Match textures are never pooled.
++struct PooledTex { GLuint id = 0; bool srgbBlocks = false; uint64_t lastUse = 0; };
++std::map<std::string, PooledTex> gTexPool;
++uint64_t gTexPoolUse = 0;
++size_t texPoolMax() {                                    // WFC_TEXPOOLMAX=<n> (0 = no pool: the old behaviour)
++    static const size_t n = std::getenv("WFC_TEXPOOLMAX") ? (size_t)std::atol(std::getenv("WFC_TEXPOOLMAX")) : 600;
++    return n;
++}
+ } // namespace
+ 
+ GLuint link(GLuint vs, GLuint fs, const std::string& tag) {
+@@ -1178,6 +1188,8 @@
+     for (auto& kv : gProgCache) if (ctx && kv.second.id) DeleteProgram(kv.second.id);
+     gProgCache.clear();
+     gProgCacheById.clear();
++    for (auto& kv : gTexPool) if (ctx && kv.second.id) glDeleteTextures(1, &kv.second.id);
++    gTexPool.clear();
+ }
+ 
+ // ------------------------------------------------------------------------- unloading (level travel)
+@@ -1281,8 +1293,30 @@
+             gProgCache.erase(it);
+         }
+     }
++    std::set<GLuint> pooled;                             // (playtest 2026-10-23 #1) a frontend scene's textures go to the pool
++    if (frontendScene_ && texPoolMax() > 0) {
++        for (auto& kv : texCache_) {
++            if (!kv.second) continue;
++            PooledTex& p = gTexPool[kv.first + (hdTextures_ ? "|hd" : "|sd")];
++            if (p.id && p.id != kv.second) glDeleteTextures(1, &p.id);
++            p.id = kv.second; p.srgbBlocks = srgbBlockTex_.count(kv.second) != 0; p.lastUse = ++gTexPoolUse;
++            pooled.insert(kv.second);
++            kv.second = 0;
++        }
++        if (gTexPool.size() > texPoolMax()) {            // trim: least recently pooled first
++            std::vector<std::pair<uint64_t, std::string>> lru;
++            for (const auto& kv : gTexPool) lru.push_back({kv.second.lastUse, kv.first});
++            std::sort(lru.begin(), lru.end());
++            for (size_t i = 0; i < lru.size() && gTexPool.size() > texPoolMax(); ++i) {
++                auto pt = gTexPool.find(lru[i].second);
++                pooled.erase(pt->second.id);
++                glDeleteTextures(1, &pt->second.id);
++                gTexPool.erase(pt);
++            }
++        }
++    }
+     for (auto& kv : texCache_) tex(kv.second);
+-    for (GLuint& t : lmTextures_) tex(t);
++    for (GLuint& t : lmTextures_) if (!pooled.count(t)) tex(t); else t = 0;   // (lightmap ids alias texCache_ entries)
+     for (int k = 0; k < kShadowRing; ++k) {            // the shadow depth ring (shadowFbo_ / shadowDepthTex_ alias a slot)
+         if (shadowRingFbo_[k] == shadowFbo_) shadowFbo_ = 0;
+         if (shadowRingTex_[k] == shadowDepthTex_) shadowDepthTex_ = 0;
+@@ -1312,8 +1346,8 @@
+     distCut_ = -1;
+     BindFramebuffer(GL_FRAMEBUFFER, 0);
+     LOG_INFO("wfc: released map render data (%zu meshes, %zu programs (%d reused from the program cache, %zu cached), "
+-             "%zu textures)", meshes_.size(), progIds.size(), progCacheHits_, gProgCache.size(),
+-             texCache_.size() + lmTextures_.size());
++             "%zu textures; %d taken from the frontend texture pool, %zu pooled now)", meshes_.size(), progIds.size(), progCacheHits_, gProgCache.size(),
++             texCache_.size() + lmTextures_.size(), texPoolHits_, gTexPool.size());
+     srgbBlockTex_.clear();
+     fogShapeLogged_.clear();
+     gMemLightmapBytes = gMemTextureBytes = gMemMeshBytes = gMemSrgbTexBytes = 0; gMemDdsTextures = 0; gMemHdTextures = 0; gMemPbrMaps = 0; gMemPbrBytes = 0; gMemLightmaps = gMemTextures = gMemMeshes = 0;   // MEMSTATS
+@@ -2510,6 +2544,19 @@
+     std::string key = file + (srgb ? "|s" : "|l") + (clampU ? "c" : "w") + (clampV ? "c" : "w");
+     auto it = texCache_.find(key);
+     if (it != texCache_.end()) return it->second;
++    {   // (playtest 2026-10-23 #1) a texture a released frontend scene left in the pool: uploaded already
++        auto pt = gTexPool.find(key + (hdTextures_ ? "|hd" : "|sd"));
++        if (pt != gTexPool.end()) {
++            const GLuint id = pt->second.id;
++            if (pt->second.srgbBlocks) srgbBlockTex_.insert(id);
++            gTexPool.erase(pt);
++            glBindTexture(GL_TEXTURE_2D, id);
++            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)anisotropy_);   // (the setting may have changed)
++            texCache_[key] = id;
++            ++texPoolHits_;
++            return id;
++        }
++    }
+     FirstUseTimer fu{"texture", file, frameNo_};
+     ImageData img;
+     GLuint id = 0;
+diff -ru a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h	2026-10-23 01:59:14.494476000 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-23 01:59:35.498453500 -0500
+@@ -228,6 +228,8 @@
+     // particle fallback draws immediately with depth writes off; characters drawn after it would cover the smoke)
+     void flushQueuedCharacters() { flushDynQueue(); }
+     void setDisplayGamma(float g) { displayGamma_ = g > 0.5f && g < 5.0f ? g : 2.2f; }
++    // (playtest 2026-10-23 #1) mark the loaded map as a frontend scene: at release its textures stay uploaded in a pool for revisits
++    void setFrontendScene(bool on) { frontendScene_ = on; }
+     // per-frame draw counters (always on, cheap) and resource counts for IRenderer::renderDiagnostics
+     struct FrameCounts {
+         int draws = 0, worldDraws = 0, bspDraws = 0, dynamicDraws = 0, fxDraws = 0;
+@@ -1048,6 +1050,8 @@
+     // light environment instead of each particle tracing its own.
+     struct CellEnv { LightEnv env; int frame = -100000; };
+     std::unordered_map<uint64_t, CellEnv> cellEnv_;
++    bool frontendScene_ = false;                     // (playtest #1) this pipeline holds a frontend scene: its textures go to the pool at release
++    int texPoolHits_ = 0;                            // (textures taken from the pool by this pipeline)
+     int frameNo_ = 0;
+ public:
+     // WFC_LOCKSTEP (deterministic captures): mark the match map load; the lockstep time base and output-affecting frame cadences
