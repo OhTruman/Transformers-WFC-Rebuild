@@ -4328,6 +4328,8 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         const int wm = waterMode();
         static const bool waterDebug = std::getenv("WFC_WATERDEBUG") != nullptr;
         Uniform1i(ULOC(P, "uWaterOn"), wm == 1 && waterDebug ? 2 : wm);
+        static const float reflK = std::getenv("WFC_WATERREFL") ? (float)std::atof(std::getenv("WFC_WATERREFL")) : 2.5f;
+        Uniform1f(ULOC(P, "uWaterReflK"), reflK);
         if (wm == 1 && P.blend >= 2) {                 // (translucent / additive only: the scene is complete by then)
             if (!P.sceneDepth) { ensureSceneDepth(); ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
                                  Uniform1i(ULOC(P, "uHasSceneDepth"), 1); }
