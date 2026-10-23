@@ -1,0 +1,108 @@
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index 0c3037a9..3199be0a 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -879,7 +879,8 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
+                     if (b.noWaySince < 0.0f || nowS - b.noWayLast > 6.0f) b.noWaySince = nowS;
+                     b.noWayLast = nowS;
+                     static const bool noSuicide = std::getenv("WFC_NOSTRANDSUICIDE") != nullptr;   // regression A/B against older builds
+-                    if (nowS - b.noWaySince >= 30.0f && !noSuicide) b.suicideWish = true;
++                    // The Escalation horde never suicides (the original's AI does not; the unstick is a versus-bot PC adaptation).
++                    if (nowS - b.noWaySince >= 30.0f && !noSuicide && !match_.players()[(size_t)b.player].directorSpawned) b.suicideWish = true;
+                 }
+                 LOG_INFO("bots: p%d stranded off the mesh at t %.2f at (%.1f %.1f %.1f): %s", b.player, match_.matchTime(), pos.x, pos.y, pos.z,
+                          b.hasRejoin ? "walking to the mesh" : "no way found");
+@@ -1264,7 +1265,7 @@ void World::botOffMeshWatch(BotBrain& b, const Character& pc, float dt) {
+             b.omEntrySinceVeh = now - b.lastVehT; b.omEntryJet = b.lastVehJet; b.omEntrySinceDmg = now - b.lastDamageTime;
+         }
+         static const bool noSuicide = std::getenv("WFC_NOSTRANDSUICIDE") != nullptr;
+-        if ((b.offMeshRun += dt) >= 30.0f && !noSuicide && !b.suicideWish) {
++        if ((b.offMeshRun += dt) >= 30.0f && !noSuicide && !b.suicideWish && !match_.players()[(size_t)b.player].directorSpawned) {
+             const core::Vec3 p = pc.position(), e = b.omEntryPos;
+             LOG_INFO("bots: p%d stranded 30 s off the mesh with a path at t %.2f at (%.1f %.1f %.1f)", b.player, now, p.x, p.y, p.z);
+             LOG_INFO("bots: p%d off-mesh entry (%s): t %.2f at (%.1f %.1f %.1f), life %.1f s, vel y %.1f, %.1f s after %s form, %.1f s after damage; "
+diff --git a/src/game/WorldSurvival.cpp b/src/game/WorldSurvival.cpp
+index 48940ac0..074fb86f 100644
+--- a/src/game/WorldSurvival.cpp
++++ b/src/game/WorldSurvival.cpp
+@@ -214,6 +214,19 @@ void World::setupSurvival() {
+             if (a.op == "unhide")
+                 for (PickupFactory* f : pickupFactories_) if (f->name() == a.target) { f->setHidden(true); ++hidden; }
+     LOG_INFO("escalation: %zu generators, %d pickup factories hidden until bought", svData_.generators.size(), hidden);
++    {   // DEV (WFC_ESCLOG): the authored spawn points our bot nav does not reach (AssetTools ESC nav coverage), log only
++        static const bool nlog = std::getenv("WFC_ESCLOG") != nullptr;
++        if (nlog && botNav_.valid()) {
++            int off = 0, all = 0;
++            for (const SurvivalData::Zone& z : svData_.zones)
++                for (size_t k = 0; k < z.spawnPoints.size(); ++k) {
++                    const core::Vec3 at{z.spawnPoints[k][0], z.spawnPoints[k][1], z.spawnPoints[k][2]};
++                    ++all;
++                    if (botNav_.findCell(at, 2.0f) < 0) { ++off; LOG_INFO("ESCLOG spawn point zone %s #%zu (%.1f %.1f %.1f) off the bot nav%s", z.id.c_str(), k, at.x, at.y, at.z, z.active ? " (active at start)" : ""); }
++                }
++            LOG_INFO("ESCLOG spawn points off the bot nav: %d of %d", off, all);
++        }
++    }
+     sv_.phase = SurvivalState::Phase::PreGame;
+     LOG_INFO("escalation: %s: %zu waves, %zu enemy entries, %zu zones, %zu horde slots (team %d vs players' team %d)", mapName_.c_str(),
+              svData_.waves.size(), svData_.enemies.size(), nz, sv_.slots.size(), horde, svData_.coopTeam);
+@@ -573,11 +586,39 @@ bool World::svSpawn(int slot) {
+                            svData_.zones[(size_t)sorted[0]].id.c_str(), svZoneScore(sorted[0], t), top > 1 ? svData_.zones[(size_t)sorted[1]].id.c_str() : "-",
+                            top > 1 ? svZoneScore(sorted[1], t) : 0.0f, top > 2 ? svData_.zones[(size_t)sorted[2]].id.c_str() : "-", top > 2 ? svZoneScore(sorted[2], t) : 0.0f);
+         if (zone.points <= 0) continue;   // GetSpawnPoint: none (an error log in the original), the try is spent
+-        const int idx = sv_.pointIndex[(size_t)z] % zone.points;
++        int idx = sv_.pointIndex[(size_t)z] % zone.points;
+         sv_.pointIndex[(size_t)z] = (idx + 1) % zone.points;
++        // PROV (Integration 2026-10-23, removed with E2b part 3's Escalation nav): about half the authored points are off our bot nav
++        // (the horde would stand stranded there); until the nav covers them the next on-nav point of this zone stands in (round
++        // robin), logged; no on-nav point in the zone -> the try is spent.
++        const SurvivalData::Zone* pz = &zone;   // the zone whose point is used (PROV stand-in below)
++        if (botNav_.valid() && (size_t)idx < zone.spawnPoints.size()) {
++            auto onNav = [&](const SurvivalData::Zone& zz, int k) { const auto& q = zz.spawnPoints[(size_t)k]; return botNav_.findCell(core::Vec3{q[0], q[1], q[2]}, 2.0f) >= 0; };
++            if (!onNav(zone, idx)) {
++                int sub = -1;
++                for (int k = 1; k < (int)zone.spawnPoints.size() && sub < 0; ++k) if (onNav(zone, (idx + k) % (int)zone.spawnPoints.size())) sub = (idx + k) % (int)zone.spawnPoints.size();
++                std::string how;
++                if (sub >= 0) { idx = sub; how = "#" + std::to_string(sub) + " of the zone stands in"; }
++                else {   // no on-nav point in the zone: the nearest on-nav authored point of any active zone
++                    const core::Vec3 c = (zone.mn + zone.mx) * 0.5f; float best = 1e18f; int bz = -1, bk = -1;
++                    for (int az : sv_.zonesList) {
++                        const SurvivalData::Zone& zz = svData_.zones[(size_t)az];
++                        for (int k = 0; k < (int)zz.spawnPoints.size(); ++k) {
++                            if (!onNav(zz, k)) continue;
++                            const auto& q = zz.spawnPoints[(size_t)k];
++                            const float d = (q[0] - c.x) * (q[0] - c.x) + (q[1] - c.y) * (q[1] - c.y) + (q[2] - c.z) * (q[2] - c.z);
++                            if (d < best) { best = d; bz = az; bk = k; }
++                        }
++                    }
++                    if (bz < 0) { LOG_INFO("escalation: PROV spawn point zone %s #%d is off the bot nav and no active zone has an on-nav point: the try is spent", zone.id.c_str(), idx); continue; }
++                    pz = &svData_.zones[(size_t)bz]; idx = bk; how = "zone " + pz->id + " #" + std::to_string(bk) + " (nearest on-nav point) stands in";
++                }
++                LOG_INFO("escalation: PROV spawn point zone %s is off the bot nav: %s", zone.id.c_str(), how.c_str());
++            }
++        }
+         core::Vec3 at; float yaw = 0.0f;
+-        if ((size_t)idx < zone.spawnPoints.size()) {
+-            const auto& q = zone.spawnPoints[(size_t)idx];
++        if ((size_t)idx < pz->spawnPoints.size()) {
++            const auto& q = pz->spawnPoints[(size_t)idx];
+             at = {q[0], q[1], q[2]}; yaw = q[3];
+         } else {   // PROV: point idx of n spread around the box centre until the authored TnSurvivalSpawnPoint positions arrive
+             const float cx = 0.5f * (zone.mn.x + zone.mx.x), cz = 0.5f * (zone.mn.z + zone.mx.z);
+@@ -590,7 +631,7 @@ bool World::svSpawn(int slot) {
+             if (slog) LOG_INFO("ESCLOG   point %d (%.2f %.2f %.2f): no ground below", idx, at.x, at.y, at.z);
+             continue;
+         }
+-        if ((size_t)idx >= zone.spawnPoints.size() && gy < zone.mn.y - 2.0f) continue;   // PROV point fell out of the zone
++        if ((size_t)idx >= pz->spawnPoints.size() && gy < zone.mn.y - 2.0f) continue;   // PROV point fell out of the zone
+         at.y = gy;
+         bool clear = true;   // IsSafeSpawnLocation (capsule): no live pawn within two radii + 1 m while the cylinders overlap in height
+         for (size_t q = 0; q < match_.players().size() && clear; ++q) {
+@@ -601,7 +642,7 @@ bool World::svSpawn(int slot) {
+         }
+         if (!clear) { if (slog) LOG_INFO("ESCLOG   point %d (%.2f %.2f %.2f): occupied", idx, at.x, at.y, at.z); continue; }
+         // Face the nearest player (PROV: the point's own rotation once the authored points land).
+-        if ((size_t)idx >= zone.spawnPoints.size()) {
++        if ((size_t)idx >= pz->spawnPoints.size()) {
+             float best = 1e9f;
+             for (size_t q = 0; q < match_.players().size(); ++q) {
+                 if (match_.players()[q].kind == ParticipantKind::Bot) continue;
