@@ -4138,3 +4138,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 17:08 ALL 10 CHAPTERS SHIPPED (AssetTools 2cabbb4; D3B at 16:59). Outside-render list final: 8,678 files / 2.98 GB (now incl.
   world.glb-referenced textures + shared transforming GLBs). Air queue resumed (optional; ships what exists at the cut).
   Remaining: Gameplay D3B check, Frontend handover4, Experimental head arm, Systems guard dry-run, the user's reboot.
+2026-10-23 17:13 Gameplay D3B check: loads (9 units, 55 transforming, 24 sentry + 33 mine factories, 308 hides) but the human falls out of
+  the world at 12 s: the intro start stands over a void (the original holds / teleports the players during IntroCine).
+  Campaign-wide gap: SeqAct_Teleport unimplemented (A1 60 ... D3B 39 refs). GO: Teleport + the D3B intro hold (RE asked;
+  PROV cinematic hold), one CAMPAIGNTEST + one D3B run, FINAL_BASE_ITEMS 11.
