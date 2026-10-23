@@ -318,7 +318,7 @@ void Pipeline::rtBuildWorld(int meshId) {
         }
     }
     if (rtBridgeAddStaticWorld(W, 1u << set)) {
-        ++rtWorldSets_; rtSets_.push_back({meshId, set});
+        ++rtWorldSets_; rtSets_.push_back({meshId, set}); rtSetIdBase_.push_back(W.idBase);
         if (keepHit) rtHitKeep_.push_back(std::move(keep));
     }
     else LOG_WARN("RT depth check: no static world on D3D12 (the round trip runs the copy)");

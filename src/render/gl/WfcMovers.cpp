@@ -405,5 +405,35 @@ void Pipeline::loadSceneActors(const assets::Json& L) {
     LOG_INFO("wfc: scene actors: %d poses, %d PHYS_Rotating, %d authored-hidden", poses, rot, hid);
 }
 
+// (campaign chapters) the actor nodes of a unit's world.glb as loadSceneActors entries - the JSON chunk alone is read (the
+// binary chunk is the meshes, already uploaded)
+void Pipeline::registerGlbActors(const std::string& glbPath) {
+    std::ifstream f(glbPath, std::ios::binary);
+    uint32_t hdr[5] = {};
+    if (!f || !f.read(reinterpret_cast<char*>(hdr), sizeof hdr) || hdr[0] != 0x46546C67u || hdr[4] != 0x4E4F534Au) return;
+    std::string js(hdr[3], ' ');
+    if (!f.read(&js[0], (std::streamsize)js.size())) return;
+    assets::Json J;
+    if (!assets::Json::parse(js, J)) return;
+    assets::Json L, list;
+    const assets::Json& N = J["nodes"];
+    for (size_t i = 0; i < N.size(); ++i) {
+        const assets::Json& nd = N[i];
+        const assets::Json& ex = nd["extras"];
+        if (!ex["actor"].isString() || nd["matrix"].size() < 16) continue;
+        const std::string cls = ex["class"].asString();
+        if (cls != "InterpActor" && cls != "StaticMeshActor" && cls != "HmSkeletalMeshActor" && cls != "Emitter") continue;
+        assets::Json e;
+        e.type = assets::Json::Type::Object;
+        e.obj["actor"] = ex["actor"]; e.obj["class"] = ex["class"]; e.obj["gltf_matrix"] = nd["matrix"];
+        list.arr.push_back(e);
+    }
+    if (list.arr.empty()) return;
+    list.type = assets::Json::Type::Array;
+    L.obj["glb"] = list;
+    L.type = assets::Json::Type::Object;
+    loadSceneActors(L);
+}
+
 } // namespace wfc
 } // namespace render

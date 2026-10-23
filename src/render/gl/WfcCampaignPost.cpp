@@ -92,7 +92,7 @@ void Pipeline::loadChapterPost(const std::string& chapterDir) {
     parsePost(J["world_default"], ppWorld_.s);
     interpOf(J["world_default"], ppWorld_.interp);
     {
-        assets::Json W; W.obj["settings"] = J["world_default"]; W.obj["lut"] = J["world_lut"];
+        assets::Json W; W.type = assets::Json::Type::Object; W.obj["settings"] = J["world_default"]; W.obj["lut"] = J["world_lut"];
         ppWorld_.lut = lutOf(W);
     }
     const assets::Json& V = J["volumes"];

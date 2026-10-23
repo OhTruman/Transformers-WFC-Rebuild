@@ -163,6 +163,9 @@ public:
     // (<chapter>/postprocess_volumes.json, tools/render/build_campaign_pp.py); Kismet toggles them by actor name
     // (SeqAct_Toggle on a (Dynamic)PostProcessVolume: "PostProcessVolume_15759").
     virtual void setPostProcessVolumeEnabled(const std::string& volume, bool on) { (void)volume; (void)on; }
+    // Chapter streaming as visibility (Gameplay's SetStreamingState): every unit is loaded at the chapter start
+    // (loadChapterUnits); a hidden unit draws nothing and leaves the ray-traced scene. unit = its dir ("A1_IAC_Elevator_Art").
+    virtual void setChapterUnitVisible(const std::string& unit, bool visible) { (void)unit; (void)visible; }
     // A matinee cutscene's per-frame view (Gameplay's SeqAct_Interp playback): the camera itself goes through the normal
     // camera and notifyCameraCut("matinee") on director cuts; this carries the rest. Unset fields keep the defaults.
     struct PostOverride {                 // the CameraActor's CamOverridePostProcess (UE3 FPostProcessSettings fields)
@@ -381,6 +384,12 @@ public:
     // drawScale / its authored DrawScale about its location. The UI_FrontEnd vignette keys it on the ship groups
     // (dec01 / dec0203 0.2, djDS01 0.08 -> ..., megatronDS 0.02) and the booster emitters (cooked VIG package).
     virtual void setFrontendActorScale(const std::string& actor, float drawScale) { (void)actor; (void)drawScale; }
+    // A campaign chapter's matinee-moved actor (Gameplay's SeqAct_Interp playback, every sim step while it moves): the
+    // world.glb actor name ("InterpActor_13020"), absolute UE location and rotator in degrees. Actors never sent keep
+    // their authored pose.
+    virtual void setMapActorTransform(const std::string& actor, const core::Vec3& posUE, const core::Vec3& rotUEdeg) {
+        (void)actor; (void)posUE; (void)rotUEdeg;
+    }
 
     // Matinee InterpTrackFloatProp tracks of the loaded frontend scene family (render data matinee_floatprops.json,
     // tools/render/build_scene_floatprops.py, from the cooked levels): the frontend scene exports carry these tracks
