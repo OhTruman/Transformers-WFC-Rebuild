@@ -69,6 +69,9 @@ MicBlocked=The browser has not allowed the microphone.
 [Lobby]
 GameSettings=Game Settings
 GameSettingsDesc=Game mode, limits, bots and the other match options.
+VoteNone=None of these
+VoteRowDesc=Vote for the next map. If most players pick None of these, three new maps are offered.
+VoteNext=Next map:
 GameModeDesc=The kind of match. Each mode keeps its own settings.
 NoPublicGames=No public games found.
 LanOnly=Public matches need the lobby service. LAN games only.
