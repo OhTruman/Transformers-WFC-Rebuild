@@ -130,8 +130,13 @@ def main():
         polys, note = brush_polygons(db, path, d)
         if note:
             notes.append((path.split('.')[-1], note))
+        # (a DynamicPostProcessVolume without an authored bEnabled starts off: Kismet switches it - A1's thumper beam 2045, hard
+        # attached to the thumper's bone, its brush only the authored pose)
+        enabled = d.get('bEnabled', cls != 'DynamicPostProcessVolume') is not False
+        if d.get('Base'):
+            notes.append((path.split('.')[-1], 'attached to %s (the brush at its authored pose)' % d.get('BaseBoneName', d['Base'].split('.')[-1])))
         res['volumes'].append({'name': path.split('.')[-1], 'unit': units[level], 'class': cls,
-                               'priority': float(d.get('Priority', 0.0) or 0.0), 'enabled': d.get('bEnabled', True) is not False,
+                               'priority': float(d.get('Priority', 0.0) or 0.0), 'enabled': enabled, 'attached': bool(d.get('Base')),
                                'settings': s, 'lut': lut(s.get('ColorCorrectionTexture'), level), 'polygons_m': polys})
     os.makedirs(out, exist_ok=True)
     json.dump(res, open(os.path.join(out, 'postprocess_volumes.json'), 'w', encoding='utf-8'), indent=1)
