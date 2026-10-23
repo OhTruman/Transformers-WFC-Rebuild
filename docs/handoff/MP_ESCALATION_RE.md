@@ -495,3 +495,67 @@ Sources:
 - Quitting mid-game: title LeaveLobby, message "**Your leaderboard progress will be lost. Do you want to proceed?**"
   (LeaveSurvivalConfirm).
 - Stats shown / written: score, kills, deaths, revives, downed (§8.3). The highest wave reached is the headline number.
+
+
+## 9. Horde AI behaviour (C: authored GOAP sets + TransGame script; for mapping onto the Smart brain)
+
+Data: `notes/data/escalation/ai_sets.json` (`tools/ai_sets_export.py`): every template's ActionSet / GoalSet / SensorSet with each
+blueprint's authored parameters and class defaults. Raw dumps: work/q/ai_sets_dump.txt, ai_subobjs.txt.
+
+The AI is GOAP. Each update, the **threat sensor picks one enemy**; the goal set picks a goal (Kill almost always); the planner
+chains **actions** whose preconditions hold, choosing by cost. The Escalation templates share the campaign sets. Only the
+weapons, loot and chassis are Escalation-specific.
+
+### 9.1 Target selection (TnAiThreatSensor, C)
+- Every update: for each known enemy (sentry / untargetable / dormant ones skipped), **threat = sum of evaluators**. The highest
+  becomes DesiredEnemy. A scripted ShootAtActor suspends this.
+
+| Evaluator | Formula | Default | Overrides |
+|---|---|---|---|
+| Distance | R < UberRange → UberLevel; else MaxLevel·(1 − clamp((R − Min)/(Max − Min))) | Min 2000, Max 5000, MaxLevel 1 | Soldier / CQC / Titan: Uber 5 within **1000 UU**, Max 7000. Jet: Uber 5 / 1000, Max 10000. Tank: Max 8000. Brute / HoloBrute: Min 1000. |
+| Damage | damage this enemy dealt to me / my HealthMax | scale 1 | – |
+| Player / AI | player 1.0; AI enemy (sentry / bot) = AiThreatLevel | 1.0 | Soldier / Tank 0.5, Brute 0.6, Jet 0.7, CQC / Titan / HoloBrute 0.8 |
+| Num attackers | −1 per other AI already targeting it | −1 | Titan −0.5. This spreads the horde over the players. |
+| Target downed | downed → −2 | −2 | in Brute, CQC, Titan, HoloBrute, Spider, Tank: **they ignore downed players** |
+| Stale enemy | current target held over 15 s → StaleScore, else −StaleScore (stickiness) | – | Tank −0.5, CQC −2, Brute / HoloBrute −3 |
+| Cloaked target | cloaked → −2 | −2 | all |
+| Revive goal | enemy currently reviving someone → −1 | −1 | Tank only |
+| Turret target | when on a turret: in its arc +1, else −1 | – | Soldier |
+| Flying enemy | flying → discarded | – | **Spider can't target flyers** |
+
+- **Aggro at spawn:** `TnSurvivalGame.SpawnDude` calls **SeeEnemy for every player**. Every spawn knows all players at once and
+  engages immediately, with no idle or wander phase.
+
+### 9.2 Per class
+
+| Class | Weapons | Behaviour (actions) | Key parameters |
+|---|---|---|---|
+| **Soldier MG / Rocket / Shotgun** | robot: AR / Burst / HeavyPistol (MG), RocketLauncher, EmpShotgun; car form: AR-vehicle / RocketVehicle | **ShootFromTactical** (move to a tactical node, then fire) and ShootAtTarget; Melee when adjacent (1 s interval); overheat → StopAndCooldown + "AI_Overheat" anim; transforms to car and back for travel; StepAway; **mounts turrets** (Ion / Rocket / Repair) if present; EMP reaction. Goals: Kill > DefendSelf > MoveToObjective > Idle. | AiPawn: fire interval × U(0.7, 1.3), aim tolerance 10°; **vs a downed target: spread × 2.5, interval × 2**; vs cloaked: spread × 5. The Shotgun chassis is "wounded" at 50 % health (overshield monitor). |
+| **CQC Specialist** | PlasmaCannon | **Cloak** goal / action; its shoot and melee actions **require being cloaked** (CloakRequired), so it closes and attacks from cloak; **Retreated**: a node picker keeping range Close–Far and **preferring nodes without LOS** (weight 2), so it backs off out of sight; melee interval 1 s. | Uber 5 within 1000 UU, Player 0.8, Stale −2, ignores downed |
+| **Brute** (Dec HalberdAxe / Aut WarHammer) | melee weapon + BruteRocketLauncher (secondary) | **SmashAttack** ground pound (Melee_AOE) usable **2000–5000 UU** while facing, **every 15–25 s**; second smash (Melee_AOE_02) **≤ 3000 UU every 15–20 s**; melee 1 s; rockets (cost +10 vs a target on the ground); Taunt (3 s); **backpack** reactions (React_To_Backpack_Damage L1 / L2, ExtinguishBackpack); goals add ReactToDeathImminent and **HunkerDown** (damage threat ≥ Medium, enemy beyond Medium range). | **Health 100,000 + HeavyDamageThreshold 300**: killed by destroying the **backpack** destructible (RB_BruteDec_Backpack_DES; tip "The only way to kill a Brute is to destroy its backpack"). Threat Min range 1000, Player 0.6, Stale −3. |
+| **Titan** | GatlingGun (override) | ShootFromTactical / ShootAtTarget; melee 1 s; overheat cooldown anim. No smash, no transform. | NumAttackers −0.5, Player 0.8, Uber 5 within 1000; slow (450 UU/s) |
+| **Soldier Jet** | jet: PlaneMachineGun, PlaneStrafingRun, BombingRunVehicle; hover robot: HeavyMG-AIHover | **JetStrafingRun** valid **5,500–15,000 UU**, every **5–10 s**; **BombingRun** at ≥ Medium range (ShootAhead 500, valid 3000), every **7–10 s**; jet-form ShootFromAirTactical / ShootAtTarget; **BarrelRoll** when damage threat ≥ Low (every 4.5–6.5 s); robot **HoverFromTactical** (≤ 6 s) and **ShootingStrafeFromHover** (4 s, every 2–3 s); transforms to jet from a jump. | TnAiJetSoldierPawnContent; Air spawn zones; threat Max 10,000 |
+| **Spider** | – | **Strike** (not at cloaked targets); MoveToTactical to a node at **Striking range of the target** with LOS, preferring forward (cost 10); TurnToAimAtActor. Goals: Kill / Idle only. | **Discards flying enemies**; ignores downed; 20 HP |
+| **HoloBrute** (Remnant) | CeremonialStaffHolo | **SmashAttack** (Melee_AOE) ≤ **5000 UU** facing, every **5 s+**; melee 1 s; **MoveToTactical** (cost 20) with a picker: battle line, **outside the target's aim**, stench avoidance | opacity 0.9; Player 0.8, Stale −3, ignores downed |
+| **Boss Tank** (TnTankAiPawn) | vehicle: TankCannonHeavy; robot: TankRobotCannonHeavy + TankRobotGatlingGun | **Phase 1 (vehicle, healthy):** cannon ShootAtTarget + **SuppressTargetFromActor**; **AOE slam (Melee_AOE_VEH) within 2800 UU, pooled, 10 s between uses**; scanning-vehicle navigation (engages ≤ 3000 UU with LOS). A **fuel cell** on its back (destructible, highlighted, FuelCell objective marker); the AI aim point is the fuel cell. **Phase 2:** fuel cell destroyed → **invulnerability off**, HealthStatus Wounded, TnSeqEvent_TankStatus(1) → **TransformToRoboWoundedReaction**; **vehicle movement disabled**. **Robot (wounded):** robot cannon (ShootAtTarget cost 25, ShootFromTactical cost 5); **gatling ShootingSweep** toward the target (2 s, side offset 2000, every **10–15 s**, needs LOS); TauntWithWeapon (gatling); **SmashAttack ≤ 1600 UU** (navigates in, facing). | Health 6000 (effective after the fuel cell, which ends invulnerability); armour stages ChestArmor1 / 2 + BackArmor destructibles. Threat Max 8000, Player 0.5, **Revive −1**, Stale −0.5. Tip: "flank around it and destroy the Fuel Cell at the back". |
+
+### 9.3 Health / retreat rules
+- **HealthMonitor:** crossing below WoundedThresholdPercentage → HealthStatus = Wounded, hit-react (Reaction 3), replan. Only the
+  Soldier Shotgun chassis has one in Escalation (0.5); the class default is −1 (never).
+- **No general low-health retreat.** Only CQC's out-of-LOS Retreated and the Brute's HunkerDown / backpack reactions; the rest fight
+  to death.
+- AI-vs-AI damage × 0.6.
+
+### 9.4 Per-wave scaling
+- **None in the templates.** Per-wave power changes are only §2's wave buffs, applied at spawn (damage taken × 0.9 … 0.5, damage
+  dealt × 1.25 … 2.25), plus composition (budgets, unlock waves, max counts).
+
+### 9.5 Smart-brain mapping (proposal)
+- Target = argmax of the §9.1 sum with the per-class weights; re-evaluated each think.
+- Soldiers: cover node → shoot (7000 UU awareness), melee adjacent, turrets when present.
+- CQC: cloak → close → shoot / melee → retreat out of LOS.
+- Brute: rockets at range, ground pound at 2000–5000 every 15–25 s, melee close; only the backpack damages it.
+- Jet: strafing run (5.5–15 k UU, 5–10 s), bombing (7–10 s), barrel roll when hurt; hover-strafe in robot form.
+- Spider: rush to striking range, strike; never targets flyers.
+- HoloBrute: flank outside the aim, smash every 5 s.
+- Tank: vehicle cannon + suppress + slam until the fuel cell dies; then robot cannon, gatling sweep (10–15 s), slam ≤ 1600.

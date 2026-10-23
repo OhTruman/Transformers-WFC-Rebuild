@@ -1,0 +1,6337 @@
+{
+ "templates": {
+  "TR_AiEscalation_p.Soldier_MachineGun_Decepticon_AICD": {
+   "ActionSet": "TR_AiActionSet_p.Soldier_AiActionSet",
+   "GoalSet": "TR_AIGoalSet_p.TR_AiGoalSet_Agent",
+   "SensorSet": "TR_AiSensorSet_p.AggressiveSoldier_AiSensorSet",
+   "PawnClass": null,
+   "ActionOverrides": [
+    "TR_AiEscalation_p.Soldier_MachineGun_Decepticon_AICD.TnAiActionOverrideWeaponClassPrimary_2517",
+    "TR_AiEscalation_p.Soldier_MachineGun_Decepticon_AICD.TnAiActionOverrideWeaponClassVehicle_10580"
+   ],
+   "HeavyDamageThreshold": null,
+   "HeavyDamageThresholdEnabled": null,
+   "LootClassification": "SoldierDec",
+   "Character": {
+    "ChassisType": "TR_SoldierCarDec_ROBODEF_p.SoldierCarMGDec_ROBODEF",
+    "PrimaryColor": {
+     "B": 225,
+     "G": 192,
+     "R": 192,
+     "A": 255
+    },
+    "SecondaryColor": {
+     "B": 73,
+     "G": 123,
+     "R": 103,
+     "A": 255
+    },
+    "CharacterName": "SoldierMG",
+    "CharacterType": "CType_SoldierCar"
+   }
+  },
+  "TR_AiEscalation_p.Soldier_Rocket_Decepticon_AICD": {
+   "ActionSet": "TR_AiActionSet_p.Soldier_AiActionSet",
+   "GoalSet": "TR_AIGoalSet_p.TR_AiGoalSet_Agent",
+   "SensorSet": "TR_AiSensorSet_p.AggressiveSoldier_AiSensorSet",
+   "PawnClass": null,
+   "ActionOverrides": [
+    "TR_AiEscalation_p.Soldier_Rocket_Decepticon_AICD.TnAiActionOverrideWeaponClassPrimary_9936",
+    "TR_AiEscalation_p.Soldier_Rocket_Decepticon_AICD.TnAiActionOverrideWeaponClassVehicle_15490"
+   ],
+   "HeavyDamageThreshold": null,
+   "HeavyDamageThresholdEnabled": null,
+   "LootClassification": "SoldierDec",
+   "Character": {
+    "ChassisType": "TR_SoldierCarDec_ROBODEF_p.SoldierCarRocketDec_ROBODEF",
+    "PrimaryColor": {
+     "B": 225,
+     "G": 192,
+     "R": 192,
+     "A": 255
+    },
+    "SecondaryColor": {
+     "B": 73,
+     "G": 123,
+     "R": 103,
+     "A": 255
+    },
+    "CharacterName": "SoldierRocket",
+    "CharacterType": "CType_SoldierCar"
+   }
+  },
+  "TR_SpiderDec_AI_p.Spider_AICD": {
+   "ActionSet": "TR_SpiderDec_AI_p.Spider_AiActionSet",
+   "GoalSet": "TR_SpiderDec_AI_p.Spider_AiGoalSet",
+   "SensorSet": "TR_SpiderDec_AI_p.Spider_AiSensorSet",
+   "PawnClass": null,
+   "ActionOverrides": null,
+   "HeavyDamageThreshold": null,
+   "HeavyDamageThresholdEnabled": null,
+   "LootClassification": "SpiderDec",
+   "Character": {
+    "ChassisType": "TR_SpiderDec_ROBODEF_p.Spider_ROBODEF",
+    "CharacterName": "Spider",
+    "CharacterType": "CType_Spider"
+   }
+  },
+  "TR_AiEscalation_p.Soldier_Shotgun_Decepticon_AICD": {
+   "ActionSet": "TR_AiActionSet_p.Soldier_AiActionSet",
+   "GoalSet": "TR_AIGoalSet_p.TR_AiGoalSet_Agent",
+   "SensorSet": "TR_AiSensorSet_p.AggressiveSoldier_AiSensorSet",
+   "PawnClass": null,
+   "ActionOverrides": [
+    "TR_AiEscalation_p.Soldier_Shotgun_Decepticon_AICD.TnAiActionOverrideWeaponClassPrimary_6268",
+    "TR_AiEscalation_p.Soldier_Shotgun_Decepticon_AICD.TnAiActionOverrideWeaponClassVehicle_4058"
+   ],
+   "HeavyDamageThreshold": null,
+   "HeavyDamageThresholdEnabled": null,
+   "LootClassification": "SoldierDec",
+   "Character": {
+    "ChassisType": "TR_SoldierCarDec_ROBODEF_p.SoldierCarShotgunDec_ROBODEF",
+    "PrimaryColor": {
+     "B": 225,
+     "G": 192,
+     "R": 192,
+     "A": 255
+    },
+    "SecondaryColor": {
+     "B": 73,
+     "G": 123,
+     "R": 103,
+     "A": 255
+    },
+    "CharacterName": "SoldierShotgun",
+    "CharacterType": "CType_SoldierCar"
+   }
+  },
+  "TR_AiEscalation_p.Brute_Decepticon_AICD": {
+   "ActionSet": "TR_AiActionSet_p.Brute_AiActionSet",
+   "GoalSet": "TR_AIGoalSet_p.TR_AiGoalSet_Brute",
+   "SensorSet": "TR_AiSensorSet_p.Brute_AiSensorSet",
+   "PawnClass": null,
+   "ActionOverrides": [
+    "TR_AiEscalation_p.Brute_Decepticon_AICD.TnAiActionOverrideWeaponClassVehicle_9828",
+    "TR_AiEscalation_p.Brute_Decepticon_AICD.TnAiActionOverrideWeaponClassMelee_10940",
+    "TR_AiEscalation_p.Brute_Decepticon_AICD.TnAiActionOverrideWeaponClassSecondary_6458"
+   ],
+   "HeavyDamageThreshold": 300.0,
+   "HeavyDamageThresholdEnabled": true,
+   "LootClassification": "BruteDec",
+   "Character": {
+    "ChassisType": "TR_BruteDec_ROBODEF_p.BruteDec_ROBODEF",
+    "CharacterName": "Brute",
+    "CharacterType": "CType_Brute"
+   }
+  },
+  "TR_AiEscalation_p.Soldier_MachineGun_Autobot_AICD": {
+   "ActionSet": "TR_AiActionSet_p.Soldier_AiActionSet",
+   "GoalSet": "TR_AIGoalSet_p.TR_AiGoalSet_Agent",
+   "SensorSet": "TR_AiSensorSet_p.AggressiveSoldier_AiSensorSet",
+   "PawnClass": null,
+   "ActionOverrides": [
+    "TR_AiEscalation_p.Soldier_MachineGun_Autobot_AICD.TnAiActionOverrideWeaponClassPrimary_7577",
+    "TR_AiEscalation_p.Soldier_MachineGun_Autobot_AICD.TnAiActionOverrideWeaponClassVehicle_14582"
+   ],
+   "HeavyDamageThreshold": null,
+   "HeavyDamageThresholdEnabled": null,
+   "LootClassification": "SoldierAut",
+   "Character": {
+    "ChassisType": "TR_SoldierCarAut_ROBODEF_p.SoldierCarMGAut_ROBODEF",
+    "PrimaryColor": {
+     "B": 32,
+     "G": 32,
+     "R": 222,
+     "A": 255
+    },
+    "SecondaryColor": {
+     "B": 192,
+     "G": 192,
+     "R": 192,
+     "A": 255
+    },
+    "CharacterName": "SoldierMG",
+    "CharacterType": "CType_SoldierCar"
+   }
+  },
+  "TR_AiEscalation_p.Soldier_Rocket_Autobot_AICD": {
+   "ActionSet": "TR_AiActionSet_p.Soldier_AiActionSet",
+   "GoalSet": "TR_AIGoalSet_p.TR_AiGoalSet_Agent",
+   "SensorSet": "TR_AiSensorSet_p.AggressiveSoldier_AiSensorSet",
+   "PawnClass": null,
+   "ActionOverrides": [
+    "TR_AiEscalation_p.Soldier_Rocket_Autobot_AICD.TnAiActionOverrideWeaponClassPrimary_9814",
+    "TR_AiEscalation_p.Soldier_Rocket_Autobot_AICD.TnAiActionOverrideWeaponClassVehicle_9331"
+   ],
+   "HeavyDamageThreshold": null,
+   "HeavyDamageThresholdEnabled": null,
+   "LootClassification": "SoldierAut",
+   "Character": {
+    "ChassisType": "TR_SoldierCarAut_ROBODEF_p.SoldierCarRocketAut_ROBODEF",
+    "PrimaryColor": {
+     "B": 232,
+     "G": 244,
+     "R": 247,
+     "A": 255
+    },
+    "SecondaryColor": {
+     "B": 32,
+     "G": 32,
+     "R": 222,
+     "A": 255
+    },
+    "CharacterName": "SoldierRocket",
+    "CharacterType": "CType_SoldierCar"
+   }
+  },
+  "TR_AiEscalation_p.CQCSpecialist_Decepticon_AICD": {
+   "ActionSet": "TR_AiActionSet_p.CQCSpecialist_AiActionSet",
+   "GoalSet": "TR_AIGoalSet_p.CQC_AiGoalSet",
+   "SensorSet": "TR_AiSensorSet_p.CQC_AiSensorSet",
+   "PawnClass": null,
+   "ActionOverrides": [
+    "TR_AiEscalation_p.CQCSpecialist_Decepticon_AICD.TnAiActionOverrideWeaponClassPrimary_3299"
+   ],
+   "HeavyDamageThreshold": null,
+   "HeavyDamageThresholdEnabled": null,
+   "LootClassification": "SoldierDec",
+   "Character": {
+    "ChassisType": "TR_CQCDec_ROBODEF_p.CQCDec_ROBODEF",
+    "CharacterName": "CQC",
+    "CharacterType": "CType_CQCSpecialist"
+   }
+  },
+  "TR_AiEscalation_p.Soldier_Jet_Decepticon_AICD": {
+   "ActionSet": "TR_AiActionSet_p.Soldier_Jet_AiActionSet",
+   "GoalSet": "TR_AIGoalSet_p.JetSoldier_AiGoalSet",
+   "SensorSet": "TR_AiSensorSet_p.SoldierJet_AiSensorSet",
+   "PawnClass": "TransContent.TnAiJetSoldierPawnContent",
+   "ActionOverrides": [
+    "TR_AiEscalation_p.Soldier_Jet_Decepticon_AICD.TnAiActionOverrideWeaponClassPrimary_9528",
+    "TR_AiEscalation_p.Soldier_Jet_Decepticon_AICD.TnAiActionOverrideWeaponClassVehicle_2175"
+   ],
+   "HeavyDamageThreshold": null,
+   "HeavyDamageThresholdEnabled": null,
+   "LootClassification": "SoldierDec",
+   "Character": {
+    "ChassisType": "TR_SoldierJetDec_ROBODEF_p.SoldierJetDec_ROBODEF",
+    "PrimaryColor": {
+     "B": 73,
+     "G": 123,
+     "R": 103,
+     "A": 255
+    },
+    "SecondaryColor": {
+     "B": 225,
+     "G": 192,
+     "R": 192,
+     "A": 255
+    },
+    "CharacterName": "SoldierJet",
+    "CharacterType": "CType_SoldierJet"
+   }
+  },
+  "TR_AiEscalation_p.Soldier_Tank_Decepticon_AICD": {
+   "ActionSet": "TR_AiActionSet_p.Tank_AiActionSet",
+   "GoalSet": "TR_AIGoalSet_p.TR_AiGoalSet_Agent",
+   "SensorSet": "TR_AiSensorSet_p.SoldierTank_AiSensorSet",
+   "PawnClass": "TransGame.TnTankAiPawn",
+   "ActionOverrides": [
+    "TR_AiEscalation_p.Soldier_Tank_Decepticon_AICD.TnAiActionOverrideWeaponClassPrimary_12539",
+    "TR_AiEscalation_p.Soldier_Tank_Decepticon_AICD.TnAiActionOverrideWeaponClassVehicle_3216",
+    "TR_AiEscalation_p.Soldier_Tank_Decepticon_AICD.TnAiActionOverrideWeaponClassSecondary_7539"
+   ],
+   "HeavyDamageThreshold": null,
+   "HeavyDamageThresholdEnabled": null,
+   "LootClassification": "SoldierTankDec",
+   "Character": {
+    "ChassisType": "TR_SoldierTankDec_ROBODEF_p.SoldierTankDec_ROBODEF",
+    "CharacterName": "SoldierTank",
+    "CharacterType": "CType_SoldierTank"
+   }
+  },
+  "TR_AiEscalation_p.Titan_Decepticon_AICD": {
+   "ActionSet": "TR_AiActionSet_p.Titan_AiActionSet",
+   "GoalSet": "TR_AIGoalSet_p.Titan_AiGoalSet",
+   "SensorSet": "TR_AiSensorSet_p.Titan_AiSensorSet",
+   "PawnClass": null,
+   "ActionOverrides": [
+    "TR_AiEscalation_p.Titan_Decepticon_AICD.TnAiActionOverrideWeaponClassPrimary_7373"
+   ],
+   "HeavyDamageThreshold": null,
+   "HeavyDamageThresholdEnabled": null,
+   "LootClassification": "TitanDec",
+   "Character": {
+    "ChassisType": "TR_BruteDec_ROBODEF_p.TitanDec_ROBODEF",
+    "CharacterName": "Titan",
+    "CharacterType": "CType_Brute"
+   }
+  },
+  "TR_AiEscalation_p.Brute_Autobot_AICD": {
+   "ActionSet": "TR_AiActionSet_p.Brute_AiActionSet",
+   "GoalSet": "TR_AIGoalSet_p.TR_AiGoalSet_Brute",
+   "SensorSet": "TR_AiSensorSet_p.Brute_AiSensorSet",
+   "PawnClass": null,
+   "ActionOverrides": [
+    "TR_AiEscalation_p.Brute_Autobot_AICD.TnAiActionOverrideWeaponClassVehicle_8087",
+    "TR_AiEscalation_p.Brute_Autobot_AICD.TnAiActionOverrideWeaponClassMelee_11508",
+    "TR_AiEscalation_p.Brute_Autobot_AICD.TnAiActionOverrideWeaponClassSecondary_12385"
+   ],
+   "HeavyDamageThreshold": 300.0,
+   "HeavyDamageThresholdEnabled": true,
+   "LootClassification": "BruteAut",
+   "Character": {
+    "ChassisType": "TR_BruteAut_ROBODEF_p.BruteAut_ROBODEF",
+    "CharacterName": "Brute",
+    "CharacterType": "CType_Brute"
+   }
+  },
+  "TR_AiEscalation_p.CQCSpecialist_Autobot_AICD": {
+   "ActionSet": "TR_AiActionSet_p.CQCSpecialist_AiActionSet",
+   "GoalSet": "TR_AIGoalSet_p.CQC_AiGoalSet",
+   "SensorSet": "TR_AiSensorSet_p.CQC_AiSensorSet",
+   "PawnClass": null,
+   "ActionOverrides": [
+    "TR_AiEscalation_p.CQCSpecialist_Autobot_AICD.TnAiActionOverrideWeaponClassPrimary_11139"
+   ],
+   "HeavyDamageThreshold": null,
+   "HeavyDamageThresholdEnabled": null,
+   "LootClassification": "SoldierAut",
+   "Character": {
+    "ChassisType": "TR_CQCAut_ROBODEF_p.CQCAut_ROBODEF",
+    "CharacterName": "CQC",
+    "CharacterType": "CType_CQCSpecialist"
+   }
+  },
+  "TR_AiEscalation_p.HoloBrute_Autobot_AICD": {
+   "ActionSet": "TR_AiActionSet_p.HoloBrute_AiActionSet",
+   "GoalSet": "TR_AIGoalSet_p.TR_AiGoalSet_Agent",
+   "SensorSet": "TR_AiSensorSet_p.HoloBrute_AiSensorSet",
+   "PawnClass": null,
+   "ActionOverrides": [
+    "TR_AiEscalation_p.HoloBrute_Autobot_AICD.TnAiActionOverrideWeaponClassMelee_7602"
+   ],
+   "HeavyDamageThreshold": null,
+   "HeavyDamageThresholdEnabled": null,
+   "LootClassification": "HoloBrute",
+   "Character": {
+    "ChassisType": "TR_AiEscalation_p.HoloBruteAut_ROBODEF",
+    "bEnableOpacity": true,
+    "Opacity": 0.8999999761581421,
+    "CharacterName": "HoloBrute",
+    "CharacterType": "CType_Brute"
+   }
+  },
+  "TR_AiEscalation_p.Soldier_Shotgun_Autobot_AICD": {
+   "ActionSet": "TR_AiActionSet_p.Soldier_AiActionSet",
+   "GoalSet": "TR_AIGoalSet_p.TR_AiGoalSet_Agent",
+   "SensorSet": "TR_AiSensorSet_p.AggressiveSoldier_AiSensorSet",
+   "PawnClass": null,
+   "ActionOverrides": [
+    "TR_AiEscalation_p.Soldier_Shotgun_Autobot_AICD.TnAiActionOverrideWeaponClassPrimary_12368",
+    "TR_AiEscalation_p.Soldier_Shotgun_Autobot_AICD.TnAiActionOverrideWeaponClassVehicle_7548"
+   ],
+   "HeavyDamageThreshold": null,
+   "HeavyDamageThresholdEnabled": null,
+   "LootClassification": "SoldierAut",
+   "Character": {
+    "ChassisType": "TR_SoldierCarAut_ROBODEF_p.SoldierCarShotgunAut_ROBODEF",
+    "PrimaryColor": {
+     "B": 32,
+     "G": 32,
+     "R": 222,
+     "A": 255
+    },
+    "SecondaryColor": {
+     "B": 192,
+     "G": 192,
+     "R": 192,
+     "A": 255
+    },
+    "CharacterName": "SoldierShotgun",
+    "CharacterType": "CType_SoldierCar"
+   }
+  },
+  "TR_AiEscalation_p.Titan_Autobot_AICD": {
+   "ActionSet": "TR_AiActionSet_p.Titan_AiActionSet",
+   "GoalSet": "TR_AIGoalSet_p.Titan_AiGoalSet",
+   "SensorSet": "TR_AiSensorSet_p.Titan_AiSensorSet",
+   "PawnClass": null,
+   "ActionOverrides": [
+    "TR_AiEscalation_p.Titan_Autobot_AICD.TnAiActionOverrideWeaponClassPrimary_12500"
+   ],
+   "HeavyDamageThreshold": null,
+   "HeavyDamageThresholdEnabled": null,
+   "LootClassification": "TitanAut",
+   "Character": {
+    "ChassisType": "TR_BruteAut_ROBODEF_p.TitanAut_ROBODEF",
+    "CharacterName": "Titan",
+    "CharacterType": "CType_Brute"
+   }
+  }
+ },
+ "sets": {
+  "TR_AiActionSet_p.Soldier_AiActionSet": {
+   "class": "HmGoapActionSet",
+   "items": [
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionStopAndAnimateCooldownWeaponBlueprint_9389",
+     "class": "TnAiActionStopAndAnimateCooldownWeaponBlueprint",
+     "props": {
+      "Params": {
+       "AnimName": "AI_Overheat",
+       "BlendInTime": 0.30000001192092896,
+       "RootMotionMode": "RMM_Ignore"
+      },
+      "EditVersion": 22
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionStopAndAnimateCooldownWeapon",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionStopAndCooldownWeaponBlueprint_6471",
+     "class": "TnAiActionStopAndCooldownWeaponBlueprint",
+     "props": {
+      "EditVersion": 8
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionStopAndCooldownWeapon"
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionShootFromTacticalBlueprint_12501",
+     "class": "TnAiActionShootFromTacticalBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponHeavyPistol",
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassPrimary"
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionShootFromTactical",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionTransformToRoboBlueprint_10333",
+     "class": "TnAiActionTransformToRoboBlueprint",
+     "props": {},
+     "class_default": {
+      "RecentTransformPenaltyCost": 50.0,
+      "DesiredTimeBetweenTransforms": 5.0,
+      "actionClass": "TransGame.TnAiActionTransformToRobo",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionTransformToVehicleBlueprint_14233",
+     "class": "TnAiActionTransformToVehicleBlueprint",
+     "props": {},
+     "class_default": {
+      "RecentTransformPenaltyCost": 50.0,
+      "DesiredTimeBetweenTransforms": 5.0,
+      "actionClass": "TransGame.TnAiActionTransformToVehicle",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionNavigateBlueprint_2396",
+     "class": "TnAiActionNavigateBlueprint",
+     "props": {
+      "ActionSet": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionNavigateBlueprint_2396.HmGoapActionSet_10057",
+      "EditVersion": 10
+     },
+     "class_default": {
+      "ActionSet": "TransGame.Default__TnAiActionNavigateBlueprint.ActionSet0",
+      "GoalSet": "TransGame.Default__TnAiActionNavigateBlueprint.GoalSet0",
+      "SmoothingWidthScale": 3.0,
+      "actionClass": "TransGame.TnAiActionNavigate",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": true
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": true
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateShield",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateAtActorLOS",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionShootAtTargetBlueprint_6430",
+     "class": "TnAiActionShootAtTargetBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponHeavyPistol",
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassPrimary"
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionShootAtTarget",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionUseInteractBlueprint_8431",
+     "class": "TnAiActionUseInteractBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionUseInteract",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": false,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateInteractedWith",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionEnterTurretBlueprint_3506",
+     "class": "TnAiActionEnterTurretBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionEnterTurret",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": false,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionStepAwayBlueprint_1743",
+     "class": "TnAiActionStepAwayBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionStepAway",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 7,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionLeaveTurretBlueprint_3131",
+     "class": "TnAiActionLeaveTurretBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionLeaveTurret",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionShootFromTurretBlueprint_3683",
+     "class": "TnAiActionShootFromTurretBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponMountedHeavyIonBlaster"
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionShootFromTurret",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": false,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionShootFromTurretBlueprint_8855",
+     "class": "TnAiActionShootFromTurretBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponMountedRocketTurret"
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionShootFromTurret",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": false,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionShootFromTurretBlueprint_8229",
+     "class": "TnAiActionShootFromTurretBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponMountedRepairRay"
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionShootFromTurret",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": false,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionTurretPlayEMPReactionBlueprint_14855",
+     "class": "TnAiActionTurretPlayEMPReactionBlueprint",
+     "props": {
+      "EditVersion": 4
+     },
+     "class_default": {
+      "ReactionDuration": 3.5,
+      "MinTimeBetweenRandomScan": 0.20000000298023224,
+      "MaxTimeBetweenRandomScan": 0.30000001192092896,
+      "RandomScanPitchFactor": 0.5,
+      "RandomScanYawFactor": 0.5,
+      "actionClass": "TransGame.TnAiActionTurretPlayEmpReaction",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 11,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionScanningIdleBlueprint_6766",
+     "class": "TnAiActionScanningIdleBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionScanningIdle",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionStimulusReactionBlueprint_10583",
+     "class": "TnAiActionStimulusReactionBlueprint",
+     "props": {
+      "Params": {
+       "BlendInTime": 0.25,
+       "BlendOutTime": 0.25
+      },
+      "EditVersion": 32
+     },
+     "class_default": {
+      "StimulusReactionSet": "TransGame.Default__TnAiActionStimulusReactionBlueprint.StimulusReactionSet_0",
+      "Params": {
+       "BlendInTime": 0.20000000298023224,
+       "BlendOutTime": 0.20000000298023224,
+       "Override": "CAPO_PlayIfIdle",
+       "Priority": "CAPR_HighPriority"
+      },
+      "actionClass": "TransGame.TnAiActionStimulusReaction",
+      "DefaultPreconditions": [],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateStimulusReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionTurretScanForEnemiesBlueprint_7407",
+     "class": "TnAiActionTurretScanForEnemiesBlueprint",
+     "props": {},
+     "class_default": {
+      "MinTimeBetweenRandomScan": 1.0,
+      "MaxTimeBetweenRandomScan": 5.0,
+      "RandomScanPitchFactor": 0.25,
+      "RandomScanYawFactor": 0.25,
+      "actionClass": "TransGame.TnAiActionTurretScanForEnemies",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateIdle",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionPlayEMPReactionBlueprint_2233",
+     "class": "TnAiActionPlayEMPReactionBlueprint",
+     "props": {},
+     "class_default": {
+      "CooldownDuration": 1.0,
+      "actionClass": "TransGame.TnAiActionPlayEMPReaction",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 11,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_AiActionSet.TnAiActionMeleeBlueprint_14122",
+     "class": "TnAiActionMeleeBlueprint",
+     "props": {
+      "UsageInterval": {
+       "Min": 1.0,
+       "Max": 1.0
+      },
+      "UseUsageInterval": true,
+      "EditVersion": 4
+     },
+     "class_default": {
+      "MeleeDelay": {
+       "Min": 0.0,
+       "Max": 0.5
+      },
+      "CheckAttackDestinationDistance": true,
+      "AttackDestinationDistanceThreshold": 2500.0,
+      "actionClass": "TransGame.TnAiActionMelee",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 2,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": false,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    }
+   ],
+   "extra": {
+    "EditVersion": 204
+   }
+  },
+  "TR_AIGoalSet_p.TR_AiGoalSet_Agent": {
+   "class": "HmGoapGoalSet",
+   "items": [
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Agent.TnGoapGoalUseInteractBlueprint_5919",
+     "class": "TnGoapGoalUseInteractBlueprint",
+     "props": {
+      "Description": "Use Interact High Priority"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalUseInteract"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Agent.TnGoapGoalReactBlueprint_8263",
+     "class": "TnGoapGoalReactBlueprint",
+     "props": {
+      "Description": "React"
+     },
+     "class_default": {
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalReact"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Agent.TnGoapGoalReactToStimulusBlueprint_5449",
+     "class": "TnGoapGoalReactToStimulusBlueprint",
+     "props": {
+      "StimulusConditionSet": "TR_AiStimulusReactionSets_p.StimulusConditions_HiPriorityEnemies",
+      "Description": "ReactToStimulus - HI Priority Enemies",
+      "EditVersion": 3
+     },
+     "class_default": {
+      "StimulusConditionSet": "TransGame.Default__TnGoapGoalReactToStimulusBlueprint.StimulusConditionSet_0",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalReactToStimulus"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Agent.TnGoapGoalScriptedMoveToBlueprint_3782",
+     "class": "TnGoapGoalScriptedMoveToBlueprint",
+     "props": {
+      "Description": "Transformer Scripted Move To Actor"
+     },
+     "class_default": {
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalScriptedMoveTo"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Agent.TnGoapGoalStayInTacticalVolumeBlueprint_1682",
+     "class": "TnGoapGoalStayInTacticalVolumeBlueprint",
+     "props": {},
+     "class_default": {
+      "Description": "Stay in Tactical Volume",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalStayInTacticalVolume"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Agent.TnGoapGoalDefendSelfBlueprint_1505",
+     "class": "TnGoapGoalDefendSelfBlueprint",
+     "props": {
+      "Description": "Defend Self"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalDefendSelf"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Agent.TnGoapGoalKillBlueprint_10851",
+     "class": "TnGoapGoalKillBlueprint",
+     "props": {
+      "Description": "Kill"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalKill"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Agent.TnGoapGoalUseInteractBlueprint_4605",
+     "class": "TnGoapGoalUseInteractBlueprint",
+     "props": {
+      "_InteractPriority": "InteractPriority_Low",
+      "Description": "Use Interact Low Priority"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalUseInteract"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Agent.TnGoapGoalMoveToBlueprint_11512",
+     "class": "TnGoapGoalMoveToBlueprint",
+     "props": {
+      "WorldStateClass": "TransGame.TnAiWorldStateMoveToObjective",
+      "Description": "Move To Objective"
+     },
+     "class_default": {
+      "RangeSensorClass": "TransGame.TnAiMoveToRangeSensor",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalMoveTo"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Agent.TnGoapGoalReactToStimulusBlueprint_7163",
+     "class": "TnGoapGoalReactToStimulusBlueprint",
+     "props": {
+      "StimulusConditionSet": "TR_AiStimulusReactionSets_p.StimulusConditions_LoPriorityEnemies",
+      "Description": "ReactToStimulus - LO Priority Enemies",
+      "EditVersion": 3
+     },
+     "class_default": {
+      "StimulusConditionSet": "TransGame.Default__TnGoapGoalReactToStimulusBlueprint.StimulusConditionSet_0",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalReactToStimulus"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Agent.TnGoapGoalIdleBlueprint_13086",
+     "class": "TnGoapGoalIdleBlueprint",
+     "props": {
+      "Description": "Idle"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalIdle"
+     }
+    }
+   ],
+   "extra": {
+    "EditVersion": 43
+   }
+  },
+  "TR_AiSensorSet_p.AggressiveSoldier_AiSensorSet": {
+   "class": "HmAiSensorSet",
+   "items": [
+    {
+     "ref": "TR_AiSensorSet_p.AggressiveSoldier_AiSensorSet.TnAiThreatSensor_14465",
+     "class": "TnAiThreatSensor",
+     "props": {
+      "_Evaluators": [
+       "TR_AiSensorSet_p.AggressiveSoldier_AiSensorSet.TnAiThreatSensor_14465.TnDamageBasedThreatLevelEvaluator_8369",
+       "TR_AiSensorSet_p.AggressiveSoldier_AiSensorSet.TnAiThreatSensor_14465.TnDistanceBasedThreatLevelEvaluator_12912",
+       "TR_AiSensorSet_p.AggressiveSoldier_AiSensorSet.TnAiThreatSensor_14465.TnPlayerBasedThreatLevelEvaluator_7972",
+       "TR_AiSensorSet_p.AggressiveSoldier_AiSensorSet.TnAiThreatSensor_14465.TnTurretTargetThreatLevelEvaluator_5043",
+       "TR_AiSensorSet_p.AggressiveSoldier_AiSensorSet.TnAiThreatSensor_14465.TnCloakedTargetThreatLevelEvaluator_14917",
+       "TR_AiSensorSet_p.AggressiveSoldier_AiSensorSet.TnAiThreatSensor_14465.TnAttackerBasedThreatLevelEvaluator_11407"
+      ]
+     },
+     "class_default": {}
+    },
+    {
+     "ref": "TR_AiSensorSet_p.AggressiveSoldier_AiSensorSet.TnAiLineOfSightSensor_10944",
+     "class": "TnAiLineOfSightSensor",
+     "props": {},
+     "class_default": {
+      "LineOfSightDetector": "TransGame.Default__TnAiLineOfSightSensor.LineOfSightDetector_0"
+     }
+    },
+    {
+     "ref": "TR_AiSensorSet_p.AggressiveSoldier_AiSensorSet.TnAiRangeSensor_9164",
+     "class": "TnAiRangeSensor",
+     "props": {},
+     "class_default": {
+      "RangeDetector": "TransGame.Default__TnAiRangeSensor.RangeDetector_0"
+     }
+    }
+   ],
+   "extra": {
+    "DynamicSensorSet": "TR_AiSensorSet_p.AggressiveSoldier_DynamicSensorSet"
+   }
+  },
+  "TR_SpiderDec_AI_p.Spider_AiActionSet": {
+   "class": "HmGoapActionSet",
+   "items": [
+    {
+     "ref": "TR_SpiderDec_AI_p.Spider_AiActionSet.TnAiActionScanningIdleBlueprint_5105",
+     "class": "TnAiActionScanningIdleBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionScanningIdle",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_SpiderDec_AI_p.Spider_AiActionSet.TnAiActionNavigateBlueprint_4297",
+     "class": "TnAiActionNavigateBlueprint",
+     "props": {
+      "ActionSet": "TR_SpiderDec_AI_p.Spider_AiActionSet.TnAiActionNavigateBlueprint_4297.HmGoapActionSet_3839",
+      "EditVersion": 16
+     },
+     "class_default": {
+      "ActionSet": "TransGame.Default__TnAiActionNavigateBlueprint.ActionSet0",
+      "GoalSet": "TransGame.Default__TnAiActionNavigateBlueprint.GoalSet0",
+      "SmoothingWidthScale": 3.0,
+      "actionClass": "TransGame.TnAiActionNavigate",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": true
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": true
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateShield",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateAtActorLOS",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_SpiderDec_AI_p.Spider_AiActionSet.TnAiActionStrikeBlueprint_2465",
+     "class": "TnAiActionStrikeBlueprint",
+     "props": {
+      "CustomProceduralPreconditions": [
+       "TR_SpiderDec_AI_p.Spider_AiActionSet.TnAiActionStrikeBlueprint_2465.TnAiCustomProceduralPreconditionTargetIsCloaked_15829"
+      ],
+      "EditVersion": 2
+     },
+     "class_default": {
+      "MeleeDelay": {
+       "Min": 1.0,
+       "Max": 5.0
+      },
+      "CheckAttackDestinationDistance": true,
+      "AttackDestinationDistanceThreshold": 2500.0,
+      "actionClass": "TransGame.TnAiActionStrike",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": false,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_SpiderDec_AI_p.Spider_AiActionSet.TnAiActionTurnToFaceActorBlueprint_13357",
+     "class": "TnAiActionTurnToAimAtActorBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionTurnToAimAtActor",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_SpiderDec_AI_p.Spider_AiActionSet.TnAiActionMoveToTacticalBlueprint_9734",
+     "class": "TnAiActionMoveToTacticalBlueprint",
+     "props": {
+      "CostModulators": [
+       "TR_SpiderDec_AI_p.Spider_AiActionSet.TnAiActionMoveToTacticalBlueprint_9734.TnGoapCostModulator_2664"
+      ],
+      "EditVersion": 3
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionMoveToTactical",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    }
+   ],
+   "extra": {
+    "EditVersion": 201
+   }
+  },
+  "TR_SpiderDec_AI_p.Spider_AiGoalSet": {
+   "class": "HmGoapGoalSet",
+   "items": [
+    {
+     "ref": "TR_SpiderDec_AI_p.Spider_AiGoalSet.TnGoapGoalScriptedMoveToBlueprint_3782",
+     "class": "TnGoapGoalScriptedMoveToBlueprint",
+     "props": {
+      "Description": "Transformer Scripted Move To Actor"
+     },
+     "class_default": {
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalScriptedMoveTo"
+     }
+    },
+    {
+     "ref": "TR_SpiderDec_AI_p.Spider_AiGoalSet.TnGoapGoalKillBlueprint_10851",
+     "class": "TnGoapGoalKillBlueprint",
+     "props": {
+      "Description": "Kill"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalKill"
+     }
+    },
+    {
+     "ref": "TR_SpiderDec_AI_p.Spider_AiGoalSet.TnGoapGoalIdleBlueprint_13086",
+     "class": "TnGoapGoalIdleBlueprint",
+     "props": {
+      "Description": "Idle"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalIdle"
+     }
+    }
+   ],
+   "extra": {
+    "EditVersion": 63
+   }
+  },
+  "TR_SpiderDec_AI_p.Spider_AiSensorSet": {
+   "class": "HmAiSensorSet",
+   "items": [
+    {
+     "ref": "TR_SpiderDec_AI_p.Spider_AiSensorSet.TnAiThreatSensor_3366",
+     "class": "TnAiThreatSensor",
+     "props": {
+      "_Evaluators": [
+       "TR_SpiderDec_AI_p.Spider_AiSensorSet.TnAiThreatSensor_3366.TnDamageBasedThreatLevelEvaluator_8369",
+       "TR_SpiderDec_AI_p.Spider_AiSensorSet.TnAiThreatSensor_3366.TnDistanceBasedThreatLevelEvaluator_12912",
+       "TR_SpiderDec_AI_p.Spider_AiSensorSet.TnAiThreatSensor_3366.TnPlayerBasedThreatLevelEvaluator_7972",
+       "TR_SpiderDec_AI_p.Spider_AiSensorSet.TnAiThreatSensor_3366.TnFlyingEnemyThreatLevelEvaluator_2790",
+       "TR_SpiderDec_AI_p.Spider_AiSensorSet.TnAiThreatSensor_3366.TnCloakedTargetThreatLevelEvaluator_7508",
+       "TR_SpiderDec_AI_p.Spider_AiSensorSet.TnAiThreatSensor_3366.TnTargetDownedThreatLevelEvaluator_9150"
+      ]
+     },
+     "class_default": {}
+    },
+    {
+     "ref": "TR_SpiderDec_AI_p.Spider_AiSensorSet.TnAiLineOfSightSensor_10944",
+     "class": "TnAiLineOfSightSensor",
+     "props": {},
+     "class_default": {
+      "LineOfSightDetector": "TransGame.Default__TnAiLineOfSightSensor.LineOfSightDetector_0"
+     }
+    },
+    {
+     "ref": "TR_SpiderDec_AI_p.Spider_AiSensorSet.TnAiRangeSensor_9164",
+     "class": "TnAiRangeSensor",
+     "props": {},
+     "class_default": {
+      "RangeDetector": "TransGame.Default__TnAiRangeSensor.RangeDetector_0"
+     }
+    },
+    {
+     "ref": "TR_SpiderDec_AI_p.Spider_AiSensorSet.TnTacticalPathNodePickerSensor_6756",
+     "class": "TnTacticalPathNodePickerSensor",
+     "props": {
+      "actionClass": "TransGame.TnAiActionMoveToTactical",
+      "TacticalPathNodePicker": "TR_SpiderDec_AI_p.Spider_AiSensorSet.TnTacticalPathNodePickerSensor_6756.TnTacticalPathNodePicker_10735"
+     },
+     "class_default": {
+      "TacticalDescription": "Retreated",
+      "UseBasedTactical": true
+     }
+    }
+   ],
+   "extra": {}
+  },
+  "TR_AiActionSet_p.Brute_AiActionSet": {
+   "class": "HmGoapActionSet",
+   "items": [
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionTransformToRoboBlueprint_6850",
+     "class": "TnAiActionTransformToRoboBlueprint",
+     "props": {},
+     "class_default": {
+      "RecentTransformPenaltyCost": 50.0,
+      "DesiredTimeBetweenTransforms": 5.0,
+      "actionClass": "TransGame.TnAiActionTransformToRobo",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionStopAndCooldownWeaponBlueprint_989",
+     "class": "TnAiActionStopAndCooldownWeaponBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionStopAndCooldownWeapon"
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionNavigateBlueprint_16036",
+     "class": "TnAiActionNavigateBlueprint",
+     "props": {
+      "ActionSet": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionNavigateBlueprint_16036.HmGoapActionSet_8243",
+      "EditVersion": 26
+     },
+     "class_default": {
+      "ActionSet": "TransGame.Default__TnAiActionNavigateBlueprint.ActionSet0",
+      "GoalSet": "TransGame.Default__TnAiActionNavigateBlueprint.GoalSet0",
+      "SmoothingWidthScale": 3.0,
+      "actionClass": "TransGame.TnAiActionNavigate",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": true
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": true
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateShield",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateAtActorLOS",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionUseInteractBlueprint_10033",
+     "class": "TnAiActionUseInteractBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionUseInteract",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": false,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateInteractedWith",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionScanningIdleWithWeaponBlueprint_15351",
+     "class": "TnAiActionScanningIdleWithWeaponBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponHalberdAxe",
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassMelee",
+      "EditVersion": 4
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionScanningIdleWithWeapon"
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionStepAwayBlueprint_12873",
+     "class": "TnAiActionStepAwayBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionStepAway",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 7,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionShootAtTargetBlueprint_956",
+     "class": "TnAiActionShootAtTargetBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponBruteRocketLauncher",
+      "CustomProceduralPreconditions": [
+       "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionShootAtTargetBlueprint_956.TnAiCustomProceduralPreconditionTargetIsCloaked_2155"
+      ],
+      "CostModulators": [
+       "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionShootAtTargetBlueprint_956.TnCustomCostEnemyOnGround_12721"
+      ],
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassSecondary",
+      "EditVersion": 8
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionShootAtTarget",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionStimulusReactionBlueprint_11700",
+     "class": "TnAiActionStimulusReactionBlueprint",
+     "props": {
+      "StimulusReactionSet": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionStimulusReactionBlueprint_11700.TnStimulusReactionSet_940",
+      "EditVersion": 12
+     },
+     "class_default": {
+      "StimulusReactionSet": "TransGame.Default__TnAiActionStimulusReactionBlueprint.StimulusReactionSet_0",
+      "Params": {
+       "BlendInTime": 0.20000000298023224,
+       "BlendOutTime": 0.20000000298023224,
+       "Override": "CAPO_PlayIfIdle",
+       "Priority": "CAPR_HighPriority"
+      },
+      "actionClass": "TransGame.TnAiActionStimulusReaction",
+      "DefaultPreconditions": [],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateStimulusReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionSmashAttackBlueprint_6434",
+     "class": "TnAiActionSmashAttackBlueprint",
+     "props": {
+      "OuterDistanceThreshold": 5000.0,
+      "InnerDistanceThreshold": 2000.0,
+      "WeaponClass": "TransContent.TnWeaponHalberdAxe",
+      "Params": {
+       "AnimName": "Melee_AOE",
+       "Priority": "CAPR_HighPriority",
+       "AnimSet": "TR_HeavyMedium_ANM_p.BruteShared_ROBO_ANIM"
+      },
+      "DynamicPreconditions": [
+       "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionSmashAttackBlueprint_6434.TnAiReadableWorldStateFacingActor_4740"
+      ],
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassMelee",
+      "UsageInterval": {
+       "Min": 15.0,
+       "Max": 25.0
+      },
+      "UseUsageInterval": true,
+      "EditVersion": 43
+     },
+     "class_default": {
+      "OuterDistanceThreshold": 1500.0,
+      "InnerDistanceThreshold": 1000.0,
+      "actionClass": "TransGame.TnAiActionSmashAttack",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionShootFromTacticalBlueprint_462",
+     "class": "TnAiActionShootFromTacticalBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponBruteRocketLauncher",
+      "CustomProceduralPreconditions": [
+       "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionShootFromTacticalBlueprint_462.TnAiCustomProceduralPreconditionTargetIsCloaked_5519"
+      ],
+      "CostModulators": [
+       "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionShootFromTacticalBlueprint_462.TnGoapCostModulator_714",
+       "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionShootFromTacticalBlueprint_462.TnCustomCostEnemyOnGround_16334"
+      ],
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassSecondary",
+      "EditVersion": 8
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionShootFromTactical",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionTauntBlueprint_3642",
+     "class": "TnAiActionTauntBlueprint",
+     "props": {
+      "Params": {
+       "AnimName": "Melee_AOE_02",
+       "Priority": "CAPR_HighPriority",
+       "AnimSet": "TR_HeavyMedium_ANM_p.BruteShared_ROBO_ANIM"
+      },
+      "UsageInterval": {
+       "Min": 3.0,
+       "Max": 3.0
+      },
+      "UseUsageInterval": true,
+      "EditVersion": 24
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionTaunt",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTaunted",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionMeleeBlueprint_2045",
+     "class": "TnAiActionMeleeBlueprint",
+     "props": {
+      "MeleeType": "MELEE_WeaponAttack",
+      "CustomProceduralPreconditions": [
+       "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionMeleeBlueprint_2045.TnAiCustomProceduralPreconditionTargetIsCloaked_5503"
+      ],
+      "UsageInterval": {
+       "Min": 1.0,
+       "Max": 1.0
+      },
+      "UseUsageInterval": true,
+      "EditVersion": 9
+     },
+     "class_default": {
+      "MeleeDelay": {
+       "Min": 0.0,
+       "Max": 0.5
+      },
+      "CheckAttackDestinationDistance": true,
+      "AttackDestinationDistanceThreshold": 2500.0,
+      "actionClass": "TransGame.TnAiActionMelee",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 2,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": false,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionTurnToFaceFocusBlueprint_592",
+     "class": "TnAiActionTurnToFaceFocusBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionTurnToFaceFocus",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionReactToBackpackDamageBlueprint_3675",
+     "class": "TnAiActionReactToBackpackDamageBlueprint",
+     "props": {
+      "DeathImminentLevel": "DI_Level_1",
+      "ReactionAnimationParams": {
+       "AnimName": "React_To_Backpack_Damage_Level_01",
+       "BlendInTime": 0.15000000596046448,
+       "BlendOutTime": 0.15000000596046448,
+       "Override": "CAPO_PlayIfIdle"
+      },
+      "EditVersion": 16
+     },
+     "class_default": {
+      "ReactionAnimationParams": {
+       "MaskType": "CAMT_FullBody",
+       "AnimName": "None",
+       "BlendInTime": 0.10000000149011612,
+       "BlendOutTime": 0.10000000149011612,
+       "StartPosition": 0.0,
+       "PlayRate": 1.0,
+       "Looping": false,
+       "RootMotionMode": "RMM_Accel",
+       "RootMotionRotationMode": "RMRM_Ignore",
+       "Override": "CAPO_PlayIfHigherOrEqualPriority",
+       "Priority": "CAPR_LowPriority",
+       "AnimSet": null,
+       "DirtyBitToggle": false
+      },
+      "actionClass": "TransGame.TnAiActionReactToBackpackDamage",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateDeathImminent",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionPlayEMPReactionBlueprint_10807",
+     "class": "TnAiActionPlayEMPReactionBlueprint",
+     "props": {},
+     "class_default": {
+      "CooldownDuration": 1.0,
+      "actionClass": "TransGame.TnAiActionPlayEMPReaction",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 11,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionExtinguishBackpackBlueprint_871",
+     "class": "TnAiActionExtinguishBackpackBlueprint",
+     "props": {
+      "Params": {
+       "AnimName": "React_To_Backpack_Damage_Level_02",
+       "BlendInTime": 0.15000000596046448,
+       "BlendOutTime": 0.0,
+       "Priority": "CAPR_HighPriority"
+      },
+      "EditVersion": 18
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionExtinguishBackpack",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateDeathImminent",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Brute_AiActionSet.TnAiActionSmashAttackBlueprint_14162",
+     "class": "TnAiActionSmashAttackBlueprint",
+     "props": {
+      "OuterDistanceThreshold": 3000.0,
+      "Params": {
+       "AnimName": "Melee_AOE_02",
+       "AnimSet": "TR_HeavyMedium_ANM_p.BruteShared_ROBO_ANIM"
+      },
+      "UsageInterval": {
+       "Min": 15.0,
+       "Max": 20.0
+      },
+      "UseUsageInterval": true,
+      "EditVersion": 21
+     },
+     "class_default": {
+      "OuterDistanceThreshold": 1500.0,
+      "InnerDistanceThreshold": 1000.0,
+      "actionClass": "TransGame.TnAiActionSmashAttack",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    }
+   ],
+   "extra": {
+    "EditVersion": 481
+   }
+  },
+  "TR_AIGoalSet_p.TR_AiGoalSet_Brute": {
+   "class": "HmGoapGoalSet",
+   "items": [
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Brute.TnGoapGoalReactToDeathImminentBlueprint_7410",
+     "class": "TnGoapGoalReactToDeathImminentBlueprint",
+     "props": {},
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalReactToDeathImminent"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Brute.TnGoapGoalUseInteractBlueprint_5919",
+     "class": "TnGoapGoalUseInteractBlueprint",
+     "props": {
+      "Description": "Use Interact High Priority"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalUseInteract"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Brute.TnGoapGoalReactBlueprint_8263",
+     "class": "TnGoapGoalReactBlueprint",
+     "props": {
+      "Description": "React"
+     },
+     "class_default": {
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalReact"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Brute.TnGoapGoalReactToStimulusBlueprint_5449",
+     "class": "TnGoapGoalReactToStimulusBlueprint",
+     "props": {
+      "StimulusConditionSet": "TR_AiStimulusReactionSets_p.StimulusConditions_HiPriorityBruteEnemy",
+      "Description": "ReactToStimulus - HI Priority Enemies",
+      "EditVersion": 4
+     },
+     "class_default": {
+      "StimulusConditionSet": "TransGame.Default__TnGoapGoalReactToStimulusBlueprint.StimulusConditionSet_0",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalReactToStimulus"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Brute.TnGoapGoalScriptedMoveToBlueprint_3782",
+     "class": "TnGoapGoalScriptedMoveToBlueprint",
+     "props": {
+      "Description": "Transformer Scripted Move To Actor"
+     },
+     "class_default": {
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalScriptedMoveTo"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Brute.TnGoapGoalStayInTacticalVolumeBlueprint_10725",
+     "class": "TnGoapGoalStayInTacticalVolumeBlueprint",
+     "props": {},
+     "class_default": {
+      "Description": "Stay in Tactical Volume",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalStayInTacticalVolume"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Brute.TnGoapGoalHunkerDownBlueprint_1235",
+     "class": "TnGoapGoalHunkerDownBlueprint",
+     "props": {},
+     "class_default": {
+      "DamageThreatThreshold": "THREAT_Medium",
+      "MinEnemyRange": "RANGE_Medium",
+      "GoalClass": "TransGame.TnGoapGoalHunkerDown"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Brute.TnGoapGoalKillBlueprint_10851",
+     "class": "TnGoapGoalKillBlueprint",
+     "props": {
+      "Description": "Kill"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalKill"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Brute.TnGoapGoalUseInteractBlueprint_4605",
+     "class": "TnGoapGoalUseInteractBlueprint",
+     "props": {
+      "_InteractPriority": "InteractPriority_Low",
+      "Description": "Use Interact Low Priority"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalUseInteract"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Brute.TnGoapGoalMoveToBlueprint_11512",
+     "class": "TnGoapGoalMoveToBlueprint",
+     "props": {
+      "WorldStateClass": "TransGame.TnAiWorldStateMoveToObjective",
+      "Description": "Move To Objective"
+     },
+     "class_default": {
+      "RangeSensorClass": "TransGame.TnAiMoveToRangeSensor",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalMoveTo"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Brute.TnGoapGoalReactToStimulusBlueprint_7163",
+     "class": "TnGoapGoalReactToStimulusBlueprint",
+     "props": {
+      "StimulusConditionSet": "TR_AiStimulusReactionSets_p.StimulusConditions_LoPriorityEnemies",
+      "Description": "ReactToStimulus - LO Priority Enemies",
+      "EditVersion": 3
+     },
+     "class_default": {
+      "StimulusConditionSet": "TransGame.Default__TnGoapGoalReactToStimulusBlueprint.StimulusConditionSet_0",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalReactToStimulus"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.TR_AiGoalSet_Brute.TnGoapGoalIdleBlueprint_13086",
+     "class": "TnGoapGoalIdleBlueprint",
+     "props": {
+      "Description": "Idle"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalIdle"
+     }
+    }
+   ],
+   "extra": {
+    "EditVersion": 49
+   }
+  },
+  "TR_AiSensorSet_p.Brute_AiSensorSet": {
+   "class": "HmAiSensorSet",
+   "items": [
+    {
+     "ref": "TR_AiSensorSet_p.Brute_AiSensorSet.TnAiThreatSensor_10584",
+     "class": "TnAiThreatSensor",
+     "props": {
+      "_Evaluators": [
+       "TR_AiSensorSet_p.Brute_AiSensorSet.TnAiThreatSensor_10584.TnDamageBasedThreatLevelEvaluator_8369",
+       "TR_AiSensorSet_p.Brute_AiSensorSet.TnAiThreatSensor_10584.TnDistanceBasedThreatLevelEvaluator_12912",
+       "TR_AiSensorSet_p.Brute_AiSensorSet.TnAiThreatSensor_10584.TnPlayerBasedThreatLevelEvaluator_7972",
+       "TR_AiSensorSet_p.Brute_AiSensorSet.TnAiThreatSensor_10584.TnAttackerBasedThreatLevelEvaluator_13369",
+       "TR_AiSensorSet_p.Brute_AiSensorSet.TnAiThreatSensor_10584.TnTargetDownedThreatLevelEvaluator_1540",
+       "TR_AiSensorSet_p.Brute_AiSensorSet.TnAiThreatSensor_10584.TnCloakedTargetThreatLevelEvaluator_14789",
+       "TR_AiSensorSet_p.Brute_AiSensorSet.TnAiThreatSensor_10584.TnStaleEnemyThreatEvaluator_6027"
+      ]
+     },
+     "class_default": {}
+    },
+    {
+     "ref": "TR_AiSensorSet_p.Brute_AiSensorSet.TnAiLineOfSightSensor_10944",
+     "class": "TnAiLineOfSightSensor",
+     "props": {},
+     "class_default": {
+      "LineOfSightDetector": "TransGame.Default__TnAiLineOfSightSensor.LineOfSightDetector_0"
+     }
+    },
+    {
+     "ref": "TR_AiSensorSet_p.Brute_AiSensorSet.TnAiRangeSensor_9164",
+     "class": "TnAiRangeSensor",
+     "props": {},
+     "class_default": {
+      "RangeDetector": "TransGame.Default__TnAiRangeSensor.RangeDetector_0"
+     }
+    }
+   ],
+   "extra": {
+    "DynamicSensorSet": "TR_AiSensorSet_p.Brute_DynamicSensorSet"
+   }
+  },
+  "TR_AiActionSet_p.CQCSpecialist_AiActionSet": {
+   "class": "HmGoapActionSet",
+   "items": [
+    {
+     "ref": "TR_AiActionSet_p.CQCSpecialist_AiActionSet.TnAiActionShootFromTacticalBlueprint_16179",
+     "class": "TnAiActionShootFromTacticalBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponPlasmaCannon",
+      "CustomProceduralPreconditions": [
+       "TR_AiActionSet_p.CQCSpecialist_AiActionSet.TnAiActionShootFromTacticalBlueprint_16179.TnAiCustomProceduralPreconditionCloak_9589"
+      ],
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassPrimary"
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionShootFromTactical",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.CQCSpecialist_AiActionSet.TnAiActionRetreatedBlueprint_1373",
+     "class": "TnAiActionRetreatedBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionRetreated",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateDamageThreat",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.CQCSpecialist_AiActionSet.TnAiActionMeleeBlueprint_15061",
+     "class": "TnAiActionMeleeBlueprint",
+     "props": {
+      "CustomProceduralPreconditions": [
+       "TR_AiActionSet_p.CQCSpecialist_AiActionSet.TnAiActionMeleeBlueprint_15061.TnAiCustomProceduralPreconditionCloak_9873"
+      ],
+      "UsageInterval": {
+       "Min": 1.0,
+       "Max": 1.0
+      },
+      "UseUsageInterval": true,
+      "EditVersion": 5
+     },
+     "class_default": {
+      "MeleeDelay": {
+       "Min": 0.0,
+       "Max": 0.5
+      },
+      "CheckAttackDestinationDistance": true,
+      "AttackDestinationDistanceThreshold": 2500.0,
+      "actionClass": "TransGame.TnAiActionMelee",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 2,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": false,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.CQCSpecialist_AiActionSet.TnAiActionStopAndCooldownWeaponBlueprint_15263",
+     "class": "TnAiActionStopAndCooldownWeaponBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionStopAndCooldownWeapon"
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.CQCSpecialist_AiActionSet.TnAiActionScanningIdleBlueprint_5105",
+     "class": "TnAiActionScanningIdleBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionScanningIdle",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.CQCSpecialist_AiActionSet.TnAiActionNavigateBlueprint_6044",
+     "class": "TnAiActionNavigateBlueprint",
+     "props": {
+      "ActionSet": "TR_AiActionSet_p.CQCSpecialist_AiActionSet.TnAiActionNavigateBlueprint_6044.HmGoapActionSet_9959",
+      "EditVersion": 8
+     },
+     "class_default": {
+      "ActionSet": "TransGame.Default__TnAiActionNavigateBlueprint.ActionSet0",
+      "GoalSet": "TransGame.Default__TnAiActionNavigateBlueprint.GoalSet0",
+      "SmoothingWidthScale": 3.0,
+      "actionClass": "TransGame.TnAiActionNavigate",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": true
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": true
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateShield",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateAtActorLOS",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.CQCSpecialist_AiActionSet.TnAiActionShootAtTargetBlueprint_12270",
+     "class": "TnAiActionShootAtTargetBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponPlasmaCannon",
+      "CustomProceduralPreconditions": [
+       "TR_AiActionSet_p.CQCSpecialist_AiActionSet.TnAiActionShootAtTargetBlueprint_12270.TnAiCustomProceduralPreconditionCloak_3155"
+      ],
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassPrimary"
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionShootAtTarget",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.CQCSpecialist_AiActionSet.TnAiActionStepAwayBlueprint_12518",
+     "class": "TnAiActionStepAwayBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionStepAway",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 7,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.CQCSpecialist_AiActionSet.TnAiActionUseInteractBlueprint_15906",
+     "class": "TnAiActionUseInteractBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionUseInteract",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": false,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateInteractedWith",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.CQCSpecialist_AiActionSet.TnAiActionCloakBlueprint_14830",
+     "class": "TnAiActionCloakBlueprint",
+     "props": {
+      "Params": {
+       "BlendOutTime": 0.10000000149011612
+      },
+      "EditVersion": 1
+     },
+     "class_default": {
+      "Params": {
+       "MaskType": "CAMT_FullBody",
+       "AnimName": "Nav_CloakActivate",
+       "BlendInTime": 0.10000000149011612,
+       "BlendOutTime": 0.5699999928474426,
+       "StartPosition": 0.0,
+       "PlayRate": 1.0,
+       "Looping": false,
+       "RootMotionMode": "RMM_Ignore",
+       "RootMotionRotationMode": "RMRM_Ignore",
+       "Override": "CAPO_PlayIfHigherOrEqualPriority",
+       "Priority": "CAPR_HighPriority",
+       "AnimSet": null,
+       "DirtyBitToggle": false
+      },
+      "actionClass": "TransGame.TnAiActionCloak",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateCloak",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.CQCSpecialist_AiActionSet.TnAiActionPlayEMPReactionBlueprint_10929",
+     "class": "TnAiActionPlayEMPReactionBlueprint",
+     "props": {},
+     "class_default": {
+      "CooldownDuration": 1.0,
+      "actionClass": "TransGame.TnAiActionPlayEMPReaction",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 11,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.CQCSpecialist_AiActionSet.TnAiActionStimulusReactionBlueprint_11895",
+     "class": "TnAiActionStimulusReactionBlueprint",
+     "props": {
+      "EditVersion": 6
+     },
+     "class_default": {
+      "StimulusReactionSet": "TransGame.Default__TnAiActionStimulusReactionBlueprint.StimulusReactionSet_0",
+      "Params": {
+       "BlendInTime": 0.20000000298023224,
+       "BlendOutTime": 0.20000000298023224,
+       "Override": "CAPO_PlayIfIdle",
+       "Priority": "CAPR_HighPriority"
+      },
+      "actionClass": "TransGame.TnAiActionStimulusReaction",
+      "DefaultPreconditions": [],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateStimulusReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    }
+   ],
+   "extra": {
+    "EditVersion": 146
+   }
+  },
+  "TR_AIGoalSet_p.CQC_AiGoalSet": {
+   "class": "HmGoapGoalSet",
+   "items": [
+    {
+     "ref": "TR_AIGoalSet_p.CQC_AiGoalSet.TnGoapGoalUseInteractBlueprint_7383",
+     "class": "TnGoapGoalUseInteractBlueprint",
+     "props": {
+      "Description": "Use Interact"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalUseInteract"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.CQC_AiGoalSet.TnGoapGoalReactBlueprint_2497",
+     "class": "TnGoapGoalReactBlueprint",
+     "props": {
+      "Description": "React"
+     },
+     "class_default": {
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalReact"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.CQC_AiGoalSet.TnGoapGoalReactToStimulusBlueprint_9689",
+     "class": "TnGoapGoalReactToStimulusBlueprint",
+     "props": {
+      "StimulusConditionSet": "TR_AiStimulusReactionSets_p.StimulusConditions_HiPriorityEnemies",
+      "Description": "ReactToStimulus - HI Priority Enemies",
+      "EditVersion": 3
+     },
+     "class_default": {
+      "StimulusConditionSet": "TransGame.Default__TnGoapGoalReactToStimulusBlueprint.StimulusConditionSet_0",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalReactToStimulus"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.CQC_AiGoalSet.TnGoapGoalScriptedMoveToBlueprint_3304",
+     "class": "TnGoapGoalScriptedMoveToBlueprint",
+     "props": {
+      "Description": "Transformer Scripted Move To Actor"
+     },
+     "class_default": {
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalScriptedMoveTo"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.CQC_AiGoalSet.TnGoapGoalStayInTacticalVolumeBlueprint_10159",
+     "class": "TnGoapGoalStayInTacticalVolumeBlueprint",
+     "props": {},
+     "class_default": {
+      "Description": "Stay in Tactical Volume",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalStayInTacticalVolume"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.CQC_AiGoalSet.TnGoapGoalCloakBlueprint_13812",
+     "class": "TnGoapGoalCloakBlueprint",
+     "props": {
+      "Description": "Cloak"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalCloak"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.CQC_AiGoalSet.TnGoapGoalDefendSelfBlueprint_10611",
+     "class": "TnGoapGoalDefendSelfBlueprint",
+     "props": {
+      "Description": "Defend Self"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalDefendSelf"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.CQC_AiGoalSet.TnGoapGoalKillBlueprint_1474",
+     "class": "TnGoapGoalKillBlueprint",
+     "props": {
+      "Description": "Kill"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalKill"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.CQC_AiGoalSet.TnGoapGoalMoveToBlueprint_8800",
+     "class": "TnGoapGoalMoveToBlueprint",
+     "props": {
+      "WorldStateClass": "TransGame.TnAiWorldStateMoveToObjective",
+      "Description": "Move To Objective"
+     },
+     "class_default": {
+      "RangeSensorClass": "TransGame.TnAiMoveToRangeSensor",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalMoveTo"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.CQC_AiGoalSet.TnGoapGoalReactToStimulusBlueprint_15220",
+     "class": "TnGoapGoalReactToStimulusBlueprint",
+     "props": {
+      "StimulusConditionSet": "TR_AiStimulusReactionSets_p.StimulusConditions_LoPriorityEnemies",
+      "Description": "ReactToStimulus - LO Priority Enemies",
+      "EditVersion": 3
+     },
+     "class_default": {
+      "StimulusConditionSet": "TransGame.Default__TnGoapGoalReactToStimulusBlueprint.StimulusConditionSet_0",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalReactToStimulus"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.CQC_AiGoalSet.TnGoapGoalIdleBlueprint_13847",
+     "class": "TnGoapGoalIdleBlueprint",
+     "props": {
+      "Description": "Idle"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalIdle"
+     }
+    }
+   ],
+   "extra": {
+    "EditVersion": 26
+   }
+  },
+  "TR_AiSensorSet_p.CQC_AiSensorSet": {
+   "class": "HmAiSensorSet",
+   "items": [
+    {
+     "ref": "TR_AiSensorSet_p.CQC_AiSensorSet.TnAiThreatSensor_3366",
+     "class": "TnAiThreatSensor",
+     "props": {
+      "_Evaluators": [
+       "TR_AiSensorSet_p.CQC_AiSensorSet.TnAiThreatSensor_3366.TnDamageBasedThreatLevelEvaluator_8369",
+       "TR_AiSensorSet_p.CQC_AiSensorSet.TnAiThreatSensor_3366.TnDistanceBasedThreatLevelEvaluator_12912",
+       "TR_AiSensorSet_p.CQC_AiSensorSet.TnAiThreatSensor_3366.TnPlayerBasedThreatLevelEvaluator_7972",
+       "TR_AiSensorSet_p.CQC_AiSensorSet.TnAiThreatSensor_3366.TnCloakedTargetThreatLevelEvaluator_13361",
+       "TR_AiSensorSet_p.CQC_AiSensorSet.TnAiThreatSensor_3366.TnTargetDownedThreatLevelEvaluator_11193",
+       "TR_AiSensorSet_p.CQC_AiSensorSet.TnAiThreatSensor_3366.TnAttackerBasedThreatLevelEvaluator_2834",
+       "TR_AiSensorSet_p.CQC_AiSensorSet.TnAiThreatSensor_3366.TnStaleEnemyThreatEvaluator_13952"
+      ]
+     },
+     "class_default": {}
+    },
+    {
+     "ref": "TR_AiSensorSet_p.CQC_AiSensorSet.TnAiLineOfSightSensor_10944",
+     "class": "TnAiLineOfSightSensor",
+     "props": {},
+     "class_default": {
+      "LineOfSightDetector": "TransGame.Default__TnAiLineOfSightSensor.LineOfSightDetector_0"
+     }
+    },
+    {
+     "ref": "TR_AiSensorSet_p.CQC_AiSensorSet.TnAiRangeSensor_9164",
+     "class": "TnAiRangeSensor",
+     "props": {},
+     "class_default": {
+      "RangeDetector": "TransGame.Default__TnAiRangeSensor.RangeDetector_0"
+     }
+    },
+    {
+     "ref": "TR_AiSensorSet_p.CQC_AiSensorSet.TnTacticalPathNodePickerSensor_16237",
+     "class": "TnTacticalPathNodePickerSensor",
+     "props": {
+      "actionClass": "TransGame.TnAiActionRetreated",
+      "TacticalPathNodePicker": "TR_AiSensorSet_p.CQC_AiSensorSet.TnTacticalPathNodePickerSensor_16237.TnTacticalPathNodePicker_646"
+     },
+     "class_default": {
+      "TacticalDescription": "Retreated",
+      "UseBasedTactical": true
+     }
+    }
+   ],
+   "extra": {
+    "DynamicSensorSet": "TR_AiSensorSet_p.CQC_DynamicSensorSet"
+   }
+  },
+  "TR_AiActionSet_p.Soldier_Jet_AiActionSet": {
+   "class": "HmGoapActionSet",
+   "items": [
+    {
+     "ref": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionMoveToTacticalBlueprint_15687",
+     "class": "TnAiActionMoveToTacticalBlueprint",
+     "props": {
+      "CustomProceduralPreconditions": [
+       "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionMoveToTacticalBlueprint_15687.TnAiCustomProceduralPreconditionJetSoldierRobot_13239"
+      ],
+      "CostModulators": [
+       "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionMoveToTacticalBlueprint_15687.TnGoapJetSoldierCostModulator_9051"
+      ],
+      "EditVersion": 6
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionMoveToTactical",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionTransformToRoboBlueprint_6595",
+     "class": "TnAiActionTransformToRoboBlueprint",
+     "props": {},
+     "class_default": {
+      "RecentTransformPenaltyCost": 50.0,
+      "DesiredTimeBetweenTransforms": 5.0,
+      "actionClass": "TransGame.TnAiActionTransformToRobo",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionTransformToVehicleFromJumpBlueprint_9435",
+     "class": "TnAiActionTransformToVehicleFromJumpBlueprint",
+     "props": {},
+     "class_default": {
+      "TransformDuration": 0.699999988079071,
+      "RecentTransformPenaltyCost": 50.0,
+      "DesiredTimeBetweenTransforms": 5.0,
+      "actionClass": "TransGame.TnAiActionTransformToVehicleFromJump",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionScanningIdleBlueprint_9080",
+     "class": "TnAiActionScanningIdleBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionScanningIdle",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionStopAndCooldownWeaponBlueprint_7126",
+     "class": "TnAiActionStopAndCooldownWeaponBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionStopAndCooldownWeapon"
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionNavigateBlueprint_6141",
+     "class": "TnAiActionNavigateBlueprint",
+     "props": {
+      "ActionSet": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionNavigateBlueprint_6141.HmGoapActionSet_15767",
+      "EditVersion": 18
+     },
+     "class_default": {
+      "ActionSet": "TransGame.Default__TnAiActionNavigateBlueprint.ActionSet0",
+      "GoalSet": "TransGame.Default__TnAiActionNavigateBlueprint.GoalSet0",
+      "SmoothingWidthScale": 3.0,
+      "actionClass": "TransGame.TnAiActionNavigate",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": true
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": true
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateShield",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateAtActorLOS",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionShootFromAirTacticalBlueprint_7080",
+     "class": "TnAiActionShootFromAirTacticalBlueprint",
+     "props": {
+      "RequiredForm": "TF_Vehicle",
+      "WeaponClass": "TransContent.TnWeaponPlaneMachineGun",
+      "CostModulators": [
+       "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionShootFromAirTacticalBlueprint_7080.TnGoapJetSoldierCostModulator_8357"
+      ],
+      "EditVersion": 7
+     },
+     "class_default": {
+      "InvalidateDuration": 2.0,
+      "ValidDuration": 2.0,
+      "actionClass": "TransGame.TnAiActionShootFromAirTactical"
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionShootAtTargetBlueprint_4827",
+     "class": "TnAiActionShootAtTargetBlueprint",
+     "props": {
+      "RequiredForm": "TF_Vehicle",
+      "WeaponClass": "TransContent.TnWeaponPlaneMachineGun",
+      "CostModulators": [
+       "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionShootAtTargetBlueprint_4827.TnGoapJetSoldierCostModulator_15452"
+      ],
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassVehicle",
+      "EditVersion": 2
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionShootAtTarget",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionUseInteractBlueprint_7388",
+     "class": "TnAiActionUseInteractBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionUseInteract",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": false,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateInteractedWith",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionBombingRunBlueprint_9554",
+     "class": "TnAiActionBombingRunBlueprint",
+     "props": {
+      "RequiredForm": "TF_Vehicle",
+      "WeaponClass": "TransContent.TnWeaponBombingRunVehicle",
+      "CostModulators": [
+       "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionBombingRunBlueprint_9554.TnGoapJetSoldierCostModulator_6092"
+      ],
+      "UsageInterval": {
+       "Min": 7.0,
+       "Max": 10.0
+      },
+      "UseUsageInterval": true,
+      "EditVersion": 6
+     },
+     "class_default": {
+      "ShootAheadDistance": 500.0,
+      "MinValidRange": "RANGE_Medium",
+      "ValidDistance": 3000.0,
+      "actionClass": "TransGame.TnAiActionBombingRun",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionStimulusReactionBlueprint_5076",
+     "class": "TnAiActionStimulusReactionBlueprint",
+     "props": {
+      "EditVersion": 6
+     },
+     "class_default": {
+      "StimulusReactionSet": "TransGame.Default__TnAiActionStimulusReactionBlueprint.StimulusReactionSet_0",
+      "Params": {
+       "BlendInTime": 0.20000000298023224,
+       "BlendOutTime": 0.20000000298023224,
+       "Override": "CAPO_PlayIfIdle",
+       "Priority": "CAPR_HighPriority"
+      },
+      "actionClass": "TransGame.TnAiActionStimulusReaction",
+      "DefaultPreconditions": [],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateStimulusReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionHoverFromTacticalBlueprint_12272",
+     "class": "TnAiActionHoverFromTacticalBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponHeavyMGAIHover",
+      "CustomProceduralPreconditions": [
+       "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionHoverFromTacticalBlueprint_12272.TnAiCustomProceduralPreconditionJetSoldierRobot_382"
+      ],
+      "CostModulators": [
+       "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionHoverFromTacticalBlueprint_12272.TnGoapJetSoldierCostModulator_1738"
+      ],
+      "UsageInterval": {
+       "Max": 6.0
+      },
+      "EditVersion": 24
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionHoverFromTactical",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": false,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateHover",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionBarrelRollBlueprint_8111",
+     "class": "TnAiActionBarrelRollBlueprint",
+     "props": {
+      "MinDamageThreat": "THREAT_Low",
+      "UsageInterval": {
+       "Min": 4.5,
+       "Max": 6.5
+      },
+      "UseUsageInterval": true,
+      "EditVersion": 2
+     },
+     "class_default": {
+      "MinDamageThreat": "THREAT_Medium",
+      "actionClass": "TransGame.TnAiActionBarrelRoll",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateBombingRun",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateDamageThreat",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionJetStrafingRunBlueprint_3198",
+     "class": "TnAiActionJetStrafingRunBlueprint",
+     "props": {
+      "RequiredForm": "TF_Vehicle",
+      "WeaponClass": "TransContent.TnWeaponPlaneStrafingRun",
+      "UsageInterval": {
+       "Min": 5.0,
+       "Max": 10.0
+      },
+      "UseUsageInterval": true,
+      "EditVersion": 10
+     },
+     "class_default": {
+      "MinValidDistance": 5500.0,
+      "MaxValidDistance": 15000.0,
+      "actionClass": "TransGame.TnAiActionJetStrafingRun",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionPlayEMPReactionBlueprint_4316",
+     "class": "TnAiActionPlayEMPReactionBlueprint",
+     "props": {},
+     "class_default": {
+      "CooldownDuration": 1.0,
+      "actionClass": "TransGame.TnAiActionPlayEMPReaction",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 11,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Soldier_Jet_AiActionSet.TnAiActionShootingStrafeFromHoverBlueprint_6057",
+     "class": "TnAiActionShootingStrafeFromHoverBlueprint",
+     "props": {
+      "Duration": 4.0,
+      "WeaponClass": "TransContent.TnWeaponHeavyMGAIHover",
+      "UsageInterval": {
+       "Min": 2.0,
+       "Max": 3.0
+      },
+      "UseUsageInterval": true,
+      "EditVersion": 25
+     },
+     "class_default": {
+      "Duration": 1.5,
+      "actionClass": "TransGame.TnAiActionShootingStrafeFromHover",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateHover",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    }
+   ],
+   "extra": {
+    "EditVersion": 460
+   }
+  },
+  "TR_AIGoalSet_p.JetSoldier_AiGoalSet": {
+   "class": "HmGoapGoalSet",
+   "items": [
+    {
+     "ref": "TR_AIGoalSet_p.JetSoldier_AiGoalSet.TnGoapGoalUseInteractBlueprint_14868",
+     "class": "TnGoapGoalUseInteractBlueprint",
+     "props": {
+      "Description": "Use Interact High Priority"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalUseInteract"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.JetSoldier_AiGoalSet.TnGoapGoalReactBlueprint_5583",
+     "class": "TnGoapGoalReactBlueprint",
+     "props": {
+      "Description": "React",
+      "EditVersion": 1
+     },
+     "class_default": {
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalReact"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.JetSoldier_AiGoalSet.TnGoapGoalScriptedMoveToBlueprint_3782",
+     "class": "TnGoapGoalScriptedMoveToBlueprint",
+     "props": {
+      "Description": "Transformer Scripted Move To Actor"
+     },
+     "class_default": {
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalScriptedMoveTo"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.JetSoldier_AiGoalSet.TnGoapGoalStayInTacticalVolumeBlueprint_10190",
+     "class": "TnGoapGoalStayInTacticalVolumeBlueprint",
+     "props": {},
+     "class_default": {
+      "Description": "Stay in Tactical Volume",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalStayInTacticalVolume"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.JetSoldier_AiGoalSet.TnGoapGoalDefendSelfBlueprint_1505",
+     "class": "TnGoapGoalDefendSelfBlueprint",
+     "props": {
+      "Description": "Defend Self"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalDefendSelf"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.JetSoldier_AiGoalSet.TnGoapGoalKillBlueprint_10851",
+     "class": "TnGoapGoalKillBlueprint",
+     "props": {
+      "Description": "Kill"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalKill"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.JetSoldier_AiGoalSet.TnGoapGoalUseInteractBlueprint_11017",
+     "class": "TnGoapGoalUseInteractBlueprint",
+     "props": {
+      "_InteractPriority": "InteractPriority_Low",
+      "Description": "Use Interact Low Priority"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalUseInteract"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.JetSoldier_AiGoalSet.TnGoapGoalMoveToBlueprint_11512",
+     "class": "TnGoapGoalMoveToBlueprint",
+     "props": {
+      "WorldStateClass": "TransGame.TnAiWorldStateMoveToObjective",
+      "Description": "Move To Objective"
+     },
+     "class_default": {
+      "RangeSensorClass": "TransGame.TnAiMoveToRangeSensor",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalMoveTo"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.JetSoldier_AiGoalSet.TnGoapGoalIdleBlueprint_13086",
+     "class": "TnGoapGoalIdleBlueprint",
+     "props": {
+      "Description": "Idle"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalIdle"
+     }
+    }
+   ],
+   "extra": {
+    "EditVersion": 51
+   }
+  },
+  "TR_AiSensorSet_p.SoldierJet_AiSensorSet": {
+   "class": "HmAiSensorSet",
+   "items": [
+    {
+     "ref": "TR_AiSensorSet_p.SoldierJet_AiSensorSet.TnAiThreatSensor_14465",
+     "class": "TnAiThreatSensor",
+     "props": {
+      "_Evaluators": [
+       "TR_AiSensorSet_p.SoldierJet_AiSensorSet.TnAiThreatSensor_14465.TnDamageBasedThreatLevelEvaluator_8369",
+       "TR_AiSensorSet_p.SoldierJet_AiSensorSet.TnAiThreatSensor_14465.TnDistanceBasedThreatLevelEvaluator_12912",
+       "TR_AiSensorSet_p.SoldierJet_AiSensorSet.TnAiThreatSensor_14465.TnPlayerBasedThreatLevelEvaluator_7972",
+       "TR_AiSensorSet_p.SoldierJet_AiSensorSet.TnAiThreatSensor_14465.TnCloakedTargetThreatLevelEvaluator_4986",
+       "TR_AiSensorSet_p.SoldierJet_AiSensorSet.TnAiThreatSensor_14465.TnAttackerBasedThreatLevelEvaluator_3212"
+      ]
+     },
+     "class_default": {}
+    },
+    {
+     "ref": "TR_AiSensorSet_p.SoldierJet_AiSensorSet.TnAiLineOfSightSensor_10944",
+     "class": "TnAiLineOfSightSensor",
+     "props": {},
+     "class_default": {
+      "LineOfSightDetector": "TransGame.Default__TnAiLineOfSightSensor.LineOfSightDetector_0"
+     }
+    },
+    {
+     "ref": "TR_AiSensorSet_p.SoldierJet_AiSensorSet.TnAiRangeSensor_9164",
+     "class": "TnAiRangeSensor",
+     "props": {},
+     "class_default": {
+      "RangeDetector": "TransGame.Default__TnAiRangeSensor.RangeDetector_0"
+     }
+    }
+   ],
+   "extra": {
+    "DynamicSensorSet": "TR_AiSensorSet_p.SoldierJet_DynamicSensorSet"
+   }
+  },
+  "TR_AiActionSet_p.Tank_AiActionSet": {
+   "class": "HmGoapActionSet",
+   "items": [
+    {
+     "ref": "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionStopAndCooldownWeaponBlueprint_8234",
+     "class": "TnAiActionStopAndCooldownWeaponBlueprint",
+     "props": {
+      "EditVersion": 1
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionStopAndCooldownWeapon"
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionTransformToRoboWoundedReactionBlueprint_16332",
+     "class": "TnAiActionTransformToRoboWoundedReactionBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionTransformToRoboWoundedReaction",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 9,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionNavigateBlueprint_3380",
+     "class": "TnAiActionNavigateBlueprint",
+     "props": {
+      "ActionSet": "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionNavigateBlueprint_3380.HmGoapActionSet_2927",
+      "EditVersion": 35
+     },
+     "class_default": {
+      "ActionSet": "TransGame.Default__TnAiActionNavigateBlueprint.ActionSet0",
+      "GoalSet": "TransGame.Default__TnAiActionNavigateBlueprint.GoalSet0",
+      "SmoothingWidthScale": 3.0,
+      "actionClass": "TransGame.TnAiActionNavigate",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": true
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": true
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateShield",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateAtActorLOS",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionShootAtTargetBlueprint_7703",
+     "class": "TnAiActionShootAtTargetBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponTankRobotCannonHeavyDecepticon",
+      "CustomProceduralPreconditions": [
+       "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionShootAtTargetBlueprint_7703.TnAiCustomProceduralPreconditionHealthStatus_419"
+      ],
+      "CostModulators": [
+       "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionShootAtTargetBlueprint_7703.TnGoapCostModulator_13388"
+      ],
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassPrimary"
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionShootAtTarget",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionShootAtTargetBlueprint_13534",
+     "class": "TnAiActionShootAtTargetBlueprint",
+     "props": {
+      "RequiredForm": "TF_Vehicle",
+      "WeaponClass": "TransContent.TnWeaponTankCannonHeavy",
+      "CustomProceduralPreconditions": [
+       "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionShootAtTargetBlueprint_13534.TnAiCustomProceduralPreconditionHealthStatus_10167"
+      ],
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassVehicle"
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionShootAtTarget",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionScanningIdleBlueprint_7592",
+     "class": "TnAiActionScanningIdleBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionScanningIdle",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionShootFromTacticalBlueprint_14044",
+     "class": "TnAiActionShootFromTacticalBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponTankRobotCannonHeavyDecepticon",
+      "CustomProceduralPreconditions": [
+       "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionShootFromTacticalBlueprint_14044.TnAiCustomProceduralPreconditionHealthStatus_13983"
+      ],
+      "CostModulators": [
+       "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionShootFromTacticalBlueprint_14044.TnGoapCostModulator_5078"
+      ],
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassPrimary",
+      "EditVersion": 7
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionShootFromTactical",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionSuppressTargetFromActorBlueprint_4778",
+     "class": "TnAiActionSuppressTargetFromActorBlueprint",
+     "props": {
+      "RequiredForm": "TF_Vehicle",
+      "WeaponClass": "TransContent.TnWeaponTankCannonHeavy",
+      "CustomProceduralPreconditions": [
+       "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionSuppressTargetFromActorBlueprint_4778.TnAiCustomProceduralPreconditionHealthStatus_6521"
+      ],
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassVehicle",
+      "EditVersion": 6
+     },
+     "class_default": {
+      "EnemyInLOSTimeThreshold": 1.0,
+      "actionClass": "TransGame.TnAiActionSuppressTargetFromActor",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionTurnToFaceActorBlueprint_2020",
+     "class": "TnAiActionTurnToAimAtActorBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionTurnToAimAtActor",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionSmashAttackBlueprint_8361",
+     "class": "TnAiActionSmashAttackBlueprint",
+     "props": {
+      "OuterDistanceThreshold": 1600.0,
+      "InnerDistanceThreshold": 0.0,
+      "WeaponClass": "TransContent.TnWeaponTankRobotCannonHeavyDecepticon",
+      "NavigateToAttackDestination": true,
+      "Params": {
+       "AnimName": "Melee_AOE",
+       "BlendInTime": 0.30000001192092896,
+       "BlendOutTime": 0.30000001192092896,
+       "RootMotionMode": "RMM_Ignore"
+      },
+      "DynamicPreconditions": [
+       "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionSmashAttackBlueprint_8361.TnAiReadableWorldStateAtActor_13068",
+       "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionSmashAttackBlueprint_8361.TnAiReadableWorldStateFacingActor_8997"
+      ],
+      "CustomProceduralPreconditions": [
+       "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionSmashAttackBlueprint_8361.TnAiCustomProceduralPreconditionHealthStatus_4128"
+      ],
+      "CostModulators": [
+       "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionSmashAttackBlueprint_8361.TnGoapCostModulator_10157"
+      ],
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassPrimary",
+      "UsageInterval": {
+       "Min": 4.0,
+       "Max": 6.0
+      },
+      "UseUsageInterval": true,
+      "EditVersion": 54
+     },
+     "class_default": {
+      "OuterDistanceThreshold": 1500.0,
+      "InnerDistanceThreshold": 1000.0,
+      "actionClass": "TransGame.TnAiActionSmashAttack",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionTauntWithWeaponBlueprint_9030",
+     "class": "TnAiActionTauntWithWeaponBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponTankRobotGatlingGunDecepticon",
+      "Params": {
+       "AnimName": "Nav_Idle_Turret_In",
+       "BlendInTime": 0.20000000298023224,
+       "BlendOutTime": 0.20000000298023224,
+       "RootMotionMode": "RMM_Ignore"
+      },
+      "CustomProceduralPreconditions": [
+       "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionTauntWithWeaponBlueprint_9030.TnAiCustomProceduralPreconditionHealthStatus_11432"
+      ],
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassSecondary",
+      "EditVersion": 11
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionTauntWithWeapon",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTaunted",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionShootingSweepTowardTargetBlueprint_6590",
+     "class": "TnAiActionShootingSweepTowardTargetBlueprint",
+     "props": {
+      "SideAimOffset": 2000.0,
+      "Duration": 2.0,
+      "WeaponClass": "TransContent.TnWeaponTankRobotGatlingGunDecepticon",
+      "CustomProceduralPreconditions": [
+       "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionShootingSweepTowardTargetBlueprint_6590.TnAiCustomProceduralPreconditionHealthStatus_2637",
+       "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionShootingSweepTowardTargetBlueprint_6590.TnAiCustomProceduralPreconditionLOSToEnemy_623"
+      ],
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassSecondary",
+      "UsageInterval": {
+       "Min": 10.0,
+       "Max": 15.0
+      },
+      "UseUsageInterval": true,
+      "EditVersion": 14
+     },
+     "class_default": {
+      "SideAimOffset": 1500.0,
+      "Duration": 1.5,
+      "actionClass": "TransGame.TnAiActionShootingSweepTowardTarget",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTaunted",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionAOEAttackPooledUsageBlueprint_4772",
+     "class": "TnAiActionAOEAttackPooledUsageBlueprint",
+     "props": {
+      "CooldownBetweenAvailableUses": 10.0,
+      "RequiredForm": "TF_Vehicle",
+      "Params": {
+       "AnimName": "Melee_AOE_VEH",
+       "BlendInTime": 0.20000000298023224,
+       "BlendOutTime": 0.20000000298023224,
+       "RootMotionMode": "RMM_Ignore"
+      },
+      "CustomProceduralPreconditions": [
+       "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionAOEAttackPooledUsageBlueprint_4772.TnAiCustomProceduralPreconditionTargetInRange_3430",
+       "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionAOEAttackPooledUsageBlueprint_4772.TnAiCustomProceduralPreconditionHealthStatus_7718",
+       "TR_AiActionSet_p.Tank_AiActionSet.TnAiActionAOEAttackPooledUsageBlueprint_4772.TnAiCustomProceduralPreconditionLOSToEnemy_9903"
+      ],
+      "EditVersion": 21
+     },
+     "class_default": {
+      "CooldownBetweenAvailableUses": 15.0,
+      "UsagePoolSize": 2,
+      "actionClass": "TransGame.TnAiActionAOEAttackPooledUsage"
+     }
+    }
+   ],
+   "extra": {
+    "EditVersion": 625
+   }
+  },
+  "TR_AiSensorSet_p.SoldierTank_AiSensorSet": {
+   "class": "HmAiSensorSet",
+   "items": [
+    {
+     "ref": "TR_AiSensorSet_p.SoldierTank_AiSensorSet.TnAiThreatSensor_9174",
+     "class": "TnAiThreatSensor",
+     "props": {
+      "_Evaluators": [
+       "TR_AiSensorSet_p.SoldierTank_AiSensorSet.TnAiThreatSensor_9174.TnAttackerBasedThreatLevelEvaluator_15433",
+       "TR_AiSensorSet_p.SoldierTank_AiSensorSet.TnAiThreatSensor_9174.TnDamageBasedThreatLevelEvaluator_8369",
+       "TR_AiSensorSet_p.SoldierTank_AiSensorSet.TnAiThreatSensor_9174.TnDistanceBasedThreatLevelEvaluator_12912",
+       "TR_AiSensorSet_p.SoldierTank_AiSensorSet.TnAiThreatSensor_9174.TnPlayerBasedThreatLevelEvaluator_7972",
+       "TR_AiSensorSet_p.SoldierTank_AiSensorSet.TnAiThreatSensor_9174.TnReviveGoalBasedThreatLevelEvaluator_5236",
+       "TR_AiSensorSet_p.SoldierTank_AiSensorSet.TnAiThreatSensor_9174.TnCloakedTargetThreatLevelEvaluator_5805",
+       "TR_AiSensorSet_p.SoldierTank_AiSensorSet.TnAiThreatSensor_9174.TnStaleEnemyThreatEvaluator_6426",
+       "TR_AiSensorSet_p.SoldierTank_AiSensorSet.TnAiThreatSensor_9174.TnTargetDownedThreatLevelEvaluator_15661"
+      ]
+     },
+     "class_default": {}
+    },
+    {
+     "ref": "TR_AiSensorSet_p.SoldierTank_AiSensorSet.TnAiLineOfSightSensor_10944",
+     "class": "TnAiLineOfSightSensor",
+     "props": {},
+     "class_default": {
+      "LineOfSightDetector": "TransGame.Default__TnAiLineOfSightSensor.LineOfSightDetector_0"
+     }
+    },
+    {
+     "ref": "TR_AiSensorSet_p.SoldierTank_AiSensorSet.TnAiRangeSensor_9164",
+     "class": "TnAiRangeSensor",
+     "props": {},
+     "class_default": {
+      "RangeDetector": "TransGame.Default__TnAiRangeSensor.RangeDetector_0"
+     }
+    }
+   ],
+   "extra": {
+    "DynamicSensorSet": "TR_AiSensorSet_p.DynamicSensorSet"
+   }
+  },
+  "TR_AiActionSet_p.Titan_AiActionSet": {
+   "class": "HmGoapActionSet",
+   "items": [
+    {
+     "ref": "TR_AiActionSet_p.Titan_AiActionSet.TnAiActionShootFromTacticalBlueprint_12501",
+     "class": "TnAiActionShootFromTacticalBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponHeavyPistol",
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassPrimary"
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionShootFromTactical",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Titan_AiActionSet.TnAiActionNavigateBlueprint_2396",
+     "class": "TnAiActionNavigateBlueprint",
+     "props": {
+      "ActionSet": "TR_AiActionSet_p.Titan_AiActionSet.TnAiActionNavigateBlueprint_2396.HmGoapActionSet_10057",
+      "EditVersion": 14
+     },
+     "class_default": {
+      "ActionSet": "TransGame.Default__TnAiActionNavigateBlueprint.ActionSet0",
+      "GoalSet": "TransGame.Default__TnAiActionNavigateBlueprint.GoalSet0",
+      "SmoothingWidthScale": 3.0,
+      "actionClass": "TransGame.TnAiActionNavigate",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": true
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": true
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateShield",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateAtActorLOS",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Titan_AiActionSet.TnAiActionShootAtTargetBlueprint_6430",
+     "class": "TnAiActionShootAtTargetBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponHeavyPistol",
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassPrimary"
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionShootAtTarget",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Titan_AiActionSet.TnAiActionStepAwayBlueprint_1743",
+     "class": "TnAiActionStepAwayBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionStepAway",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 7,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Titan_AiActionSet.TnAiActionScanningIdleBlueprint_6766",
+     "class": "TnAiActionScanningIdleBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionScanningIdle",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Titan_AiActionSet.TnAiActionStimulusReactionBlueprint_10583",
+     "class": "TnAiActionStimulusReactionBlueprint",
+     "props": {
+      "Params": {
+       "BlendInTime": 0.25,
+       "BlendOutTime": 0.25
+      },
+      "EditVersion": 32
+     },
+     "class_default": {
+      "StimulusReactionSet": "TransGame.Default__TnAiActionStimulusReactionBlueprint.StimulusReactionSet_0",
+      "Params": {
+       "BlendInTime": 0.20000000298023224,
+       "BlendOutTime": 0.20000000298023224,
+       "Override": "CAPO_PlayIfIdle",
+       "Priority": "CAPR_HighPriority"
+      },
+      "actionClass": "TransGame.TnAiActionStimulusReaction",
+      "DefaultPreconditions": [],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateStimulusReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Titan_AiActionSet.TnAiActionPlayEMPReactionBlueprint_13077",
+     "class": "TnAiActionPlayEMPReactionBlueprint",
+     "props": {},
+     "class_default": {
+      "CooldownDuration": 1.0,
+      "actionClass": "TransGame.TnAiActionPlayEMPReaction",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 11,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Titan_AiActionSet.TnAiActionMeleeBlueprint_14122",
+     "class": "TnAiActionMeleeBlueprint",
+     "props": {
+      "UsageInterval": {
+       "Min": 1.0,
+       "Max": 1.0
+      },
+      "UseUsageInterval": true,
+      "EditVersion": 4
+     },
+     "class_default": {
+      "MeleeDelay": {
+       "Min": 0.0,
+       "Max": 0.5
+      },
+      "CheckAttackDestinationDistance": true,
+      "AttackDestinationDistanceThreshold": 2500.0,
+      "actionClass": "TransGame.TnAiActionMelee",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 2,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": false,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.Titan_AiActionSet.TnAiActionStopAndAnimateCooldownWeaponBlueprint_2016",
+     "class": "TnAiActionStopAndAnimateCooldownWeaponBlueprint",
+     "props": {
+      "Params": {
+       "AnimName": "AI_Overheat",
+       "BlendInTime": 0.20000000298023224,
+       "BlendOutTime": 0.6000000238418579
+      },
+      "EditVersion": 7
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionStopAndAnimateCooldownWeapon",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    }
+   ],
+   "extra": {
+    "EditVersion": 193
+   }
+  },
+  "TR_AIGoalSet_p.Titan_AiGoalSet": {
+   "class": "HmGoapGoalSet",
+   "items": [
+    {
+     "ref": "TR_AIGoalSet_p.Titan_AiGoalSet.TnGoapGoalReactBlueprint_13905",
+     "class": "TnGoapGoalReactBlueprint",
+     "props": {
+      "Description": "React",
+      "EditVersion": 1
+     },
+     "class_default": {
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalReact"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.Titan_AiGoalSet.TnGoapGoalReactToStimulusBlueprint_5449",
+     "class": "TnGoapGoalReactToStimulusBlueprint",
+     "props": {
+      "StimulusConditionSet": "TR_AiStimulusReactionSets_p.StimulusConditions_HiPriorityBruteEnemy",
+      "Description": "ReactToStimulus - HI Priority Enemies",
+      "EditVersion": 4
+     },
+     "class_default": {
+      "StimulusConditionSet": "TransGame.Default__TnGoapGoalReactToStimulusBlueprint.StimulusConditionSet_0",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalReactToStimulus"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.Titan_AiGoalSet.TnGoapGoalScriptedMoveToBlueprint_3782",
+     "class": "TnGoapGoalScriptedMoveToBlueprint",
+     "props": {
+      "Description": "Transformer Scripted Move To Actor"
+     },
+     "class_default": {
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalScriptedMoveTo"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.Titan_AiGoalSet.TnGoapGoalStayInTacticalVolumeBlueprint_2361",
+     "class": "TnGoapGoalStayInTacticalVolumeBlueprint",
+     "props": {},
+     "class_default": {
+      "Description": "Stay in Tactical Volume",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalStayInTacticalVolume"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.Titan_AiGoalSet.TnGoapGoalKillBlueprint_10851",
+     "class": "TnGoapGoalKillBlueprint",
+     "props": {
+      "Description": "Kill"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalKill"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.Titan_AiGoalSet.TnGoapGoalMoveToBlueprint_11512",
+     "class": "TnGoapGoalMoveToBlueprint",
+     "props": {
+      "WorldStateClass": "TransGame.TnAiWorldStateMoveToObjective",
+      "Description": "Move To Objective"
+     },
+     "class_default": {
+      "RangeSensorClass": "TransGame.TnAiMoveToRangeSensor",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalMoveTo"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.Titan_AiGoalSet.TnGoapGoalReactToStimulusBlueprint_7163",
+     "class": "TnGoapGoalReactToStimulusBlueprint",
+     "props": {
+      "StimulusConditionSet": "TR_AiStimulusReactionSets_p.StimulusConditions_LoPriorityEnemies",
+      "Description": "ReactToStimulus - LO Priority Enemies",
+      "EditVersion": 3
+     },
+     "class_default": {
+      "StimulusConditionSet": "TransGame.Default__TnGoapGoalReactToStimulusBlueprint.StimulusConditionSet_0",
+      "_GenerateSearchSpace": false,
+      "GoalClass": "TransGame.TnGoapGoalReactToStimulus"
+     }
+    },
+    {
+     "ref": "TR_AIGoalSet_p.Titan_AiGoalSet.TnGoapGoalIdleBlueprint_13086",
+     "class": "TnGoapGoalIdleBlueprint",
+     "props": {
+      "Description": "Idle"
+     },
+     "class_default": {
+      "GoalClass": "TransGame.TnGoapGoalIdle"
+     }
+    }
+   ],
+   "extra": {
+    "EditVersion": 57
+   }
+  },
+  "TR_AiSensorSet_p.Titan_AiSensorSet": {
+   "class": "HmAiSensorSet",
+   "items": [
+    {
+     "ref": "TR_AiSensorSet_p.Titan_AiSensorSet.TnAiThreatSensor_10584",
+     "class": "TnAiThreatSensor",
+     "props": {
+      "_Evaluators": [
+       "TR_AiSensorSet_p.Titan_AiSensorSet.TnAiThreatSensor_10584.TnDamageBasedThreatLevelEvaluator_8369",
+       "TR_AiSensorSet_p.Titan_AiSensorSet.TnAiThreatSensor_10584.TnDistanceBasedThreatLevelEvaluator_12912",
+       "TR_AiSensorSet_p.Titan_AiSensorSet.TnAiThreatSensor_10584.TnPlayerBasedThreatLevelEvaluator_7972",
+       "TR_AiSensorSet_p.Titan_AiSensorSet.TnAiThreatSensor_10584.TnCloakedTargetThreatLevelEvaluator_1910",
+       "TR_AiSensorSet_p.Titan_AiSensorSet.TnAiThreatSensor_10584.TnTargetDownedThreatLevelEvaluator_16135",
+       "TR_AiSensorSet_p.Titan_AiSensorSet.TnAiThreatSensor_10584.TnAttackerBasedThreatLevelEvaluator_8579"
+      ]
+     },
+     "class_default": {}
+    },
+    {
+     "ref": "TR_AiSensorSet_p.Titan_AiSensorSet.TnAiLineOfSightSensor_10944",
+     "class": "TnAiLineOfSightSensor",
+     "props": {},
+     "class_default": {
+      "LineOfSightDetector": "TransGame.Default__TnAiLineOfSightSensor.LineOfSightDetector_0"
+     }
+    },
+    {
+     "ref": "TR_AiSensorSet_p.Titan_AiSensorSet.TnAiRangeSensor_9164",
+     "class": "TnAiRangeSensor",
+     "props": {},
+     "class_default": {
+      "RangeDetector": "TransGame.Default__TnAiRangeSensor.RangeDetector_0"
+     }
+    }
+   ],
+   "extra": {
+    "DynamicSensorSet": "TR_AiSensorSet_p.DynamicSensorSet"
+   }
+  },
+  "TR_AiActionSet_p.HoloBrute_AiActionSet": {
+   "class": "HmGoapActionSet",
+   "items": [
+    {
+     "ref": "TR_AiActionSet_p.HoloBrute_AiActionSet.TnAiActionTransformToRoboBlueprint_8566",
+     "class": "TnAiActionTransformToRoboBlueprint",
+     "props": {},
+     "class_default": {
+      "RecentTransformPenaltyCost": 50.0,
+      "DesiredTimeBetweenTransforms": 5.0,
+      "actionClass": "TransGame.TnAiActionTransformToRobo",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.HoloBrute_AiActionSet.TnAiActionStopAndCooldownWeaponBlueprint_12334",
+     "class": "TnAiActionStopAndCooldownWeaponBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionStopAndCooldownWeapon"
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.HoloBrute_AiActionSet.TnAiActionNavigateBlueprint_11607",
+     "class": "TnAiActionNavigateBlueprint",
+     "props": {
+      "ActionSet": "TR_AiActionSet_p.HoloBrute_AiActionSet.TnAiActionNavigateBlueprint_11607.HmGoapActionSet_16106",
+      "EditVersion": 10
+     },
+     "class_default": {
+      "ActionSet": "TransGame.Default__TnAiActionNavigateBlueprint.ActionSet0",
+      "GoalSet": "TransGame.Default__TnAiActionNavigateBlueprint.GoalSet0",
+      "SmoothingWidthScale": 3.0,
+      "actionClass": "TransGame.TnAiActionNavigate",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": true
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": true
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateWeaponOverheated",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateShield",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateAtActorLOS",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.HoloBrute_AiActionSet.TnAiActionUseInteractBlueprint_1048",
+     "class": "TnAiActionUseInteractBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionUseInteract",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": false,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateInteractedWith",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.HoloBrute_AiActionSet.TnAiActionStepAwayBlueprint_12407",
+     "class": "TnAiActionStepAwayBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionStepAway",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 7,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.HoloBrute_AiActionSet.TnAiActionStimulusReactionBlueprint_8012",
+     "class": "TnAiActionStimulusReactionBlueprint",
+     "props": {
+      "EditVersion": 6
+     },
+     "class_default": {
+      "StimulusReactionSet": "TransGame.Default__TnAiActionStimulusReactionBlueprint.StimulusReactionSet_0",
+      "Params": {
+       "BlendInTime": 0.20000000298023224,
+       "BlendOutTime": 0.20000000298023224,
+       "Override": "CAPO_PlayIfIdle",
+       "Priority": "CAPR_HighPriority"
+      },
+      "actionClass": "TransGame.TnAiActionStimulusReaction",
+      "DefaultPreconditions": [],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateStimulusReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.HoloBrute_AiActionSet.TnAiActionSmashAttackBlueprint_1458",
+     "class": "TnAiActionSmashAttackBlueprint",
+     "props": {
+      "OuterDistanceThreshold": 5000.0,
+      "WeaponClass": "TransContent.TnWeaponCeremonialStaffHolo",
+      "Params": {
+       "AnimName": "Melee_AOE",
+       "Priority": "CAPR_HighPriority",
+       "AnimSet": "TR_HeavyMedium_ANM_p.BruteShared_ROBO_ANIM"
+      },
+      "DynamicPreconditions": [
+       "TR_AiActionSet_p.HoloBrute_AiActionSet.TnAiActionSmashAttackBlueprint_1458.TnAiReadableWorldStateFacingActor_13640"
+      ],
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassMelee",
+      "UsageInterval": {
+       "Min": 5.0,
+       "Max": 10.0
+      },
+      "UseUsageInterval": true,
+      "EditVersion": 25
+     },
+     "class_default": {
+      "OuterDistanceThreshold": 1500.0,
+      "InnerDistanceThreshold": 1000.0,
+      "actionClass": "TransGame.TnAiActionSmashAttack",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.HoloBrute_AiActionSet.TnAiActionMeleeBlueprint_1329",
+     "class": "TnAiActionMeleeBlueprint",
+     "props": {
+      "MeleeType": "MELEE_WeaponAttack",
+      "UsageInterval": {
+       "Min": 1.0,
+       "Max": 1.0
+      },
+      "UseUsageInterval": true,
+      "EditVersion": 7
+     },
+     "class_default": {
+      "MeleeDelay": {
+       "Min": 0.0,
+       "Max": 0.5
+      },
+      "CheckAttackDestinationDistance": true,
+      "AttackDestinationDistanceThreshold": 2500.0,
+      "actionClass": "TransGame.TnAiActionMelee",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 2,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": false,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTurret",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": true
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.HoloBrute_AiActionSet.TnAiActionScanningIdleWithWeaponBlueprint_6296",
+     "class": "TnAiActionScanningIdleWithWeaponBlueprint",
+     "props": {
+      "WeaponClass": "TransContent.TnWeaponCeremonialStaffHolo",
+      "ActionOverrideClass": "TransGame.TnAiActionOverrideWeaponClassMelee",
+      "EditVersion": 5
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionScanningIdleWithWeapon"
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.HoloBrute_AiActionSet.TnAiActionPlayEMPReactionBlueprint_9494",
+     "class": "TnAiActionPlayEMPReactionBlueprint",
+     "props": {},
+     "class_default": {
+      "CooldownDuration": 1.0,
+      "actionClass": "TransGame.TnAiActionPlayEMPReaction",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateReaction",
+        "Subject": null,
+        "Value": {
+         "IntVal": 11,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.HoloBrute_AiActionSet.TnAiActionTurnToFaceFocusBlueprint_107",
+     "class": "TnAiActionTurnToFaceFocusBlueprint",
+     "props": {},
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionTurnToFaceFocus",
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateFacingActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    },
+    {
+     "ref": "TR_AiActionSet_p.HoloBrute_AiActionSet.TnAiActionMoveToTacticalBlueprint_1416",
+     "class": "TnAiActionMoveToTacticalBlueprint",
+     "props": {
+      "CostModulators": [
+       "TR_AiActionSet_p.HoloBrute_AiActionSet.TnAiActionMoveToTacticalBlueprint_1416.TnGoapCostModulator_6102"
+      ],
+      "EditVersion": 3
+     },
+     "class_default": {
+      "actionClass": "TransGame.TnAiActionMoveToTactical",
+      "DefaultPreconditions": [
+       {
+        "Type": "TransGame.TnAiWorldStateAtActor",
+        "Subject": null,
+        "Value": {
+         "IntVal": 1,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       },
+       {
+        "Type": "TransGame.TnAiWorldStateTransformerForm",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": false,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ],
+      "DefaultEffects": [
+       {
+        "Type": "TransGame.TnAiWorldStateTargetIsDead",
+        "Subject": null,
+        "Value": {
+         "IntVal": 0,
+         "ClassVal": null,
+         "BoolVal": true,
+         "Any": false
+        },
+        "EvaluateWhileRunning": true,
+        "DisregardSubject": false
+       }
+      ]
+     }
+    }
+   ],
+   "extra": {
+    "EditVersion": 270
+   }
+  },
+  "TR_AiSensorSet_p.HoloBrute_AiSensorSet": {
+   "class": "HmAiSensorSet",
+   "items": [
+    {
+     "ref": "TR_AiSensorSet_p.HoloBrute_AiSensorSet.TnAiThreatSensor_10584",
+     "class": "TnAiThreatSensor",
+     "props": {
+      "_Evaluators": [
+       "TR_AiSensorSet_p.HoloBrute_AiSensorSet.TnAiThreatSensor_10584.TnDamageBasedThreatLevelEvaluator_8369",
+       "TR_AiSensorSet_p.HoloBrute_AiSensorSet.TnAiThreatSensor_10584.TnDistanceBasedThreatLevelEvaluator_12912",
+       "TR_AiSensorSet_p.HoloBrute_AiSensorSet.TnAiThreatSensor_10584.TnPlayerBasedThreatLevelEvaluator_7972",
+       "TR_AiSensorSet_p.HoloBrute_AiSensorSet.TnAiThreatSensor_10584.TnAttackerBasedThreatLevelEvaluator_13369",
+       "TR_AiSensorSet_p.HoloBrute_AiSensorSet.TnAiThreatSensor_10584.TnTargetDownedThreatLevelEvaluator_1540",
+       "TR_AiSensorSet_p.HoloBrute_AiSensorSet.TnAiThreatSensor_10584.TnCloakedTargetThreatLevelEvaluator_14789",
+       "TR_AiSensorSet_p.HoloBrute_AiSensorSet.TnAiThreatSensor_10584.TnStaleEnemyThreatEvaluator_6027"
+      ]
+     },
+     "class_default": {}
+    },
+    {
+     "ref": "TR_AiSensorSet_p.HoloBrute_AiSensorSet.TnAiLineOfSightSensor_10944",
+     "class": "TnAiLineOfSightSensor",
+     "props": {},
+     "class_default": {
+      "LineOfSightDetector": "TransGame.Default__TnAiLineOfSightSensor.LineOfSightDetector_0"
+     }
+    },
+    {
+     "ref": "TR_AiSensorSet_p.HoloBrute_AiSensorSet.TnAiRangeSensor_9164",
+     "class": "TnAiRangeSensor",
+     "props": {},
+     "class_default": {
+      "RangeDetector": "TransGame.Default__TnAiRangeSensor.RangeDetector_0"
+     }
+    },
+    {
+     "ref": "TR_AiSensorSet_p.HoloBrute_AiSensorSet.TnTacticalPathNodePickerSensor_14356",
+     "class": "TnTacticalPathNodePickerSensor",
+     "props": {
+      "actionClass": "TransGame.TnAiActionMoveToTactical",
+      "TacticalPathNodePicker": "TR_AiSensorSet_p.HoloBrute_AiSensorSet.TnTacticalPathNodePickerSensor_14356.TnTacticalPathNodePicker_6626"
+     },
+     "class_default": {
+      "TacticalDescription": "Retreated",
+      "UseBasedTactical": true
+     }
+    }
+   ],
+   "extra": {}
+  }
+ }
+}
