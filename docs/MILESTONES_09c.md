@@ -4129,3 +4129,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 14:51 FINAL HAND-OVER RERUN PASS on c72b7638 (Frontend handover3/): 249 / 249 tests, 7 / 7 runs clean, hides A1 539 / A2 249 /
   D5 16 exact, A1 Realistic lift floor fully lit. Experimental arms final5 / c72b7638 built + dry-run clean. Systems
   pre-pointed. Remaining before the cut: D3B (~16:30) + outside list (~16:45), the user's reboot -> timed gate.
+2026-10-23 14:52 Render verdict on handover3: SHIP with one Realistic item: the player's held weapon is a black silhouette in D5 Realistic
+  (pre-existing; the gun takes the small-dynamic cell env; likely RT self-shadow by the body). DECISION: fix now (time
+  before the reboot / D3B); Rendering runs the A/B on the card and cuts a render-only patch vs c72b7638.
