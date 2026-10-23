@@ -109,6 +109,8 @@ The harness can start on (c) LoopbackTransport as soon as items 1-3 exist, and m
 
 ## 5. Rows
 
+**Smoothness rule (Systems / Integration 2026-10-23):** judge smoothness by step gaps, not stall_ms. net.csv has wall_ms per step since 7ee650c7: a visible hitch = two consecutive steps more than 50 ms apart; report "hitches > 50 ms: N (max gap M ms)". stall_ms also counts the sub-frame waits of a peer that is merely gated by arrival (rttjump: thousands of ~9 ms waits, 12.7 s "stalled" in one run while the steps stayed smooth - 3 gaps > 50 ms in 100 s, max 163 ms). stall_ms stays a diagnostic column.
+
 | row | what | pass |
 |---|---|---|
 | NET.identity | 2 peers, lan, 9,000 ticks Berth 31 v 32 | SIMHASH equal every tick on both; equal to a single-process lockstep replay of the host's bundles; 0 stalls |

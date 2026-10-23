@@ -35,8 +35,12 @@ for n in names:
     cum = all(x <= y for x, y in zip(bi_, bi_[1:]))
     bi = (bi_[-1] - bi_[0]) if cum else sum(bi_); bo = (bo_[-1] - bo_[0]) if cum else sum(bo_)
     secs = len(common) / 60.0
+    # visible hitches (net.csv wall_ms, 7ee650c7+): consecutive steps more than 50 ms apart - the smoothness measure (stall_ms also counts arrival-gated sub-frame waits)
+    wl = [float(rows[t]["wall_ms"]) for t in common if rows[t].get("wall_ms") not in (None, "")]
+    gaps = [b - a_ for a_, b in zip(wl, wl[1:])]
     rep["per_peer"][n] = {"stall_ticks": sum(1 for s in st if s > 0), "stall_ms_total": round(sum(st), 1), "stall_ms_max": max(st) if st else 0,
-                          "bytes_in_per_s": round(bi / secs, 1), "bytes_out_per_s": round(bo / secs, 1)}
+                          "bytes_in_per_s": round(bi / secs, 1), "bytes_out_per_s": round(bo / secs, 1),
+                          "hitches_gt_50ms": sum(1 for g in gaps if g > 50) if gaps else None, "max_gap_ms": round(max(gaps), 1) if gaps else None}
 if first_hash is None: verdict, code = "AGREE: SIMHASH identical on every common tick", 0
 elif first_bundle is not None and first_bundle <= first_hash: verdict, code = f"TRANSPORT / MERGE: command bundles differ from tick {first_bundle} (SIMHASH from {first_hash})", 2
 else: verdict, code = f"DESYNC: SIMHASH differs from tick {first_hash}; command bundles identical up to it (a sim determinism bug)", 1
