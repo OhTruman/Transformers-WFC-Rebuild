@@ -3841,3 +3841,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   loadChapterUnits takes the chapter dir explicitly (Rendering patch); no unit copies into work/render; D5_OME ships whole,
   A1 later. build_slim gaps: + bot_skill.json. x43: plume blobs reach the pass (4 blobs, r 4.5-6.8 m); x45: D5 calibration
   loads. Card: Frontend post-match check -> Systems Streets re-verify.
+2026-10-23 07:13 MERGED 0f463723 BotNav v3 kinds (leaps, versus_only costs; ESCNAV still off: Remnant perches read off-mesh -> AssetTools
+  lowered the cells to the floor, v3 done: 29 / 29 + 17 / 17 spawn points reach the players), the chapter-dir loader patch.
+  Repackage DONE: playtest_slim_be5b7cdc 27.83 GB (ESC chassis, transforming actors, iconic presets, bot_skill, D5 campaign
+  data; Play.bat sets WFC_CAMPAIGN_ROOT); old = _v1. AssetTools: D5 vbake copied, A1 rerun 0 errors (28 volume fogs, 2.97
+  GB), Kismet sequence I/O for 10 chapters (RE 13 / 13). Rendering: plume path fixed but the look isn't there (in-scatter
+  next); x45: RT GI covered one unit only -> chapter loader stage 2 (every unit in the RT static world) = the item that makes
+  Realistic real on campaign maps. W: incident = Systems removed Experimental's mapping by hand; rule recorded.
