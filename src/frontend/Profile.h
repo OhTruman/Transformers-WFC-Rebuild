@@ -58,6 +58,8 @@ public:
         bool hdTexturesUserSet = false, hdPackHintShown = false, showFps = false;
         bool volumetricLighting = true;   // [PCSettings] VolumetricLighting: Rendering's X3 froxel volumetrics, Realistic only
         int lensFlares = 2;               // [PCSettings] LensFlares: 0 Off, 1 Subtle, 2 Original (default, the shipped look); only when not 2
+        int smoke = 0;                    // [PCSettings] Smoke: 0 Original (default, the authored sprites), 1 Enhanced; only when not 0
+        int water = 0;                    // [PCSettings] Water: 0 Original (default, the authored materials), 1 Enhanced; only when not 0
         static constexpr int kRayTracingMax = 2;   // Realistic
         static constexpr int kHdTexturesMax = 2;   // Enhanced
         static constexpr int kUpscalingMax = 6;   // FSR 3.1 Performance

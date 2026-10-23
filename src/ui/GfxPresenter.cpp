@@ -1379,6 +1379,13 @@ bool addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         add(lf, 0, "Off"); add(lf, 1, "$WfcPC.Settings.LensFlaresSubtle"); add(lf, 2, "$WfcPC.Settings.LensFlaresOriginal");
         row(lf, "<PCSettings:LensFlares>", "$WfcPC.Settings.LensFlaresDesc", "$WfcPC.Settings.LensFlares");
     }
+    {   // PC EXTENSION (user decisions; Rendering setSmokeMode / setWaterMode): Original = the shipped look (default)
+        std::vector<gfx::avm1::Value> sm, wa;
+        add(sm, 0, "$WfcPC.Settings.LensFlaresOriginal"); add(sm, 1, "Enhanced");
+        row(sm, "<PCSettings:Smoke>", "$WfcPC.Settings.SmokeDesc", "$WfcPC.Settings.Smoke");
+        add(wa, 0, "$WfcPC.Settings.LensFlaresOriginal"); add(wa, 1, "Enhanced");
+        row(wa, "<PCSettings:Water>", "$WfcPC.Settings.WaterDesc", "$WfcPC.Settings.Water");
+    }
     {   // PC EXTENSION (user playtest 2026-10-13): the FPS counter in the top-right corner
         std::vector<gfx::avm1::Value> fc;
         add(fc, 0, "Off"); add(fc, 1, "On");

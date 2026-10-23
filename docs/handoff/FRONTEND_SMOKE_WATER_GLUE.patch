@@ -1,0 +1,28 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 668b3d2..9ebd6b0 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -683,6 +683,11 @@ void Application::attachPresenter() {
+         appliedLensFlare_ = d.lensFlares;
+         frontend::FlowTrace::emit("display.lensFlares", {{"mode", std::to_string(d.lensFlares)}, {"by", applyLensFlare(renderer_, d.lensFlares)},
+                                                          {"when", "boot"}, {"provenance", "PC EXTENSION"}});
++        if (renderer_) {   // Rendering 760257b9: the Smoke / Water rows (0 Original, 1 Enhanced), restart-free
++            renderer_->setSmokeMode(d.smoke);
++            renderer_->setWaterMode(d.water);
++            frontend::FlowTrace::emit("display.smokeWater", {{"smoke", std::to_string(d.smoke)}, {"water", std::to_string(d.water)}, {"when", "boot"}});
++        }
+     }
+     // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
+     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
+@@ -740,6 +745,11 @@ void Application::attachPresenter() {
+                                                                      {"by", applyVolumetric(renderer_, p.display.volumetricLighting)},
+                                                                      {"when", "apply"}, {"provenance", "PC ADAPTATION"}});
+         }
++        if (renderer_ && (p.display.smoke != renderer_->smokeMode() || p.display.water != renderer_->waterMode())) {
++            renderer_->setSmokeMode(p.display.smoke);
++            renderer_->setWaterMode(p.display.water);
++            frontend::FlowTrace::emit("display.smokeWater", {{"smoke", std::to_string(p.display.smoke)}, {"water", std::to_string(p.display.water)}, {"when", "apply"}});
++        }
+         if (p.display.lensFlares != appliedLensFlare_) {   // restart-free (Rendering): next frame
+             appliedLensFlare_ = p.display.lensFlares;
+             frontend::FlowTrace::emit("display.lensFlares", {{"mode", std::to_string(appliedLensFlare_)}, {"by", applyLensFlare(renderer_, appliedLensFlare_)},

@@ -101,6 +101,8 @@ bool LocalProfile::loadFrom(std::istream& f) {
             else if (k == "ShowFps") display.showFps = v == "1";
             else if (k == "VolumetricLighting") display.volumetricLighting = v != "0";
             else if (k == "LensFlares") display.lensFlares = std::clamp(std::atoi(v.c_str()), 0, 2);
+            else if (k == "Smoke") display.smoke = std::clamp(std::atoi(v.c_str()), 0, 1);
+            else if (k == "Water") display.water = std::clamp(std::atoi(v.c_str()), 0, 1);
             else if (k == "RayTracing") display.rayTracing = std::clamp(std::atoi(v.c_str()), 0, Display::kRayTracingMax);
             else if (k == "HDTexturesUserSet") { display.hdTexturesUserSet = v == "1"; hdUserSetKey = true; }
             else if (k == "HDPackHintShown") display.hdPackHintShown = v == "1";
@@ -203,6 +205,8 @@ void LocalProfile::save() const {
       << "\nFrameGeneration=" << display.frameGeneration << "\nRayTracing=" << display.rayTracing
       << "\nShowFps=" << (display.showFps ? 1 : 0) << "\nVolumetricLighting=" << (display.volumetricLighting ? 1 : 0)
       << (display.lensFlares != 2 ? "\nLensFlares=" + std::to_string(display.lensFlares) : std::string())   // only when not the default
+      << (display.smoke != 0 ? "\nSmoke=" + std::to_string(display.smoke) : std::string())
+      << (display.water != 0 ? "\nWater=" + std::to_string(display.water) : std::string())
       << "\nBotsFriendly=" << bots.friendly << "\nBotsEnemy=" << bots.enemy
       << "\nBotDifficulty=" << bots.difficulty << "\nBotsAutobot=" << bots.autobot << "\nBotsDecepticon=" << bots.decepticon
       << "\nAutoDetectGpu=" << autoDetectGpu

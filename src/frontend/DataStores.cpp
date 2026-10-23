@@ -99,6 +99,8 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<PCSettings:RayTracing>") return std::to_string(flow_.profile().display.rayTracing);        // PC EXTENSION
     if (markup == "<PCSettings:ShowFps>") return flow_.profile().display.showFps ? "1" : "0";                // PC EXTENSION
     if (markup == "<PCSettings:LensFlares>") return std::to_string(flow_.profile().display.lensFlares);     // PC EXTENSION (user)
+    if (markup == "<PCSettings:Smoke>") return std::to_string(flow_.profile().display.smoke);               // PC EXTENSION (user)
+    if (markup == "<PCSettings:Water>") return std::to_string(flow_.profile().display.water);               // PC EXTENSION (user #14)
     if (markup == "<WfcLobby:GameMode>") return flow_.lobby().gameModeTag;   // lobby flow v2: the Game Settings mode row
     if (markup == "<PCSettings:VolumetricLighting>") return flow_.profile().display.volumetricLighting ? "1" : "0";   // PC EXTENSION
     if (markup == "<PCSettings:VoiceMode>") return std::to_string(flow_.profile().voice.mode);              // PC EXTENSION (voice, 3.12)
@@ -463,6 +465,12 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         const bool ok = flow_.changeLobbyMode(arg(1));
         FlowTrace::emit("lobby.gameModeRow", {{"mode", arg(1)}, {"applied", FlowTrace::boolean(ok)}});
         invalidate();
+        return {};
+    }
+    if (fn == "WriteValue" && (m == "<PCSettings:Smoke>" || m == "<PCSettings:Water>")) {   // PC EXTENSION: Original / Enhanced
+        int& v = m == "<PCSettings:Smoke>" ? flow_.profile().display.smoke : flow_.profile().display.water;
+        v = std::clamp(std::atoi(arg(1).c_str()), 0, 1);
+        FlowTrace::emit(m == "<PCSettings:Smoke>" ? "settings.smoke" : "settings.water", {{"mode", std::to_string(v)}, {"provenance", "PC EXTENSION"}});
         return {};
     }
     if (fn == "WriteValue" && m == "<PCSettings:LensFlares>") {   // PC EXTENSION (user): Off / Subtle / Original; the renderer follows
