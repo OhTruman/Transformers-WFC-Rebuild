@@ -3916,3 +3916,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   unheld); chain on A2. Rendering's CAMPAIGN_STREAM (setMapActorTransform + stage 3) recut against 287085e3.
 2026-10-23 08:18 MERGED 312b0a3f campaign runtime 7 (moving nav cells for movers, ForceIntoForm per RE, Buddy var; A1 factories all
   resolve). Next broad milestone: D5 + A1 from the menus, Off + Realistic, one ~8 min slot after Rendering's STREAM patch.
+2026-10-23 08:20 MERGED d3c3e1af chapter streaming stage 3 + moving map actors (setChapterUnitVisible per unit incl. RT masks;
+  setMapActorTransform for InterpActors; the campaign world LUT fix). Card: the Frontend runs the broad campaign milestone
+  (D5 + A1 from the menus, Off + Realistic) on d3c3e1af.
