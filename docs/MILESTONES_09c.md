@@ -3542,3 +3542,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 00:50 #18 (B) traced (Gameplay): the "hovering" is Dodging = PHYS_Flying for 0.5 s with no gravity, so a Scout bot dodging off a
   ledge flies flat ~14 m over the drop; "inside geometry" was the detector's coarse bounds. RE answers whether the original
   exits to Falling when the floor goes; fix follows (bot-side no-dodge-toward-drop if authentic; floor exit for all if not).
+2026-10-23 00:56 MILESTONE MERGED 4bcfde3d online phase 2 (Systems): UdpSession behind the menus (LAN / internet codes, UPnP / STUN, lobby, load
+  gate, quick match by ping + LAN discovery), NetMatchDriver from the real frame loop, Choose Character as lockstep events;
+  UDPSESSIONTEST PASS, SESSIONTEST 41 / 41, frontend tests pass, SIMHASH identical. Remaining for a playable online match:
+  the Frontend's Host / Join wiring to UdpSession + a two-window menu match on this PC. Frontend CARD FREE: #4 PASS at runtime,
+  #6 reproduced (15 rows), #1 profile: warm costs = frontend 3D scene load (~1.5 s menu, ~0.7 s lobbies) + party preview-body
+  stalls; cold = first launch only. Card -> Rendering (8 min) -> Systems (#5 / #9 FX log).
