@@ -4042,3 +4042,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 11:05 Gate items added (Gameplay, data already exported by AssetTools in out/campaign_characters/spawnables.json): sentry
   factories (138, TnActorFactorySentryAI, 11 TURRETDEFs) and roller mines (46 TnActorFactoryRollerMine, D chapters). Order:
   TransformWorldProp -> sentries -> roller mines, then FINAL_BASE_ITEMS 07; GOAP post-build.
+2026-10-23 11:11 MERGED 49069cd9 material pow = UE3 ClampedPow (RE from the shipped microcode; fixes the cyan barrier sheet). A1 black band
+  confirmed = the bind-pose pod (SKIPMAT=Pod arm). AssetTools' transforming_actors_gameplay.json ready for A1 / D5 / A2 /
+  A3 (MP schema). Draw route: the World draws campaign transforming actors posed (versus path) + setActorHidden on the
+  bind-pose node; renderer part nil. Gameplay implementing TransformWorldProp -> sentries -> roller mines.
