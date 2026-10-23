@@ -1,0 +1,20 @@
+diff -ru a/tools/render/build_lighting.py b/tools/render/build_lighting.py
+--- a/tools/render/build_lighting.py	2026-10-23 10:18:25.432380200 -0500
++++ b/tools/render/build_lighting.py	2026-10-23 10:18:25.450943800 -0500
+@@ -943,7 +943,16 @@
+     decals(repo, out, mapname, lm_keys=set(props))   # (texture-lightmap keys: decals sample their receiver's)
+     atl = sorted({a for r in props.values() for a in r['coeffs']})
+     copied = 0
++    # (campaign chapters: the umodel dir is chapter-wide, one folder per level package, and LightMapTexture2D_<n> names repeat
++    # across packages - D5 1, A1 27, A2 30 - so only this map's own packages' pages are copied: <level> and <level>_LM.
++    # A dir without per-package folders (the MP maps) is walked whole, as before)
++    own = {os.path.splitext(p)[0].lower() for p in pkgs}
++    own |= {o + '_lm' for o in own}
++    tops = [d for d in os.listdir(umodel_dir) if os.path.isdir(os.path.join(umodel_dir, d))] if os.path.isdir(umodel_dir) else []
++    restrict = any(d.lower() in own for d in tops)
+     for root, _, files in os.walk(umodel_dir):
++        if restrict and os.path.relpath(root, umodel_dir).split(os.sep)[0].lower() not in own:
++            continue
+         for fn in files:
+             if fn.startswith('LightMapTexture2D_') and fn.endswith('.png'):
+                 shutil.copyfile(os.path.join(root, fn), os.path.join(out, 'lightmaps', fn)); copied += 1
