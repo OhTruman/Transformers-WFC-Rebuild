@@ -3895,7 +3895,21 @@ void World::queueLateSeat(int seat, const RemoteSeat& r, uint32_t atTick) {
     pendingLateSeats_.insert(it, p);
 }
 
+void World::queueLeave(int seat, uint32_t atTick) {
+    const std::pair<uint32_t, int> e{atTick, seat};
+    pendingLeaves_.insert(std::upper_bound(pendingLeaves_.begin(), pendingLeaves_.end(), e), e);
+}
+
 void World::applyPendingLateSeats() {
+    size_t nl = 0;
+    for (; nl < pendingLeaves_.size() && (int64_t)pendingLeaves_[nl].first <= (int64_t)simTick_; ++nl) {
+        const int seat = pendingLeaves_[nl].second;
+        if (!matchActive_ || seatPlayer(seat) < 0 || seat == localPlayer_ || match_.players()[(size_t)seat].dormant) continue;
+        for (MatchOpponent* o : opponents_) if (o->matchPlayer() == seat && o->spawned()) o->despawn();
+        match_.retirePlayer(seat, "left the match");
+        LOG_INFO("session: seat %d left at tick %lld", seat, (long long)simTick_);
+    }
+    if (nl) pendingLeaves_.erase(pendingLeaves_.begin(), pendingLeaves_.begin() + (long)nl);
     size_t n = 0;
     for (; n < pendingLateSeats_.size() && (int64_t)pendingLateSeats_[n].tick <= (int64_t)simTick_; ++n) {
         const PendingLateSeat& q = pendingLateSeats_[n];
@@ -3998,7 +4012,7 @@ void World::clearAllParticipants() {
     for (size_t i = 0; i < actors_.size();) { if (!actors_[i]->alive()) { actors_[i] = std::move(actors_.back()); actors_.pop_back(); } else ++i; }
     match_.truncatePlayers(0);
     localPlayer_ = -1;
-    bots_.clear(); smart_.clear(); anySmart_ = false; remoteIdle_.clear(); seatLocks_.clear(); pendingSelections_.clear(); pendingLateSeats_.clear(); launchHumans_ = 0;
+    bots_.clear(); smart_.clear(); anySmart_ = false; remoteIdle_.clear(); seatLocks_.clear(); pendingSelections_.clear(); pendingLateSeats_.clear(); pendingLeaves_.clear(); launchHumans_ = 0;
 }
 
 uint64_t World::simStateHash() const {

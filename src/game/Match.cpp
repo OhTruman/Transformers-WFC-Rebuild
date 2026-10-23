@@ -169,6 +169,8 @@ void Match::tick(float dt) {
             if (p.timeToRespawn <= 0.0f) restartPlayer((int)i);
         }
         if (s_.teamGame) updateClusters(dt);
+        if (s_.teamGame && !s_.survival) tickForfeit(dt);
+        if (state_ != State::InProgress) return;
         if (s_.rounds > 0) tickRounds(dt);
     } else if (state_ == State::MatchOver && stateTime_ >= s_.matchOverCountdown) {
         // MatchOver.OnCountdownComplete -> TnGame.ReturnToGameLobby (ServerTravel to the lobby URL).
@@ -205,6 +207,7 @@ void Match::startMatch() {
     // ElapsedTime 0, GRI.SetGameStatus(3), ResetPlayerStats, UI event 3, GTMT_StartGame.
     state_ = State::InProgress;
     gameStatus_ = 3;
+    forfeitTimer_[0] = forfeitTimer_[1] = -1.0f; teamSeen_[0] = teamSeen_[1] = false;
     elapsedTime_ = 0;
     stateTime_ = 0.0f;
     if (s_.rounds > 0) {
@@ -541,10 +544,22 @@ void Match::wakePlayer(int p, const std::string& name, const std::string& member
     LOG_INFO("MATCH join player=%d name=%s team=%d t=%.2f", p, name.c_str(), team, matchTime_);   // audit line
 }
 
-void Match::retirePlayer(int p) {
+// A versus team with nobody left: EndGame "Forfeit" after 1.5 s [RE join-in-progress: TnVersusGame].
+void Match::tickForfeit(float dt) {
+    for (int t = 0; t < 2; ++t) {
+        int n = 0;
+        for (const MatchPlayer& p : players_) n += !p.dormant && p.team == t;
+        if (n > 0) { teamSeen_[t] = true; forfeitTimer_[t] = -1.0f; continue; }
+        if (!teamSeen_[t]) continue;
+        forfeitTimer_[t] = std::max(0.0f, forfeitTimer_[t]) + dt;
+        if (forfeitTimer_[t] >= 1.5f) { endGame(-1, "Forfeit"); return; }
+    }
+}
+
+void Match::retirePlayer(int p, const char* why) {
     if (p < 0 || (size_t)p >= players_.size()) return;
     MatchPlayer& P = players_[(size_t)p];
-    LOG_INFO("MATCH leave player=%d name=%s team=%d t=%.2f (a bot makes room for a joiner)", p, P.name.c_str(), P.team, matchTime_);
+    LOG_INFO("MATCH leave player=%d name=%s team=%d t=%.2f (%s)", p, P.name.c_str(), P.team, matchTime_, why);
     P.alive = false; P.dormant = true; P.team = 255; P.timeToRespawn = -1.0f;
 }
 

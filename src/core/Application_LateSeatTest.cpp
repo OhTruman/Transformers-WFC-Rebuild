@@ -64,6 +64,31 @@ void Application::runLateSeatTest() {
     world_.queueSeatSelection(1, m.players()[0].selection, (uint32_t)world_.simTick() + 2);
     run(0.5f);
     check(!world_.localPlayerDead() && m.players()[(size_t)me].alive && m.players()[(size_t)me].team == self.team, "B: woken and picked: the local pawn spawns on its team");
+    // ---- C: a leaver empties a team (no bots): EndGame "Forfeit" after 1.5 s, the other team wins
+    {
+        game::MatchLaunch L;
+        game::MatchLaunch::fromURL("MP_IAC_Streets?GameModeTag=TDM", L);
+        game::RemoteSeat a; a.name = "Host"; a.team = 0; a.member = "HOST";
+        game::RemoteSeat b; b.name = "Guest"; b.team = 1; b.member = "GUEST";
+        L.humans = {a, b}; L.localSeat = 0;
+        check(world_.launchMatch(L), "C: launch 1 v 1 humans, no bots");
+        run(11.0f);
+        world_.queueLeave(1, (uint32_t)world_.simTick() + 3);
+        run(1.0f);
+        check(m.players()[1].dormant && m.state() == game::Match::State::InProgress, "C: the guest left (seat dormant); no forfeit before 1.5 s");
+        run(1.0f);
+        check(m.state() == game::Match::State::MatchOver && m.endReason() == "Forfeit" && m.winnerTeam() == 0, "C: the empty team forfeits after 1.5 s; Autobots win");
+    }
+    // ---- D: a team empty from the start never forfeits
+    {
+        game::MatchLaunch L;
+        game::MatchLaunch::fromURL("MP_IAC_Streets?GameModeTag=TDM", L);
+        game::RemoteSeat a; a.name = "Host"; a.team = 0; a.member = "HOST";
+        L.humans = {a}; L.localSeat = 0;
+        check(world_.launchMatch(L), "D: launch a lone human, no bots");
+        run(14.0f);
+        check(m.state() == game::Match::State::InProgress, "D: a team empty from the start does not forfeit");
+    }
     LOG_INFO("LATESEAT SUMMARY: %d/%d checks passed", checks - fails, checks);
     exitCode_ = fails ? 1 : 0;
 }

@@ -227,7 +227,7 @@ public:
     // Join in progress: a dormant seat wakes (name, member, team; no character: Choose Character, then an immediate spawn while
     // InProgress) / a bot leaves for a joiner (despawned by the host first; dormant from here on).
     void wakePlayer(int p, const std::string& name, const std::string& member, int team);
-    void retirePlayer(int p);
+    void retirePlayer(int p, const char* why = "a bot makes room for a joiner");
     void requireCharacterSelection(int p) { if (p >= 0 && (size_t)p < players_.size()) players_[(size_t)p].hasSelectedCharacter = false; }
     void tick(float dt);
     // Rounds (CTF) and the attacking team (CTF: SingleFlagCTF; EXT: the bomb holder's team, set by the objective layer).
@@ -350,6 +350,9 @@ private:
     unsigned tombstoneSerial_ = 0;
     std::vector<Tombstone> tombstones_;
     unsigned rng_ = 0x1234ABCDu;
+    float forfeitTimer_[2] = {-1.0f, -1.0f};   // a versus team at 0 participants: time so far (EndGame "Forfeit" at 1.5 s)
+    bool teamSeen_[2] = {false, false};         // the team had a participant this match (an empty-from-start team never forfeits)
+    void tickForfeit(float dt);
     int forcedStart_ = -1;               // restartPlayerAt: the start restartPlayer takes instead of FindPlayerStart
     std::vector<int> directorStart_;     // per player: its reusable "SurvivalSpawnPoint" start (team 254: never a FindPlayerStart pick)
     int randomInt(int n) { rng_ = rng_ * 1664525u + 1013904223u; return n > 0 ? (int)((rng_ >> 8) % (unsigned)n) : 0; }

@@ -1264,6 +1264,7 @@ private:
     std::vector<PendingLateSeat> pendingLateSeats_;   // by (tick, seat)
     int launchHumans_ = 0;                            // the launch's humans (dormant seats included)
     void applyPendingLateSeats();
+    std::vector<std::pair<uint32_t, int>> pendingLeaves_;   // (tick, seat), sorted
     std::vector<PendingSelection> pendingSelections_;   // by (tick, seat); applied in the step prefix
     void applyPendingSelections();
     bool pbSandbox_ = false;            // online: the player bot's brain is running (input only: its actions become presses)
@@ -1605,6 +1606,9 @@ public:
     void queueLateSeat(int seat, const RemoteSeat& r, uint32_t atTick);
     int seatPlayer(int seat) const { return seat >= 0 && seat < launchHumans_ ? seat : -1; }
     int smallerTeam() const;
+    // A seat whose member left (not handed to a bot): at the tick on every peer its pawn goes and the seat turns dormant (Systems'
+    // driver, from the session's tick-stamped leave). An empty versus team then forfeits after 1.5 s (Match).
+    void queueLeave(int seat, uint32_t atTick);
     const SeatMissile* seatMissile(int p) const { return p >= 0 && (size_t)p < seatMissiles_.size() ? &seatMissiles_[(size_t)p] : nullptr; }
     const RollerMine& rollerMine() const;   // the local player's (HUD / tests)
     const std::vector<KamikazeMine>& kamikazeMines() const { return mines_; }
