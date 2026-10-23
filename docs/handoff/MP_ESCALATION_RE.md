@@ -32,7 +32,7 @@ Maps: only **MP_ESC_BrokenHope** and **MP_ESC_Remnant** are SV (MP_TRANSFORMING_
      - RoundEnded: the respawn helper respawns every dead player; **"Round End"** event fires; **every living player is revived**
        (`GetRevive`); GC;
      - then GRI NextWaveTime counts down **TimeBetweenWaves (25 s on both)** → **InWave**.
-  6. **Game over:** `TnSurvivalGameOverMessage(DisplayWave + 1)`; every PC → `OnCampaignGameOver`. **There is no win
+  6. **Game over:** `TnSurvivalGameOverMessage(DisplayWave + 1)`; every PC → `OnCampaignGameOver` (audio only; the UI goes to EndGameStats, §8.4). **There is no win
      condition: it's endless, and you lose when all players are dead at once.**
 
 ## 2. Enemy spawning (C)
@@ -491,7 +491,14 @@ Sources:
 ### 8.4 End of match
 - **The loss** (all players dead at once):
   - `TnSurvivalGameOverMessage` with switch = DisplayWave + 1 → the GRI game-over message "**You survived until wave `r**";
-  - MatchOver → every player gets **OnCampaignGameOver** (the co-op / campaign game-over flow, not the versus EndGameStats).
+  - MatchOver → every player gets `PC.OnCampaignGameOver`: **audio only** (stop music 0.25 s, DeathSound, GameOverMusic,
+    GameOverMixerPreset, dialog off). Escalation never sends UI event 14, so the campaign "MISSION FAILED" screen is not shown
+    (corrected 2026-10-23).
+  - The super `TnMultiplayerGame.MatchOver.BeginState` runs: MVP achievement, GameStatus 5, **UI event 9 (OnEndGame) → the
+    GameEnded state → EndGameStats_GFX** (the TnUIControllerCoop EndGameUI), stats write, then **MatchOverCountdown 15 s →
+    ReturnToGameLobby**.
+  - The EndGameStats header shows `<CurrentGame:GameOverMessage>` ("You survived until wave N") when it's set, else
+    FinalScores. H: the exact GameTeamStatus condition.
 - Quitting mid-game: title LeaveLobby, message "**Your leaderboard progress will be lost. Do you want to proceed?**"
   (LeaveSurvivalConfirm).
 - Stats shown / written: score, kills, deaths, revives, downed (§8.3). The highest wave reached is the headline number.
