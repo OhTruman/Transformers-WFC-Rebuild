@@ -689,3 +689,13 @@ void Pipeline::giCopyVertexPage() {
 
 }  // namespace wfc
 }  // namespace render
+
+// (a character whose usable probes all trace near black - a dark pocket of the RT world where the bake lit the spot: D5's player
+// drew as a black silhouette in Realistic, Off normal) the brightest face's luminance below WFC_RT_PROBEMIN (default 0.02, 0 off):
+// the caller keeps the bake's ambient instead
+bool render::wfc::Pipeline::giProbeDark(const core::Vec3 cube[6]) const {
+    static const float probeMin = [] { const char* e = std::getenv("WFC_RT_PROBEMIN"); return e ? (float)std::atof(e) : 0.02f; }();
+    float peak = 0.0f;
+    for (int f = 0; f < 6; ++f) peak = std::max(peak, 0.2126f * cube[f].x + 0.7152f * cube[f].y + 0.0722f * cube[f].z);
+    return peak < probeMin;
+}

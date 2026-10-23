@@ -669,6 +669,7 @@ private:
     float giProbeOrigin_[3] = {0, 0, 0}, giProbeSpacing_ = 1.5f; int giProbeDims_[3] = {0, 0, 0};
     void giBuildProbes();
     bool giProbeAt(const core::Vec3& p, core::Vec3 cube[6]) const;
+    bool giProbeDark(const core::Vec3 cube[6]) const;   // a near-black traced cube: characters keep the bake's ambient
     bool giOn() const;
     // item 2 (Realistic): up to 4 point / spot lights shadowed per pixel by the RT pass (the lights the characters used
     // most last frame); a character's env light that is one of them takes its RT visibility (uRtLVis, uRtLSlot)

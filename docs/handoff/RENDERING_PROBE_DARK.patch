@@ -1,0 +1,90 @@
+diff -ru a/src/render/gl/WfcDirectLightEnv.cpp b/src/render/gl/WfcDirectLightEnv.cpp
+--- a/src/render/gl/WfcDirectLightEnv.cpp	2026-10-23 12:03:24.007333400 -0500
++++ b/src/render/gl/WfcDirectLightEnv.cpp	2026-10-23 12:03:23.986762800 -0500
+@@ -186,7 +186,21 @@
+         static const bool noProbes = std::getenv("WFC_NOBEASTPROBES") != nullptr;   // A/B
+         core::Vec3 pc[6];
+         // (S3, RT Realistic with R4: the RT probe grid in place of the bake's Beast probes)
+-        if (!noProbes && (giProbeAt(origin, pc) || beastAmbient(toUE(origin), pc)))
++        // (a traced cube that comes out near black - giProbeDark - is not used: the Beast probe as in Off)
++        bool got = !noProbes && giProbeAt(origin, pc) && !giProbeDark(pc);
++        if (!got && !noProbes) got = beastAmbient(toUE(origin), pc);
++        static const bool envLog = std::getenv("WFC_ENVLOG") != nullptr;
++        static int dleLogged = 0;
++        if (envLog && dleLogged < 40) {
++            core::Vec3 rt[6];
++            const bool rtHit = !noProbes && giProbeAt(origin, rt);
++            if (rtHit && giProbeDark(rt)) {
++                ++dleLogged;
++                LOG_INFO("ENVLOG DLE form %d at (%.2f %.2f %.2f): RT probe REJECTED dark, bake ambient %s", form, origin.x, origin.y, origin.z,
++                         got ? "used" : "none");
++            }
++        }
++        if (got)
+             for (int fc = 0; fc < 6; ++fc) env.cube[fc] = env.cube[fc] + pc[fc];
+     }
+     core::Vec3 lightsSH[6];               // LightsSH (+0x108): direct lights folded into the ambient cube
+diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-23 12:03:23.925553000 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 12:03:23.903477600 -0500
+@@ -3760,7 +3760,12 @@
+     // (S3, RT Realistic with R4 and its probes: the RT world's ambient - sky + bounce - in place of the SkyLights' terms;
+     // the folded lights below stay)
+     core::Vec3 rtAmb[6];
+-    const bool rtProbe = giProbeAt(p, rtAmb);
++    bool rtProbe = giProbeAt(p, rtAmb);
++    // (a dynamic object whose probes trace near black - giProbeDark: the SkyLight terms below as in Off)
++    float probePeak = 0.0f;
++    if (rtProbe) for (int f = 0; f < 6; ++f) probePeak = std::max(probePeak, 0.2126f * rtAmb[f].x + 0.7152f * rtAmb[f].y + 0.0722f * rtAmb[f].z);
++    const bool probeDark = rtProbe && dynamicObject && giProbeDark(rtAmb);
++    if (probeDark) rtProbe = false;
+     if (rtProbe) for (int f = 0; f < 6; ++f) env.cube[f] = rtAmb[f];
+     // [CONF] TnRobotForm/TnVehicleForm LightEnvironmentComponent TotalLightCount = 2 (TransGame.xxx):
+     // the brightest 2 lights stay direct, everything else is folded into the ambient cube.
+@@ -3855,6 +3860,18 @@
+             }
+         }
+     }
++    // (diagnostics) WFC_ENVLOG=1: a dynamic object's environment that ends near black - where its light came from
++    static const bool envLog = std::getenv("WFC_ENVLOG") != nullptr;
++    static int envLogged = 0;
++    if (envLog && dynamicObject && envLogged < 40) {
++        float peak = 0.0f;
++        for (int f = 0; f < 6; ++f) peak = std::max(peak, 0.2126f * env.cube[f].x + 0.7152f * env.cube[f].y + 0.0722f * env.cube[f].z);
++        if (peak < 0.02f || probeDark) {
++            ++envLogged;
++            LOG_INFO("ENVLOG f%d at (%.2f %.2f %.2f): ambient peak %.4f, %d direct, RT probe %s (peak %.4f)", frameNo_, p.x, p.y, p.z, peak,
++                     env.n, probeDark ? "REJECTED dark" : (rtProbe ? "used" : "none"), probePeak);
++        }
++    }
+ }
+ 
+ // ------------------------------------------------------------------------- meshes
+diff -ru a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h	2026-10-23 12:03:23.748446300 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-23 12:03:23.724363700 -0500
+@@ -669,6 +669,7 @@
+     float giProbeOrigin_[3] = {0, 0, 0}, giProbeSpacing_ = 1.5f; int giProbeDims_[3] = {0, 0, 0};
+     void giBuildProbes();
+     bool giProbeAt(const core::Vec3& p, core::Vec3 cube[6]) const;
++    bool giProbeDark(const core::Vec3 cube[6]) const;   // a near-black traced cube: characters keep the bake's ambient
+     bool giOn() const;
+     // item 2 (Realistic): up to 4 point / spot lights shadowed per pixel by the RT pass (the lights the characters used
+     // most last frame); a character's env light that is one of them takes its RT visibility (uRtLVis, uRtLSlot)
+diff -ru a/src/render/gl/WfcRtGi.cpp b/src/render/gl/WfcRtGi.cpp
+--- a/src/render/gl/WfcRtGi.cpp	2026-10-23 12:03:23.839257400 -0500
++++ b/src/render/gl/WfcRtGi.cpp	2026-10-23 12:03:23.817181900 -0500
+@@ -689,3 +689,13 @@
+ 
+ }  // namespace wfc
+ }  // namespace render
++
++// (a character whose usable probes all trace near black - a dark pocket of the RT world where the bake lit the spot: D5's player
++// drew as a black silhouette in Realistic, Off normal) the brightest face's luminance below WFC_RT_PROBEMIN (default 0.02, 0 off):
++// the caller keeps the bake's ambient instead
++bool render::wfc::Pipeline::giProbeDark(const core::Vec3 cube[6]) const {
++    static const float probeMin = [] { const char* e = std::getenv("WFC_RT_PROBEMIN"); return e ? (float)std::atof(e) : 0.02f; }();
++    float peak = 0.0f;
++    for (int f = 0; f < 6; ++f) peak = std::max(peak, 0.2126f * cube[f].x + 0.7152f * cube[f].y + 0.0722f * cube[f].z);
++    return peak < probeMin;
++}
