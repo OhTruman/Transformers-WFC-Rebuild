@@ -3800,3 +3800,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   canonicalMapName rejects D5_OME_BASE); AssetTools: absolute texture paths into the old _m/tex dirs, empty decals.glb.
   x42 plume volume: inconclusive (interior, no sun) -> x43 at 10x density. DECISIONS: overlay g = f + Streets revertA;
   ESC nav v3 typed links. Card: Frontend pt9 on the diag head (fresh exe verified).
+2026-10-23 06:22 overlay_20261023g FROZEN (f + Streets revertA; only Streets collision differs) = the shipping set. AssetTools queue:
+  A1 rerun (mid-chapter) -> ESC nav v3 typed links -> unit-relative texture path post-pass (D5 + A1) -> Kismet I/O export.
