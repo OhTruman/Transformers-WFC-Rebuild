@@ -8978,7 +8978,8 @@ void Pipeline::drawFallbackSprites(const FallbackBatch& b) {
 void Pipeline::smokeVolumeAdd(const Sprite* sp, size_t n) {
     // (Smoke stage 2, Realistic only: the batch as a density blob for the froxel volume - its extent, and an optical depth
     // across it of K x the sprites' mean opacity; WFC_SMOKEVOL = K, 0 off)
-    static const float volK = std::getenv("WFC_SMOKEVOL") ? (float)std::atof(std::getenv("WFC_SMOKEVOL")) : 0.6f;
+    // (parked 2026-10-23, x48: the plumes did not read - a red veil at every emit strength; default off, WFC_SMOKEVOL=0.6 to study)
+    static const float volK = std::getenv("WFC_SMOKEVOL") ? (float)std::atof(std::getenv("WFC_SMOKEVOL")) : 0.0f;
     if (rtMode_ == 2 && volK > 0.0f && smokeVolAcc_.size() < 256) {
         // (x43: one batch can hold several plumes - every emitter of the material - so its single blob was centred in the
         // air between them, tens of metres wide and near-empty; the sprites are clustered per plume instead: a sprite joins
