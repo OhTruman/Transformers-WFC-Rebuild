@@ -3666,3 +3666,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Escalation EndGameStats + directorSpawned filter, XP for public, join in progress.
 2026-10-23 02:11 UdpSession identity PASS on 2528df5e incl. the exit path (Experimental). Retest checklist drafted
   (docs/handoff/USER_RETEST_CHECKLIST_2026-10-23.md). Escalation soak building on effecacc. Rendering CARD FREE (analysis pending).
+2026-10-23 02:12 RE E1 review: PASS with 3 fixes (PreGame clock from level start; zone activate / deactivate hook; Round Begin / End events)
+  -> Gameplay folds them into E2.
