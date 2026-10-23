@@ -935,6 +935,8 @@ public:
                              std::string physmat; };   // the hit surface's PhysicalMaterial path ("" = not a world hit)
     // The pellet index of the hitscan traces being fired (set by the NumShotsToFire loops, 0 otherwise).
     void setPelletIndex(int k) { pellet_ = k; }
+    // Weapon.AddSpread (stock UE3; TnWeapon's SpreadPattern for the shotguns): the shot direction for spread S of weapon w, pellet pellet_.
+    core::Vec3 addSpread(const core::Vec3& dir, float S, const Weapon& w) const;
     int pelletIndex() const { return pellet_; }
     const std::vector<ParticipantShot>& participantShots() const { return participantShots_; }
     // Participant shot presentation (muzzle flash / tracer / impact of bots' weapons). When set, called once per participant shot

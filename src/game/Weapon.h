@@ -106,6 +106,7 @@ struct Weapon {
     float spreadPerShot = 0.005f;   // ModifierChangePerShot
     float spreadCooldown = 2.0f;    // seconds of no-fire before spread decays
     float spread        = 0.08f;    // current bloom
+    float shotSpread    = 0.08f;    // CurrentSpread at the last shot (before its IncrementSpread): the value that shot's AddSpread uses
     float sinceFire     = 999.0f;
 
     float reloadTimer   = 0.0f;
@@ -137,6 +138,7 @@ struct Weapon {
         if (ammo > 0) --ammo;
         ++shotSerial;
         sinceFire = 0.0f;
+        shotSpread = spread;                    // this shot uses the spread before its increment
         spread = spread + spreadPerShot < spreadMax ? spread + spreadPerShot : spreadMax;
     }
     // TnWeapon.GetRangeDamageModifier [CONF decompiled script]: no points -> 1.0; the Modifier of the first point (but the last) whose

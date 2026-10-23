@@ -351,6 +351,13 @@ public:
     float effectiveSpread() const {
         return weapon().spread * airSpreadMult_ * (fineAiming_ ? weapon().fineAimSpreadMult : 1.0f);
     }
+    // The S of a shot of weapon w (TnPlayerPawn.GetWeaponSpreadModifier): w's CurrentSpread at the shot x, in robot form only, the
+    // airborne multiplier x FineAimSpreadModifier when fine aiming; vehicle weapons are unmodified [CONF RE playtest #11].
+    float shotSpreadFor(const Weapon& w) const {
+        const bool robot = moveForm() == Form::Robot && &w != vehicleWeaponPtr();
+        return w.shotSpread * (robot ? airSpreadMult_ * (fineAiming_ ? w.fineAimSpreadMult : 1.0f) : 1.0f);
+    }
+    const Weapon* vehicleWeaponPtr() const;
     float airSpreadMult_ = 1.0f;
     // TnOverShieldPickup granted (amount/duration are native and not recovered: state flag only [PARTIAL]).
     void grantOverShield() { overShield_ = true; ++overShieldGrants_; }

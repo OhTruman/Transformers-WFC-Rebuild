@@ -67,9 +67,8 @@ void World::fireHitscanAs(int instigator, const Character& shooter, const Weapon
     {
         const core::Vec3 rt = core::normalize(core::cross(dir, core::Vec3{0, 1, 0}));
         const core::Vec3 u2 = core::normalize(core::cross(rt, dir));
-        auto rf = [] { return core::simRandSigned(); };   // simulation stream (not shared with FX)
-        const float spread = shooter.effectiveSpread();
-        dir = core::normalize(dir + rt * (rf() * spread) + u2 * (rf() * spread));
+        (void)rt; (void)u2;
+        dir = addSpread(dir, shooter.shotSpreadFor(w), w);   // Weapon.AddSpread [CONF RE playtest #11]
     }
     // The nearest target candidate first (pawn cylinders, destructible boxes, sentries, barriers: cheap), then the world trace only
     // up to it (+ the barrier tolerance): the same first hit as tracing the whole range, without walking every grid cell to 300 m.
@@ -158,7 +157,7 @@ void World::botFire(BotBody o, BotBrain& b, Weapon& w, const core::Vec3& aimPoin
     if (w.projectile()) {
         // Weapon.ProjectileFire at the muzzle; without a posed held weapon the eye + 1.5 m stands in (the local fallback).
         const core::Vec3 muzzle = eye + d * 1.5f;
-        spawnProjectile(muzzle, d * w.projSpeed, w, o.matchPlayer());
+        spawnProjectile(muzzle, addSpread(d, pc.shotSpreadFor(w), w) * w.projSpeed, w, o.matchPlayer());
         if (w.projHoming && b.target >= 0) projectiles_.back().target = b.target;   // AI fires homing weapons at its enemy
         participantShots_.push_back({o.matchPlayer(), w.def ? w.def->id : "", muzzle, aimPoint, false, -1});
     } else if (w.simulated() && !w.beam()) {

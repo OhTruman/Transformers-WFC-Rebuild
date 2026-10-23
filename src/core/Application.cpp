@@ -5877,6 +5877,30 @@ void Application::runSessionTest() {
         LOG_INFO("SESSIONTEST Choose Character: seat 1 specialty %s / %s, hashes %016llx %016llx", spec[0].c_str(), spec[1].c_str(), (unsigned long long)hs[0], (unsigned long long)hs[1]);
         check(hs[0] == hs[1] && spec[0] == spec[1] && spec[0] == "Scout", "online Choose Character: seat 1's tick-stamped Scout pick applies alike from both perspectives");
     }
+    {   // Weapon.AddSpread (playtest #11): the stock disc within +-0.5 S (right) / +-0.354 S (up); the Shotgun's fixed pattern x M
+        const game::WeaponDef* ar = game::findWeaponDef("AssaultRifle"); const game::WeaponDef* sg = game::findWeaponDef("Shotgun");
+        bool ok = ar && sg; float maxY = 0.0f, maxZ = 0.0f;
+        if (ok) {
+            const game::Weapon w = game::Weapon::fromDef(*ar);
+            const core::Vec3 X{0, 0, -1}, Y{1, 0, 0}, Z{0, 1, 0};
+            world_.setPelletIndex(0);
+            for (int i = 0; i < 4000; ++i) {
+                const core::Vec3 d = world_.addSpread(X, 0.1f, w);
+                const float k = 1.0f / core::dot(d, X);   // back to the tangent plane
+                maxY = std::max(maxY, std::fabs(core::dot(d, Y) * k)); maxZ = std::max(maxZ, std::fabs(core::dot(d, Z) * k));
+            }
+            ok = maxY <= 0.0501f && maxZ <= 0.0355f && maxY > 0.045f;
+            game::Weapon s = game::Weapon::fromDef(*sg);
+            world_.setPelletIndex(4);   // pattern (-.035, -.04) x M, M = S / spreadMin
+            const float S = s.spreadMin * 2.0f;
+            const core::Vec3 d = world_.addSpread(X, S, s);
+            const float k = 1.0f / core::dot(d, X);
+            ok = ok && std::fabs(core::dot(d, Y) * k - (-0.035f * 2.0f)) < 1e-4f && std::fabs(core::dot(d, Z) * k - (-0.04f * 2.0f)) < 1e-4f;
+            world_.setPelletIndex(0);
+        }
+        LOG_INFO("SESSIONTEST AddSpread: S 0.1 -> max right %.4f up %.4f (stock bounds 0.05 / 0.0354)", maxY, maxZ);
+        check(ok, "Weapon.AddSpread: the stock +-0.5 S disc; the Shotgun's fixed pellet pattern scaled by GetSpread / GetInitialSpread");
+    }
     LOG_INFO("SESSIONTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

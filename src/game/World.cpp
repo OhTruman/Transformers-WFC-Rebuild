@@ -279,7 +279,7 @@ void World::load(render::IRenderer& renderer) {
     };
     weaponFireHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) {
         if (w.projectile()) {
-            spawnProjectile(o, d * w.projSpeed, w, localPlayer_);   // Spawn at RealStartLoc (callers pass the muzzle)
+            spawnProjectile(o, addSpread(d, player_.pawn().shotSpreadFor(w), w) * w.projSpeed, w, localPlayer_);   // RealStartLoc; AddSpread
             if (player_.pawn().moveForm() == Form::Vehicle) {   // [Systems M08h] the vehicle shot's muzzle flash
                 core::Vec3 vm;
                 spawnVehicleMuzzleFlash(projectiles_.back().weaponClass, vm);
@@ -788,10 +788,8 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
         core::Vec3 up{0, 1, 0};
         core::Vec3 rt = core::normalize(core::cross(dir, up));
         core::Vec3 u2 = core::normalize(core::cross(rt, dir));
-        auto rf = [] { return core::simRandSigned(); };   // simulation stream (not shared with FX)
-        // Fine aim scales spread by the weapon's FineAimSpreadModifier (Ion Blaster 0.5) [CONF data].
-        float spread = player_.pawn().effectiveSpread();   // bloom x airborne x fine aim (HmWeapon.GetSpread)
-        dir = core::normalize(dir + rt * (rf() * spread) + u2 * (rf() * spread));
+        (void)rt; (void)u2;
+        dir = addSpread(dir, player_.pawn().shotSpreadFor(w), w);   // Weapon.AddSpread [CONF RE playtest #11]
     }
     core::Vec3 end = origin + dir * range;
 
@@ -5326,6 +5324,30 @@ void World::tickHazards(float dt) {
     LOG_INFO("hazard %s: %.0f damage (%s)", v.actor.c_str(), dmg, v.damageType.c_str());
     if (matchActive_) applyMatchDamage(localPlayer_, -1, dmg, true, v.damageType);   // environment: no instigator
     else if (pc.health().applyDamage(dmg) > 0.0f && pc.health().isDead()) respawnPlayer();
+}
+
+core::Vec3 World::addSpread(const core::Vec3& dirIn, float S, const Weapon& w) const {
+    const core::Vec3 X = core::normalize(dirIn);
+    core::Vec3 Y = core::cross(X, core::Vec3{0, 1, 0});   // right
+    if (core::length(Y) < 1e-5f) Y = core::Vec3{1, 0, 0};
+    Y = core::normalize(Y);
+    const core::Vec3 Z = core::normalize(core::cross(Y, X));   // up
+    // TnWeapon.AddSpread: the weapons with a SpreadPattern (fixed pellet offsets, scaled by GetSpread / GetInitialSpread).
+    static const float kShotgun[8][2] = {{0, 0}, {.025f, -.025f}, {-.02f, .02f}, {.03f, .015f}, {-.035f, -.04f}, {.013f, .04f}, {-.013f, -.03f}, {-.03f, -.015f}};
+    static const float kEmp[13][2] = {{0, 0}, {.015f, -.015f}, {-.01f, .01f}, {.02f, .015f}, {-.025f, -.035f}, {-.02f, -.03f}, {-.05f, -.02f},
+                                      {.035f, .02f}, {-.035f, .01f}, {.015f, -.02f}, {0, .04f}, {-.045f, -.035f}, {0, -.015f}};
+    const char* id = w.def ? w.def->id : "";
+    const float (*pat)[2] = nullptr; int n = 0;
+    if (!std::strcmp(id, "Shotgun")) { pat = kShotgun; n = 8; }
+    else if (!std::strcmp(id, "EmpShotgun")) { pat = kEmp; n = 13; }
+    if (pat && pellet_ >= 0 && pellet_ < n) {
+        const float M = w.spreadMin > 1e-6f ? S / w.spreadMin : 1.0f;
+        return core::normalize(X + Y * (pat[pellet_][0] * M) + Z * (pat[pellet_][1] * M));
+    }
+    // Weapon.AddSpread (stock UE3): RandY = FRand() - 0.5; RandZ = Sqrt(0.5 - RandY^2) * (FRand() - 0.5).
+    const float ry = core::simRand01() - 0.5f;
+    const float rz = std::sqrt(std::max(0.0f, 0.5f - ry * ry)) * (core::simRand01() - 0.5f);
+    return core::normalize(X + Y * (ry * S) + Z * (rz * S));
 }
 
 void World::spawnProjectile(const core::Vec3& pos, const core::Vec3& vel, const Weapon& w, int instigator) {

@@ -1002,3 +1002,5 @@ void Character::draw(render::IRenderer& r) const {
 }
 
 } // namespace game
+
+const game::Weapon* game::Character::vehicleWeaponPtr() const { return const_cast<game::Character*>(this)->vehicleWeapon(); }
