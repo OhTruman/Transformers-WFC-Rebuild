@@ -566,3 +566,9 @@ weapons, loot and chassis are Escalation-specific.
 - Spider: rush to striking range, strike; never targets flyers.
 - HoloBrute: flank outside the aim, smash every 5 s.
 - Tank: vehicle cannon + suppress + slam until the fuel cell dies; then robot cannon, gatling sweep (10–15 s), slam ≤ 1600.
+
+
+**Corrections (2026-10-23, ESCALATION_HORDE_AI_RE):**
+- In Escalation the boss Tank spawns in **robot form, with no fuel cell** (its AICD has no StartingForm), so the §9.2 "phase 1" applies only to the campaign tank.
+- The Jet and CQC loot class is **SoldierDec** (4 ability resources), not GENERIC.
+- JetStrafingRun only targets enemies in jet form.
