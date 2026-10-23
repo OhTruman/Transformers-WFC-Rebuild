@@ -119,6 +119,11 @@ for m in ['MP_ESC_BrokenHope', 'MP_ESC_Remnant']:
         tvs[name] = {'planes': planes(polys), 'min': [round(min(p[i] for p in pts), 3) for i in range(3)],
                      'max': [round(max(p[i] for p in pts), 3) for i in range(3)]}
     out['kismet'] = dict(k, volumes=tvs)
+    # TnWeaponPickupFactory (AssetTools weapon_pickups): our weapon id = the inventory class without TransContent.TnWeapon.
+    out['weaponPickups'] = [{'actor': w['actor'], 'weapon': w['inventory_type'].split('.')[-1].replace('TnWeapon', ''),
+                             'respawn': w.get('respawn_time') or 2.0, 'pos': [round(v, 3) for v in w['location_gltf']],
+                             'yaw': round(math.atan2(-math.cos(math.radians(w.get('yaw_deg', 0.0))), -math.sin(math.radians(w.get('yaw_deg', 0.0)))), 5)}
+                            for w in geo.get('weapon_pickups', [])]
     path = os.path.join(OUT, 'escalation_' + m + '.json')
     with open(path, 'w') as f:
         json.dump(out, f, indent=1)

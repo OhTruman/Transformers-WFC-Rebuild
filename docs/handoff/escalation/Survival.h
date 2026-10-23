@@ -4,6 +4,7 @@
 // tools/gameplay/gen_escalation.py (RE export + AssetTools zone boxes), compiled in as src/game/EscalationData.inc.
 // Owned and ticked by World (WorldSurvival.cpp); all sim, drawn from the Match RNG, by match player index.
 #include "core/Math.h"
+#include "game/Weapon.h"
 
 #include <array>
 #include <cstdint>
@@ -76,6 +77,9 @@ struct SurvivalData {
     std::vector<RoundGate> roundGates;
     struct Window { int enable = -1, volume = -1; std::string wall; float damage = 0.0f; };
     Window window;
+    // TnWeaponPickupFactory (AssetTools weapon_pickups): the weapon id (our WeaponDef id), RespawnTime, location / yaw.
+    struct WeaponPickup { std::string actor, weapon; float respawn = 2.0f; core::Vec3 pos{0, 0, 0}; float yaw = 0.0f; };
+    std::vector<WeaponPickup> weaponPickups;
     // RE's initial sorted order per type (the original binary's sort of the starting Zones list): ESCTEST's test vector.
     std::array<std::vector<std::string>, kSvTypes> initialSorted;
     static bool load(const std::string& map, SurvivalData& out);
@@ -119,6 +123,15 @@ struct SurvivalState {
     std::vector<uint8_t> crashDone, gateOn;               // per crash wall: fired; per round gate: its touch enabled
     std::vector<std::vector<uint8_t>> gateInside;         // per round gate, per match player: inside last step
     bool windowArmed = false, windowDone = false;
+    std::vector<uint8_t> windowInside;                    // per match player: inside the arming volume last step
+    // Weapon pickups: per factory hidden (until bought) / available / respawn timer; dropped weapons (TnDroppedPickupWeapon) with the
+    // tossed weapon's state; per match player the Interact press edge for the contextual pickup.
+    struct WeaponPick { bool hidden = true, available = true; float respawn = 0.0f; };
+    std::vector<WeaponPick> weaponPicks;
+    struct Drop { Weapon w; core::Vec3 pos{0, 0, 0}; float life = 0.0f; };
+    std::vector<Drop> drops;
+    std::vector<uint8_t> pickupPress;
+    int weaponTakes = 0, ammoTakes = 0, tosses = 0;
     int spawns = 0, failedSpawns = 0;
     std::vector<int> spawnOrder;               // the enemy entry of every spawn (tests)
 };

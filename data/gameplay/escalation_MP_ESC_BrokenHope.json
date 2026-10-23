@@ -8634,5 +8634,194 @@
     ]
    }
   }
- }
+ },
+ "weaponPickups": [
+  {
+   "actor": "TnWeaponPickupFactory_1782",
+   "weapon": "RocketLauncher",
+   "respawn": 2.0,
+   "pos": [
+    54.912,
+    15.4,
+    -111.619
+   ],
+   "yaw": -1.5708
+  },
+  {
+   "actor": "TnWeaponPickupFactory_3202",
+   "weapon": "HealGrenades",
+   "respawn": 2.0,
+   "pos": [
+    -3.744,
+    16.68,
+    92.579
+   ],
+   "yaw": -2.35619
+  },
+  {
+   "actor": "TnWeaponPickupFactory_3414",
+   "weapon": "SniperRifle",
+   "respawn": 2.0,
+   "pos": [
+    137.12,
+    15.4,
+    -4.96
+   ],
+   "yaw": 1.5708
+  },
+  {
+   "actor": "TnWeaponPickupFactory_5307",
+   "weapon": "HeavyPistol",
+   "respawn": 2.0,
+   "pos": [
+    194.386,
+    15.4,
+    -106.88
+   ],
+   "yaw": -2.35619
+  },
+  {
+   "actor": "TnWeaponPickupFactory_5452",
+   "weapon": "BurstRifle",
+   "respawn": 2.0,
+   "pos": [
+    190.673,
+    0.04,
+    -136.987
+   ],
+   "yaw": -2.30712
+  },
+  {
+   "actor": "TnWeaponPickupFactory_7607",
+   "weapon": "KamikazeMines",
+   "respawn": 2.0,
+   "pos": [
+    -7.68,
+    7.699,
+    -140.8
+   ],
+   "yaw": 1.66897
+  },
+  {
+   "actor": "TnWeaponPickupFactory_8082",
+   "weapon": "Shotgun",
+   "respawn": 2.0,
+   "pos": [
+    82.971,
+    15.4,
+    -134.281
+   ],
+   "yaw": 0.04908
+  },
+  {
+   "actor": "TnWeaponPickupFactory_10216",
+   "weapon": "FlakGrenades",
+   "respawn": 2.0,
+   "pos": [
+    204.626,
+    7.72,
+    -188.449
+   ],
+   "yaw": -2.30712
+  },
+  {
+   "actor": "TnWeaponPickupFactory_10719",
+   "weapon": "RepairRay",
+   "respawn": 2.0,
+   "pos": [
+    197.6,
+    15.4,
+    36.8
+   ],
+   "yaw": -1.5708
+  },
+  {
+   "actor": "TnWeaponPickupFactory_10991",
+   "weapon": "FlashBangs",
+   "respawn": 2.0,
+   "pos": [
+    34.5,
+    20.524,
+    7.38
+   ],
+   "yaw": 1.5708
+  },
+  {
+   "actor": "TnWeaponPickupFactory_11116",
+   "weapon": "EmpShotgun",
+   "respawn": 2.0,
+   "pos": [
+    158.423,
+    0.04,
+    27.233
+   ],
+   "yaw": 2.45437
+  },
+  {
+   "actor": "TnWeaponPickupFactory_11488",
+   "weapon": "FlakGrenades",
+   "respawn": 2.0,
+   "pos": [
+    45.62,
+    0.04,
+    -3.32
+   ],
+   "yaw": 1.5708
+  },
+  {
+   "actor": "TnWeaponPickupFactory_11775",
+   "weapon": "HeavyMG",
+   "respawn": 2.0,
+   "pos": [
+    142.56,
+    15.4,
+    -22.24
+   ],
+   "yaw": 1.5708
+  },
+  {
+   "actor": "TnWeaponPickupFactory_12062",
+   "weapon": "GrenadeLauncher",
+   "respawn": 2.0,
+   "pos": [
+    49.44,
+    20.52,
+    25.92
+   ],
+   "yaw": -0.0
+  },
+  {
+   "actor": "TnWeaponPickupFactory_12873",
+   "weapon": "GatlingGun",
+   "respawn": 2.0,
+   "pos": [
+    16.96,
+    20.524,
+    6.08
+   ],
+   "yaw": -1.86532
+  },
+  {
+   "actor": "TnWeaponPickupFactory_14866",
+   "weapon": "HeavyRocketTurret",
+   "respawn": 2.0,
+   "pos": [
+    12.322,
+    16.68,
+    92.115
+   ],
+   "yaw": 0.93267
+  },
+  {
+   "actor": "TnWeaponPickupFactory_16224",
+   "weapon": "PlasmaCannon",
+   "respawn": 2.0,
+   "pos": [
+    152.16,
+    15.4,
+    -147.2
+   ],
+   "yaw": 1.5708
+  }
+ ]
 }
