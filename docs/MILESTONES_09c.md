@@ -3896,3 +3896,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   CAMPAIGNTEST 24 / 24; OmegaSupreme + the 4 battery destructibles held latent -> AssetTools exports), the CO1 co-op lobby
   test (passes without frontend changes). Gameplay next: mover nav + A1 boot, AI ops, Matinee, conversations, movies, forms,
   restore, co-op humans.
+2026-10-23 07:59 MERGED bf3f28ff campaign post-process chain + matinee hooks (data-driven volumes / LUTs; setCinematicView), d252040a
+  campaign audio hosted by the Kismet VM (97 D5 audio ops) + VPS readiness (both UDP ports, limits, health check,
+  online_service.json), c2030cbf campaign runtime 4 (co-op humans, AI move / objective ops, CMP_ bodies) + lobby default +
+  invite mailbox. Pending recut (WorldCampaign anchors): Systems' FMV + dialog sim-time. AssetTools chain: A2 running, then
+  pp export, actors.json, campaign characters, destructible dump.
