@@ -3594,3 +3594,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Exp_Death_Sm_FX StartSize values[4], present in both = identical; backups in the session scratchpad mapfx_backup_pre_kf).
   #9 render side complete (code 8d6f0c4b + data). Pre-age v2 merged d788870b (expected sub-frame change in all modes for the
   gate). RE: AnimControl evaluator C. Card: Frontend two-window test 01:30 -> Rendering x28 + x29 (12 min) -> Systems (8 min).
+2026-10-23 01:31 Two-window menu match on this PC (loopback): host by code, join, lobby sync, launch record, load gate, Choose Character and
+  spawns all WORK; desync at tick 660: the two worlds disagree on the host's team (the host's launch record went out with team 0
+  before its random FinalCountdown pick). Frontend fixes (fix the team before setLaunch; build the host's launch from the record
+  it sent; the flow test compares both MatchLaunch teams). Retest = another two-window slot after the fix.
