@@ -3486,3 +3486,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 00:16 AssetTools: slim refresh 101,214 rows (+161 escalation, +16 campaign_anims, +6 lens_flares); CeremonialStaffHolo hum cues
   silent as cooked (CONFIRMED); package 6 DOES carry hd_pbr_index + m6 -> #4 is a runtime condition (HD root lookup or the
   HD 2 -> 1 clamp) for the Frontend / Systems.
+2026-10-23 00:17 #3 / #16 cause found (Rendering): the per-frame transient-light re-ranking moved headlights in and out of the 4 RT-shadow
+  slots as vehicles / muzzle flashes moved; fix = 1.5x hysteresis for last frame's selection + sticky shadow slot (rt2 fefd136b,
+  Realistic only; WFC_TLSTABLE=0 old; WFC_TLDIAG=1 counts). Patch against c86a56cf + a 10-min card A/B after Experimental.
