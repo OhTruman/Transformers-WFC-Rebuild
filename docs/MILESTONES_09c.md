@@ -3967,3 +3967,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   reactions, horde rules, then a PROV list for the final-build decision.
 2026-10-23 09:08 GAMEPLAY_PROV_LIST merged; DECISION: fix H3 / H5 / M1 / M5 / M10 / M11 for the final build; GOAP (H1 / H2) + H4 stay
   PROV (the GOAP port is post-build). Gameplay: Omega AI + hit reactions + melee rule, then the six fixes, then done.
+2026-10-23 09:20 CAMPAIGN MILESTONE RUN #2 (Frontend, 022ba748 / d48f995d): flow PASS x5, 0 unanswered bridge calls, 0 held ops; A1
+  RENDERS (the opening plays); loads D5 Off 37 s / 5.9 GB, D5 Realistic 55 s / 6.8 GB, A1 Off 44 s / 7.3 GB, A1 Realistic
+  62 s / 8.4 GB (was 142 s / 17.6 GB); black regions around the lift (void vs not-streamed: Rendering eye pass); a squad
+  strand-recover once per A1 run at ~60 s (Gameplay); persistent bsp.glb 'cannot read' (expected?).
