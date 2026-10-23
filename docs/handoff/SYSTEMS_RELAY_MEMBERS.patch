@@ -1,0 +1,203 @@
+diff -ruN a/src/net/NetTransport.h b/src/net/NetTransport.h
+--- a/src/net/NetTransport.h	2026-10-23 06:26:13.590034200 -0500
++++ b/src/net/NetTransport.h	2026-10-23 06:26:13.615120700 -0500
+@@ -51,6 +51,8 @@
+     virtual void setRelay(const std::string& /*relayHostPort*/, uint64_t /*room*/, uint32_t /*selfId*/) {}
+     virtual uint32_t relayId() const { return 0; }
+     virtual void addInfra(const std::string& /*hostPort*/) {}
++    // The address of the latest datagram that came from `seat` directly (not through the relay) since the last call; empty = none.
++    virtual std::string takeDirectFrom(int /*seat*/) { return {}; }
+     virtual bool pollStranger(std::string& /*fromHostPort*/, std::vector<uint8_t>& /*data*/) { return false; }
+     // A datagram exactly as given (no framing byte): the STUN query from this socket (its reply comes back via pollStranger).
+     virtual bool sendRaw(const std::string& /*hostPort*/, const uint8_t* /*p*/, size_t /*n*/) { return false; }
+diff -ruN a/src/net/UdpSession.cpp b/src/net/UdpSession.cpp
+--- a/src/net/UdpSession.cpp	2026-10-23 06:26:13.592542400 -0500
++++ b/src/net/UdpSession.cpp	2026-10-23 06:26:13.615622200 -0500
+@@ -34,7 +34,7 @@
+ namespace {
+ 
+ using namespace frontend;
+-constexpr uint32_t kProtocol = 0x57464303;   // "WFC" v3 (the map vote fields appended to the member / lobby records)
++constexpr uint32_t kProtocol = 0x57464304;   // "WFC" v4 (v3 + relay ids in JOIN / PEERS: the relay fallback between members)
+ enum : uint8_t {
+     kJoin = 0x50, kJoinOk = 0x51, kJoinFail = 0x52,
+     kLobby = 0x40, kPeers = 0x41, kInfo = 0x42, kLaunch = 0x43, kLoaded = 0x44, kPeerLoaded = 0x45, kAllLoaded = 0x46,
+@@ -405,8 +405,8 @@
+ void UdpSession::sendPeerTable() {   // host: every member learns every other member's address (the match is a full mesh)
+     W w(kPeers);
+     w.u8((int)peers_.size() + 1);
+-    w.u8(0); w.str(self_.id.fingerprint); w.str("");   // the host: each member already has it as seat 0
+-    for (const auto& kv : peers_) { w.u8(kv.first); w.str(kv.second.info.id.fingerprint); w.str(kv.second.address); }
++    w.u8(0); w.str(self_.id.fingerprint); w.str(""); w.u32(t_ ? t_->relayId() : 0u);   // the host: each member already has it as seat 0
++    for (const auto& kv : peers_) { w.u8(kv.first); w.str(kv.second.info.id.fingerprint); w.str(kv.second.address); w.u32(kv.second.relayId); }
+     sendAllMembers(w.b);
+ }
+ 
+@@ -654,6 +654,7 @@
+         const uint32_t proto = r.u32();
+         SessionMemberInfo info = r.info();
+         if (!r.ok) return;
++        const uint32_t joinerRelay = r.i + 4 <= r.n ? r.u32() : 0u;   // v4: the joiner's relay id (0 = none)
+         if (proto != kProtocol) { std::vector<uint8_t> f = {kJoinFail, (uint8_t)SessionJoinFailure::Version}; t_->sendTo(from, f.data(), f.size()); return; }
+         int seat = -1;
+         for (const auto& kv : peers_) if (kv.second.address == from || kv.second.info.id == info.id) seat = kv.first;   // a JOIN resend
+@@ -665,6 +666,7 @@
+             Peer& p = peers_[seat];
+             p.info = info; p.address = from; p.lastHeard = now_;
+         }
++        peers_[seat].relayId = joinerRelay;
+         std::vector<uint8_t> ok = {kJoinOk, (uint8_t)seat};
+         t_->sendTo(from, ok.data(), ok.size());
+         if (fresh) {
+@@ -725,13 +727,14 @@
+         for (int k = r.u8(); k > 0 && r.ok; --k) {
+             const int s = r.u8();
+             const std::string fp = r.str(), addr = r.str();
++            const uint32_t rid = r.u32();   // v4
+             if (!r.ok) break;
+-            if (s == 0) { keep[0].info.id.fingerprint = fp; continue; }
++            if (s == 0) { keep[0].info.id.fingerprint = fp; keep[0].relayId = rid; continue; }
+             if (t_ && s == t_->self()) continue;
+             Peer p = peers_.count(s) ? peers_[s] : Peer{};
+-            p.info.id.fingerprint = fp; p.address = addr;
++            p.info.id.fingerprint = fp; p.relayId = rid;
+             if (p.lastHeard <= 0.0) p.lastHeard = now_;
+-            if (t_) t_->addPeer(s, addr);
++            if (!p.viaRelay) { p.address = addr; if (t_) t_->addPeer(s, addr); }   // a peer already switched to the relay stays there
+             keep[s] = p;
+         }
+         for (const auto& kv : peers_) if (!keep.count(kv.first) && t_) t_->removePeer(kv.first);
+@@ -910,7 +913,7 @@
+         }
+         if (now_ - lastJoinSend_ >= 1.0 && t_->self() == 255) {   // JOIN until seated (out of band: no seat yet)
+             lastJoinSend_ = now_;
+-            W w(kJoin); w.u32(kProtocol); w.info(self_);
++            W w(kJoin); w.u32(kProtocol); w.info(self_); w.u32(t_->relayId());
+             for (const std::string& c : joinCandidates_) t_->sendTo(c, w.b.data(), w.b.size());   // the LAN endpoint and the public one
+         }
+         if (now_ - joinStart_ >= opt_.joinTimeoutS) {
+@@ -937,6 +940,25 @@
+         const uint8_t k = kKeepalive;
+         for (const auto& kv : peers_) t_->sendUnreliable(kv.first, &k, 1);
+     }
++    // The relay fallback between peers (SYSTEMS_RELAY.md): a peer silent for kRelayAfterS while both of us have a relay id is sent to
++    // through its relay alias (keepalives flow every second both ways, so silence = no direct path; the other side switches the same
++    // way). Receiving does not depend on the path (the channel header names the sender), and a direct datagram from a peer on the
++    // relay switches it back: a peer that was only busy (a blocking map load) returns to the direct path at once.
++    if (role_ != Role::Offline && t_ && t_->relayId() != 0)
++        for (auto& kv : peers_) {
++            Peer& pr = kv.second;
++            const std::string direct = t_->takeDirectFrom(kv.first);
++            if (pr.viaRelay && !direct.empty() && t_->addPeer(kv.first, direct)) {
++                pr.viaRelay = false; pr.address = direct;
++                LOG_INFO("session: seat %d answers directly again - back on %s", kv.first, direct.c_str());
++            } else if (!pr.viaRelay && pr.relayId != 0 && now_ - pr.lastHeard > kRelayAfterS) {
++                const std::string alias = "relay:" + std::to_string(pr.relayId);
++                if (t_->addPeer(kv.first, alias)) {
++                    pr.viaRelay = true; pr.address = alias;
++                    LOG_INFO("session: seat %d silent %.1f s - through the relay now (%s)", kv.first, now_ - pr.lastHeard, alias.c_str());
++                }
++            }
++        }
+     // Timeouts: the host drops silent members; a member ends the session when the host is silent (other members: the host decides).
+     if (role_ == Role::Host) {
+         std::vector<int> gone;
+diff -ruN a/src/net/UdpSession.h b/src/net/UdpSession.h
+--- a/src/net/UdpSession.h	2026-10-23 06:26:13.591540100 -0500
++++ b/src/net/UdpSession.h	2026-10-23 06:26:13.617127100 -0500
+@@ -133,6 +133,8 @@
+         double lastHeard = 0.0;
+         bool loaded = false;
+         double lateLoadSince = -1.0;   // a late joiner loading the running match (LateLaunch sent, LOADED not yet): the load window
++        uint32_t relayId = 0;          // its id at the lobby service's relay (JOIN / PEERS; 0 = none)
++        bool viaRelay = false;         // reached through the relay (switched after kRelayAfterS of silence on the direct path)
+     };
+     class MatchView;
+     friend class MatchView;
+diff -ruN a/src/net/UdpTransport.cpp b/src/net/UdpTransport.cpp
+--- a/src/net/UdpTransport.cpp	2026-10-23 06:26:13.591037500 -0500
++++ b/src/net/UdpTransport.cpp	2026-10-23 06:26:13.616625400 -0500
+@@ -149,6 +149,9 @@
+     UdpTransport(int self, Socket s, std::map<int, sockaddr_in> peers) : self_(self), sock_(s), peers_(std::move(peers)), ch_(self) {
+         const char* dd = std::getenv("WFC_NET_DIRECT_DROP");
+         directDrop_ = dd && *dd && dd[0] != '0';
++        // "ports:A+B": only the direct path to / from those UDP ports is blocked (members that cannot reach each other, the host can)
++        if (directDrop_ && std::strncmp(dd, "ports:", 6) == 0)
++            for (const char* q = dd + 6; *q;) { dropPorts_.push_back(std::atoi(q)); while (*q && *q != '+') ++q; if (*q) ++q; }
+         if (directDrop_) LOG_WARN("NET transport: WFC_NET_DIRECT_DROP - only the relay and the lobby service are reachable (TEST ONLY)");
+     }
+     ~UdpTransport() override { if (sock_ != kBad) closeSock(sock_); }
+@@ -179,7 +182,7 @@
+         // (the same peer, another path: the unacked datagrams resend through it).
+         auto it = peers_.find(seat);
+         const std::string before = peerAddress(seat);
+-        if (it != peers_.end() && before != hostPort && !rid) ch_.reset(seat);
++        if (it != peers_.end() && before != hostPort && !rid && !peerRelay_.count(seat)) ch_.reset(seat);   // relay -> direct: the same peer too
+         if (rid) { peerRelay_[seat] = rid; peers_[seat] = relay_; }
+         else { peerRelay_.erase(seat); peers_[seat] = a; }
+         return true;
+@@ -194,6 +197,11 @@
+     }
+     uint32_t relayId() const override { return haveRelay_ ? rid_ : 0; }
+     void addInfra(const std::string& hostPort) override { sockaddr_in a{}; if (parseAddr(hostPort, a)) infra_.push_back(a); }
++    std::string takeDirectFrom(int seat) override {
++        auto it = directFrom_.find(seat);
++        if (it == directFrom_.end()) return {};
++        std::string a = it->second; directFrom_.erase(it); return a;
++    }
+     void setSelf(int seat) override { self_ = seat; ch_.setSelf(seat); }
+     std::string peerAddress(int seat) const override {
+         auto r = peerRelay_.find(seat);
+@@ -240,7 +248,7 @@
+         if (relayAlias(hostPort, rid)) { if (!haveRelay_) return false; sendRelayed(rid, p, n); return true; }
+         sockaddr_in a{};
+         if (!parseAddr(hostPort, a)) return false;
+-        if (directDrop_ && !isInfra(a)) return true;   // TEST ONLY: the direct path does not exist
++        if (blocked(a)) return true;   // TEST ONLY: the direct path does not exist
+         sendto(sock_, (const char*)p, (int)n, 0, (const sockaddr*)&a, sizeof a);
+         stats_.bytesSent += n; ++stats_.packetsSent;
+         return true;
+@@ -260,7 +268,7 @@
+         if (r != peerRelay_.end()) { sendRelayed(r->second, d.data(), d.size()); return; }
+         auto it = peers_.find(peer);
+         if (it == peers_.end()) return;
+-        if (directDrop_ && !isInfra(it->second)) return;   // TEST ONLY
++        if (blocked(it->second)) return;   // TEST ONLY
+         sendto(sock_, (const char*)d.data(), (int)d.size(), 0, (const sockaddr*)&it->second, sizeof it->second);
+         stats_.bytesSent += d.size(); ++stats_.packetsSent;
+     }
+@@ -312,7 +320,7 @@
+                 fromStr = "relay:" + std::to_string(src);
+                 if (n <= 0) continue;
+             } else {
+-                if (directDrop_ && !isInfra(from)) continue;   // TEST ONLY: the direct path does not exist
++                if (blocked(from)) continue;   // TEST ONLY: the direct path does not exist
+                 fromStr = addrString(from);
+             }
+             if (bp[0] == kStranger) {   // out of band: keep the sender's address
+@@ -328,6 +336,7 @@
+                 if (strangers_.size() < 256) strangers_.push_back({fromStr, std::vector<uint8_t>(bp, bp + n)});
+                 continue;
+             }
++            if (haveRelay_ && bp == buf && n >= 2) directFrom_[bp[1]] = fromStr;   // the sender seat (channel header): its direct path works
+             std::vector<uint8_t> ack; int ackTo = -1;
+             ch_.receive(bp, (size_t)n, inbox_, ack, ackTo);
+             if (!ack.empty()) raw(ackTo, ack);
+@@ -336,8 +345,17 @@
+     int self_;
+     Socket sock_;
+     std::map<int, sockaddr_in> peers_;
++    std::map<int, std::string> directFrom_;   // seat -> its latest direct datagram's address (with a relay only; takeDirectFrom)
+     std::map<int, uint32_t> peerRelay_;   // seat -> its relay id (reached through the relay)
+     bool haveRelay_ = false, directDrop_ = false;
++    std::vector<int> dropPorts_;   // WFC_NET_DIRECT_DROP=ports:A+B (empty = every direct path)
++    bool blocked(const sockaddr_in& a) const {   // TEST ONLY
++        if (!directDrop_ || isInfra(a)) return false;
++        if (dropPorts_.empty()) return true;
++        const int port = ntohs(a.sin_port);
++        for (int q : dropPorts_) if (q == port) return true;
++        return false;
++    }
+     sockaddr_in relay_{};
+     uint64_t room_ = 0;
+     uint32_t rid_ = 0;

@@ -149,6 +149,9 @@ public:
     UdpTransport(int self, Socket s, std::map<int, sockaddr_in> peers) : self_(self), sock_(s), peers_(std::move(peers)), ch_(self) {
         const char* dd = std::getenv("WFC_NET_DIRECT_DROP");
         directDrop_ = dd && *dd && dd[0] != '0';
+        // "ports:A+B": only the direct path to / from those UDP ports is blocked (members that cannot reach each other, the host can)
+        if (directDrop_ && std::strncmp(dd, "ports:", 6) == 0)
+            for (const char* q = dd + 6; *q;) { dropPorts_.push_back(std::atoi(q)); while (*q && *q != '+') ++q; if (*q) ++q; }
         if (directDrop_) LOG_WARN("NET transport: WFC_NET_DIRECT_DROP - only the relay and the lobby service are reachable (TEST ONLY)");
     }
     ~UdpTransport() override { if (sock_ != kBad) closeSock(sock_); }
@@ -179,7 +182,7 @@ public:
         // (the same peer, another path: the unacked datagrams resend through it).
         auto it = peers_.find(seat);
         const std::string before = peerAddress(seat);
-        if (it != peers_.end() && before != hostPort && !rid) ch_.reset(seat);
+        if (it != peers_.end() && before != hostPort && !rid && !peerRelay_.count(seat)) ch_.reset(seat);   // relay -> direct: the same peer too
         if (rid) { peerRelay_[seat] = rid; peers_[seat] = relay_; }
         else { peerRelay_.erase(seat); peers_[seat] = a; }
         return true;
@@ -194,6 +197,11 @@ public:
     }
     uint32_t relayId() const override { return haveRelay_ ? rid_ : 0; }
     void addInfra(const std::string& hostPort) override { sockaddr_in a{}; if (parseAddr(hostPort, a)) infra_.push_back(a); }
+    std::string takeDirectFrom(int seat) override {
+        auto it = directFrom_.find(seat);
+        if (it == directFrom_.end()) return {};
+        std::string a = it->second; directFrom_.erase(it); return a;
+    }
     void setSelf(int seat) override { self_ = seat; ch_.setSelf(seat); }
     std::string peerAddress(int seat) const override {
         auto r = peerRelay_.find(seat);
@@ -240,7 +248,7 @@ public:
         if (relayAlias(hostPort, rid)) { if (!haveRelay_) return false; sendRelayed(rid, p, n); return true; }
         sockaddr_in a{};
         if (!parseAddr(hostPort, a)) return false;
-        if (directDrop_ && !isInfra(a)) return true;   // TEST ONLY: the direct path does not exist
+        if (blocked(a)) return true;   // TEST ONLY: the direct path does not exist
         sendto(sock_, (const char*)p, (int)n, 0, (const sockaddr*)&a, sizeof a);
         stats_.bytesSent += n; ++stats_.packetsSent;
         return true;
@@ -260,7 +268,7 @@ private:
         if (r != peerRelay_.end()) { sendRelayed(r->second, d.data(), d.size()); return; }
         auto it = peers_.find(peer);
         if (it == peers_.end()) return;
-        if (directDrop_ && !isInfra(it->second)) return;   // TEST ONLY
+        if (blocked(it->second)) return;   // TEST ONLY
         sendto(sock_, (const char*)d.data(), (int)d.size(), 0, (const sockaddr*)&it->second, sizeof it->second);
         stats_.bytesSent += d.size(); ++stats_.packetsSent;
     }
@@ -312,7 +320,7 @@ private:
                 fromStr = "relay:" + std::to_string(src);
                 if (n <= 0) continue;
             } else {
-                if (directDrop_ && !isInfra(from)) continue;   // TEST ONLY: the direct path does not exist
+                if (blocked(from)) continue;   // TEST ONLY: the direct path does not exist
                 fromStr = addrString(from);
             }
             if (bp[0] == kStranger) {   // out of band: keep the sender's address
@@ -328,6 +336,7 @@ private:
                 if (strangers_.size() < 256) strangers_.push_back({fromStr, std::vector<uint8_t>(bp, bp + n)});
                 continue;
             }
+            if (haveRelay_ && bp == buf && n >= 2) directFrom_[bp[1]] = fromStr;   // the sender seat (channel header): its direct path works
             std::vector<uint8_t> ack; int ackTo = -1;
             ch_.receive(bp, (size_t)n, inbox_, ack, ackTo);
             if (!ack.empty()) raw(ackTo, ack);
@@ -336,8 +345,17 @@ private:
     int self_;
     Socket sock_;
     std::map<int, sockaddr_in> peers_;
+    std::map<int, std::string> directFrom_;   // seat -> its latest direct datagram's address (with a relay only; takeDirectFrom)
     std::map<int, uint32_t> peerRelay_;   // seat -> its relay id (reached through the relay)
     bool haveRelay_ = false, directDrop_ = false;
+    std::vector<int> dropPorts_;   // WFC_NET_DIRECT_DROP=ports:A+B (empty = every direct path)
+    bool blocked(const sockaddr_in& a) const {   // TEST ONLY
+        if (!directDrop_ || isInfra(a)) return false;
+        if (dropPorts_.empty()) return true;
+        const int port = ntohs(a.sin_port);
+        for (int q : dropPorts_) if (q == port) return true;
+        return false;
+    }
     sockaddr_in relay_{};
     uint64_t room_ = 0;
     uint32_t rid_ = 0;

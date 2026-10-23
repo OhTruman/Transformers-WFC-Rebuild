@@ -133,6 +133,8 @@ private:
         double lastHeard = 0.0;
         bool loaded = false;
         double lateLoadSince = -1.0;   // a late joiner loading the running match (LateLaunch sent, LOADED not yet): the load window
+        uint32_t relayId = 0;          // its id at the lobby service's relay (JOIN / PEERS; 0 = none)
+        bool viaRelay = false;         // reached through the relay (switched after kRelayAfterS of silence on the direct path)
     };
     class MatchView;
     friend class MatchView;

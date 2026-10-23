@@ -34,7 +34,7 @@ namespace net {
 namespace {
 
 using namespace frontend;
-constexpr uint32_t kProtocol = 0x57464303;   // "WFC" v3 (the map vote fields appended to the member / lobby records)
+constexpr uint32_t kProtocol = 0x57464304;   // "WFC" v4 (v3 + relay ids in JOIN / PEERS: the relay fallback between members)
 enum : uint8_t {
     kJoin = 0x50, kJoinOk = 0x51, kJoinFail = 0x52,
     kLobby = 0x40, kPeers = 0x41, kInfo = 0x42, kLaunch = 0x43, kLoaded = 0x44, kPeerLoaded = 0x45, kAllLoaded = 0x46,
@@ -405,8 +405,8 @@ void UdpSession::sendAllMembers(const std::vector<uint8_t>& msg) { for (const au
 void UdpSession::sendPeerTable() {   // host: every member learns every other member's address (the match is a full mesh)
     W w(kPeers);
     w.u8((int)peers_.size() + 1);
-    w.u8(0); w.str(self_.id.fingerprint); w.str("");   // the host: each member already has it as seat 0
-    for (const auto& kv : peers_) { w.u8(kv.first); w.str(kv.second.info.id.fingerprint); w.str(kv.second.address); }
+    w.u8(0); w.str(self_.id.fingerprint); w.str(""); w.u32(t_ ? t_->relayId() : 0u);   // the host: each member already has it as seat 0
+    for (const auto& kv : peers_) { w.u8(kv.first); w.str(kv.second.info.id.fingerprint); w.str(kv.second.address); w.u32(kv.second.relayId); }
     sendAllMembers(w.b);
 }
 
@@ -654,6 +654,7 @@ void UdpSession::handleStranger(const std::string& from, const std::vector<uint8
         const uint32_t proto = r.u32();
         SessionMemberInfo info = r.info();
         if (!r.ok) return;
+        const uint32_t joinerRelay = r.i + 4 <= r.n ? r.u32() : 0u;   // v4: the joiner's relay id (0 = none)
         if (proto != kProtocol) { std::vector<uint8_t> f = {kJoinFail, (uint8_t)SessionJoinFailure::Version}; t_->sendTo(from, f.data(), f.size()); return; }
         int seat = -1;
         for (const auto& kv : peers_) if (kv.second.address == from || kv.second.info.id == info.id) seat = kv.first;   // a JOIN resend
@@ -665,6 +666,7 @@ void UdpSession::handleStranger(const std::string& from, const std::vector<uint8
             Peer& p = peers_[seat];
             p.info = info; p.address = from; p.lastHeard = now_;
         }
+        peers_[seat].relayId = joinerRelay;
         std::vector<uint8_t> ok = {kJoinOk, (uint8_t)seat};
         t_->sendTo(from, ok.data(), ok.size());
         if (fresh) {
@@ -725,13 +727,14 @@ void UdpSession::handleSeated(int seat, const std::vector<uint8_t>& d) {
         for (int k = r.u8(); k > 0 && r.ok; --k) {
             const int s = r.u8();
             const std::string fp = r.str(), addr = r.str();
+            const uint32_t rid = r.u32();   // v4
             if (!r.ok) break;
-            if (s == 0) { keep[0].info.id.fingerprint = fp; continue; }
+            if (s == 0) { keep[0].info.id.fingerprint = fp; keep[0].relayId = rid; continue; }
             if (t_ && s == t_->self()) continue;
             Peer p = peers_.count(s) ? peers_[s] : Peer{};
-            p.info.id.fingerprint = fp; p.address = addr;
+            p.info.id.fingerprint = fp; p.relayId = rid;
             if (p.lastHeard <= 0.0) p.lastHeard = now_;
-            if (t_) t_->addPeer(s, addr);
+            if (!p.viaRelay) { p.address = addr; if (t_) t_->addPeer(s, addr); }   // a peer already switched to the relay stays there
             keep[s] = p;
         }
         for (const auto& kv : peers_) if (!keep.count(kv.first) && t_) t_->removePeer(kv.first);
@@ -910,7 +913,7 @@ std::vector<SessionEvent> UdpSession::poll(double now) {
         }
         if (now_ - lastJoinSend_ >= 1.0 && t_->self() == 255) {   // JOIN until seated (out of band: no seat yet)
             lastJoinSend_ = now_;
-            W w(kJoin); w.u32(kProtocol); w.info(self_);
+            W w(kJoin); w.u32(kProtocol); w.info(self_); w.u32(t_->relayId());
             for (const std::string& c : joinCandidates_) t_->sendTo(c, w.b.data(), w.b.size());   // the LAN endpoint and the public one
         }
         if (now_ - joinStart_ >= opt_.joinTimeoutS) {
@@ -937,6 +940,25 @@ std::vector<SessionEvent> UdpSession::poll(double now) {
         const uint8_t k = kKeepalive;
         for (const auto& kv : peers_) t_->sendUnreliable(kv.first, &k, 1);
     }
+    // The relay fallback between peers (SYSTEMS_RELAY.md): a peer silent for kRelayAfterS while both of us have a relay id is sent to
+    // through its relay alias (keepalives flow every second both ways, so silence = no direct path; the other side switches the same
+    // way). Receiving does not depend on the path (the channel header names the sender), and a direct datagram from a peer on the
+    // relay switches it back: a peer that was only busy (a blocking map load) returns to the direct path at once.
+    if (role_ != Role::Offline && t_ && t_->relayId() != 0)
+        for (auto& kv : peers_) {
+            Peer& pr = kv.second;
+            const std::string direct = t_->takeDirectFrom(kv.first);
+            if (pr.viaRelay && !direct.empty() && t_->addPeer(kv.first, direct)) {
+                pr.viaRelay = false; pr.address = direct;
+                LOG_INFO("session: seat %d answers directly again - back on %s", kv.first, direct.c_str());
+            } else if (!pr.viaRelay && pr.relayId != 0 && now_ - pr.lastHeard > kRelayAfterS) {
+                const std::string alias = "relay:" + std::to_string(pr.relayId);
+                if (t_->addPeer(kv.first, alias)) {
+                    pr.viaRelay = true; pr.address = alias;
+                    LOG_INFO("session: seat %d silent %.1f s - through the relay now (%s)", kv.first, now_ - pr.lastHeard, alias.c_str());
+                }
+            }
+        }
     // Timeouts: the host drops silent members; a member ends the session when the host is silent (other members: the host decides).
     if (role_ == Role::Host) {
         std::vector<int> gone;

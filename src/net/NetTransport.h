@@ -51,6 +51,8 @@ public:
     virtual void setRelay(const std::string& /*relayHostPort*/, uint64_t /*room*/, uint32_t /*selfId*/) {}
     virtual uint32_t relayId() const { return 0; }
     virtual void addInfra(const std::string& /*hostPort*/) {}
+    // The address of the latest datagram that came from `seat` directly (not through the relay) since the last call; empty = none.
+    virtual std::string takeDirectFrom(int /*seat*/) { return {}; }
     virtual bool pollStranger(std::string& /*fromHostPort*/, std::vector<uint8_t>& /*data*/) { return false; }
     // A datagram exactly as given (no framing byte): the STUN query from this socket (its reply comes back via pollStranger).
     virtual bool sendRaw(const std::string& /*hostPort*/, const uint8_t* /*p*/, size_t /*n*/) { return false; }
