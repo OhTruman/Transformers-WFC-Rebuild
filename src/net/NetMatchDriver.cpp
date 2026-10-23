@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <chrono>
 #include <cstdlib>
 
 namespace net {
@@ -18,6 +19,7 @@ namespace {
 constexpr float kStep = 1.0f / 60.0f;
 constexpr int kMaxStepsPerFrame = 8;   // catch-up cap (a long hitch is not replayed at once)
 constexpr uint8_t kEventSelection = 1;
+constexpr double kCatchUpBudgetMs = 12.0;   // a late joiner's history replay: sim time per frame (the loading screen keeps drawing)
 
 void putStr(std::vector<uint8_t>& b, const std::string& s) {
     const size_t n = std::min<size_t>(s.size(), 255);
@@ -78,7 +80,9 @@ struct NetMatchDriver::Impl {
     double accum = 0.0;
     bool stalled = false, held = false, ended = false, talking = false;
     uint32_t startTick = 1;
+    bool live = true;                     // a late joiner: false until it steps its activeTick
     FILE* rec = nullptr;
+    int player(int seat) const { return cfg.seatPlayer ? cfg.seatPlayer(seat) : seat; }
     Impl(game::World& w, INetTransport& tr, const Config& c) : world(w), t(tr), cfg(c) {}
 };
 
@@ -87,7 +91,14 @@ NetMatchDriver::NetMatchDriver(game::World& world, INetTransport& transport, aud
     Lockstep::Config lc;
     lc.seats = cfg.seats; lc.self = cfg.self; lc.delay = cfg.delay; lc.hashEvery = cfg.hashEvery;
     lc.peerTimeoutS = cfg.peerTimeoutS; lc.launchHash = cfg.launchHash; lc.logPath = cfg.logPath;
+    lc.activeFrom = cfg.activeFrom; lc.lateJoin = cfg.lateJoin; lc.keepHistory = cfg.keepHistory;
     impl_->ls = std::make_unique<Lockstep>(transport, lc);
+    impl_->live = !cfg.lateJoin;
+    if (cfg.keepHistory) {
+        Lockstep* ls = impl_->ls.get();
+        std::function<int(int)> pick = cfg.pickJoinTeam;
+        ls->setJoinReady([ls, pick](int seat) { ls->activateSeat(seat, pick ? pick(seat) : seat % 2); });
+    }
     if (!cfg.recordPath.empty()) {
         impl_->rec = std::fopen(cfg.recordPath.c_str(), "wb");
         if (impl_->rec) {   // the phase 1 WFC_NET_RECORD layout (WFC_NET_REPLAY reads it); events are not in it yet
@@ -99,7 +110,9 @@ NetMatchDriver::NetMatchDriver(game::World& world, INetTransport& transport, aud
     if (cfg.voice) {
         impl_->voice = std::make_unique<VoiceSession>(*impl_->ls, audio, VoiceSession::Config{});
         game::World* w = &world;
-        impl_->ls->setVoiceAudience([w](int talker, int listener, uint8_t flags) {   // as runNetMatch: match player = seat
+        Impl* im = impl_.get();
+        impl_->ls->setVoiceAudience([w, im](int talkerSeat, int listenerSeat, uint8_t flags) {   // seats -> match players
+            const int talker = im->player(talkerSeat), listener = im->player(listenerSeat);
             const auto& ps = w->match().players();
             if (talker < 0 || listener < 0 || (size_t)talker >= ps.size() || (size_t)listener >= ps.size()) return false;
             if ((flags & 1) && ps[(size_t)talker].team == ps[(size_t)listener].team && ps[(size_t)talker].team != 255) return true;
@@ -129,27 +142,36 @@ int NetMatchDriver::frame(double dtSeconds) {
             game::CharacterSelection sel;
             if (decodeSelection(ev.payload, sel)) { if (m.cfg.onSelection) m.cfg.onSelection(ev.seat, sel, ev.atTick); }
             else LOG_WARN("NET driver: a bad selection event from seat %d", ev.seat);
+        } else if (ev.kind == Lockstep::kEventSeatJoin && ev.payload.size() >= 6) {   // {u8 seat, u32 activeTick, u8 team}
+            const int seat = ev.payload[0], team = ev.payload[5];
+            LOG_INFO("NET driver: seat %d joins at tick %u, team %d%s", seat, ev.atTick, team, seat == m.cfg.self ? " (this peer)" : "");
+            if (m.cfg.onSeatJoin) m.cfg.onSeatJoin(seat, team, seat == m.cfg.self, ev.atTick);
         }
     }
     if (m.voice) {   // the listener = the local pawn (its right vector from the facing yaw)
         game::World& w = m.world;
-        const game::Character* me = w.participantPawn(m.cfg.self);
+        const game::Character* me = w.participantPawn(m.player(m.cfg.self));
         const core::Vec3 lp = me ? me->position() + core::Vec3{0, 1.8f, 0} : core::Vec3{0, 0, 0};
         const float yaw = me ? me->yaw() : 0.0f;
         const core::Vec3 right = core::normalize(core::cross(core::forwardFromYawPitch(yaw, 0.0f), core::Vec3{0, 1, 0}));
-        const int self = m.cfg.self;
+        const int self = m.player(m.cfg.self);
+        Impl* im = &m;
         m.voice->update(m.talking,
-                        [&w](int seat, core::Vec3& out) { const game::Character* c = w.participantPawn(seat); if (!c) return false; out = c->position() + core::Vec3{0, 1.8f, 0}; return true; },
-                        [&w, self](int seat) { const auto& ps = w.match().players(); return (size_t)seat < ps.size() && (size_t)self < ps.size() && ps[(size_t)seat].team == ps[(size_t)self].team && ps[(size_t)seat].team != 255; },
+                        [&w, im](int seat, core::Vec3& out) { const int p = im->player(seat); const game::Character* c = p >= 0 ? w.participantPawn(p) : nullptr; if (!c) return false; out = c->position() + core::Vec3{0, 1.8f, 0}; return true; },
+                        [&w, im, self](int seat) { const int p = im->player(seat); const auto& ps = w.match().players(); return p >= 0 && self >= 0 && (size_t)p < ps.size() && (size_t)self < ps.size() && ps[(size_t)p].team == ps[(size_t)self].team && ps[(size_t)p].team != 255; },
                         [&w](const core::Vec3& a, const core::Vec3& b) { return w.soundBlocked(a, b); },
                         [&w]() { return w.currentReverbPreset(); }, lp, right);
     }
     if (ls.status() != Lockstep::Status::Running) { m.ended = true; return 0; }
     if (m.held) { m.accum = 0.0; return 0; }
-    m.accum = std::min(m.accum + dtSeconds, (double)kStep * kMaxStepsPerFrame);
+    // A late joiner replays the history unpaced (a time budget per frame) until it steps its activeTick; then real time from there.
+    const auto t0 = std::chrono::steady_clock::now();
+    auto budgetLeft = [&t0]() { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() < kCatchUpBudgetMs; };
+    if (!m.live) m.accum = kStep;
+    else m.accum = std::min(m.accum + dtSeconds, (double)kStep * kMaxStepsPerFrame);
     int steps = 0;
     m.stalled = false;
-    while (m.accum >= kStep && steps < kMaxStepsPerFrame) {
+    while (m.live ? (m.accum >= kStep && steps < kMaxStepsPerFrame) : budgetLeft()) {
         const uint32_t n = (uint32_t)m.world.simTick() + 1;
         if (ls.endTick() > 0 && n > ls.endTick()) { m.ended = true; break; }
         while (m.nextLocal <= n + (uint32_t)ls.delay()) {   // this seat's commands up to N + D (the local controller's input now)
@@ -158,11 +180,14 @@ int NetMatchDriver::frame(double dtSeconds) {
             ls.submitLocal(m.nextLocal, c);
             ++m.nextLocal;
         }
+        if (!m.live) ls.reportCatchUp(n);
         if (!ls.haveAll(n)) { m.stalled = true; ls.stalled(dtSeconds * 1000.0); break; }
         for (int s = 0; s < m.cfg.seats; ++s) {
+            const int p = m.player(s);
+            if (p < 0) continue;   // a reserved seat without a participant yet
             game::RemoteCommand c;
             ls.command(s, n, c);
-            m.world.applyRemoteCommand(s, c);
+            m.world.applyRemoteCommand(p, c);
         }
         if (m.rec) {
             std::fwrite(&n, 4, 1, m.rec);
@@ -173,14 +198,22 @@ int NetMatchDriver::frame(double dtSeconds) {
         ls.stepped(n, h);
         ls.reportHash(n, h);
         if (n > 64) ls.forget(n - 64);
-        m.accum -= kStep;
+        if (m.live) m.accum -= kStep;
         ++steps;
+        if (!m.live && ls.activeFrom(m.cfg.self) != 0 && n >= ls.activeFrom(m.cfg.self)) {
+            m.live = true; m.accum = 0.0;
+            LOG_INFO("NET driver: live at tick %u (caught up; host at %u)", n, ls.hostLive());
+            break;
+        }
     }
     if (ls.status() != Lockstep::Status::Running) m.ended = true;
     return steps;
 }
 
 bool NetMatchDriver::stalled() const { return impl_->stalled; }
+bool NetMatchDriver::catchingUp() const { return !impl_->live; }
+uint32_t NetMatchDriver::catchUpTick() const { return (uint32_t)impl_->world.simTick(); }
+uint32_t NetMatchDriver::catchUpTarget() const { return impl_->ls->hostLive(); }
 bool NetMatchDriver::held() const { return impl_->held; }
 void NetMatchDriver::setHeld(bool held, uint32_t startTick) { impl_->held = held; if (startTick) impl_->startTick = startTick; }
 bool NetMatchDriver::finished() const { return impl_->ended; }

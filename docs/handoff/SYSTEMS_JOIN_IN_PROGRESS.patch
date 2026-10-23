@@ -1,0 +1,1099 @@
+diff -ruN a/src/core/Application_Net.cpp b/src/core/Application_Net.cpp
+--- a/src/core/Application_Net.cpp	2026-10-23 02:55:41.325021800 -0500
++++ b/src/core/Application_Net.cpp	2026-10-23 02:55:41.340574800 -0500
+@@ -171,10 +171,24 @@
+     }
+ 
+     net::Lockstep::Config cfg;
++    // Join in progress (harness): WFC_NET_LATE=<seat>[,<seat>] reserves seats on every peer (a human in the launch whose pawn idles
++    // on empty commands until it joins - the sim side of a dormant seat is Gameplay's); the joiner runs with WFC_NET_LATEJOIN=1.
++    if (const char* late = std::getenv("WFC_NET_LATE")) {
++        cfg.activeFrom.assign((size_t)seats, 1);
++        for (const char* q = late; *q;) {
++            const int ls = std::atoi(q);
++            if (ls > 0 && ls < seats) cfg.activeFrom[(size_t)ls] = 0;
++            while (*q && *q != ',') ++q;
++            if (*q == ',') ++q;
++        }
++        cfg.keepHistory = self == 0;
++        cfg.lateJoin = std::getenv("WFC_NET_LATEJOIN") != nullptr;
++    }
+     cfg.seats = seats; cfg.self = self; cfg.delay = (int)env("WFC_NET_DELAY", 0); cfg.hashEvery = (int)env("WFC_NET_HASH_EVERY", 60);   // delay 0 = auto from the RTT
+     cfg.peerTimeoutS = (double)env("WFC_NET_TIMEOUT_S", 10); cfg.launchHash = lh;
+     if (const char* lp = std::getenv("WFC_NET_LOG")) cfg.logPath = lp;
+     net::Lockstep ls(*t, cfg);
++    if (cfg.keepHistory) ls.setJoinReady([&ls](int seat) { ls.activateSeat(seat, seat % 2); });   // the harness: the launch's team
+     const long desyncAt = env("WFC_NET_DESYNC_AT", -1);
+     std::unique_ptr<net::VoiceSession> voice;
+     if (const char* vm = std::getenv("WFC_NET_VOICE")) {
+@@ -224,9 +238,11 @@
+     const bool pace = std::getenv("WFC_NET_PACE") != nullptr;
+     long steps = 0;
+     bool started = false;
+-    const auto tRun = std::chrono::steady_clock::now();
++    auto tRun = std::chrono::steady_clock::now();
+     while (ls.status() == net::Lockstep::Status::Running) {
+         ls.pump();
++        for (net::Lockstep::Event ev; ls.pollEvent(ev);)   // the harness has no event consumers; a seat join is logged by the Lockstep
++            (void)ev;
+         if (voice) {   // the listener: the local pawn (its right vector from the facing yaw)
+             const game::Character* me = world_.participantPawn(world_.localMatchPlayer());
+             const core::Vec3 lp = me ? me->position() + core::Vec3{0, 1.8f, 0} : core::Vec3{0, 0, 0};
+@@ -243,7 +259,18 @@
+             ls.submitLocal(nextLocal, world_.encodeLocalCommand());
+             ++nextLocal;
+         }
+-        if (pace && secsSince(tRun) < (double)n * step) {   // not yet this tick's wall time (real-time pacing)
++        bool live = true;   // the joiner: full speed until it reaches its activeTick (caught up), then the match's real-time pace
++        if (cfg.lateJoin) {
++            static bool wasLive = false;
++            ls.reportCatchUp(n);
++            live = ls.activeFrom(self) != 0 && n >= ls.activeFrom(self);
++            if (live && !wasLive) {
++                LOG_INFO("NET late join: live at tick %u (active from %u, host at %u, %.1f s after start)", n, ls.activeFrom(self), ls.hostLive(), secsSince(tRun));
++                tRun = std::chrono::steady_clock::now() - std::chrono::microseconds((long long)((double)n * step * 1e6));
++            }
++            wasLive = live;
++        }
++        if (pace && live && secsSince(tRun) < (double)n * step) {   // not yet this tick's wall time (real-time pacing)
+             std::this_thread::sleep_for(std::chrono::microseconds(500));
+             continue;
+         }
+@@ -360,6 +387,31 @@
+     }
+ }
+ 
++// Join in progress (Gameplay's dormant seats): World::queueLateSeat / smallerTeam / seatPlayer when the tree has them. Before
++// Gameplay's patch: the wake is logged only (a dormant seat stays dormant) and the team is counted here from the match players.
++template <class W, class = void> struct HasQueueLateSeat : std::false_type {};
++template <class W> struct HasQueueLateSeat<W, std::void_t<decltype(std::declval<W&>().queueLateSeat(0, std::declval<const game::RemoteSeat&>(), 0u))>> : std::true_type {};
++template <class W> void queueLateSeat(W& w, int seat, const game::RemoteSeat& r, uint32_t atTick) {
++    if constexpr (HasQueueLateSeat<W>::value) w.queueLateSeat(seat, r, atTick);
++    else LOG_WARN("online: World::queueLateSeat missing in this build - seat %d (%s) does not wake at tick %u", seat, r.name.c_str(), atTick);
++}
++template <class W, class = void> struct HasSmallerTeam : std::false_type {};
++template <class W> struct HasSmallerTeam<W, std::void_t<decltype(std::declval<const W&>().smallerTeam())>> : std::true_type {};
++template <class W> int smallerTeamOf(const W& w) {
++    if constexpr (HasSmallerTeam<W>::value) return w.smallerTeam();
++    else {
++        int n[2] = {0, 0};
++        for (const auto& p : w.match().players()) if (p.team == 0 || p.team == 1) ++n[p.team];
++        return n[1] < n[0] ? 1 : 0;
++    }
++}
++template <class W, class = void> struct HasSeatPlayer : std::false_type {};
++template <class W> struct HasSeatPlayer<W, std::void_t<decltype(std::declval<const W&>().seatPlayer(0))>> : std::true_type {};
++template <class W> int seatPlayerOf(const W& w, int seat) {
++    if constexpr (HasSeatPlayer<W>::value) return w.seatPlayer(seat);
++    else return seat;   // the launch's seat order: dormant seats are humans too
++}
++
+ // [Systems, online phase 2] The online match from the frontend: the lockstep driver over the session's match view (match player i =
+ // seat i on every peer), started right after World::launchMatch of an online launch. The launch hash is phase 1's: the host's
+ // launch URL + seed + seats + this build, so a peer on another build / URL fails at HELLO (JoinFailed{Version} via the session).
+@@ -393,6 +445,23 @@
+         if (frontend_) { driveLifecycleTest(dt); routeMatchToFrontend(dt); }
+     };
+     c.onSelection = [this](int seat, const game::CharacterSelection& sel, uint32_t atTick) { queueSelection(world_, seat, sel, atTick); };
++    // Join in progress: Reserved seats (dormant humans) from the launch roster; the host keeps the history while any is free.
++    c.activeFrom = udpSession_->matchActiveFrom();
++    c.lateJoin = udpSession_->lateJoin();
++    c.keepHistory = localSeat == 0 && std::find(c.activeFrom.begin(), c.activeFrom.end(), 0u) != c.activeFrom.end();
++    c.pickJoinTeam = [this](int) { return smallerTeamOf(world_); };
++    c.seatPlayer = [this](int seat) { return seatPlayerOf(world_, seat); };
++    c.onSeatJoin = [this](int seat, int team, bool local, uint32_t atTick) {
++        game::RemoteSeat r;
++        r.team = team; r.selected = false;
++        if (udpSession_) {
++            r.member = udpSession_->matchMember(seat).fingerprint;
++            r.name = udpSession_->matchMemberName(seat);
++        }
++        if (r.name.empty()) r.name = "Player";
++        LOG_INFO("online: seat %d (%s) wakes at tick %u on team %d%s", seat, r.name.c_str(), atTick, team, local ? " - this peer" : "");
++        queueLateSeat(world_, seat, r, atTick);
++    };
+     netDriver_ = std::make_unique<net::NetMatchDriver>(world_, *udpSession_->matchTransport(), audio_, c);
+     LOG_INFO("online: the lockstep driver runs the match (seat %d of %d, launch hash %016llx)", localSeat, seats, (unsigned long long)lh);
+ }
+@@ -405,6 +474,11 @@
+         d.setTalking(v.mode == frontend::SessionVoiceMode::OpenMic || (v.mode == frontend::SessionVoiceMode::PushToTalk && udpSession_->pushToTalk()));
+     }
+     d.frame(realDt);
++    if (udpSession_) {   // join in progress: the host's tick (the catch-up limit); a late joiner's replay -> CatchUpProgress
++        if (d.localSeat() == 0) udpSession_->noteMatchTick((uint32_t)world_.simTick());
++        if (d.catchingUp()) udpSession_->reportCatchUp(d.catchUpTick(), d.catchUpTarget());
++        else if (udpSession_->lateJoin()) udpSession_->reportCatchUp(d.catchUpTick(), d.catchUpTick());   // the last one: done
++    }
+     const bool over = !world_.matchActive();
+     if (d.finished() || over) {
+         const int st = d.status();
+@@ -422,6 +496,9 @@
+ // AllLoaded, then NetMatchDriver steps it (real-time pacing) until WFC_MATCH_SECONDS of match time. Exit codes as runNetMatch:
+ // 0 ended, 3 desync, 4 timeout / peers missing, 5 host lost, 6 launch mismatch, 7 setup. Headless with WFC_NULLRENDER; netshim can
+ // sit between (the host binds its port, members WFC_UDPBIND; each side is given the shim's port as the other's address).
++// Join in progress: the host with WFC_UDPRESERVE=N adds N Reserved slots (WFC_UDPLATELIMIT_S = the catch-up limit, default 300);
++// a member with WFC_UDPLATEJOIN=1 joins the session while the match runs, asks joinRunningMatch on MatchInProgress and launches
++// from the late launch record (until Gameplay's dormant seats land, a Reserved seat is a plain human idling on empty commands).
+ void Application::runUdpSessionMatch() {
+     using frontend::SessionEvent;
+     using T = SessionEvent::Type;
+@@ -472,13 +549,22 @@
+             frontend::SessionSlot sl; sl.kind = frontend::SessionSlot::Kind::Human; sl.member = members[i]; sl.team = (int)((i + 1) % 2);
+             lobby.slots.push_back(sl);
+         }
++        for (long i = 0; i < env("WFC_UDPRESERVE", 0); ++i) { frontend::SessionSlot sl; sl.kind = frontend::SessionSlot::Kind::Reserved; lobby.slots.push_back(sl); }
++        s.setLateJoinLimit((double)env("WFC_UDPLATELIMIT_S", 300));
+         s.publishLobby(lobby);
+         pump(0.5, nullptr);
+         s.setLaunch(url, seed, lobby);
+         s.requestStart();
+     } else if (joinAddr) {
+         s.join(joinAddr);
++        if (std::getenv("WFC_UDPLATEJOIN")) {   // join in progress: the lobby says the match runs -> ask for a Reserved seat
++            if (!pump(60.0, [&] { return has(T::MatchInProgress) || has(T::Joined) || has(T::JoinFailed); }) || !has(T::MatchInProgress)) {
++                LOG_ERROR("UDPMATCH: no running match to join (joined %d)", has(T::Joined) ? 1 : 0); exitCode_ = 4; return;
++            }
++            s.joinRunningMatch();
++        }
+         if (!pump(60.0, [&] { return has(T::CountdownStarted) || has(T::JoinFailed) || has(T::HostLost); }) || !has(T::CountdownStarted)) {
++            if (has(T::JoinFailed)) for (const SessionEvent& e : ev) if (e.type == T::JoinFailed) LOG_INFO("UDPMATCH: JoinFailed reason %d", (int)e.joinFailure);
+             LOG_ERROR("UDPMATCH: no launch from the host (joined %d)", has(T::Joined) ? 1 : 0); exitCode_ = 4; return;
+         }
+     }
+@@ -490,9 +576,13 @@
+     const int n = s.matchSeats(), self = s.matchSelf();
+     L.localTeam = self % 2;
+     game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+-    for (int i = 0; i < n; ++i) {
+-        game::RemoteSeat r; r.name = "Seat" + std::to_string(i); r.team = i % 2; r.member = s.matchMember(i).fingerprint;
+-        r.selected = true; r.selection = cs;
++    const std::vector<uint32_t> activeFrom = s.matchActiveFrom();
++    for (int i = 0; i < n; ++i) {   // a Reserved seat: no member at launch on any peer (the joiner too), so every launch is identical
++        game::RemoteSeat r; r.name = "Seat" + std::to_string(i); r.team = i % 2;
++        const bool reserved = (size_t)i < activeFrom.size() && activeFrom[(size_t)i] == 0;
++        r.member = reserved ? std::string() : s.matchMember(i).fingerprint;
++        r.selected = !reserved; r.selection = cs;
++        r.dormant = reserved;   // Gameplay's dormant seat: no pawn / team / score until World::queueLateSeat wakes it
+         L.humans.push_back(r);
+     }
+     L.localSeat = self; L.online = true;
+@@ -514,7 +604,19 @@
+     c.voice = false;
+     c.step = [this](float dt) { world_.tick(dt); gameMode_.tick(world_, dt); };
+     c.onSelection = [this](int seat, const game::CharacterSelection& sel, uint32_t atTick) { queueSelection(world_, seat, sel, atTick); };
++    c.activeFrom = activeFrom; c.lateJoin = s.lateJoin();
++    c.keepHistory = self == 0 && std::find(activeFrom.begin(), activeFrom.end(), 0u) != activeFrom.end();
++    c.pickJoinTeam = [this](int) { return smallerTeamOf(world_); };
++    c.seatPlayer = [this](int seat) { return seatPlayerOf(world_, seat); };
++    bool pickAfterWake = false;
++    c.onSeatJoin = [this, &s, &pickAfterWake](int seat, int team, bool local, uint32_t atTick) {
++        game::RemoteSeat r; r.team = team; r.member = s.matchMember(seat).fingerprint; r.name = s.matchMemberName(seat);
++        LOG_INFO("UDPMATCH seat %d (%s) wakes at tick %u on team %d%s", seat, r.name.c_str(), atTick, team, local ? " - this peer" : "");
++        queueLateSeat(world_, seat, r, atTick);
++        if (local) pickAfterWake = true;   // the woken joiner goes through Choose Character (an event, as in the game)
++    };
+     net::NetMatchDriver drv(world_, *s.matchTransport(), nullptr, c);
++    long catchUpEvents = 0;
+     const float matchSeconds = (float)std::atof(std::getenv("WFC_MATCH_SECONDS") ? std::getenv("WFC_MATCH_SECONDS") : "60");
+     auto last = std::chrono::steady_clock::now();
+     bool started = false, reachedEnd = false, hostLostEarly = false;
+@@ -525,6 +627,11 @@
+         const double dt = std::chrono::duration<double>(t - last).count();
+         last = t;
+         steps += drv.frame(dt);
++        if (pickAfterWake && !drv.catchingUp()) { pickAfterWake = false; drv.chooseCharacter(cs); LOG_INFO("UDPMATCH: the joiner picks its character"); }
++        if (self == 0) s.noteMatchTick((uint32_t)world_.simTick());
++        if (s.lateJoin()) s.reportCatchUp(drv.catchUpTick(), drv.catchingUp() ? drv.catchUpTarget() : drv.catchUpTick());
++        for (const SessionEvent& e : ev) if (e.type == T::CatchUpProgress) ++catchUpEvents;
++        ev.erase(std::remove_if(ev.begin(), ev.end(), [](const SessionEvent& e) { return e.type == T::CatchUpProgress; }), ev.end());
+         const bool inProgress = world_.matchActive() && world_.match().state() == game::Match::State::InProgress;
+         if (inProgress) started = true;
+         if ((started && !inProgress) || (inProgress && world_.match().elapsedTime() >= matchSeconds)) { reachedEnd = true; break; }
+@@ -533,7 +640,8 @@
+         std::this_thread::sleep_for(std::chrono::microseconds(500));
+     }
+     const int st = drv.status();
+-    LOG_INFO("UDPMATCH done: %ld steps, seat %d of %d, status %d, D %d, rtt %.1f ms", steps, self, n, st, drv.delay(), drv.rttMs());
++    LOG_INFO("UDPMATCH done: %ld steps, seat %d of %d, status %d, D %d, rtt %.1f ms%s", steps, self, n, st, drv.delay(), drv.rttMs(),
++             s.lateJoin() ? (", late join, " + std::to_string(catchUpEvents) + " CatchUpProgress events").c_str() : "");
+     exitCode_ = st != 0 ? st : (hostLostEarly ? (has(T::HostLost) ? 5 : 4) : 0);   // the host leaving at the normal end = 0
+ }
+ 
+diff -ruN a/src/frontend/Session.h b/src/frontend/Session.h
+--- a/src/frontend/Session.h	2026-10-23 02:55:41.190058900 -0500
++++ b/src/frontend/Session.h	2026-10-23 02:55:41.206114100 -0500
+@@ -56,7 +56,9 @@
+ // One participant slot of the lobby / match: a human (local or remote) or a bot. Bot counts from Game Mode Options are
+ // maxima; humans take bot slots (ONLINE_MP_FLOWS.md 3.4).
+ struct SessionSlot {
+-    enum class Kind { Bot, Human } kind = Kind::Bot;
++    // Reserved [Systems, join in progress]: a seat kept for a joiner of a running public match - a dormant human in the launch
++    // (game::RemoteSeat::dormant: no pawn / team / score) until the joiner wakes it (World::queueLateSeat).
++    enum class Kind { Bot, Human, Reserved } kind = Kind::Bot;
+     SessionMemberId member;                 // humans only
+     int team = 255;                         // 0 Autobots, 1 Decepticons, 255 none (FFA)
+     bool connecting = false;                // PlayerList_GFX IsConnecting
+@@ -103,7 +105,8 @@
+ 
+ enum class SessionHostFailure { NoPath, StrictNat };                     // D2: PC text / the original NAT text
+ // the original texts (ONLINE_MP_UI_STRINGS.md 3); Invalid: the code failed the session layer's decode / check symbol
+-enum class SessionJoinFailure { Full, Timeout, Version, MapMissing, Invalid };
++// TooFarAlong [Systems]: joinRunningMatch refused - the running match is past the host's catch-up limit (setLateJoinLimit)
++enum class SessionJoinFailure { Full, Timeout, Version, MapMissing, Invalid, TooFarAlong };
+ 
+ // Voice (decision D7; ONLINE_MP_FLOWS.md 3.12, architecture section 7). Capture / playback / Opus are Systems'; the
+ // frontend hands over the player's settings and the push-to-talk key state, and shows MemberVoice as HeadsetState.
+@@ -170,6 +173,7 @@
+     // Join in progress (Systems' plan 2026-10-23): CountdownStarted with lateJoin = the host's LateLaunch record (url, seed,
+     // the roster with this joiner's seat and team): travel straight into the running match, no lobby countdown.
+     bool lateJoin = false;
++    int lateSeat = -1;                        // [Systems] lateJoin: this joiner's match seat (a Reserved slot of `lobby`) = the launch's localSeat
+     int catchUpTick = 0, catchUpTarget = 0;   // CatchUpProgress
+ };
+ inline const char* sessionEventName(SessionEvent::Type t) {
+@@ -219,6 +223,9 @@
+     // waiting in the lobby (D6). The host answers with CountdownStarted{lateJoin} and CatchUpProgress during the load.
+     virtual bool supportsLateJoin() const { return false; }
+     virtual void joinRunningMatch() {}
++    // [Systems] Host, before requestStart: the catch-up limit in seconds of match time (0 = joining a running match refused ->
++    // JoinFailed{Full}; past it -> JoinFailed{TooFarAlong}). The seats are the launch roster's Reserved slots.
++    virtual void setLateJoinLimit(double maxMatchSeconds) { (void)maxMatchSeconds; }
+ };
+ 
+ // Match-side plumbing for WFC_SESSIONTEST (Gameplay's harness, ONLINE_MP_FRONTEND_TESTS.md section 4); declared here so
+diff -ruN a/src/net/Lockstep.cpp b/src/net/Lockstep.cpp
+--- a/src/net/Lockstep.cpp	2026-10-23 02:55:40.526786000 -0500
++++ b/src/net/Lockstep.cpp	2026-10-23 02:55:40.542339300 -0500
+@@ -22,7 +22,13 @@
+ uint32_t get32(const uint8_t* p) { return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24); }
+ uint64_t get64(const uint8_t* p) { return (uint64_t)get32(p) | ((uint64_t)get32(p + 4) << 32); }
+ 
+-enum : uint8_t { kCmds = 1, kHello = 2, kHash = 3, kBye = 4, kPing = 5, kPong = 6, kVoice = 7, kEvent = 8 };
++enum : uint8_t { kCmds = 1, kHello = 2, kHash = 3, kBye = 4, kPing = 5, kPong = 6, kVoice = 7, kEvent = 8,
++                 kJoinReq = 9, kHist = 10, kReady = 11 };
++enum : uint8_t { kHistTicks = 0, kHistEvent = 1, kHistHash = 2 };   // HIST sub-records
++constexpr size_t kHistPacketBytes = 1100;      // under the transport's 2048-byte receive buffer, one datagram
++constexpr double kFeedBytesPerMs = 2000.0;     // 2 MB/s history pacing (the reliable channel has no window of its own)
++constexpr uint32_t kReadyTicks = 10;           // a joiner within this many ticks of the forwarded history says READY
++constexpr uint32_t kFeedPastActive = 120;      // the host forwards until it has stepped the joiner's activeTick + this
+ constexpr uint32_t kRedundancy = 3;   // ticks per regular CMDS packet: the newest + 2 before it (covers isolated losses)
+ 
+ }  // namespace
+@@ -71,6 +77,11 @@
+     leadCur_.assign((size_t)cfg_.seats, kNoLead); leadPrev_.assign((size_t)cfg_.seats, kNoLead); leadReported_.assign((size_t)cfg_.seats, kNoLead);
+     hello_.assign((size_t)cfg_.seats, 0);
+     hello_[(size_t)cfg_.self] = 1;
++    eventSeen_.resize((size_t)cfg_.seats);
++    activeFrom_ = cfg_.activeFrom;
++    activeFrom_.resize((size_t)cfg_.seats, 1);
++    for (int s = 0; s < cfg_.seats; ++s)
++        if (activeFrom_[(size_t)s] == 0 || cfg_.lateJoin) hello_[(size_t)s] = 1;   // reserved seats / a late joiner wait for no HELLO
+     lastFullMs_.assign((size_t)cfg_.seats, 0.0);
+     delay_ = cfg_.delay > 0 ? cfg_.delay : 4;   // auto starts at 4 and follows the RTT
+     if (!cfg_.logPath.empty()) {
+@@ -80,6 +91,11 @@
+     }
+     std::vector<uint8_t> b; put8(b, kHello); put8(b, (uint8_t)cfg_.self); put64(b, cfg_.launchHash);
+     for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) t_.sendReliable(s, b.data(), b.size());
++    if (cfg_.lateJoin && cfg_.self != 0) {   // join in progress: ask the host for the history
++        std::vector<uint8_t> j; put8(j, kJoinReq); put8(j, (uint8_t)cfg_.self);
++        t_.sendReliable(0, j.data(), j.size());
++        LOG_INFO("NET late join: seat %d asks the host for the match history", cfg_.self);
++    }
+     LOG_INFO("NET lockstep: seat %d of %d, D %s%d, hash every %d, launch hash %016llx", cfg_.self, cfg_.seats, cfg_.delay > 0 ? "" : "auto from ",
+              delay_, cfg_.hashEvery,
+              (unsigned long long)cfg_.launchHash);
+@@ -108,7 +124,7 @@
+         const double overdue = 1.5 * (double)std::max(srtt_, 20.0f) + 10.0;
+         const bool idle = nowMs() - lastSendMs_ >= 30.0;
+         for (int s = 0; s < cfg_.seats; ++s) {
+-            if (s == cfg_.self) continue;
++            if (s == cfg_.self || activeFrom_[(size_t)s] == 0) continue;
+             // overdue: the peer still lacks a tick I first sent more than `overdue` ago (and no full window went out since)
+             auto next = producedMs_.find(peerAck_[(size_t)s] + 1);
+             const bool lost = next != producedMs_.end() && nowMs() - next->second >= overdue && nowMs() - lastFullMs_[(size_t)s] >= overdue;
+@@ -119,7 +135,104 @@
+     if (nowMs() - lastPingMs_ >= 250.0) {
+         lastPingMs_ = nowMs();
+         std::vector<uint8_t> b; put8(b, kPing); put8(b, (uint8_t)cfg_.self); put64(b, (uint64_t)(nowMs() * 1000.0));
+-        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) t_.sendUnreliable(s, b.data(), b.size());
++        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && activeFrom_[(size_t)s] != 0) t_.sendUnreliable(s, b.data(), b.size());
++    }
++    if (!feeds_.empty()) pumpFeeds();
++}
++
++bool Lockstep::seatActive(int seat, uint32_t tick) const {
++    if (seat < 0 || seat >= cfg_.seats) return false;
++    const uint32_t a = activeFrom_[(size_t)seat];
++    return a != 0 && tick >= a;
++}
++
++// The host's history feed to each joining seat, paced (kFeedBytesPerMs): first every event it knows that this joiner has not had,
++// then the tick bundles from the cursor up to the host's newest stepped tick (every seat active at the tick: u8 seat + 23 bytes),
++// and its own state hashes up to there. The order on the reliable channel guarantees that an event stamped for tick T reaches the
++// joiner before T's bundle (the host held the event before it could step T). Fed until the host has stepped the joiner's
++// activeTick + kFeedPastActive (by then every peer sends to the joiner directly).
++void Lockstep::pumpFeeds() {
++    const double t = nowMs();
++    feedBudget_ = std::min(65536.0, feedBudget_ + (feedLastMs_ > 0.0 ? (t - feedLastMs_) * kFeedBytesPerMs : 65536.0));
++    feedLastMs_ = t;
++    for (size_t f = 0; f < feeds_.size();) {
++        Feed& fd = feeds_[f];
++        const uint32_t act = activeFrom_[(size_t)fd.seat];
++        if (act != 0 && hostStepped_ >= act + kFeedPastActive && fd.nextTick > hostStepped_) {
++            LOG_INFO("NET late join: seat %d fed through tick %u (active from %u) - feed closed", fd.seat, fd.nextTick - 1, act);
++            feeds_.erase(feeds_.begin() + (long)f);
++            continue;
++        }
++        while (feedBudget_ > 0.0 && fd.nextEvent < eventLog_.size()) {   // events first
++            const Event& e = eventLog_[fd.nextEvent++];
++            std::vector<uint8_t> b; put8(b, kHist); put8(b, (uint8_t)cfg_.self); put8(b, kHistEvent);
++            put8(b, (uint8_t)e.seat); put32(b, e.atTick); put8(b, e.kind); put32(b, e.seq);
++            put8(b, (uint8_t)e.payload.size()); put8(b, (uint8_t)(e.payload.size() >> 8));
++            b.insert(b.end(), e.payload.begin(), e.payload.end());
++            t_.sendReliable(fd.seat, b.data(), b.size());
++            feedBudget_ -= (double)b.size();
++        }
++        while (feedBudget_ > 0.0 && fd.nextTick <= hostStepped_) {   // tick bundles, as many as fit one datagram
++            std::vector<uint8_t> b; put8(b, kHist); put8(b, (uint8_t)cfg_.self); put8(b, kHistTicks);
++            put32(b, hostStepped_);   // the live target: READY only near it (not near what has trickled in so far)
++            put32(b, fd.nextTick);
++            const size_t nAt = b.size(); put8(b, 0);
++            uint8_t n = 0;
++            while (fd.nextTick <= hostStepped_ && n < 255) {
++                std::vector<uint8_t> one; one.push_back(0);
++                for (int s = 0; s < cfg_.seats; ++s) {
++                    auto it = cmds_[(size_t)s].find(fd.nextTick);
++                    if (!seatActive(s, fd.nextTick) || it == cmds_[(size_t)s].end()) continue;
++                    one.push_back((uint8_t)s); one.insert(one.end(), it->second.begin(), it->second.end()); ++one[0];
++                }
++                if (n > 0 && b.size() + one.size() > kHistPacketBytes) break;
++                b.insert(b.end(), one.begin(), one.end());
++                ++n; ++fd.nextTick;
++            }
++            b[nAt] = n;
++            t_.sendReliable(fd.seat, b.data(), b.size());
++            feedBudget_ -= (double)b.size();
++            for (auto it = hashLog_.lower_bound(fd.nextHashTick); it != hashLog_.end() && it->first < fd.nextTick; ++it) {
++                std::vector<uint8_t> h; put8(h, kHist); put8(h, (uint8_t)cfg_.self); put8(h, kHistHash); put32(h, it->first); put64(h, it->second);
++                t_.sendReliable(fd.seat, h.data(), h.size());
++                fd.nextHashTick = it->first + 1;
++            }
++        }
++        ++f;
++    }
++}
++
++void Lockstep::reportCatchUp(uint32_t nextStep) {
++    if (!cfg_.lateJoin || readySent_ || !histStarted_ || nextStep + kReadyTicks < hostLive_ || nextStep + kReadyTicks < histHigh_) return;
++    readySent_ = true;
++    std::vector<uint8_t> b; put8(b, kReady); put8(b, (uint8_t)cfg_.self); put32(b, nextStep);
++    t_.sendReliable(0, b.data(), b.size());
++    LOG_INFO("NET late join: caught up at tick %u (history at %u, host at %u) - READY", nextStep, histHigh_, hostLive_);
++}
++
++uint32_t Lockstep::activateSeat(int seat, int team) {
++    std::vector<uint8_t> pl; pl.push_back((uint8_t)seat);
++    const uint32_t at = localHigh_ + 1, active = at + kJoinLeadTicks;
++    put32(pl, active); pl.push_back((uint8_t)team);
++    submitEvent(kEventSeatJoin, pl);   // applies it here (applySeatJoin) and sends it to every active seat; the feed forwards it
++    LOG_INFO("NET late join: seat %d joins at tick %u, its commands from tick %u, team %d", seat, at, active, team);
++    return active;
++}
++
++void Lockstep::applySeatJoin(const Event& e) {
++    if (e.payload.size() < 6) return;
++    const int seat = e.payload[0];
++    if (seat < 0 || seat >= cfg_.seats || activeFrom_[(size_t)seat] != 0) return;
++    const uint32_t active = get32(&e.payload[1]);
++    activeFrom_[(size_t)seat] = active;
++    hello_[(size_t)seat] = 1;
++    LOG_INFO("NET seat %d is active from tick %u (joined at tick %u)", seat, active, e.atTick);
++    if (seat == cfg_.self) {   // this joiner: ticks it already passed to submitLocal from activeTick on had no command - empty ones
++        for (uint32_t t = active; t <= lastSubmitTick_; ++t) cmds_[(size_t)seat].emplace(t, encodeCommand(game::RemoteCommand{}));
++        if (lastSubmitTick_ >= active) localHigh_ = std::max(localHigh_, lastSubmitTick_);
++        uint32_t& h = contiguous_[(size_t)seat];
++        h = std::max(h, active - 1);
++        while (cmds_[(size_t)seat].count(h + 1)) ++h;
+     }
+ }
+ 
+@@ -139,6 +252,7 @@
+             WireCommand w;
+             std::copy(d.begin() + 11 + (long)(i * kWireCommandBytes), d.begin() + 11 + (long)((i + 1) * kWireCommandBytes), w.begin());
+             const uint32_t tick = first + (uint32_t)i;
++            if (!seatActive(seat, tick)) continue;   // a reserved seat / before its activeTick: not part of the match
+             // a first arrival (resends keep the first copy) once stepping. The command the step is waiting for (tick == nextStep_)
+             // reports how late it is: minus the ticks this peer has stalled on it, so the sender raises D by the whole shortfall at once
+             // (lead 0 alone hid it: D then crept up one tick per report while the match stalled).
+@@ -149,6 +263,7 @@
+             }
+         }
+         uint32_t& c = contiguous_[(size_t)seat];
++        if (activeFrom_[(size_t)seat] > 1) c = std::max(c, activeFrom_[(size_t)seat] - 1);
+         while (m.count(c + 1)) ++c;
+         if (count > 0 && d.size() >= 11 + count * kWireCommandBytes + 2) {   // the event announcement (absent from phase 1 peers)
+             const size_t at = 11 + count * kWireCommandBytes;
+@@ -165,8 +280,59 @@
+         const size_t len = (size_t)d[7] | ((size_t)d[8] << 8);
+         if (d.size() < 9 + len) return;
+         e.payload.assign(d.begin() + 9, d.begin() + 9 + (long)len);
+-        ++eventsReceived_[(size_t)seat];
+-        eventQueue_.push_back(std::move(e));
++        e.seq = d.size() >= 13 + len ? get32(&d[9 + len]) : eventsReceived_[(size_t)seat];
++        acceptEvent(std::move(e));
++        break;
++    }
++    case kJoinReq: {   // the host: a reserved seat's joiner wants the history
++        if (cfg_.self != 0 || activeFrom_[(size_t)seat] != 0) return;
++        for (const Feed& f : feeds_) if (f.seat == seat) return;
++        Feed f; f.seat = seat;
++        feeds_.push_back(f);
++        LOG_INFO("NET late join: seat %d asked for the history (host at tick %u, %zu events)", seat, hostStepped_, eventLog_.size());
++        break;
++    }
++    case kReady: {
++        if (cfg_.self != 0) return;
++        for (Feed& f : feeds_)
++            if (f.seat == seat && !f.ready) {
++                f.ready = true;
++                LOG_INFO("NET late join: seat %d READY at tick %u (host at %u)", seat, d.size() >= 6 ? get32(&d[2]) : 0, hostStepped_);
++                if (onJoinReady_) onJoinReady_(seat);
++            }
++        break;
++    }
++    case kHist: {   // the joiner: the host's history feed
++        if (!cfg_.lateJoin || seat != 0 || d.size() < 3) return;
++        histStarted_ = true;
++        const uint8_t sub = d[2];
++        if (sub == kHistTicks && d.size() >= 12) {
++            hostLive_ = std::max(hostLive_, get32(&d[3]));
++            uint32_t tick = get32(&d[7]);
++            const int n = d[11];
++            size_t at = 12;
++            for (int k = 0; k < n && at < d.size(); ++k, ++tick) {
++                const int cnt = d[at++];
++                for (int j = 0; j < cnt && at + 1 + kWireCommandBytes <= d.size(); ++j) {
++                    const int s = d[at];
++                    WireCommand w; std::copy(d.begin() + (long)at + 1, d.begin() + (long)(at + 1 + kWireCommandBytes), w.begin());
++                    at += 1 + kWireCommandBytes;
++                    if (s < 0 || s >= cfg_.seats || s == cfg_.self) continue;
++                    cmds_[(size_t)s].emplace(tick, w);
++                    uint32_t& c = contiguous_[(size_t)s];
++                    while (cmds_[(size_t)s].count(c + 1)) ++c;
++                }
++                histHigh_ = std::max(histHigh_, tick);
++            }
++        } else if (sub == kHistEvent && d.size() >= 14) {
++            Event e; e.seat = d[3]; e.atTick = get32(&d[4]); e.kind = d[8]; e.seq = get32(&d[9]);
++            const size_t len = (size_t)d[13] | (d.size() > 14 ? (size_t)d[14] << 8 : 0);
++            if (d.size() < 15 + len || e.seat < 0 || e.seat >= cfg_.seats) return;
++            e.payload.assign(d.begin() + 15, d.begin() + 15 + (long)len);
++            acceptEvent(std::move(e));
++        } else if (sub == kHistHash && d.size() >= 15) {
++            peerHash_[get32(&d[3])].push_back({0, get64(&d[7])});
++        }
+         break;
+     }
+     case kHello: {
+@@ -283,6 +449,8 @@
+ }
+ 
+ void Lockstep::submitLocal(uint32_t tick, const game::RemoteCommand& c) {
++    lastSubmitTick_ = std::max(lastSubmitTick_, tick);
++    if (!seatActive(cfg_.self, tick)) return;   // a reserved / late seat before its activeTick sends nothing
+     cmds_[(size_t)cfg_.self][tick] = encodeCommand(c);
+     localHigh_ = std::max(localHigh_, tick);
+     producedMs_.emplace(tick, nowMs());
+@@ -293,13 +461,17 @@
+     }
+     uint32_t& h = contiguous_[(size_t)cfg_.self];
+     while (cmds_[(size_t)cfg_.self].count(h + 1)) ++h;
+-    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) sendCommands(s, false);
++    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && activeFrom_[(size_t)s] != 0) sendCommands(s, false);
+ }
+ 
+ bool Lockstep::haveAll(uint32_t tick) const {
+-    for (const auto& m : cmds_) if (!m.count(tick)) return false;
++    if (cfg_.lateJoin) {   // the history holds the events stamped for the tick (no announcements reach the joiner before it joins)
++        const uint32_t a = activeFrom_[(size_t)cfg_.self];
++        if ((a == 0 || tick < a + kFeedPastActive / 2) && tick > histHigh_) return false;
++    }
++    for (int s = 0; s < cfg_.seats; ++s) if (seatActive(s, tick) && !cmds_[(size_t)s].count(tick)) return false;
+     for (int s = 0; s < cfg_.seats; ++s) {   // every event stamped for this tick (or earlier) arrived
+-        if (s == cfg_.self) continue;
++        if (s == cfg_.self || activeFrom_[(size_t)s] == 0) continue;
+         const auto& a = eventsAnnounced_[(size_t)s];
+         auto it = a.lower_bound(tick);   // the announcement of a packet that covered this tick
+         if (it != a.end() && eventsReceived_[(size_t)s] < it->second) return false;
+@@ -309,18 +481,34 @@
+ 
+ uint32_t Lockstep::submitEvent(uint8_t kind, const std::vector<uint8_t>& payload) {
+     const uint32_t at = localHigh_ + 1;   // the next command this seat submits: every peer gets the event before it can step it
++    const uint32_t seq = (uint32_t)ownEventTicks_.size();
+     ownEventTicks_.push_back(at);
+     std::vector<uint8_t> b;
+     put8(b, kEvent); put8(b, (uint8_t)cfg_.self); put32(b, at); put8(b, kind);
+     const size_t len = std::min<size_t>(payload.size(), 65535);
+     put8(b, (uint8_t)len); put8(b, (uint8_t)(len >> 8));
+     b.insert(b.end(), payload.begin(), payload.begin() + (long)len);
+-    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) t_.sendReliable(s, b.data(), b.size());
+-    Event e; e.seat = cfg_.self; e.atTick = at; e.kind = kind; e.payload.assign(payload.begin(), payload.begin() + (long)len);
+-    eventQueue_.push_back(std::move(e));
++    put32(b, seq);
++    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && activeFrom_[(size_t)s] != 0) t_.sendReliable(s, b.data(), b.size());
++    Event e; e.seat = cfg_.self; e.atTick = at; e.kind = kind; e.seq = seq; e.payload.assign(payload.begin(), payload.begin() + (long)len);
++    acceptEvent(std::move(e));
+     return at;
+ }
+ 
++// Every event (own, received, or from the history feed) once per (seat, seq): counted, logged for joiners (the host), SeatJoin
++// applied to the seat table, then queued for the driver.
++void Lockstep::acceptEvent(Event e) {
++    if (e.seat < 0 || e.seat >= cfg_.seats) return;
++    std::vector<char>& seen = eventSeen_[(size_t)e.seat];
++    if (e.seq < seen.size() && seen[e.seq]) return;
++    if (e.seq >= seen.size()) seen.resize((size_t)e.seq + 1, 0);
++    seen[e.seq] = 1;
++    if (e.seat != cfg_.self) ++eventsReceived_[(size_t)e.seat];
++    if (cfg_.keepHistory) eventLog_.push_back(e);
++    if (e.kind == kEventSeatJoin && e.seat == 0) applySeatJoin(e);
++    eventQueue_.push_back(std::move(e));
++}
++
+ bool Lockstep::pollEvent(Event& out) {
+     if (eventQueue_.empty()) return false;
+     out = std::move(eventQueue_.front());
+@@ -356,8 +544,10 @@
+ void Lockstep::reportHash(uint32_t tick, uint64_t h) {
+     if (cfg_.hashEvery <= 0 || tick % (uint32_t)cfg_.hashEvery != 0) return;
+     ownHash_[tick] = h;
++    if (cfg_.keepHistory) hashLog_[tick] = h;
+     std::vector<uint8_t> b; put8(b, kHash); put8(b, (uint8_t)cfg_.self); put32(b, tick); put64(b, h);
+-    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) t_.sendReliable(s, b.data(), b.size());
++    if (seatActive(cfg_.self, tick))   // a joiner still catching up only checks (against the history): it sends no hashes yet
++        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && activeFrom_[(size_t)s] != 0) t_.sendReliable(s, b.data(), b.size());
+     auto it = peerHash_.find(tick);
+     if (it != peerHash_.end()) {
+         for (const auto& ph : it->second)
+@@ -387,6 +577,7 @@
+ 
+ void Lockstep::stepped(uint32_t tick, uint64_t stateHash) {
+     nextStep_ = tick + 1;
++    hostStepped_ = std::max(hostStepped_, tick);
+     if (nowMs() - leadRollMs_ >= 1000.0) { leadRollMs_ = nowMs(); leadPrev_ = leadCur_; std::fill(leadCur_.begin(), leadCur_.end(), kNoLead); }
+     if (log_) {
+         const NetStats st = t_.stats();
+@@ -397,7 +588,8 @@
+ }
+ 
+ void Lockstep::forget(uint32_t belowTick) {
+-    for (auto& m : cmds_) while (!m.empty() && m.begin()->first < belowTick) m.erase(m.begin());
++    if (!cfg_.keepHistory)
++        for (auto& m : cmds_) while (!m.empty() && m.begin()->first < belowTick) m.erase(m.begin());
+     for (auto& a : eventsAnnounced_) while (!a.empty() && a.begin()->first < belowTick) a.erase(a.begin());
+ }
+ 
+@@ -409,7 +601,7 @@
+ void Lockstep::fanOutVoice(int talker, const uint8_t* p, size_t n) {
+     const uint8_t flags = n > 4 ? p[4] : 0;
+     for (int s = 0; s < cfg_.seats; ++s) {
+-        if (s == cfg_.self || s == talker) continue;
++        if (s == cfg_.self || s == talker || activeFrom_[(size_t)s] == 0) continue;
+         if (voiceAudience_ && !voiceAudience_(talker, s, flags)) continue;
+         t_.sendUnreliable(s, p, n);
+         if (talker != cfg_.self) ++voiceRelayed_;
+@@ -418,7 +610,7 @@
+ 
+ void Lockstep::bye(uint32_t lastTick) {
+     std::vector<uint8_t> b; put8(b, kBye); put8(b, (uint8_t)cfg_.self); put32(b, lastTick);
+-    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) t_.sendReliable(s, b.data(), b.size());
++    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && activeFrom_[(size_t)s] != 0) t_.sendReliable(s, b.data(), b.size());
+     for (int i = 0; i < 20; ++i) t_.service();   // flush best-effort (the peers' acks may not come back before exit)
+     const NetStats st = t_.stats();
+     LOG_INFO("NET bye: sent %llu B / %llu pkts, received %llu B / %llu pkts, resends %llu, rtt %.1f ms, stalled %.0f ms total, D %d",
+diff -ruN a/src/net/Lockstep.h b/src/net/Lockstep.h
+--- a/src/net/Lockstep.h	2026-10-23 02:55:40.389816600 -0500
++++ b/src/net/Lockstep.h	2026-10-23 02:55:40.405871900 -0500
+@@ -14,6 +14,20 @@
+ //                        seats in that frame's audience (setVoiceAudience: radio = the talker's team, proximity = within earshot by
+ //                        the sim's positions), never back to the talker - a client's upload is one stream whatever the match size.
+ //   5 PING  (unreliable) u8 type, u8 seat, u64 sender clock (us)   6 PONG (unreliable) u8 type, u8 seat, u64 the echoed clock
++// Join in progress (public games, the original: a joiner spawns at once on the smaller team): seats beyond the launch's humans can be
++// RESERVED (Config::activeFrom 0) - they contribute implicit empty commands and no HELLO, nobody waits on them. A late joiner runs
++// the same launch with its own seat reserved and Config::lateJoin:
++//   9 JOINREQ (reliable, joiner -> host)  u8 type, u8 seat
++//  10 HIST    (reliable, host -> joiner)  u8 type, u8 seat (0), u8 sub: 0 commands {u8 seat, u32 first, u16 count, count x 23}
++//             1 event {u8 seat, u32 atTick, u8 kind, u16 len, payload}  2 hash {u32 tick, u64 h}. The host keeps every tick's
++//             commands, every event and every state hash (keepHistory) and sends the joiner all of it, then forwards each tick it
++//             steps (and each event it learns) until the joiner's seat is active - the joiner replays from tick 1 at full speed
++//             (deterministic sim; the hashes check it) while the match runs on.
++//  11 READY   (reliable, joiner -> host)  u8 type, u8 seat, u32 the joiner's next step: it is within a few ticks of the host.
++// The host then (onJoinReady -> activateSeat) submits the reliable event kind kEventSeatJoin {u8 seat, u32 activeTick, u8 team}
++// stamped E = its next tick; activeTick = E + kJoinLeadTicks. Every peer sets the seat active from activeTick on arrival (no peer can
++// have stepped E without the event); the sim adds / wakes the participant at E (NetMatchDriver::Config::onSeatJoin) and the joiner's
++// own commands start at activeTick.
+ // Input delay: each peer picks its OWN D (it only decides how far ahead this seat schedules its commands; every peer applies the same
+ // streams to the same ticks, so the D values need not agree). Auto D (Config::delay <= 0) = ceil((SRTT / 2 + 4 x RTTVAR + 5 ms) / tick),
+ // clamped 2..15, from PING / PONG every 250 ms to each peer (the worst peer counts); it rises at once and falls at most 1 tick a second.
+@@ -50,7 +64,14 @@
+         double peerTimeoutS = 10.0; // a stall this long = the peer is lost
+         uint64_t launchHash = 0;
+         std::string logPath;        // per-tick CSV (WFC_NET_LOG)
++        // Join in progress: per seat the first tick it sends commands for (1 = from the start, 0 = reserved: not yet joined). Empty =
++        // every seat from tick 1. A late joiner (lateJoin) has its own seat reserved, asks the host for the history, and needs no HELLO.
++        std::vector<uint32_t> activeFrom;
++        bool lateJoin = false;
++        bool keepHistory = false;   // the host: keep every command / event / hash for late joiners
+     };
++    static constexpr uint8_t kEventSeatJoin = 2;     // event kind (1 = Choose Character, NetMatchDriver)
++    static constexpr uint32_t kJoinLeadTicks = 30;   // activeTick = the SeatJoin event's tick + this (0.5 s for the joiner's first commands)
+     enum class Status { Running = 0, Desync = 3, PeerTimeout = 4, HostLost = 5, LaunchMismatch = 6 };
+ 
+     Lockstep(INetTransport& t, const Config& c);
+@@ -78,9 +99,21 @@
+     // the sender's count of events stamped at or before its newest tick, and haveAll(T) also waits until that many of the seat's
+     // events arrived - so no peer steps a tick without the events stamped for it (unreliable commands may overtake the reliable
+     // event). pollEvent returns every seat's events (this seat's too) in arrival order; the caller applies them at atTick.
+-    struct Event { int seat = -1; uint32_t atTick = 0; uint8_t kind = 0; std::vector<uint8_t> payload; };
++    struct Event { int seat = -1; uint32_t atTick = 0; uint8_t kind = 0; std::vector<uint8_t> payload; uint32_t seq = 0; };   // seq: per seat, from 0 (dedupe: an event may reach a joiner twice)
+     uint32_t submitEvent(uint8_t kind, const std::vector<uint8_t>& payload);
+     bool pollEvent(Event& out);
++    // Join in progress.
++    bool seatActive(int seat, uint32_t tick) const;   // the seat sends commands for this tick
++    bool selfActive() const { return seatActive(cfg_.self, localHigh_ + 1); }
++    uint32_t activeFrom(int seat) const { return seat >= 0 && seat < cfg_.seats ? activeFrom_[(size_t)seat] : 0; }
++    // The host: a reserved seat's joiner is caught up (READY); the callback decides the team and calls activateSeat.
++    void setJoinReady(std::function<void(int seat)> f) { onJoinReady_ = std::move(f); }
++    uint32_t activateSeat(int seat, int team);      // the host: the SeatJoin event; returns the seat's activeTick
++    // The joiner: the newest tick the host has forwarded so far (the catch-up target) and whether it said READY.
++    uint32_t historyHigh() const { return histHigh_; }
++    uint32_t hostLive() const { return hostLive_; }   // the catch-up target (CatchUpProgress)
++    bool historyStarted() const { return histStarted_; }
++    void reportCatchUp(uint32_t nextStep);           // the joiner's step loop: READY once within kReadyTicks of historyHigh
+     Status status() const { return status_; }
+     const std::string& statusText() const { return statusText_; }
+     uint32_t localHigh() const { return localHigh_; }
+@@ -95,7 +128,8 @@
+     std::map<uint32_t, double> producedMs_;   // this seat's ticks -> when first sent (ack-overdue test)
+     void fail(Status s, const std::string& why);
+     std::vector<uint32_t> ownEventTicks_;                  // this seat's events, their atTick (ascending)
+-    std::vector<uint32_t> eventsReceived_;                 // per seat: events arrived
++    std::vector<uint32_t> eventsReceived_;                 // per seat: distinct events arrived
++    std::vector<std::vector<char>> eventSeen_;             // per seat: seq -> arrived (dedupe)
+     std::vector<std::map<uint32_t, uint32_t>> eventsAnnounced_;   // per seat: newest tick of a CMDS packet -> its event count
+     std::deque<Event> eventQueue_;
+     INetTransport& t_;
+@@ -128,6 +162,22 @@
+     Status status_ = Status::Running;
+     std::string statusText_;
+     FILE* log_ = nullptr;
++    // Join in progress.
++    std::vector<uint32_t> activeFrom_;
++    std::vector<Event> eventLog_;                    // the host: every event (any seat), in arrival order
++    std::map<uint32_t, uint64_t> hashLog_;           // the host: its own state hash per hashEvery tick
++    std::function<void(int)> onJoinReady_;
++    uint32_t histHigh_ = 0;                          // the joiner: the newest tick with every seat's command forwarded
++    uint32_t hostLive_ = 0;                          // the joiner: the host's newest stepped tick as of its last HIST packet
++    bool histStarted_ = false, readySent_ = false;
++    uint32_t hostStepped_ = 0;                       // the host: its newest stepped tick (what it can forward)
++    uint32_t lastSubmitTick_ = 0;                    // the newest tick submitLocal was called for (stored or not)
++    struct Feed { int seat; uint32_t nextTick = 1; size_t nextEvent = 0; uint32_t nextHashTick = 0; bool ready = false; };
++    std::vector<Feed> feeds_;                        // the host: per joining seat, the history cursor (paced)
++    double feedBudget_ = 0.0, feedLastMs_ = 0.0;
++    void pumpFeeds();
++    void applySeatJoin(const Event& e);
++    void acceptEvent(Event e);
+ };
+ 
+ }  // namespace net
+diff -ruN a/src/net/NetMatchDriver.cpp b/src/net/NetMatchDriver.cpp
+--- a/src/net/NetMatchDriver.cpp	2026-10-23 02:55:40.792195700 -0500
++++ b/src/net/NetMatchDriver.cpp	2026-10-23 02:55:40.807748900 -0500
+@@ -10,6 +10,7 @@
+ 
+ #include <algorithm>
+ #include <cstdio>
++#include <chrono>
+ #include <cstdlib>
+ 
+ namespace net {
+@@ -18,6 +19,7 @@
+ constexpr float kStep = 1.0f / 60.0f;
+ constexpr int kMaxStepsPerFrame = 8;   // catch-up cap (a long hitch is not replayed at once)
+ constexpr uint8_t kEventSelection = 1;
++constexpr double kCatchUpBudgetMs = 12.0;   // a late joiner's history replay: sim time per frame (the loading screen keeps drawing)
+ 
+ void putStr(std::vector<uint8_t>& b, const std::string& s) {
+     const size_t n = std::min<size_t>(s.size(), 255);
+@@ -78,7 +80,9 @@
+     double accum = 0.0;
+     bool stalled = false, held = false, ended = false, talking = false;
+     uint32_t startTick = 1;
++    bool live = true;                     // a late joiner: false until it steps its activeTick
+     FILE* rec = nullptr;
++    int player(int seat) const { return cfg.seatPlayer ? cfg.seatPlayer(seat) : seat; }
+     Impl(game::World& w, INetTransport& tr, const Config& c) : world(w), t(tr), cfg(c) {}
+ };
+ 
+@@ -87,7 +91,14 @@
+     Lockstep::Config lc;
+     lc.seats = cfg.seats; lc.self = cfg.self; lc.delay = cfg.delay; lc.hashEvery = cfg.hashEvery;
+     lc.peerTimeoutS = cfg.peerTimeoutS; lc.launchHash = cfg.launchHash; lc.logPath = cfg.logPath;
++    lc.activeFrom = cfg.activeFrom; lc.lateJoin = cfg.lateJoin; lc.keepHistory = cfg.keepHistory;
+     impl_->ls = std::make_unique<Lockstep>(transport, lc);
++    impl_->live = !cfg.lateJoin;
++    if (cfg.keepHistory) {
++        Lockstep* ls = impl_->ls.get();
++        std::function<int(int)> pick = cfg.pickJoinTeam;
++        ls->setJoinReady([ls, pick](int seat) { ls->activateSeat(seat, pick ? pick(seat) : seat % 2); });
++    }
+     if (!cfg.recordPath.empty()) {
+         impl_->rec = std::fopen(cfg.recordPath.c_str(), "wb");
+         if (impl_->rec) {   // the phase 1 WFC_NET_RECORD layout (WFC_NET_REPLAY reads it); events are not in it yet
+@@ -99,7 +110,9 @@
+     if (cfg.voice) {
+         impl_->voice = std::make_unique<VoiceSession>(*impl_->ls, audio, VoiceSession::Config{});
+         game::World* w = &world;
+-        impl_->ls->setVoiceAudience([w](int talker, int listener, uint8_t flags) {   // as runNetMatch: match player = seat
++        Impl* im = impl_.get();
++        impl_->ls->setVoiceAudience([w, im](int talkerSeat, int listenerSeat, uint8_t flags) {   // seats -> match players
++            const int talker = im->player(talkerSeat), listener = im->player(listenerSeat);
+             const auto& ps = w->match().players();
+             if (talker < 0 || listener < 0 || (size_t)talker >= ps.size() || (size_t)listener >= ps.size()) return false;
+             if ((flags & 1) && ps[(size_t)talker].team == ps[(size_t)listener].team && ps[(size_t)talker].team != 255) return true;
+@@ -129,27 +142,36 @@
+             game::CharacterSelection sel;
+             if (decodeSelection(ev.payload, sel)) { if (m.cfg.onSelection) m.cfg.onSelection(ev.seat, sel, ev.atTick); }
+             else LOG_WARN("NET driver: a bad selection event from seat %d", ev.seat);
++        } else if (ev.kind == Lockstep::kEventSeatJoin && ev.payload.size() >= 6) {   // {u8 seat, u32 activeTick, u8 team}
++            const int seat = ev.payload[0], team = ev.payload[5];
++            LOG_INFO("NET driver: seat %d joins at tick %u, team %d%s", seat, ev.atTick, team, seat == m.cfg.self ? " (this peer)" : "");
++            if (m.cfg.onSeatJoin) m.cfg.onSeatJoin(seat, team, seat == m.cfg.self, ev.atTick);
+         }
+     }
+     if (m.voice) {   // the listener = the local pawn (its right vector from the facing yaw)
+         game::World& w = m.world;
+-        const game::Character* me = w.participantPawn(m.cfg.self);
++        const game::Character* me = w.participantPawn(m.player(m.cfg.self));
+         const core::Vec3 lp = me ? me->position() + core::Vec3{0, 1.8f, 0} : core::Vec3{0, 0, 0};
+         const float yaw = me ? me->yaw() : 0.0f;
+         const core::Vec3 right = core::normalize(core::cross(core::forwardFromYawPitch(yaw, 0.0f), core::Vec3{0, 1, 0}));
+-        const int self = m.cfg.self;
++        const int self = m.player(m.cfg.self);
++        Impl* im = &m;
+         m.voice->update(m.talking,
+-                        [&w](int seat, core::Vec3& out) { const game::Character* c = w.participantPawn(seat); if (!c) return false; out = c->position() + core::Vec3{0, 1.8f, 0}; return true; },
+-                        [&w, self](int seat) { const auto& ps = w.match().players(); return (size_t)seat < ps.size() && (size_t)self < ps.size() && ps[(size_t)seat].team == ps[(size_t)self].team && ps[(size_t)seat].team != 255; },
++                        [&w, im](int seat, core::Vec3& out) { const int p = im->player(seat); const game::Character* c = p >= 0 ? w.participantPawn(p) : nullptr; if (!c) return false; out = c->position() + core::Vec3{0, 1.8f, 0}; return true; },
++                        [&w, im, self](int seat) { const int p = im->player(seat); const auto& ps = w.match().players(); return p >= 0 && self >= 0 && (size_t)p < ps.size() && (size_t)self < ps.size() && ps[(size_t)p].team == ps[(size_t)self].team && ps[(size_t)p].team != 255; },
+                         [&w](const core::Vec3& a, const core::Vec3& b) { return w.soundBlocked(a, b); },
+                         [&w]() { return w.currentReverbPreset(); }, lp, right);
+     }
+     if (ls.status() != Lockstep::Status::Running) { m.ended = true; return 0; }
+     if (m.held) { m.accum = 0.0; return 0; }
+-    m.accum = std::min(m.accum + dtSeconds, (double)kStep * kMaxStepsPerFrame);
++    // A late joiner replays the history unpaced (a time budget per frame) until it steps its activeTick; then real time from there.
++    const auto t0 = std::chrono::steady_clock::now();
++    auto budgetLeft = [&t0]() { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() < kCatchUpBudgetMs; };
++    if (!m.live) m.accum = kStep;
++    else m.accum = std::min(m.accum + dtSeconds, (double)kStep * kMaxStepsPerFrame);
+     int steps = 0;
+     m.stalled = false;
+-    while (m.accum >= kStep && steps < kMaxStepsPerFrame) {
++    while (m.live ? (m.accum >= kStep && steps < kMaxStepsPerFrame) : budgetLeft()) {
+         const uint32_t n = (uint32_t)m.world.simTick() + 1;
+         if (ls.endTick() > 0 && n > ls.endTick()) { m.ended = true; break; }
+         while (m.nextLocal <= n + (uint32_t)ls.delay()) {   // this seat's commands up to N + D (the local controller's input now)
+@@ -158,11 +180,14 @@
+             ls.submitLocal(m.nextLocal, c);
+             ++m.nextLocal;
+         }
++        if (!m.live) ls.reportCatchUp(n);
+         if (!ls.haveAll(n)) { m.stalled = true; ls.stalled(dtSeconds * 1000.0); break; }
+         for (int s = 0; s < m.cfg.seats; ++s) {
++            const int p = m.player(s);
++            if (p < 0) continue;   // a reserved seat without a participant yet
+             game::RemoteCommand c;
+             ls.command(s, n, c);
+-            m.world.applyRemoteCommand(s, c);
++            m.world.applyRemoteCommand(p, c);
+         }
+         if (m.rec) {
+             std::fwrite(&n, 4, 1, m.rec);
+@@ -173,14 +198,22 @@
+         ls.stepped(n, h);
+         ls.reportHash(n, h);
+         if (n > 64) ls.forget(n - 64);
+-        m.accum -= kStep;
++        if (m.live) m.accum -= kStep;
+         ++steps;
++        if (!m.live && ls.activeFrom(m.cfg.self) != 0 && n >= ls.activeFrom(m.cfg.self)) {
++            m.live = true; m.accum = 0.0;
++            LOG_INFO("NET driver: live at tick %u (caught up; host at %u)", n, ls.hostLive());
++            break;
++        }
+     }
+     if (ls.status() != Lockstep::Status::Running) m.ended = true;
+     return steps;
+ }
+ 
+ bool NetMatchDriver::stalled() const { return impl_->stalled; }
++bool NetMatchDriver::catchingUp() const { return !impl_->live; }
++uint32_t NetMatchDriver::catchUpTick() const { return (uint32_t)impl_->world.simTick(); }
++uint32_t NetMatchDriver::catchUpTarget() const { return impl_->ls->hostLive(); }
+ bool NetMatchDriver::held() const { return impl_->held; }
+ void NetMatchDriver::setHeld(bool held, uint32_t startTick) { impl_->held = held; if (startTick) impl_->startTick = startTick; }
+ bool NetMatchDriver::finished() const { return impl_->ended; }
+diff -ruN a/src/net/NetMatchDriver.h b/src/net/NetMatchDriver.h
+--- a/src/net/NetMatchDriver.h	2026-10-23 02:55:40.661247000 -0500
++++ b/src/net/NetMatchDriver.h	2026-10-23 02:55:40.676800500 -0500
+@@ -17,6 +17,7 @@
+ #include <functional>
+ #include <memory>
+ #include <string>
++#include <vector>
+ 
+ namespace audio { class IAudio; }
+ namespace game { class World; struct CharacterSelection; }
+@@ -42,6 +43,16 @@
+         std::function<void(float)> step;   // World::tick + GameMode::tick, once per complete tick (fixed dt)
+         // A seat's Choose Character (event kind 1), on every peer when it arrives: World::queueSeatSelection(seat, sel, atTick).
+         std::function<void(int seat, const game::CharacterSelection& sel, uint32_t atTick)> onSelection;
++        // Join in progress (Lockstep.h): seats = the player limit's human seats; reserved ones (activeFrom 0) join later.
++        std::vector<uint32_t> activeFrom;   // empty = every seat from tick 1
++        bool lateJoin = false;              // this peer joins a running match (replays the history, then goes live)
++        bool keepHistory = false;           // the host of a joinable match
++        // The host: the team for a joiner that caught up (the original: the smaller team). Unset: seat % 2.
++        std::function<int(int seat)> pickJoinTeam;
++        // Every peer, on the SeatJoin event: the seat's participant appears before the step of atTick (local = this peer's seat).
++        std::function<void(int seat, int team, bool local, uint32_t atTick)> onSeatJoin;
++        // Seat -> match player for commands / voice (-1 = no participant yet). Unset: player == seat (the launch's seat order).
++        std::function<int(int seat)> seatPlayer;
+     };
+     // `transport` is the session's match view (seats = match seats); the driver owns the Lockstep built over it.
+     NetMatchDriver(game::World& world, INetTransport& transport, audio::IAudio* audio, const Config& cfg);
+@@ -54,6 +65,11 @@
+     int frame(double dtSeconds);
+ 
+     bool stalled() const;              // tick N waits for a seat's commands
++    // A late joiner: replaying the history (no pacing, a time budget per frame) until it reaches its activeTick. The loading screen
++    // shows catchUpTick() / catchUpTarget() (CatchUpProgress); live() = caught up and playing.
++    bool catchingUp() const;
++    uint32_t catchUpTick() const;
++    uint32_t catchUpTarget() const;
+     bool held() const;                 // the load gate (no step until the start tick)
+     void setHeld(bool held, uint32_t startTick = 0);
+     bool finished() const;             // the match ended normally (every seat's BYE / the match end) or failed (see status)
+diff -ruN a/src/net/UdpSession.cpp b/src/net/UdpSession.cpp
+--- a/src/net/UdpSession.cpp	2026-10-23 02:55:41.059110300 -0500
++++ b/src/net/UdpSession.cpp	2026-10-23 02:55:41.075165400 -0500
+@@ -39,9 +39,11 @@
+     kJoin = 0x50, kJoinOk = 0x51, kJoinFail = 0x52,
+     kLobby = 0x40, kPeers = 0x41, kInfo = 0x42, kLaunch = 0x43, kLoaded = 0x44, kPeerLoaded = 0x45, kAllLoaded = 0x46,
+     kLeave = 0x47, kKick = 0x48, kDropped = 0x49, kVersion = 0x4A, kReturn = 0x4B, kKeepalive = 0x4F,
++    kLateJoin = 0x4C, kLateLaunch = 0x4D, kSeatMap = 0x4E,   // join in progress: ask / the launch record + seat (or refusal) / a seat filled
+     kDiscover = 0x53, kAnnounce = 0x54, kPing = 0x55, kPong = 0x56,   // out of band: LAN discovery, candidate pings
+ };
+ constexpr double kSearchCollectS = 1.0, kPingRoundS = 0.3;
++constexpr int kNoSession = 255;   // a Reserved match seat nobody holds yet (the match seat table's placeholder)
+ constexpr int kPingRounds = 3, kMaxPingMs = 250;
+ std::string versionTag() { char b[64]; std::snprintf(b, sizeof b, "%08x-%s", kProtocol, __DATE__); return b; }
+ std::string jsonEsc(const std::string& s) {
+@@ -144,7 +146,8 @@
+ 
+ private:
+     int toSession(int matchSeat) const {
+-        return matchSeat >= 0 && (size_t)matchSeat < s_.matchToSession_.size() && s_.t_ ? s_.matchToSession_[(size_t)matchSeat] : -1;
++        const int ss = matchSeat >= 0 && (size_t)matchSeat < s_.matchToSession_.size() && s_.t_ ? s_.matchToSession_[(size_t)matchSeat] : -1;
++        return ss == kNoSession ? -1 : ss;
+     }
+     UdpSession& s_;
+ };
+@@ -450,15 +453,18 @@
+ void UdpSession::requestStart() {
+     if (role_ != Role::Host) return;
+     // The match seats: the roster's humans in slot order (the launch record's humans); the host is among them.
+-    matchToSession_.clear();
++    matchToSession_.clear(); matchReserved_.clear(); lateJoin_ = false;
+     const SessionLobby& r = launchRoster_.slots.empty() ? lobby_ : launchRoster_;
+     for (const SessionSlot& s : r.slots) {
++        if (s.kind == SessionSlot::Kind::Reserved) { matchToSession_.push_back(kNoSession); matchReserved_.push_back(1); continue; }   // join in progress
+         if (s.kind != SessionSlot::Kind::Human) continue;
+         const int seat = s.member.fingerprint.empty() ? 0 : seatOf(s.member);   // "" = the host itself (the flow's MatchLaunch.self convention)
+-        if (seat >= 0) matchToSession_.push_back(seat);
++        if (seat >= 0) { matchToSession_.push_back(seat); matchReserved_.push_back(0); }
+         else LOG_WARN("session: roster member %s is not in the session - left out of the match", s.member.fingerprint.c_str());
+     }
+-    if (std::find(matchToSession_.begin(), matchToSession_.end(), 0) == matchToSession_.end()) matchToSession_.insert(matchToSession_.begin(), 0);
++    if (std::find(matchToSession_.begin(), matchToSession_.end(), 0) == matchToSession_.end()) {
++        matchToSession_.insert(matchToSession_.begin(), 0); matchReserved_.insert(matchReserved_.begin(), 0);
++    }
+     matchSelf_ = (int)(std::find(matchToSession_.begin(), matchToSession_.end(), 0) - matchToSession_.begin());
+     view_ = std::make_unique<MatchView>(*this);
+     W w(kLaunch); w.str(launchUrl_); w.u32(launchSeed_); w.lobby(r);
+@@ -494,12 +500,31 @@
+ }
+ 
+ void UdpSession::matchEnded() {
+-    matchRunning_ = false; held_ = false; view_.reset(); matchToSession_.clear(); matchSelf_ = -1;
++    matchRunning_ = false; held_ = false; view_.reset(); matchToSession_.clear(); matchSelf_ = -1; matchReserved_.clear(); lateJoin_ = false;
+     if (role_ == Role::Host) { W w(kReturn); sendAllMembers(w.b); lobby_.matchRunning = false; sendAllMembers(lobbyMsg(kLobby, lobby_)); }
+ }
+ 
+ INetTransport* UdpSession::matchTransport() { return view_.get(); }
+ 
++std::vector<uint32_t> UdpSession::matchActiveFrom() const {
++    std::vector<uint32_t> a;
++    for (size_t i = 0; i < matchToSession_.size(); ++i) a.push_back(i < matchReserved_.size() && matchReserved_[i] ? 0u : 1u);
++    return a;
++}
++
++void UdpSession::joinRunningMatch() {
++    if (role_ != Role::Member || !lobby_.matchRunning) return;
++    W w(kLateJoin); sendSeat(0, w.b);
++    LOG_INFO("session: asking the host to join the running match");
++}
++
++void UdpSession::reportCatchUp(uint32_t tick, uint32_t target) {
++    if (!lateJoin_ || (now_ - catchUpSentAt_ < 0.1 && tick < target)) return;   // ~10 a second, and the last one
++    if (tick == catchUpSent_ && catchUpSentAt_ >= 0.0) return;
++    catchUpSent_ = tick; catchUpSentAt_ = now_;
++    SessionEvent e; e.type = SessionEvent::Type::CatchUpProgress; e.catchUpTick = tick; e.catchUpTarget = target; emit(e);
++}
++
+ void UdpSession::matchFailed(int status, int64_t tick) {
+     SessionEvent e;
+     if (status == 3) { e.type = SessionEvent::Type::Desync; e.value = tick; }
+@@ -519,6 +544,14 @@
+ }
+ 
+ // ---- receive ----
++std::string UdpSession::matchMemberName(int matchSeat) const {
++    if (matchSeat < 0 || (size_t)matchSeat >= matchToSession_.size()) return "";
++    const int s = matchToSession_[(size_t)matchSeat];
++    if (t_ && s == t_->self()) return self_.displayName;
++    auto it = peers_.find(s);
++    return it == peers_.end() ? std::string() : it->second.info.displayName;
++}
++
+ void UdpSession::handleStranger(const std::string& from, const std::vector<uint8_t>& d) {
+     if (d.empty()) return;
+     if (d.size() >= 4 && d[0] == 'W' && d[1] == 'F' && d[2] == 'C' && d[3] == 'L') { handleService(from, d); return; }
+@@ -668,6 +701,8 @@
+         if (!r.ok) break;
+         auto me = std::find(matchToSession_.begin(), matchToSession_.end(), t_ ? t_->self() : -1);
+         matchSelf_ = me == matchToSession_.end() ? -1 : (int)(me - matchToSession_.begin());
++        matchReserved_.clear(); lateJoin_ = false;
++        for (int ms : matchToSession_) matchReserved_.push_back(ms == kNoSession ? 1 : 0);
+         if (matchSelf_ < 0) { LOG_WARN("session: the launch roster does not include this member"); break; }
+         view_ = std::make_unique<MatchView>(*this);
+         SessionEvent e; e.type = SessionEvent::Type::CountdownStarted;
+@@ -681,9 +716,63 @@
+         peers_[seat].loaded = true;
+         W w(kPeerLoaded); w.str(peers_[seat].info.id.fingerprint); sendAllMembers(w.b);
+         SessionEvent e; e.type = SessionEvent::Type::PeerLoaded; e.member = peers_[seat].info.id; emit(e);
++        if (matchRunning_) {   // a late joiner loaded: only its own gate opens (it replays the history from tick 1)
++            W a(kAllLoaded); a.u32(1); sendSeat(seat, a.b);
++            LOG_INFO("session: late joiner %d loaded - released (it catches up)", seat);
++            break;
++        }
+         checkAllLoaded();
+         break;
+     }
++    case kLateJoin: {   // the host: a member asks for a Reserved seat of the running match
++        if (role_ != Role::Host || !peers_.count(seat)) break;
++        auto refuse = [&](SessionJoinFailure why) {
++            W f(kLateLaunch); f.u8(0); f.u8((int)why); sendSeat(seat, f.b);
++            LOG_INFO("session: late join of seat %d refused (%d; match tick %u, limit %.0f s)", seat, (int)why, matchTick_, lateJoinLimitS_);
++        };
++        if (!matchRunning_ || lateJoinLimitS_ <= 0.0) { refuse(SessionJoinFailure::Full); break; }
++        if ((double)matchTick_ > lateJoinLimitS_ * 60.0) { refuse(SessionJoinFailure::TooFarAlong); break; }
++        int ms = -1;
++        for (size_t i = 0; i < matchToSession_.size(); ++i) if (matchToSession_[i] == seat) ms = (int)i;   // a resend
++        for (size_t i = 0; i < matchToSession_.size() && ms < 0; ++i)
++            if (i < matchReserved_.size() && matchReserved_[i] && matchToSession_[i] == kNoSession) ms = (int)i;
++        if (ms < 0) { refuse(SessionJoinFailure::Full); break; }
++        matchToSession_[(size_t)ms] = seat;
++        W m(kSeatMap); m.u8(ms); m.u8(seat);
++        for (const auto& kv : peers_) if (kv.first != seat) sendSeat(kv.first, m.b);
++        W w(kLateLaunch); w.u8(1); w.u8(0); w.str(launchUrl_); w.u32(launchSeed_); w.lobby(launchRoster_.slots.empty() ? lobby_ : launchRoster_);
++        w.u8((int)matchToSession_.size());
++        for (size_t i = 0; i < matchToSession_.size(); ++i) { w.u8(matchToSession_[i]); w.u8(matchReserved_[i]); }   // live seat + Reserved at launch
++        w.u8(ms);
++        sendSeat(seat, w.b);
++        peers_[seat].loaded = false;
++        LOG_INFO("session: late join - seat %d takes match seat %d (match tick %u)", seat, ms, matchTick_);
++        break;
++    }
++    case kLateLaunch: {   // the member: the running match's launch record and its seat, or a refusal
++        if (role_ != Role::Member || seat != 0) break;
++        const int ok = r.u8(), why = r.u8();
++        if (!ok) { SessionEvent e; e.type = SessionEvent::Type::JoinFailed; e.joinFailure = (SessionJoinFailure)why; emit(e); break; }
++        launchUrl_ = r.str(); launchSeed_ = r.u32(); launchRoster_ = r.lobby();
++        matchToSession_.clear(); matchReserved_.clear();
++        for (int k = r.u8(); k > 0 && r.ok; --k) { matchToSession_.push_back(r.u8()); matchReserved_.push_back((char)r.u8()); }
++        const int mine = r.u8();
++        if (!r.ok || mine < 0 || (size_t)mine >= matchToSession_.size()) break;
++        matchToSession_[(size_t)mine] = t_ ? t_->self() : kNoSession;
++        matchSelf_ = mine; lateJoin_ = true; matchRunning_ = false;
++        view_ = std::make_unique<MatchView>(*this);
++        LOG_INFO("session: late join accepted - match seat %d of %zu", mine, matchToSession_.size());
++        SessionEvent e; e.type = SessionEvent::Type::CountdownStarted;
++        e.launchUrl = launchUrl_; e.seed = launchSeed_; e.lobby = launchRoster_; e.lateJoin = true; e.lateSeat = mine;
++        emit(e);
++        break;
++    }
++    case kSeatMap: {   // the member: a late joiner holds this match seat now (lockstep packets from its session seat map to it)
++        if (role_ != Role::Member || seat != 0) break;
++        const int ms = r.u8(), ss = r.u8();
++        if (r.ok && ms >= 0 && (size_t)ms < matchToSession_.size()) matchToSession_[(size_t)ms] = ss;
++        break;
++    }
+     case kPeerLoaded: {
+         if (role_ != Role::Member) break;
+         SessionEvent e; e.type = SessionEvent::Type::PeerLoaded; e.member.fingerprint = r.str(); emit(e);
+diff -ruN a/src/net/UdpSession.h b/src/net/UdpSession.h
+--- a/src/net/UdpSession.h	2026-10-23 02:55:40.925652900 -0500
++++ b/src/net/UdpSession.h	2026-10-23 02:55:40.940202900 -0500
+@@ -67,6 +67,9 @@
+     void quickMatch(const std::string& playlist) override;
+     void cancelSearch() override;
+     void setLobbyService(const std::string& address) override;
++    bool supportsLateJoin() const override { return true; }
++    void joinRunningMatch() override;
++    void setLateJoinLimit(double maxMatchSeconds) override { lateJoinLimitS_ = maxMatchSeconds; }
+     bool simHeld() const override { return held_; }
+     std::vector<frontend::SessionEvent> poll(double now) override;
+ 
+@@ -76,10 +79,18 @@
+     int matchSelf() const { return matchSelf_; }
+     INetTransport* matchTransport();                       // lockstep packets in match seats (null before the roster)
+     const frontend::SessionMemberId& matchMember(int matchSeat) const;
++    std::string matchMemberName(int matchSeat) const;   // the display name ("" unknown)
+     void matchEnded();                                     // back to the lobby (host: LobbyState with matchRunning false)
+     // The driver's lockstep failed (phase 1 codes): 3 desync -> Desync{tick}, 5 host lost -> HostLost, 4 / 6 -> ConnectionLost.
+     void matchFailed(int status, int64_t tick);
+     const std::string& launchUrl() const { return launchUrl_; }
++    // Join in progress: per match seat, 0 = Reserved in the launch roster (the Lockstep's activeFrom; joins come as SeatJoin events),
++    // 1 = from the start. lateJoin(): this peer joined the running match (joinRunningMatch accepted). noteMatchTick: the host's sim
++    // tick (the catch-up limit); reportCatchUp: the joiner's replay progress (-> CatchUpProgress events).
++    std::vector<uint32_t> matchActiveFrom() const;
++    bool lateJoin() const { return lateJoin_; }
++    void noteMatchTick(uint32_t tick) { matchTick_ = tick; }
++    void reportCatchUp(uint32_t tick, uint32_t target);
+     uint32_t launchSeed() const { return launchSeed_; }
+     const frontend::SessionVoiceSettings& voiceSettings() const { return voice_; }
+     bool pushToTalk() const { return pushToTalk_; }
+@@ -176,6 +187,11 @@
+     frontend::SessionLobby launchRoster_;
+     std::vector<int> matchToSession_;      // match seat -> session seat
+     int matchSelf_ = -1;
++    std::vector<char> matchReserved_;      // per match seat: a Reserved slot of the launch roster
++    bool lateJoin_ = false;
++    double lateJoinLimitS_ = 0.0;
++    uint32_t matchTick_ = 0, catchUpSent_ = 0;
++    double catchUpSentAt_ = -1.0;
+     frontend::SessionVoiceSettings voice_;
+     bool pushToTalk_ = false;
+     std::map<std::string, bool> muted_;

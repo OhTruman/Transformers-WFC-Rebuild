@@ -67,6 +67,9 @@ public:
     void quickMatch(const std::string& playlist) override;
     void cancelSearch() override;
     void setLobbyService(const std::string& address) override;
+    bool supportsLateJoin() const override { return true; }
+    void joinRunningMatch() override;
+    void setLateJoinLimit(double maxMatchSeconds) override { lateJoinLimitS_ = maxMatchSeconds; }
     bool simHeld() const override { return held_; }
     std::vector<frontend::SessionEvent> poll(double now) override;
 
@@ -76,10 +79,18 @@ public:
     int matchSelf() const { return matchSelf_; }
     INetTransport* matchTransport();                       // lockstep packets in match seats (null before the roster)
     const frontend::SessionMemberId& matchMember(int matchSeat) const;
+    std::string matchMemberName(int matchSeat) const;   // the display name ("" unknown)
     void matchEnded();                                     // back to the lobby (host: LobbyState with matchRunning false)
     // The driver's lockstep failed (phase 1 codes): 3 desync -> Desync{tick}, 5 host lost -> HostLost, 4 / 6 -> ConnectionLost.
     void matchFailed(int status, int64_t tick);
     const std::string& launchUrl() const { return launchUrl_; }
+    // Join in progress: per match seat, 0 = Reserved in the launch roster (the Lockstep's activeFrom; joins come as SeatJoin events),
+    // 1 = from the start. lateJoin(): this peer joined the running match (joinRunningMatch accepted). noteMatchTick: the host's sim
+    // tick (the catch-up limit); reportCatchUp: the joiner's replay progress (-> CatchUpProgress events).
+    std::vector<uint32_t> matchActiveFrom() const;
+    bool lateJoin() const { return lateJoin_; }
+    void noteMatchTick(uint32_t tick) { matchTick_ = tick; }
+    void reportCatchUp(uint32_t tick, uint32_t target);
     uint32_t launchSeed() const { return launchSeed_; }
     const frontend::SessionVoiceSettings& voiceSettings() const { return voice_; }
     bool pushToTalk() const { return pushToTalk_; }
@@ -176,6 +187,11 @@ private:
     frontend::SessionLobby launchRoster_;
     std::vector<int> matchToSession_;      // match seat -> session seat
     int matchSelf_ = -1;
+    std::vector<char> matchReserved_;      // per match seat: a Reserved slot of the launch roster
+    bool lateJoin_ = false;
+    double lateJoinLimitS_ = 0.0;
+    uint32_t matchTick_ = 0, catchUpSent_ = 0;
+    double catchUpSentAt_ = -1.0;
     frontend::SessionVoiceSettings voice_;
     bool pushToTalk_ = false;
     std::map<std::string, bool> muted_;

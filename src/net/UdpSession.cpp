@@ -39,9 +39,11 @@ enum : uint8_t {
     kJoin = 0x50, kJoinOk = 0x51, kJoinFail = 0x52,
     kLobby = 0x40, kPeers = 0x41, kInfo = 0x42, kLaunch = 0x43, kLoaded = 0x44, kPeerLoaded = 0x45, kAllLoaded = 0x46,
     kLeave = 0x47, kKick = 0x48, kDropped = 0x49, kVersion = 0x4A, kReturn = 0x4B, kKeepalive = 0x4F,
+    kLateJoin = 0x4C, kLateLaunch = 0x4D, kSeatMap = 0x4E,   // join in progress: ask / the launch record + seat (or refusal) / a seat filled
     kDiscover = 0x53, kAnnounce = 0x54, kPing = 0x55, kPong = 0x56,   // out of band: LAN discovery, candidate pings
 };
 constexpr double kSearchCollectS = 1.0, kPingRoundS = 0.3;
+constexpr int kNoSession = 255;   // a Reserved match seat nobody holds yet (the match seat table's placeholder)
 constexpr int kPingRounds = 3, kMaxPingMs = 250;
 std::string versionTag() { char b[64]; std::snprintf(b, sizeof b, "%08x-%s", kProtocol, __DATE__); return b; }
 std::string jsonEsc(const std::string& s) {
@@ -144,7 +146,8 @@ public:
 
 private:
     int toSession(int matchSeat) const {
-        return matchSeat >= 0 && (size_t)matchSeat < s_.matchToSession_.size() && s_.t_ ? s_.matchToSession_[(size_t)matchSeat] : -1;
+        const int ss = matchSeat >= 0 && (size_t)matchSeat < s_.matchToSession_.size() && s_.t_ ? s_.matchToSession_[(size_t)matchSeat] : -1;
+        return ss == kNoSession ? -1 : ss;
     }
     UdpSession& s_;
 };
@@ -450,15 +453,18 @@ void UdpSession::setLaunch(const std::string& matchUrl, uint32_t seed, const Ses
 void UdpSession::requestStart() {
     if (role_ != Role::Host) return;
     // The match seats: the roster's humans in slot order (the launch record's humans); the host is among them.
-    matchToSession_.clear();
+    matchToSession_.clear(); matchReserved_.clear(); lateJoin_ = false;
     const SessionLobby& r = launchRoster_.slots.empty() ? lobby_ : launchRoster_;
     for (const SessionSlot& s : r.slots) {
+        if (s.kind == SessionSlot::Kind::Reserved) { matchToSession_.push_back(kNoSession); matchReserved_.push_back(1); continue; }   // join in progress
         if (s.kind != SessionSlot::Kind::Human) continue;
         const int seat = s.member.fingerprint.empty() ? 0 : seatOf(s.member);   // "" = the host itself (the flow's MatchLaunch.self convention)
-        if (seat >= 0) matchToSession_.push_back(seat);
+        if (seat >= 0) { matchToSession_.push_back(seat); matchReserved_.push_back(0); }
         else LOG_WARN("session: roster member %s is not in the session - left out of the match", s.member.fingerprint.c_str());
     }
-    if (std::find(matchToSession_.begin(), matchToSession_.end(), 0) == matchToSession_.end()) matchToSession_.insert(matchToSession_.begin(), 0);
+    if (std::find(matchToSession_.begin(), matchToSession_.end(), 0) == matchToSession_.end()) {
+        matchToSession_.insert(matchToSession_.begin(), 0); matchReserved_.insert(matchReserved_.begin(), 0);
+    }
     matchSelf_ = (int)(std::find(matchToSession_.begin(), matchToSession_.end(), 0) - matchToSession_.begin());
     view_ = std::make_unique<MatchView>(*this);
     W w(kLaunch); w.str(launchUrl_); w.u32(launchSeed_); w.lobby(r);
@@ -494,11 +500,30 @@ void UdpSession::checkAllLoaded() {
 }
 
 void UdpSession::matchEnded() {
-    matchRunning_ = false; held_ = false; view_.reset(); matchToSession_.clear(); matchSelf_ = -1;
+    matchRunning_ = false; held_ = false; view_.reset(); matchToSession_.clear(); matchSelf_ = -1; matchReserved_.clear(); lateJoin_ = false;
     if (role_ == Role::Host) { W w(kReturn); sendAllMembers(w.b); lobby_.matchRunning = false; sendAllMembers(lobbyMsg(kLobby, lobby_)); }
 }
 
 INetTransport* UdpSession::matchTransport() { return view_.get(); }
+
+std::vector<uint32_t> UdpSession::matchActiveFrom() const {
+    std::vector<uint32_t> a;
+    for (size_t i = 0; i < matchToSession_.size(); ++i) a.push_back(i < matchReserved_.size() && matchReserved_[i] ? 0u : 1u);
+    return a;
+}
+
+void UdpSession::joinRunningMatch() {
+    if (role_ != Role::Member || !lobby_.matchRunning) return;
+    W w(kLateJoin); sendSeat(0, w.b);
+    LOG_INFO("session: asking the host to join the running match");
+}
+
+void UdpSession::reportCatchUp(uint32_t tick, uint32_t target) {
+    if (!lateJoin_ || (now_ - catchUpSentAt_ < 0.1 && tick < target)) return;   // ~10 a second, and the last one
+    if (tick == catchUpSent_ && catchUpSentAt_ >= 0.0) return;
+    catchUpSent_ = tick; catchUpSentAt_ = now_;
+    SessionEvent e; e.type = SessionEvent::Type::CatchUpProgress; e.catchUpTick = tick; e.catchUpTarget = target; emit(e);
+}
 
 void UdpSession::matchFailed(int status, int64_t tick) {
     SessionEvent e;
@@ -519,6 +544,14 @@ const SessionMemberId& UdpSession::matchMember(int matchSeat) const {
 }
 
 // ---- receive ----
+std::string UdpSession::matchMemberName(int matchSeat) const {
+    if (matchSeat < 0 || (size_t)matchSeat >= matchToSession_.size()) return "";
+    const int s = matchToSession_[(size_t)matchSeat];
+    if (t_ && s == t_->self()) return self_.displayName;
+    auto it = peers_.find(s);
+    return it == peers_.end() ? std::string() : it->second.info.displayName;
+}
+
 void UdpSession::handleStranger(const std::string& from, const std::vector<uint8_t>& d) {
     if (d.empty()) return;
     if (d.size() >= 4 && d[0] == 'W' && d[1] == 'F' && d[2] == 'C' && d[3] == 'L') { handleService(from, d); return; }
@@ -668,6 +701,8 @@ void UdpSession::handleSeated(int seat, const std::vector<uint8_t>& d) {
         if (!r.ok) break;
         auto me = std::find(matchToSession_.begin(), matchToSession_.end(), t_ ? t_->self() : -1);
         matchSelf_ = me == matchToSession_.end() ? -1 : (int)(me - matchToSession_.begin());
+        matchReserved_.clear(); lateJoin_ = false;
+        for (int ms : matchToSession_) matchReserved_.push_back(ms == kNoSession ? 1 : 0);
         if (matchSelf_ < 0) { LOG_WARN("session: the launch roster does not include this member"); break; }
         view_ = std::make_unique<MatchView>(*this);
         SessionEvent e; e.type = SessionEvent::Type::CountdownStarted;
@@ -681,7 +716,61 @@ void UdpSession::handleSeated(int seat, const std::vector<uint8_t>& d) {
         peers_[seat].loaded = true;
         W w(kPeerLoaded); w.str(peers_[seat].info.id.fingerprint); sendAllMembers(w.b);
         SessionEvent e; e.type = SessionEvent::Type::PeerLoaded; e.member = peers_[seat].info.id; emit(e);
+        if (matchRunning_) {   // a late joiner loaded: only its own gate opens (it replays the history from tick 1)
+            W a(kAllLoaded); a.u32(1); sendSeat(seat, a.b);
+            LOG_INFO("session: late joiner %d loaded - released (it catches up)", seat);
+            break;
+        }
         checkAllLoaded();
+        break;
+    }
+    case kLateJoin: {   // the host: a member asks for a Reserved seat of the running match
+        if (role_ != Role::Host || !peers_.count(seat)) break;
+        auto refuse = [&](SessionJoinFailure why) {
+            W f(kLateLaunch); f.u8(0); f.u8((int)why); sendSeat(seat, f.b);
+            LOG_INFO("session: late join of seat %d refused (%d; match tick %u, limit %.0f s)", seat, (int)why, matchTick_, lateJoinLimitS_);
+        };
+        if (!matchRunning_ || lateJoinLimitS_ <= 0.0) { refuse(SessionJoinFailure::Full); break; }
+        if ((double)matchTick_ > lateJoinLimitS_ * 60.0) { refuse(SessionJoinFailure::TooFarAlong); break; }
+        int ms = -1;
+        for (size_t i = 0; i < matchToSession_.size(); ++i) if (matchToSession_[i] == seat) ms = (int)i;   // a resend
+        for (size_t i = 0; i < matchToSession_.size() && ms < 0; ++i)
+            if (i < matchReserved_.size() && matchReserved_[i] && matchToSession_[i] == kNoSession) ms = (int)i;
+        if (ms < 0) { refuse(SessionJoinFailure::Full); break; }
+        matchToSession_[(size_t)ms] = seat;
+        W m(kSeatMap); m.u8(ms); m.u8(seat);
+        for (const auto& kv : peers_) if (kv.first != seat) sendSeat(kv.first, m.b);
+        W w(kLateLaunch); w.u8(1); w.u8(0); w.str(launchUrl_); w.u32(launchSeed_); w.lobby(launchRoster_.slots.empty() ? lobby_ : launchRoster_);
+        w.u8((int)matchToSession_.size());
+        for (size_t i = 0; i < matchToSession_.size(); ++i) { w.u8(matchToSession_[i]); w.u8(matchReserved_[i]); }   // live seat + Reserved at launch
+        w.u8(ms);
+        sendSeat(seat, w.b);
+        peers_[seat].loaded = false;
+        LOG_INFO("session: late join - seat %d takes match seat %d (match tick %u)", seat, ms, matchTick_);
+        break;
+    }
+    case kLateLaunch: {   // the member: the running match's launch record and its seat, or a refusal
+        if (role_ != Role::Member || seat != 0) break;
+        const int ok = r.u8(), why = r.u8();
+        if (!ok) { SessionEvent e; e.type = SessionEvent::Type::JoinFailed; e.joinFailure = (SessionJoinFailure)why; emit(e); break; }
+        launchUrl_ = r.str(); launchSeed_ = r.u32(); launchRoster_ = r.lobby();
+        matchToSession_.clear(); matchReserved_.clear();
+        for (int k = r.u8(); k > 0 && r.ok; --k) { matchToSession_.push_back(r.u8()); matchReserved_.push_back((char)r.u8()); }
+        const int mine = r.u8();
+        if (!r.ok || mine < 0 || (size_t)mine >= matchToSession_.size()) break;
+        matchToSession_[(size_t)mine] = t_ ? t_->self() : kNoSession;
+        matchSelf_ = mine; lateJoin_ = true; matchRunning_ = false;
+        view_ = std::make_unique<MatchView>(*this);
+        LOG_INFO("session: late join accepted - match seat %d of %zu", mine, matchToSession_.size());
+        SessionEvent e; e.type = SessionEvent::Type::CountdownStarted;
+        e.launchUrl = launchUrl_; e.seed = launchSeed_; e.lobby = launchRoster_; e.lateJoin = true; e.lateSeat = mine;
+        emit(e);
+        break;
+    }
+    case kSeatMap: {   // the member: a late joiner holds this match seat now (lockstep packets from its session seat map to it)
+        if (role_ != Role::Member || seat != 0) break;
+        const int ms = r.u8(), ss = r.u8();
+        if (r.ok && ms >= 0 && (size_t)ms < matchToSession_.size()) matchToSession_[(size_t)ms] = ss;
         break;
     }
     case kPeerLoaded: {

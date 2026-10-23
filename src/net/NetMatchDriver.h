@@ -17,6 +17,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace audio { class IAudio; }
 namespace game { class World; struct CharacterSelection; }
@@ -42,6 +43,16 @@ public:
         std::function<void(float)> step;   // World::tick + GameMode::tick, once per complete tick (fixed dt)
         // A seat's Choose Character (event kind 1), on every peer when it arrives: World::queueSeatSelection(seat, sel, atTick).
         std::function<void(int seat, const game::CharacterSelection& sel, uint32_t atTick)> onSelection;
+        // Join in progress (Lockstep.h): seats = the player limit's human seats; reserved ones (activeFrom 0) join later.
+        std::vector<uint32_t> activeFrom;   // empty = every seat from tick 1
+        bool lateJoin = false;              // this peer joins a running match (replays the history, then goes live)
+        bool keepHistory = false;           // the host of a joinable match
+        // The host: the team for a joiner that caught up (the original: the smaller team). Unset: seat % 2.
+        std::function<int(int seat)> pickJoinTeam;
+        // Every peer, on the SeatJoin event: the seat's participant appears before the step of atTick (local = this peer's seat).
+        std::function<void(int seat, int team, bool local, uint32_t atTick)> onSeatJoin;
+        // Seat -> match player for commands / voice (-1 = no participant yet). Unset: player == seat (the launch's seat order).
+        std::function<int(int seat)> seatPlayer;
     };
     // `transport` is the session's match view (seats = match seats); the driver owns the Lockstep built over it.
     NetMatchDriver(game::World& world, INetTransport& transport, audio::IAudio* audio, const Config& cfg);
@@ -54,6 +65,11 @@ public:
     int frame(double dtSeconds);
 
     bool stalled() const;              // tick N waits for a seat's commands
+    // A late joiner: replaying the history (no pacing, a time budget per frame) until it reaches its activeTick. The loading screen
+    // shows catchUpTick() / catchUpTarget() (CatchUpProgress); live() = caught up and playing.
+    bool catchingUp() const;
+    uint32_t catchUpTick() const;
+    uint32_t catchUpTarget() const;
     bool held() const;                 // the load gate (no step until the start tick)
     void setHeld(bool held, uint32_t startTick = 0);
     bool finished() const;             // the match ended normally (every seat's BYE / the match end) or failed (see status)

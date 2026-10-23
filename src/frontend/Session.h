@@ -56,7 +56,9 @@ struct SessionMemberInfo {
 // One participant slot of the lobby / match: a human (local or remote) or a bot. Bot counts from Game Mode Options are
 // maxima; humans take bot slots (ONLINE_MP_FLOWS.md 3.4).
 struct SessionSlot {
-    enum class Kind { Bot, Human } kind = Kind::Bot;
+    // Reserved [Systems, join in progress]: a seat kept for a joiner of a running public match - a dormant human in the launch
+    // (game::RemoteSeat::dormant: no pawn / team / score) until the joiner wakes it (World::queueLateSeat).
+    enum class Kind { Bot, Human, Reserved } kind = Kind::Bot;
     SessionMemberId member;                 // humans only
     int team = 255;                         // 0 Autobots, 1 Decepticons, 255 none (FFA)
     bool connecting = false;                // PlayerList_GFX IsConnecting
@@ -103,7 +105,8 @@ struct SessionHostSettings {
 
 enum class SessionHostFailure { NoPath, StrictNat };                     // D2: PC text / the original NAT text
 // the original texts (ONLINE_MP_UI_STRINGS.md 3); Invalid: the code failed the session layer's decode / check symbol
-enum class SessionJoinFailure { Full, Timeout, Version, MapMissing, Invalid };
+// TooFarAlong [Systems]: joinRunningMatch refused - the running match is past the host's catch-up limit (setLateJoinLimit)
+enum class SessionJoinFailure { Full, Timeout, Version, MapMissing, Invalid, TooFarAlong };
 
 // Voice (decision D7; ONLINE_MP_FLOWS.md 3.12, architecture section 7). Capture / playback / Opus are Systems'; the
 // frontend hands over the player's settings and the push-to-talk key state, and shows MemberVoice as HeadsetState.
@@ -170,6 +173,7 @@ struct SessionEvent {
     // Join in progress (Systems' plan 2026-10-23): CountdownStarted with lateJoin = the host's LateLaunch record (url, seed,
     // the roster with this joiner's seat and team): travel straight into the running match, no lobby countdown.
     bool lateJoin = false;
+    int lateSeat = -1;                        // [Systems] lateJoin: this joiner's match seat (a Reserved slot of `lobby`) = the launch's localSeat
     int catchUpTick = 0, catchUpTarget = 0;   // CatchUpProgress
 };
 inline const char* sessionEventName(SessionEvent::Type t) {
@@ -219,6 +223,9 @@ public:
     // waiting in the lobby (D6). The host answers with CountdownStarted{lateJoin} and CatchUpProgress during the load.
     virtual bool supportsLateJoin() const { return false; }
     virtual void joinRunningMatch() {}
+    // [Systems] Host, before requestStart: the catch-up limit in seconds of match time (0 = joining a running match refused ->
+    // JoinFailed{Full}; past it -> JoinFailed{TooFarAlong}). The seats are the launch roster's Reserved slots.
+    virtual void setLateJoinLimit(double maxMatchSeconds) { (void)maxMatchSeconds; }
 };
 
 // Match-side plumbing for WFC_SESSIONTEST (Gameplay's harness, ONLINE_MP_FRONTEND_TESTS.md section 4); declared here so
