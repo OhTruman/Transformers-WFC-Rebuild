@@ -4049,3 +4049,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 11:13 Cyan sheet NOT removed by ClampedPow (confirm on Rendering's exe: unchanged). ClampedPow stays (RE-correct). Next: a
   diagnostic exe (WFC_DRAWDUMP near-camera draw list at the shot frame + SKIPMAT on skinned draws), one Frontend slot, then
   a named mesh and the fix.
+2026-10-23 11:18 MERGED 7f4f72fe campaign transforming actors (doors / tube doors / pods open via TnSeqAct_TransformWorldProp; the pod
+  rides the A1 lift; 140 nav cells blocked by closed doors) + 18861041 Gltf keys bind-pose nodes by actor (setActorHidden
+  reaches them). Gate item 1 DONE; Gameplay on sentries -> roller mines -> FINAL_BASE_ITEMS 07. Cyan draw dump pending.
