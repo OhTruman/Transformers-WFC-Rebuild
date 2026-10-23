@@ -1015,6 +1015,7 @@ bool World::loadMapAudio(const std::string& level) {
         for (const std::string& c : loadoutWeaponClasses_) ensureWeaponAudio(c);   // [Systems M08d] the loadout's weapons
         for (const std::string& c : participantWeaponClasses_) ensureWeaponAudio(c);   // [Systems M09b] the bots' weapons
         if (!selectionChassis_.empty() || !selectionWeapons_.empty()) preloadSelectionAudio({}, {});   // [Systems M09c]
+        dialogEvents_.setLevel(canonicalMapName(level), cues_);   // [Systems] the level's character dialog sets + manager
         const SoundCues::LocStats& ls = SoundCues::locStats();
         LOG_INFO("localized waves (language %s): %d from the _LOC twin, %d merged copy of that twin, %d not played",
                  std::getenv("WFC_LANGUAGE") ? std::getenv("WFC_LANGUAGE") : "INT", ls.twin, ls.merged, ls.skipped);
@@ -1191,7 +1192,7 @@ void World::tickCharacterAudio(float dt) {
 
     foleyCues_.clear();
     robotFoley_.tick(pc, dt, foleyCues_);
-    for (const char* c : foleyCues_) cues_.play(c, atPawn(), 0.0f);
+    for (const char* c : foleyCues_) if (!routeDialogNotify(c, audioProfile(), localPlayer_, atPawn(), 0.0f)) cues_.play(c, atPawn(), 0.0f);
     static const bool foleyLog = std::getenv("WFC_FOLEYLOG") != nullptr;
     if (foleyLog) {
         const core::Vec3& v = pc.velocity();
@@ -2592,6 +2593,7 @@ void World::stepRemainder(float dt) {
             if (cues_.pendingEvents() > 30) LOG_INFO("AMB pending: %s", cues_.pendingSummary().c_str());
             occlusionRays_ = 0;
         }
+        dialogEvents_.tick(dt, cues_);   // [Systems] the dialog groups' retrigger timers
         cues_.tick(dt);
     }
 
@@ -6122,6 +6124,24 @@ void World::onAnimNotifyWindow(int matchPlayer, const char* animSet, const char*
     static const bool off = std::getenv("WFC_BODYNOTIFYFX") && std::getenv("WFC_BODYNOTIFYFX")[0] == '0';
     static const bool log = std::getenv("WFC_NOTIFYLOG") != nullptr;
     (void)backwards;   // nothing of ours plays backwards (Gameplay's hook)
+    // [Systems] HmAnimNotify_Dialog (non-verbal dialog: hit / death reactions, melee swings, warcries) in this window: the speaker's
+    // clip notifies (its audio profile, by sequence name), MinWeight gate [C: AnimSeqInstigator.NodeTotalWeight < MinWeight -> none],
+    // to the level's dialog manager (DialogEvents: the group rules, then the level / robot / vehicle set's cue) at the pawn.
+    static const bool dialogOff = std::getenv("WFC_NODIALOGNOTIFY") != nullptr;   // TEST: silent
+    if (audio_ && !dialogOff && !levelAudio_.level().empty() && t1 > t0 && weight > 0.0f) {
+        const bool me = matchPlayer == localPlayer_;
+        const Character* pc = me ? (localDead_ ? nullptr : &player_.pawn()) : participantPawn(matchPlayer);
+        auto pb = participantBodies_.find(matchPlayer);
+        const CharacterAudioProfile* who = me ? &audioProfile() : pb != participantBodies_.end() ? &pb->second.foley.voiceProfile() : nullptr;
+        const CharacterAudioProfile::Clip* clip = who ? who->clip(sequence) : nullptr;
+        if (pc && clip)
+            for (const CharacterAudioProfile::Notify& n : clip->notifies) {
+                if (n.cue.compare(0, 7, "dialog:") != 0 || n.t < t0 || n.t >= t1 || weight < n.minWeight) continue;
+                SoundCues::Emitter e = me ? atPawn() : SoundCues::Emitter{};
+                if (!me) e.pos = pc->position();
+                dialogEvents_.play(*who, matchPlayer, n.cue.substr(7), cues_, e, me ? 0.0f : core::length(pc->position() - listenerPos_));
+            }
+    }
     if (off || !renderer_ || weight <= 0.0f || !(t1 > t0)) return;
     const BodyNotifyIndex& idx = bodyNotifyIndex();
     auto it = idx.effects.find(std::string(animSet) + "|" + sequence);
@@ -7819,7 +7839,7 @@ void World::tickParticipantBodyAudio(int player, const std::string& chassisKey, 
     // Robot foley from the pawn's own animation.
     std::vector<const char*>& out = partScratch_; out.clear();       // reused: no per-bot allocation
     b.foley.tick(pc, dt, out);
-    for (const char* c : out) cues_.play(c, at({0, 0, 0}), dist);
+    for (const char* c : out) if (!routeDialogNotify(c, b.foley.voiceProfile(), player, at({0, 0, 0}), dist)) cues_.play(c, at({0, 0, 0}), dist);
     // Vehicle component at AUDIO_ROOT (+147.25 UU), as the local pawn.
     VehicleFormSignals s = vs;
     s.tookOff = s.tookOff || (s.vehicle && b.prevGrounded && !s.onGround && s.velocity.y > 2.0f);   // UpdateJumping take-off edge
@@ -7861,7 +7881,7 @@ void World::tickParticipantWeaponAudio(int player, const std::string& cls, unsig
     std::vector<const char*>& out = partScratch_; out.clear();
     b.foley.actionLayer(viaAbility ? std::string() : actionClip, actionTime, out);
     e.offset = {0, 0, 0}; e.pos = b.pos;
-    for (const char* c : out) cues_.play(c, e, dist);
+    for (const char* c : out) if (!routeDialogNotify(c, b.foley.voiceProfile(), player, e, dist)) cues_.play(c, e, dist);
 }
 
 int World::participantBodiesActive() const {
@@ -8225,13 +8245,20 @@ void World::onRollerMineExploded(const core::Vec3& pos) { abilityAudio_.rollerMi
 void World::onActionClip(const std::string& clip, float t) {
     std::vector<const char*> out;
     robotFoley_.actionLayer(clip, t, out);
-    for (const char* c : out) cues_.play(c, atPawn(), 0.0f);
+    for (const char* c : out) if (!routeDialogNotify(c, audioProfile(), localPlayer_, atPawn(), 0.0f)) cues_.play(c, atPawn(), 0.0f);
 }
 
 void World::onAbilityAnimFallback(const std::string& clip) {
     std::vector<const char*> out;
     robotFoley_.clipNotifiesOnce(clip, out);
-    for (const char* c : out) cues_.play(c, atPawn(), 0.0f);
+    for (const char* c : out) if (!routeDialogNotify(c, audioProfile(), localPlayer_, atPawn(), 0.0f)) cues_.play(c, atPawn(), 0.0f);
+}
+
+bool World::routeDialogNotify(const char* cue, const CharacterAudioProfile& who, int owner, const SoundCues::Emitter& at, float distM) {
+    // The foley paths see only some clips; the dialog notifies fire from every clip's window instead (onAnimNotifyWindow), so here
+    // they are only kept from playing as plain cues.
+    (void)who; (void)owner; (void)at; (void)distM;
+    return std::strncmp(cue, "dialog:", 7) == 0;
 }
 
 void World::onDodgeStarted() {
@@ -8802,6 +8829,18 @@ void World::tickCorpses(float dt) {
     for (size_t i = 0; i < corpses_.size();) {
         Corpse& c = corpses_[i];
         c.t += dt;
+        // [Systems] the death clip's HmAnimNotify_Dialog (DeathRX_NonVerbalDialog ...): the dying chassis's clip notifies in this step's
+        // window [t - dt, t), to the level's dialog manager at the body (the same rule as a live clip's window, onAnimNotifyWindow)
+        if (audio_ && c.clip >= 0 && !c.gibbed && c.model && !levelAudio_.level().empty()) {
+            const CharacterAudioProfile* who = CharacterAudio::find(c.chassis);
+            const CharacterAudioProfile::Clip* cl = who ? who->clip(c.model->clips[(size_t)c.clip].name) : nullptr;
+            if (cl)
+                for (const CharacterAudioProfile::Notify& n : cl->notifies) {
+                    if (n.cue.compare(0, 7, "dialog:") != 0 || n.t < c.t - dt || n.t >= c.t) continue;
+                    SoundCues::Emitter e; e.pos = {c.world.m[12], c.world.m[13], c.world.m[14]};
+                    dialogEvents_.play(*who, c.player, n.cue.substr(7), cues_, e, core::length(e.pos - listenerPos_));
+                }
+        }
         if (c.defrag) c.gpuOk = false;   // the Defrag energy-death material is not applied on the queued GPU draw: CPU path
         if (!c.gibbed && !c.poseStatic) {
             if (c.clip >= 0) {

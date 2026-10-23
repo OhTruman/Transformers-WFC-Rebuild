@@ -14,6 +14,7 @@
 // Verified: the default profile reproduces the previous hand-made Optimus tables exactly (26 / 26 locomotion notifies,
 // the landing / take-off / idle notifies, all 14 vehicle sounds, the transform cues).
 #pragma once
+#include "assets/Json.h"
 #include <cmath>
 #include <map>
 #include <string>
@@ -57,6 +58,7 @@ struct CharacterAudioProfile {
     struct Notify { float t; std::string event, cue; float minWeight; };   // event (resolved via voice) or cue
     struct Clip { float length; std::vector<Notify> notifies; };
     std::string key, name, faction, voiceSet, vehicleSet, vehicleDeath;
+    std::string robodef;   // the robot definition (TR_*_ROBODEF): the key of the levels' character dialog sets (DialogEvents)
     std::map<std::string, std::string> voice, vehicle;
     std::map<std::string, Clip> clips;
     std::vector<std::string> weapons;
@@ -147,6 +149,10 @@ class CharacterAudio {
 public:
     static const CharacterAudioProfile* find(const std::string& keyOrName);   // roster chassis key or display name
     static const CharacterAudioProfile& defaultProfile();                    // "Truck" (Optimus Prime)
+    // [Systems] Non-verbal dialog data (DialogEvents): level_sets / sets / events / groups. An HmAnimNotify_Dialog notify's cue is
+    // "dialog:<event>" (routed to DialogEvents, never played as a cue).
+    static const assets::Json& dialogData();
+    static int loadDialogCues(SoundCues& cues, const std::string& level);   // the level's character dialog sets' cues
     static int profileCount();
     static std::vector<std::string> keys();
     // Load the cues the profile references that the cue table does not have yet (level-owned: released with the

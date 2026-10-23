@@ -33,6 +33,7 @@ FOOT = {None: 'FS_DEFAULT_WALK', 'kFootstep': 'FS_DEFAULT_WALK', 'kFootstepRun':
 _, D_FOOT = props('Engine.Default__AnimNotify_Footstep')
 _, D_HMSND = props('HM_Engine.Default__HmAnimNotify_Sound')
 _, D_HMEVT = props('HM_Engine.Default__HmAnimNotify_SoundEvent')
+_, D_HMDLG = props('HM_Engine.Default__HmAnimNotify_Dialog')
 
 clip_cache = {}
 def anim_set_clips(anim_set):
@@ -55,6 +56,11 @@ def anim_set_clips(anim_set):
                 cue = np.get('SoundCue') or np.get('Sound')
                 if cue: notes.append({'t': round(n['Time'], 6), 'cue': cue, 'min_weight': np.get('MinWeight', D_HMSND.get('MinWeight', 0.25)),
                                       'socket': np.get('SocketName'), 'kind': 'sound'})
+            elif cl == 'HmAnimNotify_Dialog':   # non-verbal dialog (RE 2026-10-23, C): DialogEventManager.Play(owner, SoundEvent)
+                ev = np.get('SoundEvent')
+                if ev: notes.append({'t': round(n['Time'], 6), 'event': ev.split('.')[-1], 'event_path': ev,
+                                     'min_weight': np.get('MinWeight', D_HMDLG.get('MinWeight', 0.25)), 'socket': np.get('SocketName'),
+                                     'kind': 'dialog'})
         if notes:
             out[d.get('SequenceName')] = {'length': d.get('SequenceLength', 0.0), 'rate': d.get('RateScale', 1.0), 'notifies': notes}
     clip_cache[anim_set] = out
@@ -165,7 +171,7 @@ for key, ch in roster['chassis'].items():
     loadout = (ch.get('weapons') or {}).get('iconic_loadout') or {}
     disp = ch.get('display') or {}
     name = ((disp.get('iconic') or disp.get('custom_body') or {}).get('INT')) if isinstance(disp, dict) else disp
-    prof = {'key': key, 'name': name, 'faction': ch.get('faction'),
+    prof = {'key': key, 'name': name, 'faction': ch.get('faction'), 'robodef': (ch.get('robot') or {}).get('definition'),
             'voice_set': (au.get('voice') or {}).get('object'), 'vehicle_set': (au.get('vehicle') or {}).get('object'),
             'voice': voice, 'vehicle': vehicle, 'vehicle_death_sound': au.get('vehicle_death_sound'),
             'clips': clips, 'weapons': sorted(set(loadout.values())),
@@ -397,12 +403,57 @@ src = io.open(os.path.join(os.path.dirname(__file__), 'gen_level_audio.py'), enc
 lib = src[:src.index('SINK_OPS =')]                       # the helper section (db, cue_tree, cue_limits ...)
 exec(compile(lib, 'gen_level_audio_helpers', 'exec'), gl)
 cues = {}
+# Non-verbal dialog (RE 2026-10-23, C: TnPawn.FindSoundCue + HmDialogEventManager, CAMPAIGN_DIALOG_SCHEMA 2): an HmAnimNotify_Dialog's
+# SoundEvent -> the cue from (1) the level's character set (TnWorldInfo._SoundEventSetInfo.CharacterSoundEventSets, by the chassis's
+# ROBODEF; one per MP map / campaign chapter base level), (2) the robot set (voice), (3) the vehicle set; the first hit wins. The
+# manager's rules need each event's DialogPriority / DialogGroup and the groups (InstanceLimit, ReTriggerDelayMin / Max,
+# InitialChanceToPlay, ParentDialogGroup), class defaults applied.
+_, D_DGROUP = props('Engine.Default__HmSoundEventDialogGroup')
+level_sets, dialog_sets = {}, {}
+for o, pj in c.execute("select opath, props from objects where class='TnSoundEventSetInfo'"):
+    pp = json.loads(pj)
+    if not pp.get('CharacterSoundEventSets'): continue
+    lvl = o.split('.')[0]
+    for suf in ('_BASE_m', '_Base_m', '_base_m'):
+        if lvl.endswith(suf): lvl = lvl[:-len(suf)]
+    level_sets[lvl] = {e['Chassis']: e['SoundEventSet'] for e in pp['CharacterSoundEventSets'] if e.get('Chassis') and e.get('SoundEventSet')}
+    for st in level_sets[lvl].values():
+        if st not in dialog_sets: dialog_sets[st] = event_set(st)
+dlg_events = {}
+for prof in profiles.values():
+    for cl in prof['clips'].values():
+        for n in cl['notifies']:
+            if n.get('kind') == 'dialog': dlg_events[n['event']] = n['event_path']
+dialog_events, dialog_groups = {}, {}
+def add_group(g):
+    while g and g not in dialog_groups:
+        _, gp = props(g)
+        v = dict(D_DGROUP); v.update(gp)
+        dialog_groups[g] = {'limit': int(v.get('InstanceLimit', 1)), 'retrigger_min': float(v.get('ReTriggerDelayMin') or 0.0),
+                            'retrigger_max': float(v.get('ReTriggerDelayMax') or 0.0), 'chance': int(v.get('InitialChanceToPlay', 100)),
+                            'parent': v.get('ParentDialogGroup') or ''}
+        g = dialog_groups[g]['parent']
+for short, path in sorted(dlg_events.items()):
+    _, ep = props(path)
+    dialog_events[short] = {'priority': float(ep.get('DialogPriority') or 0.0), 'group': ep.get('DialogGroup') or ''}
+    add_group(dialog_events[short]['group'])
+for m in dialog_sets.values():
+    for ev, cue in m.items():
+        if ev in dialog_events: all_cues.add(cue)
+for prof in profiles.values():   # the robot / vehicle sets' cues for the dialog events (the fallbacks)
+    for ev in dialog_events:
+        for setname in ('voice', 'vehicle'):
+            if prof[setname].get(ev): all_cues.add(prof[setname][ev])
+print('non-verbal dialog: %d events %s, %d groups, %d levels with character sets, %d sets' % (len(dialog_events), sorted(dialog_events),
+      len(dialog_groups), len(level_sets), len(dialog_sets)))
+doc_dialog = {'level_sets': level_sets, 'sets': {k: {e: v for e, v in m.items() if e in dialog_events} for k, m in dialog_sets.items()},
+              'events': dialog_events, 'groups': dialog_groups}
 missing = []
 for q in sorted(x for x in all_cues if x):
     d = gl['cue_tree'](q)
     if d: cues[q] = d
     else: missing.append(q)
-doc = {'map': '__characters__', 'source': 'Systems tools/systems/gen_character_audio.py (AssetTools roster_package / mp_weapons / authored.db)',
+doc = {'map': '__characters__', 'dialog': doc_dialog, 'source': 'Systems tools/systems/gen_character_audio.py (AssetTools roster_package / mp_weapons / authored.db)',
        'profiles': profiles, 'weapons': wpn, 'abilities': abilities, 'buffs': buffs, 'class_sounds': class_sounds,
        'melee_damage_types': sorted(melee_damage_types), 'damage_hit_effects': damage_hit_effects, 'cues': cues}
 print('profiles %d, weapons %d, cues %d (missing %d: %s)' % (len(profiles), len(wpn), len(cues), len(missing), missing[:6]))

@@ -46,6 +46,7 @@
 #include "game/RobotFoley.h"
 #include "game/AmbientAudio.h"
 #include "game/LevelAudioHost.h"
+#include "game/DialogEvents.h"
 #include "game/CharacterAudio.h"
 #include "game/VehicleAudio.h"
 #include "game/VehicleFormAudio.h"
@@ -1766,6 +1767,9 @@ private:
     audio::IAudio* audio_ = nullptr;
     SoundCues cues_;
     LevelAudioHost levelAudio_{cues_};     // the loaded level's audio, music player, UI sounds (Systems contract)
+    DialogEvents dialogEvents_;            // [Systems] the level's HmDialogEventManager (non-verbal dialog from anim notifies)
+    // [Systems] a foley "cue" that is an HmAnimNotify_Dialog ("dialog:<event>") goes to the dialog manager (true = handled)
+    bool routeDialogNotify(const char* cue, const CharacterAudioProfile& who, int owner, const SoundCues::Emitter& at, float distM);
     PickupPresentation pickupFx_;           // stateless: onTaken resolves a factory class or actor name
     // Cue owners (SoundCues::Emitter::owner): attached AudioComponents follow these every tick.
     // Owner ids: the player pawn (its mesh origin, or a bone/socket of the displayed skeleton) and

@@ -44,6 +44,7 @@ const Db& db() {
         p.faction = j["faction"].asString();
         p.voiceSet = j["voice_set"].asString();
         p.vehicleSet = j["vehicle_set"].asString();
+        p.robodef = j["robodef"].asString();
         p.vehicleDeath = j["vehicle_death_sound"].asString();
         for (const auto& e : j["voice"].obj) p.voice[e.first] = e.second.asString();
         for (const auto& e : j["vehicle"].obj) p.vehicle[e.first] = e.second.asString();
@@ -52,7 +53,8 @@ const Db& db() {
             clip.length = c.second["length"].asFloat(0.0f);
             const assets::Json& ns = c.second["notifies"];
             for (size_t i = 0; i < ns.size(); ++i)
-                clip.notifies.push_back({ns[i]["t"].asFloat(), ns[i]["event"].asString(), ns[i]["cue"].asString(),
+                clip.notifies.push_back({ns[i]["t"].asFloat(), ns[i]["event"].asString(),
+                                         ns[i]["kind"].asString() == "dialog" ? "dialog:" + ns[i]["event"].asString() : ns[i]["cue"].asString(),
                                          ns[i]["min_weight"].asFloat(0.25f)});
             p.clips[c.first] = clip;
         }
@@ -217,6 +219,21 @@ const CharacterAudioProfile* CharacterAudio::find(const std::string& k) {
     if (it != d.profiles.end()) return &it->second;
     for (const auto& kv : d.profiles) if (!kv.second.name.empty() && kv.second.name == k) return &kv.second;
     return nullptr;
+}
+
+const assets::Json& CharacterAudio::dialogData() { return db().doc["dialog"]; }
+
+int CharacterAudio::loadDialogCues(SoundCues& cues, const std::string& level) {
+    const Db& d = db();
+    assets::Json sub;
+    sub.type = assets::Json::Type::Object;
+    const assets::Json& dl = d.doc["dialog"];
+    for (const auto& kv : dl["level_sets"][level].obj)
+        for (const auto& e : dl["sets"][kv.second.asString()].obj) {
+            const std::string& q = e.second.asString();
+            if (!q.empty() && !cues.hasCue(q.c_str()) && !sub.has(q) && d.doc["cues"][q].isObject()) sub.obj[q] = d.doc["cues"][q];
+        }
+    return commit(cues, sub);
 }
 
 const CharacterAudioProfile& CharacterAudio::defaultProfile() {

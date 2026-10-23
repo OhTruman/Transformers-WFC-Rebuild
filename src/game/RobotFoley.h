@@ -44,6 +44,7 @@ struct CharacterAudioProfile;
 
 class RobotFoley {
 public:
+    const CharacterAudioProfile& voiceProfile() const { return profile(); }   // [Systems] the dialog notifies' speaker (DialogEvents)
     // Advance one simulation step and append the cue names (SoundCues table names) to play, attached
     // to the pawn, to `out`. Call after the pawn's animation update.
     void tick(const Character& pc, float dt, std::vector<const char*>& out);

@@ -1,0 +1,380 @@
+diff -ruN a/src/game/CharacterAudio.cpp b/src/game/CharacterAudio.cpp
+--- a/src/game/CharacterAudio.cpp	2026-10-23 08:29:10.506604900 -0500
++++ b/src/game/CharacterAudio.cpp	2026-10-23 08:29:10.522158300 -0500
+@@ -44,6 +44,7 @@
+         p.faction = j["faction"].asString();
+         p.voiceSet = j["voice_set"].asString();
+         p.vehicleSet = j["vehicle_set"].asString();
++        p.robodef = j["robodef"].asString();
+         p.vehicleDeath = j["vehicle_death_sound"].asString();
+         for (const auto& e : j["voice"].obj) p.voice[e.first] = e.second.asString();
+         for (const auto& e : j["vehicle"].obj) p.vehicle[e.first] = e.second.asString();
+@@ -52,7 +53,8 @@
+             clip.length = c.second["length"].asFloat(0.0f);
+             const assets::Json& ns = c.second["notifies"];
+             for (size_t i = 0; i < ns.size(); ++i)
+-                clip.notifies.push_back({ns[i]["t"].asFloat(), ns[i]["event"].asString(), ns[i]["cue"].asString(),
++                clip.notifies.push_back({ns[i]["t"].asFloat(), ns[i]["event"].asString(),
++                                         ns[i]["kind"].asString() == "dialog" ? "dialog:" + ns[i]["event"].asString() : ns[i]["cue"].asString(),
+                                          ns[i]["min_weight"].asFloat(0.25f)});
+             p.clips[c.first] = clip;
+         }
+@@ -219,6 +221,21 @@
+     return nullptr;
+ }
+ 
++const assets::Json& CharacterAudio::dialogData() { return db().doc["dialog"]; }
++
++int CharacterAudio::loadDialogCues(SoundCues& cues, const std::string& level) {
++    const Db& d = db();
++    assets::Json sub;
++    sub.type = assets::Json::Type::Object;
++    const assets::Json& dl = d.doc["dialog"];
++    for (const auto& kv : dl["level_sets"][level].obj)
++        for (const auto& e : dl["sets"][kv.second.asString()].obj) {
++            const std::string& q = e.second.asString();
++            if (!q.empty() && !cues.hasCue(q.c_str()) && !sub.has(q) && d.doc["cues"][q].isObject()) sub.obj[q] = d.doc["cues"][q];
++        }
++    return commit(cues, sub);
++}
++
+ const CharacterAudioProfile& CharacterAudio::defaultProfile() {
+     static CharacterAudioProfile none;
+     const CharacterAudioProfile* p = find("Truck");
+diff -ruN a/src/game/CharacterAudio.h b/src/game/CharacterAudio.h
+--- a/src/game/CharacterAudio.h	2026-10-23 08:29:10.583368700 -0500
++++ b/src/game/CharacterAudio.h	2026-10-23 08:29:10.596914400 -0500
+@@ -14,6 +14,7 @@
+ // Verified: the default profile reproduces the previous hand-made Optimus tables exactly (26 / 26 locomotion notifies,
+ // the landing / take-off / idle notifies, all 14 vehicle sounds, the transform cues).
+ #pragma once
++#include "assets/Json.h"
+ #include <cmath>
+ #include <map>
+ #include <string>
+@@ -57,6 +58,7 @@
+     struct Notify { float t; std::string event, cue; float minWeight; };   // event (resolved via voice) or cue
+     struct Clip { float length; std::vector<Notify> notifies; };
+     std::string key, name, faction, voiceSet, vehicleSet, vehicleDeath;
++    std::string robodef;   // the robot definition (TR_*_ROBODEF): the key of the levels' character dialog sets (DialogEvents)
+     std::map<std::string, std::string> voice, vehicle;
+     std::map<std::string, Clip> clips;
+     std::vector<std::string> weapons;
+@@ -147,6 +149,10 @@
+ public:
+     static const CharacterAudioProfile* find(const std::string& keyOrName);   // roster chassis key or display name
+     static const CharacterAudioProfile& defaultProfile();                    // "Truck" (Optimus Prime)
++    // [Systems] Non-verbal dialog data (DialogEvents): level_sets / sets / events / groups. An HmAnimNotify_Dialog notify's cue is
++    // "dialog:<event>" (routed to DialogEvents, never played as a cue).
++    static const assets::Json& dialogData();
++    static int loadDialogCues(SoundCues& cues, const std::string& level);   // the level's character dialog sets' cues
+     static int profileCount();
+     static std::vector<std::string> keys();
+     // Load the cues the profile references that the cue table does not have yet (level-owned: released with the
+diff -ruN a/src/game/DialogEvents.cpp b/src/game/DialogEvents.cpp
+--- a/src/game/DialogEvents.cpp	1969-12-31 18:00:00.000000000 -0600
++++ b/src/game/DialogEvents.cpp	2026-10-23 08:29:10.655615900 -0500
+@@ -0,0 +1,107 @@
++// Clean-room reconstruction — see DialogEvents.h.
++#include "game/DialogEvents.h"
++#include "game/CharacterAudio.h"
++#include "core/Log.h"
++
++#include <algorithm>
++#include <cstdlib>
++
++namespace game {
++
++namespace {
++bool logOn() { static const bool on = std::getenv("WFC_DIALOGLOG") != nullptr; return on; }
++const std::string kNone;
++}
++
++void DialogEvents::setLevel(const std::string& level, SoundCues& cues) {
++    level_ = level;
++    groups_.clear();
++    const int n = CharacterAudio::loadDialogCues(cues, level);
++    if (logOn()) LOG_INFO("DIALOG level %s: %d level-set cues loaded", level.c_str(), n);
++}
++
++const std::string& DialogEvents::findCue(const CharacterAudioProfile& who, const std::string& event) const {
++    const assets::Json& d = CharacterAudio::dialogData();
++    const std::string& set = d["level_sets"][level_][who.robodef].asString();   // 1. the level's character set
++    if (!set.empty()) {
++        const assets::Json& c = d["sets"][set][event];
++        if (c.isString() && !c.asString().empty()) return c.asString();
++    }
++    auto v = who.voice.find(event);                                             // 2. the robot form's set
++    if (v != who.voice.end() && !v->second.empty()) return v->second;
++    auto h = who.vehicle.find(event);                                           // 3. the vehicle form's set
++    if (h != who.vehicle.end() && !h->second.empty()) return h->second;
++    return kNone;
++}
++
++DialogEvents::Group& DialogEvents::group(const std::string& name) {
++    Group& g = groups_[name];
++    if (!g.started) {   // GetInitialDelay: 0 when RandomInt(100) < InitialChanceToPlay, else a retrigger delay
++        g.started = true;
++        const int chance = CharacterAudio::dialogData()["groups"][name]["chance"].asInt(100);
++        g.timer = (int)(rng_() % 100u) < chance ? 0.0f : retriggerDelay(name);
++    }
++    return g;
++}
++
++float DialogEvents::retriggerDelay(const std::string& name) {
++    const assets::Json& j = CharacterAudio::dialogData()["groups"][name];
++    const float a = j["retrigger_min"].asFloat(0.0f), b = j["retrigger_max"].asFloat(0.0f);
++    if (b <= a) return a;
++    return a + (b - a) * (float)(rng_() % 10000u) / 10000.0f;
++}
++
++int DialogEvents::play(const CharacterAudioProfile& who, int owner, const std::string& event, SoundCues& cues,
++                       const SoundCues::Emitter& at, float distM) {
++    const assets::Json& d = CharacterAudio::dialogData();
++    const assets::Json& ev = d["events"][event];
++    std::string first = ev["group"].asString();
++    if (first.empty()) first = "SoundEvents_Dialog.DefaultDialogGroup";   // the manager's DefaultDialogGroup (every level's)
++    const float priority = ev["priority"].asFloat(0.0f);
++    std::vector<std::string> chain;
++    for (std::string g = first; !g.empty() && chain.size() < 8; g = d["groups"][g]["parent"].asString()) chain.push_back(g);
++    // CanPlayDialog: every group of the chain; preemption victims are only stopped once the whole chain allows the event.
++    std::vector<std::pair<std::string, size_t>> evict;
++    for (const std::string& name : chain) {
++        Group& g = group(name);
++        for (size_t i = 0; i < g.playing.size();)   // drop the finished instances first
++            if (!cues.playing(g.playing[i].instance)) g.playing.erase(g.playing.begin() + (long)i); else ++i;
++        if (g.timer > 0.0f) { if (logOn()) LOG_INFO("DIALOG %s refused: %s retrigger %.2f s", event.c_str(), name.c_str(), g.timer); return -1; }
++        const int limit = d["groups"][name]["limit"].asInt(1);
++        if (limit != 0 && (int)g.playing.size() >= limit) {
++            size_t low = 0;
++            for (size_t i = 1; i < g.playing.size(); ++i) if (g.playing[i].priority < g.playing[low].priority) low = i;
++            if (!(priority > g.playing[low].priority)) { if (logOn()) LOG_INFO("DIALOG %s refused: %s full", event.c_str(), name.c_str()); return -1; }
++            evict.push_back({name, low});
++        }
++    }
++    const std::string& cue = findCue(who, event);
++    if (cue.empty()) { if (logOn()) LOG_INFO("DIALOG %s: no cue for %s", event.c_str(), who.key.c_str()); return -1; }
++    for (const auto& e : evict) {   // StopDialog on the preempted instance (it leaves every group it was in)
++        const int victim = groups_[e.first].playing[e.second].instance;
++        cues.stop(victim, 0.0f);
++        for (auto& kv : groups_)
++            kv.second.playing.erase(std::remove_if(kv.second.playing.begin(), kv.second.playing.end(),
++                                                   [victim](const Inst& x) { return x.instance == victim; }), kv.second.playing.end());
++    }
++    const int inst = cues.play(cue.c_str(), at, distM);
++    if (inst < 0) return -1;
++    for (const std::string& name : chain) {   // PlayInternal
++        Group& g = groups_[name];
++        g.playing.push_back({inst, priority, owner});
++        const int limit = d["groups"][name]["limit"].asInt(1);
++        if (limit == 0 || (int)g.playing.size() >= limit) g.timer = retriggerDelay(name);
++    }
++    if (logOn()) LOG_INFO("DIALOG %s by %s (owner %d): %s, priority %.0f, groups %zu", event.c_str(), who.key.c_str(), owner, cue.c_str(), priority, chain.size());
++    return inst;
++}
++
++void DialogEvents::tick(float dt, SoundCues& cues) {
++    for (auto& kv : groups_) {
++        if (kv.second.timer > 0.0f) kv.second.timer = std::max(0.0f, kv.second.timer - dt);
++        std::vector<Inst>& p = kv.second.playing;
++        p.erase(std::remove_if(p.begin(), p.end(), [&cues](const Inst& x) { return !cues.playing(x.instance); }), p.end());
++    }
++}
++
++} // namespace game
+diff -ruN a/src/game/DialogEvents.h b/src/game/DialogEvents.h
+--- a/src/game/DialogEvents.h	1969-12-31 18:00:00.000000000 -0600
++++ b/src/game/DialogEvents.h	2026-10-23 08:29:10.717327100 -0500
+@@ -0,0 +1,47 @@
++// Clean-room reconstruction — non-verbal dialog (Systems, 2026-10-23): HmAnimNotify_Dialog -> HmDialogEventManager -> the pawn's
++// dialog [RE 2026-10-23 + CAMPAIGN_DIALOG_SCHEMA section 2, CONFIRMED from script]:
++//   * the notify (MinWeight gate as the sound notifies) calls WorldInfo._DialogEventManager.Play(pawn, SoundEvent);
++//   * Play: the event's DialogGroup (else the manager's DefaultDialogGroup); CanPlayDialog walks the group and its ParentDialogGroup
++//     chain: a group with RetriggerTimer > 0 refuses; a group at its InstanceLimit (0 = no limit) refuses unless the new event's
++//     DialogPriority is higher than its lowest-priority playing instance, which is then stopped (preemption);
++//   * PlayInternal adds the instance to every group of the chain (by priority); a group that reaches its limit (or has limit 0) arms
++//     RetriggerTimer = RandRange(ReTriggerDelayMin, Max); then the pawn plays the event's cue: TnPawn.FindSoundCue - the level's
++//     character set (TnWorldInfo CharacterSoundEventSets, by the chassis's ROBODEF), then the robot set, then the vehicle set;
++//     no cue = nothing plays;
++//   * Tick counts the timers down; a group starts with RetriggerTimer = 0 when RandomInt(100) < InitialChanceToPlay, else a
++//     retrigger delay (GetInitialDelay).
++// One manager per loaded level (MP: the map's; campaign: the chapter's base level). Presentation only: its randomness and timers are
++// audio-side (not the sim's). Data: CharacterAudio.inc "dialog" (tools/systems/gen_character_audio.py).
++#pragma once
++#include <map>
++#include <random>
++#include <string>
++#include <vector>
++#include "game/SoundCues.h"
++
++namespace game {
++
++struct CharacterAudioProfile;
++
++class DialogEvents {
++public:
++    // A level was loaded (its audio): the manager's groups restart and the level's character sets apply ("" = none). Loads the
++    // level sets' cues into `cues` (level-owned). `level` = the map / chapter name (MP_IAC_Streets, D5_OME).
++    void setLevel(const std::string& level, SoundCues& cues);
++    // An HmAnimNotify_Dialog of `who` fired (event = the HmSoundEvent's short name). Returns the instance (-1: refused / no cue).
++    int play(const CharacterAudioProfile& who, int owner, const std::string& event, SoundCues& cues, const SoundCues::Emitter& at, float distM);
++    void tick(float dt, SoundCues& cues);
++    // The cue `who` plays for `event` here (FindSoundCue): "" = none.
++    const std::string& findCue(const CharacterAudioProfile& who, const std::string& event) const;
++
++private:
++    struct Inst { int instance; float priority; int owner; };
++    struct Group { float timer = 0.0f; bool started = false; std::vector<Inst> playing; };
++    std::string level_;
++    std::map<std::string, Group> groups_;
++    std::mt19937 rng_{0x5eed1234u};
++    Group& group(const std::string& name);
++    float retriggerDelay(const std::string& name);
++};
++
++} // namespace game
+diff -ruN a/src/game/RobotFoley.h b/src/game/RobotFoley.h
+--- a/src/game/RobotFoley.h	2026-10-23 08:29:10.787066200 -0500
++++ b/src/game/RobotFoley.h	2026-10-23 08:29:10.801616000 -0500
+@@ -44,6 +44,7 @@
+ 
+ class RobotFoley {
+ public:
++    const CharacterAudioProfile& voiceProfile() const { return profile(); }   // [Systems] the dialog notifies' speaker (DialogEvents)
+     // Advance one simulation step and append the cue names (SoundCues table names) to play, attached
+     // to the pawn, to `out`. Call after the pawn's animation update.
+     void tick(const Character& pc, float dt, std::vector<const char*>& out);
+diff -ruN a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-23 08:29:10.862324200 -0500
++++ b/src/game/World.cpp	2026-10-23 08:29:10.879382400 -0500
+@@ -1015,6 +1015,7 @@
+         for (const std::string& c : loadoutWeaponClasses_) ensureWeaponAudio(c);   // [Systems M08d] the loadout's weapons
+         for (const std::string& c : participantWeaponClasses_) ensureWeaponAudio(c);   // [Systems M09b] the bots' weapons
+         if (!selectionChassis_.empty() || !selectionWeapons_.empty()) preloadSelectionAudio({}, {});   // [Systems M09c]
++        dialogEvents_.setLevel(canonicalMapName(level), cues_);   // [Systems] the level's character dialog sets + manager
+         const SoundCues::LocStats& ls = SoundCues::locStats();
+         LOG_INFO("localized waves (language %s): %d from the _LOC twin, %d merged copy of that twin, %d not played",
+                  std::getenv("WFC_LANGUAGE") ? std::getenv("WFC_LANGUAGE") : "INT", ls.twin, ls.merged, ls.skipped);
+@@ -1191,7 +1192,7 @@
+ 
+     foleyCues_.clear();
+     robotFoley_.tick(pc, dt, foleyCues_);
+-    for (const char* c : foleyCues_) cues_.play(c, atPawn(), 0.0f);
++    for (const char* c : foleyCues_) if (!routeDialogNotify(c, audioProfile(), localPlayer_, atPawn(), 0.0f)) cues_.play(c, atPawn(), 0.0f);
+     static const bool foleyLog = std::getenv("WFC_FOLEYLOG") != nullptr;
+     if (foleyLog) {
+         const core::Vec3& v = pc.velocity();
+@@ -2592,6 +2593,7 @@
+             if (cues_.pendingEvents() > 30) LOG_INFO("AMB pending: %s", cues_.pendingSummary().c_str());
+             occlusionRays_ = 0;
+         }
++        dialogEvents_.tick(dt, cues_);   // [Systems] the dialog groups' retrigger timers
+         cues_.tick(dt);
+     }
+ 
+@@ -6122,6 +6124,24 @@
+     static const bool off = std::getenv("WFC_BODYNOTIFYFX") && std::getenv("WFC_BODYNOTIFYFX")[0] == '0';
+     static const bool log = std::getenv("WFC_NOTIFYLOG") != nullptr;
+     (void)backwards;   // nothing of ours plays backwards (Gameplay's hook)
++    // [Systems] HmAnimNotify_Dialog (non-verbal dialog: hit / death reactions, melee swings, warcries) in this window: the speaker's
++    // clip notifies (its audio profile, by sequence name), MinWeight gate [C: AnimSeqInstigator.NodeTotalWeight < MinWeight -> none],
++    // to the level's dialog manager (DialogEvents: the group rules, then the level / robot / vehicle set's cue) at the pawn.
++    static const bool dialogOff = std::getenv("WFC_NODIALOGNOTIFY") != nullptr;   // TEST: silent
++    if (audio_ && !dialogOff && !levelAudio_.level().empty() && t1 > t0 && weight > 0.0f) {
++        const bool me = matchPlayer == localPlayer_;
++        const Character* pc = me ? (localDead_ ? nullptr : &player_.pawn()) : participantPawn(matchPlayer);
++        auto pb = participantBodies_.find(matchPlayer);
++        const CharacterAudioProfile* who = me ? &audioProfile() : pb != participantBodies_.end() ? &pb->second.foley.voiceProfile() : nullptr;
++        const CharacterAudioProfile::Clip* clip = who ? who->clip(sequence) : nullptr;
++        if (pc && clip)
++            for (const CharacterAudioProfile::Notify& n : clip->notifies) {
++                if (n.cue.compare(0, 7, "dialog:") != 0 || n.t < t0 || n.t >= t1 || weight < n.minWeight) continue;
++                SoundCues::Emitter e = me ? atPawn() : SoundCues::Emitter{};
++                if (!me) e.pos = pc->position();
++                dialogEvents_.play(*who, matchPlayer, n.cue.substr(7), cues_, e, me ? 0.0f : core::length(pc->position() - listenerPos_));
++            }
++    }
+     if (off || !renderer_ || weight <= 0.0f || !(t1 > t0)) return;
+     const BodyNotifyIndex& idx = bodyNotifyIndex();
+     auto it = idx.effects.find(std::string(animSet) + "|" + sequence);
+@@ -7819,7 +7839,7 @@
+     // Robot foley from the pawn's own animation.
+     std::vector<const char*>& out = partScratch_; out.clear();       // reused: no per-bot allocation
+     b.foley.tick(pc, dt, out);
+-    for (const char* c : out) cues_.play(c, at({0, 0, 0}), dist);
++    for (const char* c : out) if (!routeDialogNotify(c, b.foley.voiceProfile(), player, at({0, 0, 0}), dist)) cues_.play(c, at({0, 0, 0}), dist);
+     // Vehicle component at AUDIO_ROOT (+147.25 UU), as the local pawn.
+     VehicleFormSignals s = vs;
+     s.tookOff = s.tookOff || (s.vehicle && b.prevGrounded && !s.onGround && s.velocity.y > 2.0f);   // UpdateJumping take-off edge
+@@ -7861,7 +7881,7 @@
+     std::vector<const char*>& out = partScratch_; out.clear();
+     b.foley.actionLayer(viaAbility ? std::string() : actionClip, actionTime, out);
+     e.offset = {0, 0, 0}; e.pos = b.pos;
+-    for (const char* c : out) cues_.play(c, e, dist);
++    for (const char* c : out) if (!routeDialogNotify(c, b.foley.voiceProfile(), player, e, dist)) cues_.play(c, e, dist);
+ }
+ 
+ int World::participantBodiesActive() const {
+@@ -8225,13 +8245,20 @@
+ void World::onActionClip(const std::string& clip, float t) {
+     std::vector<const char*> out;
+     robotFoley_.actionLayer(clip, t, out);
+-    for (const char* c : out) cues_.play(c, atPawn(), 0.0f);
++    for (const char* c : out) if (!routeDialogNotify(c, audioProfile(), localPlayer_, atPawn(), 0.0f)) cues_.play(c, atPawn(), 0.0f);
+ }
+ 
+ void World::onAbilityAnimFallback(const std::string& clip) {
+     std::vector<const char*> out;
+     robotFoley_.clipNotifiesOnce(clip, out);
+-    for (const char* c : out) cues_.play(c, atPawn(), 0.0f);
++    for (const char* c : out) if (!routeDialogNotify(c, audioProfile(), localPlayer_, atPawn(), 0.0f)) cues_.play(c, atPawn(), 0.0f);
++}
++
++bool World::routeDialogNotify(const char* cue, const CharacterAudioProfile& who, int owner, const SoundCues::Emitter& at, float distM) {
++    // The foley paths see only some clips; the dialog notifies fire from every clip's window instead (onAnimNotifyWindow), so here
++    // they are only kept from playing as plain cues.
++    (void)who; (void)owner; (void)at; (void)distM;
++    return std::strncmp(cue, "dialog:", 7) == 0;
+ }
+ 
+ void World::onDodgeStarted() {
+@@ -8802,6 +8829,18 @@
+     for (size_t i = 0; i < corpses_.size();) {
+         Corpse& c = corpses_[i];
+         c.t += dt;
++        // [Systems] the death clip's HmAnimNotify_Dialog (DeathRX_NonVerbalDialog ...): the dying chassis's clip notifies in this step's
++        // window [t - dt, t), to the level's dialog manager at the body (the same rule as a live clip's window, onAnimNotifyWindow)
++        if (audio_ && c.clip >= 0 && !c.gibbed && c.model && !levelAudio_.level().empty()) {
++            const CharacterAudioProfile* who = CharacterAudio::find(c.chassis);
++            const CharacterAudioProfile::Clip* cl = who ? who->clip(c.model->clips[(size_t)c.clip].name) : nullptr;
++            if (cl)
++                for (const CharacterAudioProfile::Notify& n : cl->notifies) {
++                    if (n.cue.compare(0, 7, "dialog:") != 0 || n.t < c.t - dt || n.t >= c.t) continue;
++                    SoundCues::Emitter e; e.pos = {c.world.m[12], c.world.m[13], c.world.m[14]};
++                    dialogEvents_.play(*who, c.player, n.cue.substr(7), cues_, e, core::length(e.pos - listenerPos_));
++                }
++        }
+         if (c.defrag) c.gpuOk = false;   // the Defrag energy-death material is not applied on the queued GPU draw: CPU path
+         if (!c.gibbed && !c.poseStatic) {
+             if (c.clip >= 0) {
+diff -ruN a/src/game/World.h b/src/game/World.h
+--- a/src/game/World.h	2026-10-23 08:29:10.944606000 -0500
++++ b/src/game/World.h	2026-10-23 08:29:10.960661000 -0500
+@@ -46,6 +46,7 @@
+ #include "game/RobotFoley.h"
+ #include "game/AmbientAudio.h"
+ #include "game/LevelAudioHost.h"
++#include "game/DialogEvents.h"
+ #include "game/CharacterAudio.h"
+ #include "game/VehicleAudio.h"
+ #include "game/VehicleFormAudio.h"
+@@ -1766,6 +1767,9 @@
+     audio::IAudio* audio_ = nullptr;
+     SoundCues cues_;
+     LevelAudioHost levelAudio_{cues_};     // the loaded level's audio, music player, UI sounds (Systems contract)
++    DialogEvents dialogEvents_;            // [Systems] the level's HmDialogEventManager (non-verbal dialog from anim notifies)
++    // [Systems] a foley "cue" that is an HmAnimNotify_Dialog ("dialog:<event>") goes to the dialog manager (true = handled)
++    bool routeDialogNotify(const char* cue, const CharacterAudioProfile& who, int owner, const SoundCues::Emitter& at, float distM);
+     PickupPresentation pickupFx_;           // stateless: onTaken resolves a factory class or actor name
+     // Cue owners (SoundCues::Emitter::owner): attached AudioComponents follow these every tick.
+     // Owner ids: the player pawn (its mesh origin, or a bone/socket of the displayed skeleton) and
