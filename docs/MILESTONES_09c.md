@@ -3530,3 +3530,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   all modes on those surfaces) + fog per-vertex for Off / Faithful (= shipped, byte-identical to pre-c2fb7eb5; per-pixel stays
   Realistic-only), 087ead81 fog extinction compare as shipped. 8a6e1d67 (lamp clearance) conflicts on rt_shadow_ao.hlsl ->
   Rendering re-cuts. SIMHASH identical. Card: Experimental flare views 00:40 -> Frontend 7 min -> Rendering #14 5 min.
+2026-10-23 00:46 MERGED e0163393 lamp clearance (#16 second cause). #12: data = original (TTK table matches); bot accuracy is the lever ->
+  measure per difficulty, propose scales (Normal ~25-35 %, Hard ~45 %, Easy ~15 %). #18 (A) hull tops above visuals ->
+  AssetTools audit + PC-adapt overlays; (B) zeroed vertical velocity sim bug -> Gameplay traces. RE: PPV height fog decoded
+  (volume-gated, transitions; Remnant's applies inside PostProcessVolume_10624) -> Rendering runtime item; Matinee tangents:
+  IMT_UseBrokenTangentEval (no gap scaling) corrects the Matinee doc.
