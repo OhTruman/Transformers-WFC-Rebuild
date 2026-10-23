@@ -120,11 +120,23 @@ bool World::cpPawnFactoryActivate(KismetVM& vm, int op, int input) {
     for (CampaignFactory& F : cp_.factories) {
         if (F.op != op) continue;
         KismetVM::Op& o = vm.op(op);
+        const bool desFactory = F.cls == "TnActorFactoryOmegaBatteryDestructible";
+        if (desFactory && input == 4) {   // Kill All: the factory's destructibles leave the world
+            for (int di : F.spawnedDes) cpRemoveDestructible(di);
+            F.spawnedDes.clear();
+            return true;
+        }
         if (input != 0) return true;   // Stop / other inputs: nothing to do yet
-        if (F.cls == "TnActorFactoryOmegaBatteryDestructible" && !F.points.empty()) {   // a destructible factory: the blueprint at its spawn point
+        if (desFactory && !F.points.empty()) {   // a destructible factory: the blueprint at its spawn point
+            // named after its sequence + op (the four D5 battery sequences share the op name), the Spawned variable = "des:<i>"
+            std::string seq = F.action.substr(0, F.action.find_last_of('.'));
+            seq = seq.substr(seq.find_last_of('.') + 1);
             for (int c = 0; c < F.count; ++c) {
-                const int di = cpSpawnDestructible(F.aicd, afterDot(F.action) + "_" + std::to_string(c), F.points[(size_t)c % F.points.size()], 0.0f);
-                if (di >= 0) cpBindDesEvents(di);
+                const int di = cpSpawnDestructible(F.aicd, seq + "_" + afterDot(F.action) + "_" + std::to_string(c), F.points[(size_t)c % F.points.size()], 0.0f);
+                if (di < 0) continue;
+                cpBindDesEvents(di);
+                F.spawnedDes.push_back(di);
+                for (int v : vm.varLink(op, "Spawned")) if (KismetVM::Var* var = vm.var(v)) var->obj = "des:" + std::to_string(di);
             }
             vm.output(op, std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Spawned") != F.outputs.end() ? "All Pawns Spawned" : "Out");
             return true;
