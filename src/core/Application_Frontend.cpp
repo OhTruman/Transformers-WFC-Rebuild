@@ -1379,6 +1379,8 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
         if (m.modeTag == game::gameModeName(mm)) { world_.setMatchMode(mm); modeOk = true; }
     // [Frontend C6] campaign chapters (SOLO / CP / CCP): the TDM map state + TnCampaignGame, as Gameplay's MatchLaunch::fromURL
     if (m.modeTag == "SOLO" || m.modeTag == "CP" || m.modeTag == "CCP") { world_.setMatchMode(game::MatchMode::TDM); modeOk = true; }
+    // [Frontend] Escalation: the lobby's original GameModeTag SV (TnGameLobbyGameSurvival) is Gameplay's ESC (the TDM map state + the director)
+    if (m.modeTag == "SV") { world_.setMatchMode(game::MatchMode::TDM); modeOk = true; }
     if (!modeOk) { LOG_WARN("FLOW match mode %s is not supported by Gameplay", m.modeTag.c_str()); return false; }
     LOG_INFO("FLOW loading match world: map dir %s, mode %s", m.map->runtimeDir.c_str(), m.modeTag.c_str());
     double t0 = nowSeconds();
@@ -1432,7 +1434,12 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     // RE M05 blockers D1-D3: GameModeTag / PointsToWin / TimeLimit passed explicitly). The map is the catalog
     // selection's runtime directory (World loaded it above); teams are Gameplay's PickTeam (RE E4, offline).
     game::MatchLaunch gl;
-    game::MatchLaunch::fromURL(m.url.toString(), gl);
+    {
+        std::string url = m.url.toString();
+        const size_t sv = url.find("?GameModeTag=SV");
+        if (sv != std::string::npos && (sv + 15 == url.size() || url[sv + 15] == '?')) url.replace(sv, 15, "?GameModeTag=ESC");   // [Frontend] SV -> ESC
+        game::MatchLaunch::fromURL(url, gl);
+    }
     gl.map = m.map->runtimeDir;
     // [integration M08b] The team the lobby assigned (random PickTeam or the player's Switch Team) is the team the player
     // spawns on; Gameplay's own PickTeam used to override it (always Autobots offline). Experimental audit P1-1.
