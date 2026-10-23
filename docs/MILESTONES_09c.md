@@ -4022,3 +4022,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   empty collision glbs: A2 re-lowered; bounded off-nav fill 60 m per seed); MP / Escalation nav identical by construction;
   A2 / A3 air nav rebuilt by a waiter. GATE HOLD: nonpaged pool 9.8 GB; the timed gate waits for the user's reboot /
   Malwarebytes decision (put to the user ~10:50); the headless pre stage continues.
+2026-10-23 10:58 FINAL MILESTONE RUN PASS (Frontend, candidate code a5d088db): 6 / 6 runs exit 0, 0 crashes / hang dumps / [error] lines /
+  unanswered bridge calls; D5 + A1 x Off / Realistic from the menus (pick, squad swap, game over path), TDM Streets 4v4,
+  Escalation Remnant (wave 1 game over -> stats -> lobby); 249 / 249 frontend tests. Shots: Rebuild-Frontend/work/bins/final/
+  (eye pass with Rendering). Notes: bot_skill.json warning = the run dir's cwd (data/frontend has it; build_slim ships it).
