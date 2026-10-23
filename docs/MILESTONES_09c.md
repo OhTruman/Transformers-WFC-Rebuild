@@ -3577,3 +3577,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 01:14 MERGED 8d6f0c4b FX kill flags (#9; kill-on-deactivate live, kill-on-completed gated). map_fx regen for 10 maps running through
   the kill-flags gate (only the two new keys allowed). Rule set tonight: no test exe binds 0.0.0.0 on this PC while the user is
   away (firewall prompt); loopback mode for the two-window menu test + Experimental's UdpSession rows.
+2026-10-23 01:20 MERGED fa8bb8b5 #5 death FX attached + stopped (Systems; presentation). UDPSESSIONTEST flake = a LobbyState race (2 / 2 pass after).
+  #16: clearance = guard, slot stability = the evidenced fix; #14 authored refraction restored (PASS); Enhanced water option
+  APPROVED after smoke stage 1. #12 bot accuracy ~2x the targets at every difficulty -> sweep approved (data-driven scales).
+  RE #6 ActorFactory + #7 FaceFX merged; RE -> #8 small items. Smoke stage 1 first look queued after the Frontend's runs.
