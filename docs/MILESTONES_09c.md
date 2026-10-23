@@ -3734,3 +3734,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   hidden until tuned; PPV fog accepted (subtle, authored); X7 parked (mirrored det -1 instances lose 18-28 % at 2x).
   x36: same-moment arms confirmed after the seed fix. Card: Frontend campaign + pt9 -> Rendering x37 (smoke frames).
   Internal test package on my word after pt9 + both leave halves + overlay f.
+2026-10-23 03:51 MERGED 70b3d2df WATERDEBUG, ae9bbb6e leavers always bots (D16; UDP / LATESEAT 20 / 20 / FLOW pass). overlay_20261023f
+  FROZEN (4 files differ from e). RE E2b1 review: correct except W1 (window arming follows players + invulnerability toggle)
+  -> Gameplay with E2b2; G1 corrected (bought item + one free respawn, as implemented). Pending: Frontend's PeerDropped-swap
+  removal, pt9 two-window proof, then the internal test package (refresh.sh on f).
