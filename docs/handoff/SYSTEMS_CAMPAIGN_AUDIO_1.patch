@@ -1,0 +1,353 @@
+diff -ruN a/src/core/Application.cpp b/src/core/Application.cpp
+--- a/src/core/Application.cpp	2026-10-23 02:14:37.057404200 -0500
++++ b/src/core/Application.cpp	2026-10-23 02:14:37.081486900 -0500
+@@ -245,6 +245,7 @@
+     if (std::getenv("WFC_SESSIONTEST")) { runSessionTest(); return false; }          // online session match side (Remote / swaps)
+     if (std::getenv("WFC_VOICEFRAMETEST")) { runVoiceFrameTest(); return false; }   // [Systems] voice framer + codec, synthetic, no device
+     if (std::getenv("WFC_UDPSESSIONTEST")) { runUdpSessionTest(); return false; }   // [Systems] the real online session on loopback UDP
++    if (std::getenv("WFC_CAMPAIGNAUDIOTEST")) { runCampaignAudioTest(); return false; }   // [Systems] campaign Kismet audio ops, headless
+     if (std::getenv("WFC_ONLINEFLOWTEST")) { runOnlineFlowTest(); return false; }   // [Frontend] two frontend flows on real UdpSessions
+     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
+     if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
+diff -ruN a/src/core/Application.h b/src/core/Application.h
+--- a/src/core/Application.h	2026-10-23 02:14:36.946022700 -0500
++++ b/src/core/Application.h	2026-10-23 02:14:36.970105200 -0500
+@@ -37,6 +37,7 @@
+     static bool netMatchRequested();
+     void runVoiceFrameTest();   // [Systems] WFC_VOICEFRAMETEST: the voice framer on synthetic input (no device)
+     void runUdpSessionTest();   // [Systems] WFC_UDPSESSIONTEST: two UdpSessions in this process over loopback UDP (host / join / lobby / start / load gate / leave)
++    void runCampaignAudioTest();   // [Systems] WFC_CAMPAIGNAUDIOTEST=<chapter audio JSON>: the campaign Kismet audio ops, headless
+     void runUdpSessionMatch();  // [Systems] WFC_UDPHOST / WFC_UDPJOIN: a headless lockstep match through UdpSession + NetMatchDriver (identity rows)
+     void runOnlineFlowTest();   // [Frontend] WFC_ONLINEFLOWTEST: two frontend flows, each on a real UdpSession, over loopback UDP
+     int exitCode_ = -1;        // [Systems] set by the headless / net runs (main returns it when init stops); -1 = the default
+diff -ruN a/src/core/Application_CampaignAudio.cpp b/src/core/Application_CampaignAudio.cpp
+--- a/src/core/Application_CampaignAudio.cpp	1969-12-31 18:00:00.000000000 -0600
++++ b/src/core/Application_CampaignAudio.cpp	2026-10-23 02:14:37.204408300 -0500
+@@ -0,0 +1,93 @@
++// [Systems] WFC_CAMPAIGNAUDIOTEST=<chapter audio JSON> (tools/systems/gen_level_audio.py --campaign): headless check of the
++// campaign Kismet audio ops on real chapter data, with no campaign runtime yet (the Kismet triggers are Gameplay's next item).
++// Every conversation is played through its own Play input and run to its end at 60 Hz: it must report Finished (all lines
++// started and ended, the ducking preset pushed and popped) or Stopped with a logged reason (a line that cannot start). Every
++// timeline with sound keys is played to its end: each key must fire once. Run with WFC_NULLRENDER=1 WFC_NULLRENDER_AUDIO=1
++// WFC_MUTE=1 (the whole cue mix, silent), paced at real time (the device plays voices in wall time). Exit 0 = PASS.
++#include "core/Application.h"
++#include "core/Config.h"
++#include "core/Log.h"
++#include "assets/Json.h"
++#include "game/LevelAudioScript.h"
++#include "game/SoundCues.h"
++
++#include <cstdlib>
++#include <fstream>
++#include <sstream>
++#include <thread>
++#include <chrono>
++
++namespace core {
++
++void Application::runCampaignAudioTest() {
++    const char* path = std::getenv("WFC_CAMPAIGNAUDIOTEST");
++    std::ifstream f(path, std::ios::binary);
++    std::ostringstream ss; ss << f.rdbuf();
++    const std::string text = ss.str();
++    assets::Json doc;
++    if (!f || !assets::Json::parse(text.data(), text.size(), doc)) { LOG_ERROR("CAMPAIGNAUDIO: cannot read %s", path); std::exit(2); }
++    if (!audio_) { LOG_ERROR("CAMPAIGNAUDIO: no audio device (WFC_NULLRENDER_AUDIO=1)"); std::exit(2); }
++    const char* ar = std::getenv("WFC_ASSETS");
++    const std::string content = std::string(ar ? ar : config::kAssetRootDefault) + "/../content/";
++    game::SoundCues cues;
++    cues.load(audio_, content);
++    const int nCues = cues.addCues(doc["cues"], content);
++    game::LevelAudioScript script;
++    const assets::Json& k = doc["kismet"];
++    script.load(k);
++    LOG_INFO("CAMPAIGNAUDIO %s: %d cues, %d ops, %d links", doc["map"].asString().c_str(), nCues, script.opCount(), script.linkCount());
++    const core::Vec3 listener{0, 0, 0};
++    // Drive each op through a private trigger: a test link per op ("Test:<id>:<input>") added to a copy of the script.
++    int fail = 0, convs = 0, finished = 0, stopped = 0, timelines = 0, keys = 0;
++    const assets::Json& ops = k["ops"];
++    for (size_t i = 0; i < ops.size(); ++i) {
++        const std::string type = ops[i]["type"].asString(), id = ops[i]["id"].asString();
++        const bool conv = type == "conversation", tl = type == "timeline" && ops[i]["sounds"].size() > 0;
++        if (!conv && !tl) continue;
++        assets::Json one = k;                                     // this op + a test trigger into its Play input
++        assets::Json link; link.type = assets::Json::Type::Object;
++        link.obj["from"].type = assets::Json::Type::String; link.obj["from"].strVal = "Test:play";
++        link.obj["to"].type = assets::Json::Type::String; link.obj["to"].strVal = id;
++        link.obj["input"].type = assets::Json::Type::Number; link.obj["input"].numVal = 0;
++        one.obj["links"].arr.push_back(link);
++        script.load(one);
++        script.fire("Test:play", cues, nullptr, listener);
++        const int shots0 = script.soundKeysFired();
++        bool done = false;
++        float t = 0.0f;
++        for (; t < 120.0f && !done; t += 1.0f / 60.0f) {
++            script.tick(1.0f / 60.0f, listener, cues, nullptr);
++            cues.setListener(listener);
++            cues.tick(1.0f / 60.0f);
++            audio_->update();
++            std::this_thread::sleep_for(std::chrono::microseconds(16667));   // the device plays in real time
++            done = conv ? script.conversationsPlaying() == 0 : script.timelinesPlaying() == 0;
++        }
++        if (!done && std::getenv("WFC_CAMPAIGNAUDIODEBUG")) cues.logSpatial("CAMPAIGNAUDIO", listener, true);
++        if (conv) {
++            ++convs;
++            const bool fin = script.hasFired("Out:" + id + ":Finished"), stp = script.hasFired("Out:" + id + ":Stopped");
++            finished += fin; stopped += stp;
++            LOG_INFO("CAMPAIGNAUDIO conversation %s: %zu lines, %s after %.2f s", id.c_str(), ops[i]["lines"].size(),
++                     fin ? "Finished" : stp ? "Stopped" : "STILL RUNNING", t);
++            if (!done || (!fin && !stp)) ++fail;
++        } else {
++            ++timelines;
++            const int fired = script.soundKeysFired() - shots0;
++            int want = 0;   // keys inside the matinee [0, length]: authored keys before 0 / past the end never play (UE3 position walk)
++            for (size_t s = 0; s < ops[i]["sounds"].size(); ++s) {
++                const float kt = ops[i]["sounds"][s]["time"].asFloat();
++                want += kt >= 0.0f && kt <= ops[i]["length"].asFloat() ? 1 : 0;
++            }
++            keys += fired;
++            LOG_INFO("CAMPAIGNAUDIO timeline %s: %d / %d sound keys, %.2f s", id.c_str(), fired, want, t);
++            if (!done || fired != want) ++fail;
++        }
++        cues.stopAll();
++    }
++    LOG_INFO("CAMPAIGNAUDIO RESULT %s: %d conversations (%d finished, %d stopped), %d timelines (%d keys), %d failures",
++             fail ? "FAIL" : "PASS", convs, finished, stopped, timelines, keys, fail);
++    std::exit(fail ? 1 : 0);
++}
++
++} // namespace core
+diff -ruN a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+--- a/src/core/Application_Frontend.cpp	2026-10-23 02:14:37.257088800 -0500
++++ b/src/core/Application_Frontend.cpp	2026-10-23 02:14:37.275652200 -0500
+@@ -588,7 +588,7 @@
+                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
+                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
+                           "WFC_VEHTEST", "WFC_FOVTEST", "WFC_SCREENTEST", "WFC_TILETEST", "WFC_MODETEST", "WFC_CHASSISTEST",
+-                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_UDPHOST", "WFC_UDPJOIN", "WFC_ONLINEFLOWTEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
++                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_CAMPAIGNAUDIOTEST", "WFC_UDPHOST", "WFC_UDPJOIN", "WFC_ONLINEFLOWTEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
+                           "WFC_SPAWNFILLTEST", "WFC_EXTRABODYTEST", "WFC_DOUBLEJUMPTEST",
+                           "WFC_DETERMINISMTEST", "WFC_WEAPONAUDIT", "WFC_VEHFRAMETEST", "WFC_VEHICLEAUDIT", "WFC_QABOTTEST", "WFC_MARKERSTEST", "WFC_STUCKSPOT_BOT", "WFC_ASYNCSTEPTEST", "WFC_ENGAGETEST", "WFC_EVICTTEST", "WFC_BARRIERWALKTEST"})   // [integration 09c] Gameplay 26d / 26h / 26k harnesses
+         if (std::getenv(v)) return false;
+diff -ruN a/src/game/LevelAudioScript.cpp b/src/game/LevelAudioScript.cpp
+--- a/src/game/LevelAudioScript.cpp	2026-10-23 02:14:36.834139400 -0500
++++ b/src/game/LevelAudioScript.cpp	2026-10-23 02:14:36.858723700 -0500
+@@ -103,7 +103,22 @@
+             op.tlLooping = j["looping"].asBool(false);
+             for (size_t e = 0; e < j["events"].size(); ++e)
+                 op.events.push_back({j["events"][e]["time"].asFloat(), "Timeline:" + op.id + ":" + j["events"][e]["name"].asString()});
++            for (size_t e = 0; e < j["sounds"].size(); ++e) {
++                const assets::Json& sk = j["sounds"][e];
++                auto ai = actorIndex.find(sk["actor"].asString());
++                op.soundKeys.push_back({sk["time"].asFloat(), sk["cue"].asString(), ai != actorIndex.end() ? ai->second : -1});
++            }
++            std::stable_sort(op.soundKeys.begin(), op.soundKeys.end(), [](const SoundKey& a, const SoundKey& b) { return a.time < b.time; });
+             std::stable_sort(op.events.begin(), op.events.end(), [](const Event& a, const Event& b) { return a.time < b.time; });
++        } else if (t == "conversation") {
++            op.type = Type::Conversation;
++            op.preset = j["duck"].asString();
++            for (size_t l = 0; l < j["lines"].size(); ++l) {
++                const assets::Json& ln = j["lines"][l];
++                auto ai = actorIndex.find(ln["speaker"].asString());
++                op.lines.push_back({ln["cue"].asString(), ln["post_delay"].asFloat(0.0f), ai != actorIndex.end() ? ai->second : -1,
++                                    ln["output"].asString()});
++            }
+         } else {
+             LOG_WARN("level audio: op %s of unknown type %s skipped", op.id.c_str(), t.c_str());
+             continue;
+@@ -135,8 +150,9 @@
+     currentZoneLabel_.clear();
+     havePawn_ = false;
+     touches_ = 0;
+-    links_ = oneShots_ = fired_ = depth_ = 0;
++    links_ = oneShots_ = fired_ = depth_ = keysFired_ = 0;
+     musicStart_.clear();
++    firedSet_.clear();
+ }
+ 
+ // GameInfo.ResetLevel -> Kismet Reset [HIGH]: pools / flybys stop (IsPlaying false / Stop), zones forget their scene
+@@ -154,6 +170,7 @@
+ }
+ 
+ int LevelAudioScript::fire(const std::string& trigger, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener) {
++    firedSet_.insert(trigger);
+     auto it = byTrigger_.find(trigger);
+     if (it == byTrigger_.end()) return 0;
+     if (++depth_ > 8) { --depth_; LOG_WARN("level audio: trigger depth exceeded at %s", trigger.c_str()); return 0; }
+@@ -237,9 +254,30 @@
+         break;
+     case Type::Touch:
+         break;
++    case Type::Conversation:
++        if (idx == 0) {                                              // Play (0x8276EE00)
++            if (op.lineIdx >= 0 && op.lineInst >= 0) cues.stop(op.lineInst, 0.0f);
++            const bool wasActive = op.lineIdx >= 0;
++            op.lineIdx = 0; op.lineInst = -1; op.postTimer = -1.0f; op.lineStarted = false;
++            if (!wasActive && !op.preset.empty()) cues.mixer().enable(op.preset);   // one push per running conversation
++            if (logOn()) LOG_INFO("LEVELAUDIO %s conversation play (%zu lines, duck %s)", op.id.c_str(), op.lines.size(), op.preset.c_str());
++            out(op, "Played", cues, music, listener);
++        } else if (op.lineIdx >= 0) {                                // Stop (0x827A7090)
++            if (op.lineInst >= 0) cues.stop(op.lineInst, 0.0f);
++            endConversation(op, false, cues, music, listener);
++        }
++        break;
+     }
+ }
+ 
++// Stop (0x82764048): pops the ducking preset, fires Finished (ran to the end) or Stopped.
++void LevelAudioScript::endConversation(Op& op, bool finished, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener) {
++    op.lineIdx = -1; op.lineInst = -1; op.postTimer = -1.0f; op.lineStarted = false;
++    if (!op.preset.empty()) cues.mixer().disable(op.preset, false);
++    if (logOn()) LOG_INFO("LEVELAUDIO %s conversation %s", op.id.c_str(), finished ? "finished" : "stopped");
++    out(op, finished ? "Finished" : "Stopped", cues, music, listener);
++}
++
+ void LevelAudioScript::out(const Op& op, const char* output, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener) {
+     fire("Out:" + op.id + ":" + output, cues, music, listener);
+ }
+@@ -270,8 +308,16 @@
+     return (hits & 1) != 0;
+ }
+ 
+-void LevelAudioScript::fireRange(const Op& tl, float from, float to, bool inclusiveEnd, SoundCues& cues, MusicPlayer* music,
++void LevelAudioScript::fireRange(Op& tl, float from, float to, bool inclusiveEnd, SoundCues& cues, MusicPlayer* music,
+                                  const core::Vec3& listener) {
++    for (const SoundKey& k : tl.soundKeys)
++        if (k.time >= from && (k.time < to || (inclusiveEnd && k.time <= to))) {
++            ++keysFired_;
++            const core::Vec3 at = actorPos(k.actor, listener);
++            const int inst = cues.play(k.cue.c_str(), at, core::length(at - listener));
++            if (inst >= 0) { ++oneShots_; if (k.actor >= 0) sounds_.push_back({k.actor, k.cue, inst, false}); }
++            if (logOn()) LOG_INFO("LEVELAUDIO %s sound key %.3f %s on %d -> %d", tl.id.c_str(), k.time, k.cue.c_str(), k.actor, inst);
++        }
+     for (const Event& e : tl.events)
+         if (e.time >= from && (e.time < to || (inclusiveEnd && e.time <= to))) fire(e.trigger, cues, music, listener);
+ }
+@@ -320,6 +366,31 @@
+         op.remaining -= dt;
+         if (op.remaining <= 0.0f) { op.playing = false; out(op, "Finished", cues, music, listener); }
+     }
++    // Conversations (UpdateOp 0x82787588).
++    for (Op& op : ops_) {
++        if (op.type != Type::Conversation || op.lineIdx < 0) continue;
++        if (op.postTimer >= 0.0f) {
++            op.postTimer -= dt;
++            if (op.postTimer >= 0.0f) continue;                  // waiting out the post-delay
++            op.postTimer = -1.0f; op.lineStarted = false; ++op.lineIdx; op.lineInst = -1;
++        }
++        if (op.lineIdx >= (int)op.lines.size()) { endConversation(op, true, cues, music, listener); continue; }
++        const Line& ln = op.lines[(size_t)op.lineIdx];
++        if (!op.lineStarted) {                                   // StartLine: the dialog must really start
++            const core::Vec3 at = actorPos(ln.speaker, listener);
++            op.lineInst = ln.cue.empty() ? -1 : cues.play(ln.cue.c_str(), at, core::length(at - listener));
++            if (op.lineInst < 0) {
++                LOG_WARN("level audio: %s line %d (%s) could not start - conversation aborted", op.id.c_str(), op.lineIdx, ln.cue.c_str());
++                endConversation(op, false, cues, music, listener);
++                continue;
++            }
++            op.lineStarted = true;
++            if (logOn()) LOG_INFO("LEVELAUDIO %s line %d %s on %d", op.id.c_str(), op.lineIdx, ln.cue.c_str(), ln.speaker);
++        } else if (op.postTimer < 0.0f && !cues.playing(op.lineInst)) {   // DialogEventCallback Finished
++            op.postTimer = ln.postDelay;
++            if (!ln.output.empty()) out(op, ln.output.c_str(), cues, music, listener);
++        }
++    }
+     // Timelines (event keys -> triggers).
+     for (size_t i = 0; i < ops_.size(); ++i) {
+         if (ops_[i].type != Type::Timeline || !ops_[i].playing) continue;
+@@ -402,6 +473,12 @@
+     return n;
+ }
+ 
++int LevelAudioScript::conversationsPlaying() const {
++    int n = 0;
++    for (const Op& op : ops_) n += op.type == Type::Conversation && op.lineIdx >= 0 ? 1 : 0;
++    return n;
++}
++
+ int LevelAudioScript::timelinesPlaying() const {
+     int n = 0;
+     for (const Op& op : ops_) n += op.type == Type::Timeline && op.playing ? 1 : 0;
+diff -ruN a/src/game/LevelAudioScript.h b/src/game/LevelAudioScript.h
+--- a/src/game/LevelAudioScript.h	2026-10-23 02:14:36.717238700 -0500
++++ b/src/game/LevelAudioScript.h	2026-10-23 02:14:36.744832400 -0500
+@@ -44,6 +44,15 @@
+ //                    (Delay, Looping); each one-shot starts RandRange(StartingDistanceMin, Max) from the Target (the
+ //                    player) at a random yaw within AngleMax, offset vertically by RandRange(HeadOffsetMin, Max), and
+ //                    moves through the target point at RandRange(SpeedMin, SpeedMax) UU/s [PROVISIONAL motion model].
++//   conversation     SeqAct_Conversation (campaign chapters; RE CAMPAIGN_DIALOG_TIMING_RE, C): Play -> the current line stops,
++//                    CurrentLineIndex 0, the DuckingMixerPreset is pushed, "Played". UpdateOp per tick: a running
++//                    PostDelayTimer counts down (the next line on the first tick it goes negative); index past the last
++//                    line -> pop the preset, "Finished"; a line starts once (the speaker's dialog; a line that cannot
++//                    start - no cue / refused - aborts: pop, "Stopped"); the cue's end -> PostDelayTimer = PostDelayTime
++//                    and the line's own output (3 + i). Stop -> the line stops, pop, "Stopped". The speaker is the line's
++//                    first variable link [the dialog plays from that actor; none / unresolved = at the listener].
++//   timeline sounds  InterpTrackSound keys on a campaign matinee: the key's cue plays at the group actor when the position
++//                    passes it, the same forward walk as the event keys [HIGH, stock UE3]; Volume / Pitch not applied.
+ // Triggers ("links" from): GameplayStarted (fired by AmbientAudio on the level's first tick), FsCommand:<cmd> and
+ // MovieStopped:<movie> (GFx fscommands / Bink movie ends - the frontend owner forwards them, fire()), and
+ // Timeline:<op>:<event> and Out:<op>:<output> (internal), Game:<event class>:<output> (gameplay-owned Kismet events,
+@@ -52,6 +61,7 @@
+ #pragma once
+ #include <string>
+ #include <unordered_map>
++#include <unordered_set>
+ #include <vector>
+ #include "assets/Json.h"
+ #include "core/Math.h"
+@@ -88,13 +98,19 @@
+     int liveSounds() const { return (int)sounds_.size(); }
+     int poolsPlaying() const;
+     int timelinesPlaying() const;
++    int conversationsPlaying() const;
+     float timelinePosition() const;       // the first timeline's position (s), -1 if none
+     int oneShots() const { return oneShots_; }
++    int soundKeysFired() const { return keysFired_; }   // timeline sound keys passed (played or not: a culled cue counts)
+     int fired() const { return fired_; }
++    // Test hook (WFC_CAMPAIGNAUDIOTEST): every trigger fired since load(), linked or not.
++    bool hasFired(const std::string& t) const { return firedSet_.count(t) != 0; }
+ 
+ private:
+-    enum class Type { PlaySound, Pool, Reverb, PlayMusic, StopMusic, Timeline, Touch, Zone, Delay, Gate, Mixer, Flyby };
++    enum class Type { PlaySound, Pool, Reverb, PlayMusic, StopMusic, Timeline, Touch, Zone, Delay, Gate, Mixer, Flyby, Conversation };
+     struct Event { float time; std::string trigger; };
++    struct SoundKey { float time; std::string cue; int actor; };          // timeline InterpTrackSound key (campaign)
++    struct Line { std::string cue; float postDelay; int speaker; std::string output; };   // conversation line
+     struct Op {
+         Type type = Type::PlaySound;
+         std::string id, cue, preset;
+@@ -114,6 +130,12 @@
+         float length = 0.0f, rate = 1.0f, pos = 0.0f;
+         bool tlLooping = false;
+         std::vector<Event> events;
++        std::vector<SoundKey> soundKeys;
++        // conversation (RE CAMPAIGN_DIALOG_TIMING_RE): CurrentLineIndex, PostDelayTimer, the line-started flag
++        std::vector<Line> lines;
++        int lineIdx = -1, lineInst = -1;
++        float postTimer = -1.0f;
++        bool lineStarted = false;
+         // touch
+         std::vector<core::Vec3> tris;     // triangle soup (glTF)
+         core::Vec3 bmin{0, 0, 0}, bmax{0, 0, 0};
+@@ -136,8 +158,9 @@
+ 
+     void input(Op& op, int idx, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener);
+     void out(const Op& op, const char* output, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener);
++    void endConversation(Op& op, bool finished, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener);
+     bool insideVolume(const Op& op, const core::Vec3& p) const;
+-    void fireRange(const Op& tl, float from, float to, bool inclusiveEnd, SoundCues& cues, MusicPlayer* music,
++    void fireRange(Op& tl, float from, float to, bool inclusiveEnd, SoundCues& cues, MusicPlayer* music,
+                    const core::Vec3& listener);
+     core::Vec3 actorPos(int a, const core::Vec3& listener) const;
+ 
+@@ -151,8 +174,9 @@
+     core::Vec3 pawn_{0, 0, 0};
+     bool havePawn_ = false;
+     int touches_ = 0;
+-    int links_ = 0, oneShots_ = 0, fired_ = 0, depth_ = 0;
++    int links_ = 0, oneShots_ = 0, fired_ = 0, depth_ = 0, keysFired_ = 0;
+     std::string musicStart_;
++    std::unordered_set<std::string> firedSet_;
+ };
+ 
+ } // namespace game
