@@ -1,5 +1,5 @@
 diff --git a/src/game/World.cpp b/src/game/World.cpp
-index b1c938b2..d2327839 100644
+index d62e2be3..40ef8464 100644
 --- a/src/game/World.cpp
 +++ b/src/game/World.cpp
 @@ -397,8 +397,8 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
@@ -22,7 +22,7 @@ index b1c938b2..d2327839 100644
      if (!authored) assets::loadGlb(mapDir + "collision.glb", colMesh);
      // Per-node bounds of the authored movement collision (for tracing contacts back to authored actors).
      colActors_.clear();
-@@ -5250,6 +5250,19 @@ void World::forcedDirPost(Character& c) const {
+@@ -5262,6 +5262,19 @@ void World::forcedDirPost(Character& c) const {
  
  std::string World::mapDir() const { return assetRoot() + "/Maps/" + mapName_ + "/"; }
  
@@ -43,10 +43,10 @@ index b1c938b2..d2327839 100644
      std::string base = m;
      for (const char* suf : {"_BASE_m", "_Base_m", "_base_m", "_m"}) {
 diff --git a/src/game/World.h b/src/game/World.h
-index 093bd812..b5944a2d 100644
+index 810fe685..faa30237 100644
 --- a/src/game/World.h
 +++ b/src/game/World.h
-@@ -919,6 +919,8 @@ public:
+@@ -928,6 +928,8 @@ public:
          return o && o->spawned() ? &o->intent() : nullptr;
      }
      bool ensureBotNav();
