@@ -4039,3 +4039,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   untransformed pod. GO: AssetTools per-chapter transforming_actors export (MP schema; A1 first), Gameplay loader + op +
   nav states + FINAL_BASE_ITEMS 07, Rendering poses them from TransformingActors' t. Also: barrier Fresnel fix (Rendering).
   The cut moves to the head carrying both; the timed gate waits for the reboot anyway.
+2026-10-23 11:05 Gate items added (Gameplay, data already exported by AssetTools in out/campaign_characters/spawnables.json): sentry
+  factories (138, TnActorFactorySentryAI, 11 TURRETDEFs) and roller mines (46 TnActorFactoryRollerMine, D chapters). Order:
+  TransformWorldProp -> sentries -> roller mines, then FINAL_BASE_ITEMS 07; GOAP post-build.
