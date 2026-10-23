@@ -76,3 +76,13 @@ the authored bHidden is sent for drawable classes only, and names that collide a
 
 Verified: the 01–09 chain applies to a fresh af4d0731 and matches 78caf2bc's tree over every patched path (by file). It is
 campaign-only, so the versus / Escalation same-match of 07 / 08 is unchanged.
+
+## 10: campaign hides by object path (78caf2bc -> b315e585 + GAMEPLAY_CAMPAIGN_HIDE_PATHS)
+
+`10_campaign_hide_paths.patch`: the same paths, from 78caf2bc to b315e585 + GAMEPLAY_CAMPAIGN_HIDE_PATHS (77b40439). It contains:
+- Gameplay's object-path keys: WorldCampaignRuntime.cpp;
+- the asset / interface parts of Rendering's ACTOR_PATH: assets/Gltf.cpp reads extras.actor_path, and render/Mesh.h gains the
+  SubMesh field.
+
+The renderer-side matching itself stays at package 6 in the base. The sim is unaffected, since hides are render-only. Apply it after
+09. Verified: the 01–10 chain applies to a fresh af4d0731 and matches the tested tree over every patched path.
