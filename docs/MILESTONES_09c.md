@@ -4055,3 +4055,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 11:25 Cyan sheet RESOLVED as a camera placement item: the draw is BlueEnergonSigns_MATINST on StaticInterpActor_75 (an authored
   10 m additive spinning disc at Remnant's spawn, camera-transparent in the original); the material is faithful; the
   camera sat 0.33 m from the disc, 7.9 m from the player start. Gameplay checks the spawn pick / camera vs the original.
+2026-10-23 11:28 MERGED 76d8b4f5 campaign sentries + pawn factory death outputs (Single / All Pawns Killed never fired: every scripted fight
+  waiting on them stalled) + chapter start = first checkpoint (A2 started inside the Soundwave arena). Gate item 2 DONE.
+  Cyan sheet: camera + boom faithful (8 m orbit); the Remnant human start pick vs the original is with RE. Roller mines next.
