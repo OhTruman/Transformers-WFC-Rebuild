@@ -1230,6 +1230,7 @@ public:
     static bool fsr3RuntimeShipped();                  // the FFX loader + Agility runtime beside the exe (file checks)
     void setAnisotropy(int level);              // 4 (original MaxAnisotropy, default) / 8 / 16
     static bool hdTexturesAvailable();          // IRenderer::hdTexturesAvailable
+    static bool hdEnhancedAvailable();          // HD level 2: the colour pack + the M6 modern material maps (hd_pbr_index)
     void setHdTextures(bool on);
     bool hdTextures_ = false;
     int anisotropy_ = 4;

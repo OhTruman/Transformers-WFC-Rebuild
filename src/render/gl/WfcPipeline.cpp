@@ -2210,7 +2210,7 @@ const std::map<std::pair<std::string, std::string>, HdPbrEntry>& hdPbrIndex() {
             std::transform(tex.begin(), tex.end(), tex.begin(), ::tolower);
             std::transform(role.begin(), role.end(), role.begin(), ::tolower);
             const long long want = (long long)r["bytes"].asDouble(-1.0);   // double: a 32-bit float cannot hold sizes above 2^24 exactly (89,478,612 -> 89,478,608 rejected the whole HD pack)
-            std::ifstream f(root + "/" + dds, std::ios::binary | std::ios::ate);
+            std::ifstream f(platform::longPath(root + "/" + dds), std::ios::binary | std::ios::ate);   // [Systems] long paths
             if (tex.empty() || role.empty() || dds.empty() || (fmt != "BC4" && fmt != "BC7") || (!space.empty() && space != "linear") ||
                 !f || (want >= 0 && (long long)f.tellg() != want)) { ++bad; continue; }
             m[{tex, role}] = HdPbrEntry{dds, fmt, want};
@@ -2223,7 +2223,7 @@ const std::map<std::pair<std::string, std::string>, HdPbrEntry>& hdPbrIndex() {
 }
 // a BC4 / BC7 DDS (DX10 header: DXGI 80 BC4_UNORM / 98 BC7_UNORM; legacy FourCC ATI1 / BC4U for BC4): the mip chain
 bool readDdsBc(const std::string& path, const std::string& fmt, int& w, int& h, std::vector<std::vector<uint8_t>>& levels) {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(platform::longPath(path), std::ios::binary);
     std::vector<uint8_t> d((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
     auto u32 = [&](size_t o) { return o + 4 <= d.size() ? (uint32_t)d[o] | ((uint32_t)d[o + 1] << 8) | ((uint32_t)d[o + 2] << 16) | ((uint32_t)d[o + 3] << 24) : 0u; };
     if (d.size() < 128 || u32(0) != 0x20534444u) return false;          // "DDS "
@@ -2251,6 +2251,9 @@ bool readDdsBc(const std::string& path, const std::string& fmt, int& w, int& h, 
 // Available = the index parses with rows (no per-file stat at boot); once the setting has verified the files, the result
 // of that verification
 bool Pipeline::hdTexturesAvailable() { return hdIndexRows() && (!gHdVerified || !hdIndex().empty()); }
+// Enhanced (HD level 2) = Faithful's colour pack + at least one usable M6 map (user playtest 2026-10-23 #4: the level was
+// reported unavailable unconditionally, so the HD row only ever offered Faithful although package 6 ships the 498 maps)
+bool Pipeline::hdEnhancedAvailable() { return hdTexturesAvailable() && !hdPbrIndex().empty(); }
 // HD Textures setting: textures load from the pack (when available) from the next map / scene load on; a live
 // change does not reload the current map's textures (they are bound into its materials)
 void Pipeline::setModernMaterials(bool on) {
