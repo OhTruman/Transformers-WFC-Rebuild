@@ -13,8 +13,8 @@ ed('src/game/WorldBots.cpp', 'void World::tickBots(float dt) {\n',
    '            if (!o->spawned()) { run.erase(o->matchPlayer()); continue; }\n' +
    '            const Character& c = o->pawn(); auto& r = run[o->matchPlayer()];\n' +
    '            const core::Vec3 p = c.position(), v = c.velocity();\n' +
-   '            float cgy = 0.0f; core::Vec3 cgn; const bool high = collision_.valid() && collision_.groundHeight(p.x, p.z, p.y + 0.3f, 0.3f, cgy, cgn) && p.y - cgy > 0.5f;
-            const bool stall = c.moveForm() == Form::Robot && !c.onGround() && c.hoverState_ == 0 && !c.isTransforming() && std::fabs(v.y) < 0.2f && high;\n' +
+   '            float cgy = 0.0f; core::Vec3 cgn; const bool high = collision_.valid() && collision_.groundHeight(p.x, p.z, p.y + 0.3f, 0.3f, cgy, cgn) && p.y - cgy > 0.5f;\n' +
+   '            const bool stall =c.moveForm() == Form::Robot && !c.onGround() && c.hoverState_ == 0 && !c.isTransforming() && std::fabs(v.y) < 0.2f && high;\n' +
    '            r.first = stall ? r.first + 1 : 0;\n' +
    '            if (r.first == 30) LOG_INFO("FLOAT stall p%d %s t %.2f at (%.2f %.2f %.2f) vel (%.2f %.2f %.2f) groundY %.2f", o->matchPlayer(), c.chassis().id.c_str(), match_.matchTime(), p.x, p.y, p.z, v.x, v.y, v.z, c.groundY);\n' +
    '            float gy = 0.0f; core::Vec3 gn; bool above = false;\n' +
