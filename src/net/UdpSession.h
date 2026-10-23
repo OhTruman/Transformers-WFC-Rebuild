@@ -93,6 +93,9 @@ public:
     void reportCatchUp(uint32_t tick, uint32_t target);
     // The host: match seats whose member the session lost mid-match since the last call (-> NetMatchDriver::dropSeat).
     std::vector<int> takeDroppedMatchSeats() { std::vector<int> v; v.swap(droppedMatchSeats_); return v; }
+    bool isMuted(const frontend::SessionMemberId& member) const { return muted_.count(member.fingerprint) != 0; }
+    // A member's talking indicator from the voice lane (0 / 1 / 2, via) -> SessionEvent::MemberVoice on each change.
+    void reportVoice(const frontend::SessionMemberId& member, int headsetState, int via);
     uint32_t launchSeed() const { return launchSeed_; }
     const frontend::SessionVoiceSettings& voiceSettings() const { return voice_; }
     bool pushToTalk() const { return pushToTalk_; }
@@ -191,6 +194,7 @@ private:
     int matchSelf_ = -1;
     std::vector<char> matchReserved_;      // per match seat: a Reserved slot of the launch roster
     std::vector<int> droppedMatchSeats_;
+    std::map<std::string, std::pair<int, int>> voiceShown_;   // member -> (headset state, via) last emitted
     bool lateJoin_ = false;
     double lateJoinLimitS_ = 0.0;
     uint32_t matchTick_ = 0, catchUpSent_ = 0;

@@ -518,6 +518,16 @@ std::vector<uint32_t> UdpSession::matchActiveFrom() const {
     return a;
 }
 
+void UdpSession::reportVoice(const SessionMemberId& member, int headsetState, int via) {
+    if (member.fingerprint.empty()) return;
+    const int shownVia = headsetState == 2 ? ((via & 1) ? 1 : (via & 2) ? 2 : 0) : 0;   // while speaking: radio wins, as the talker cue
+    auto& last = voiceShown_[member.fingerprint];
+    if (last.first == headsetState && last.second == shownVia) return;
+    last = {headsetState, shownVia};
+    SessionEvent e; e.type = SessionEvent::Type::MemberVoice; e.member = member; e.headsetState = headsetState; e.voiceVia = shownVia;
+    emit(e);
+}
+
 void UdpSession::joinRunningMatch() {
     if (role_ != Role::Member || !lobby_.matchRunning) return;
     W w(kLateJoin); sendSeat(0, w.b);

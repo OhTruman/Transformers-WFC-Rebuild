@@ -250,6 +250,7 @@ bool Application::init() {
     if (std::getenv("WFC_CAMPAIGNAUDIOTEST")) { runCampaignAudioTest(); return false; }   // [Systems] campaign Kismet audio ops, headless
     if (std::getenv("WFC_ONLINEFLOWTEST")) { runOnlineFlowTest(); return false; }   // [Frontend] two frontend flows on real UdpSessions
     if (std::getenv("WFC_SOLOLAUNCHTEST")) { runSoloLaunchTest(); return false; }   // [Systems] a solo private launch: local loop, deterministic
+    if (std::getenv("WFC_VOICETEST")) { runVoiceTest(); return false; }   // [Systems] voice end to end, headless
     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
     if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
     if (std::getenv("WFC_BOTTEST")) { runBotTest(); return false; }                 // offline bots: TDM human + bots, then 7 v 8

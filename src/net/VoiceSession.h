@@ -26,7 +26,8 @@ namespace net {
 
 class Lockstep;
 
-struct VoiceStats { long sent = 0, received = 0, late = 0, played = 0, concealed = 0, underruns = 0, radio = 0, proximity = 0, occluded = 0, unheard = 0; };
+struct VoiceStats { long sent = 0, received = 0, late = 0, played = 0, concealed = 0, underruns = 0, radio = 0, proximity = 0, occluded = 0, unheard = 0,
+                    muted = 0, gated = 0; };
 
 class VoiceSession {
 public:
@@ -34,10 +35,24 @@ public:
         bool radio = true, proximity = true;   // this seat's audience flags (Radio + Proximity default)
         float volume = 1.0f;                   // the voice slider
         int jitterFrames = 3;                  // frames buffered before a talker starts playing (60 ms)
+        // Open mic: frames go out only while the voice gate is open - a frame above gateDb (dBFS RMS) opens it for hangMs (breathing
+        // and room noise do not stream). Push to talk: the key is the gate.
+        bool openMic = false;
+        float gateDb = -45.0f;
+        double hangMs = 300.0;
     };
     VoiceSession(Lockstep& ls, audio::IAudio* audio, const Config& c);
     ~VoiceSession();
     void setSource(std::unique_ptr<IVoiceCapture> mic);   // the microphone (started on demand)
+    void setConfig(const Config& c);                      // live: volume, audience, open mic / push to talk (the Audio rows)
+    // Local mute (the lobby / pause menu's Mute): a muted talker's frames are dropped before decoding (never played). Seat -> muted.
+    void setMuted(std::function<bool(int seat)> f) { muted_ = std::move(f); }
+    // TEST ONLY: every decoded (or concealed) frame of a talker, before routing (WFC_VOICETEST compares it with the source).
+    void setPlayTap(std::function<void(int seat, const VoiceFrame& pcm, bool concealed)> f) { tap_ = std::move(f); }
+    // The talking indicator (SessionEvent::MemberVoice HeadsetState): 0 no voice heard for 10 s, 1 voice on, 2 speaking (a frame in the
+    // last 250 ms); via = the last frame's audience flags (1 radio, 2 proximity). selfSeat = this seat's own sending.
+    int headsetState(int seat) const;
+    uint8_t lastVia(int seat) const;
     void setSyntheticTone(float hz);                      // TEST ONLY: a tone instead of a microphone (no device)
     // Every loop iteration. talking = push-to-talk held / open mic gate open; seatPos(seat, pos) gives a talker's head (false: unknown);
     // sameTeam(seat) = that talker is on the listener's team (radio frames are heard by the team only); the listener pose orients
@@ -79,6 +94,11 @@ private:
     std::map<int, Talker> talkers_;
     double lastPlayMs_ = 0.0;
     VoiceStats stats_;
+    std::function<bool(int)> muted_;
+    std::function<void(int, const VoiceFrame&, bool)> tap_;
+    struct Heard { double lastMs = -1e9; uint8_t via = 0; };
+    std::map<int, Heard> heard_;       // per seat (this seat too: its own sends) - the indicators
+    double gateOpenUntil_ = -1.0;
 };
 
 }  // namespace net

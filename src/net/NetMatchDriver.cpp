@@ -109,7 +109,11 @@ NetMatchDriver::NetMatchDriver(game::World& world, INetTransport& transport, aud
         }
     }
     if (cfg.voice) {
-        impl_->voice = std::make_unique<VoiceSession>(*impl_->ls, audio, VoiceSession::Config{});
+        impl_->voice = std::make_unique<VoiceSession>(*impl_->ls, audio, cfg.voiceCfg);
+        // The microphone: only for a talking player, and never in lane / harness runs (WFC_NOINTERACT: no device, no capture).
+        static const bool noInteract = [] { const char* e = std::getenv("WFC_NOINTERACT"); return e && *e && e[0] != '0'; }();
+        if (cfg.voiceMic && !noInteract) impl_->voice->setSource(createVoiceCapture());
+        if (cfg.voiceMuted) impl_->voice->setMuted(cfg.voiceMuted);
         game::World* w = &world;
         Impl* im = impl_.get();
         impl_->ls->setVoiceAudience([w, im](int talkerSeat, int listenerSeat, uint8_t flags) {   // seats -> match players

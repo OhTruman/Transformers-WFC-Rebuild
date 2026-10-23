@@ -43,6 +43,15 @@ VoiceSession::~VoiceSession() {
 }
 
 void VoiceSession::setSource(std::unique_ptr<IVoiceCapture> mic) { mic_ = std::move(mic); }
+void VoiceSession::setConfig(const Config& c) { const int j = cfg_.jitterFrames; cfg_ = c; cfg_.jitterFrames = j; }
+
+int VoiceSession::headsetState(int seat) const {
+    auto it = heard_.find(seat);
+    if (it == heard_.end()) return 0;
+    const double age = nowMs() - it->second.lastMs;
+    return age < 250.0 ? 2 : age < 10000.0 ? 1 : 0;
+}
+uint8_t VoiceSession::lastVia(int seat) const { auto it = heard_.find(seat); return it == heard_.end() ? 0 : it->second.via; }
 void VoiceSession::setSyntheticTone(float hz) { toneHz_ = hz; }
 
 float VoiceSession::micLevel() const { return mic_ ? mic_->level() : 0.0f; }
@@ -71,7 +80,18 @@ void VoiceSession::update(bool talking, const SeatPos& seatPos, const SameTeam& 
             if (talking && !mic_->running()) mic_->start();
             if (!talking && mic_->running()) mic_->stop();
             VoiceFrame f;
-            while (mic_->pop(f)) if (talking) frames.push_back(f);
+            while (mic_->pop(f)) {
+                if (!talking) continue;
+                if (cfg_.openMic) {   // the voice gate: a frame above gateDb opens it for hangMs
+                    double e = 0.0;
+                    for (int16_t v : f) e += (double)v * (double)v;
+                    const double rms = std::sqrt(e / (double)kVoiceFrameSamples) / 32768.0;
+                    const double db = rms > 1e-9 ? 20.0 * std::log10(rms) : -120.0;
+                    if (db >= cfg_.gateDb) gateOpenUntil_ = now + cfg_.hangMs;
+                    if (now >= gateOpenUntil_) { ++stats_.gated; continue; }
+                }
+                frames.push_back(f);
+            }
         }
         for (const VoiceFrame& f : frames) {
             std::vector<uint8_t> opus;
@@ -81,6 +101,7 @@ void VoiceSession::update(bool talking, const SeatPos& seatPos, const SameTeam& 
             pkt.insert(pkt.end(), opus.begin(), opus.end());
             ls_.sendVoice(pkt.data(), pkt.size());   // to the host (a client) or fanned out (the host)
             ++seq_; ++stats_.sent;
+            Heard& me = heard_[ls_.self()]; me.lastMs = now; me.via = pkt[4];
         }
     }
     // ---- play: every remote talker, one frame per 20 ms of wall time ----
@@ -98,6 +119,8 @@ void VoiceSession::receive(int seat, const uint8_t* p, size_t n) {
     if (!t.dec) t.dec = std::make_unique<VoiceDecoder>();
     const uint16_t seq = (uint16_t)(p[2] | (p[3] << 8));
     ++stats_.received;
+    { Heard& h = heard_[seat]; h.lastMs = nowMs(); h.via = p[4]; }   // the indicator shows a muted talker too (as the original)
+    if (muted_ && muted_(seat)) { ++stats_.muted; t.buf.clear(); t.playing = false; return; }
     if (t.playing && seqDiff(seq, t.next) < 0) { ++stats_.late; return; }   // its play-out slot has passed
     if (t.buf.size() < 50) t.buf[seq] = {p[4], std::vector<uint8_t>(p + 5, p + n)};
 }
@@ -113,6 +136,7 @@ void VoiceSession::playTalker(int seat, Talker& t, const SeatPos& seatPos, const
     VoiceFrame pcm{};
     bool have = false;
     auto it = t.buf.find(t.next);
+    const bool concealedFrame = it == t.buf.end();   // (before the erase below)
     if (it != t.buf.end()) {
         t.lastFlags = it->second.first;
         have = t.dec->decode(it->second.second.data(), it->second.second.size(), pcm);
@@ -129,6 +153,7 @@ void VoiceSession::playTalker(int seat, Talker& t, const SeatPos& seatPos, const
     }
     ++t.next;
     if (!have) return;
+    if (tap_) tap_(seat, pcm, concealedFrame);
     (void)right;   // the mixer pans positional streams itself
     // Who hears it: radio = the talker's team, 2D at the voice volume; proximity = anyone in earshot, as a 3D voice in the cue mix
     // (falloff, pan, the listener's room reverb, occlusion); radio wins for teammates.

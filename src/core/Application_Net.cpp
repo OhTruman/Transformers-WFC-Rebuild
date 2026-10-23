@@ -389,6 +389,7 @@ template <class W> void queueSelection(W& w, int seat, const game::CharacterSele
 
 // Join in progress (Gameplay's dormant seats): World::queueLateSeat / smallerTeam / seatPlayer when the tree has them. Before
 // Gameplay's patch: the wake is logged only (a dormant seat stays dormant) and the team is counted here from the match players.
+net::VoiceSession::Config voiceConfigFrom(const frontend::SessionVoiceSettings& v);   // the Audio rows -> the voice lane (below)
 template <class W, class = void> struct HasQueueLateSeat : std::false_type {};
 template <class W> struct HasQueueLateSeat<W, std::void_t<decltype(std::declval<W&>().queueLateSeat(0, std::declval<const game::RemoteSeat&>(), 0u))>> : std::true_type {};
 template <class W> void queueLateSeat(W& w, int seat, const game::RemoteSeat& r, uint32_t atTick) {
@@ -447,7 +448,10 @@ void Application::startNetDriver(const std::string& launchUrl, uint32_t seed, in
     net::NetMatchDriver::Config c;
     c.seats = seats; c.self = localSeat; c.launchHash = lh; c.delay = 0; c.hashEvery = 60;
     if (const char* rp = std::getenv("WFC_NET_RECORD")) c.recordPath = rp;
-    c.voice = udpSession_->voiceSettings().mode != frontend::SessionVoiceMode::Off;
+    c.voice = true;   // everyone hears; the mode decides whether this player talks (Off = listen only)
+    c.voiceMic = udpSession_->voiceSettings().mode != frontend::SessionVoiceMode::Off;
+    c.voiceCfg = voiceConfigFrom(udpSession_->voiceSettings());
+    c.voiceMuted = [this](int seat) { return udpSession_ && udpSession_->isMuted(udpSession_->matchMember(seat)); };
     c.step = [this](float dt) {
         world_.tick(dt);
         gameMode_.tick(world_, dt);
@@ -477,6 +481,19 @@ void Application::startNetDriver(const std::string& launchUrl, uint32_t seed, in
     LOG_INFO("online: the lockstep driver runs the match (seat %d of %d, launch hash %016llx)", localSeat, seats, (unsigned long long)lh);
 }
 
+// The Audio rows -> the voice lane: volume, who hears this player (TeamRadio: the team by radio; AllRadio: everyone by radio - the
+// host's fan-out treats radio as team only today, so AllRadio maps to radio + proximity until the relay knows it; Proximity; Radio +
+// Proximity), open mic.
+net::VoiceSession::Config voiceConfigFrom(const frontend::SessionVoiceSettings& v) {
+    net::VoiceSession::Config c;
+    c.volume = std::max(0, std::min(100, v.volume)) / 100.0f;
+    using A = frontend::SessionVoiceAudience;
+    c.radio = v.audience != A::Proximity;
+    c.proximity = v.audience != A::TeamRadio;
+    c.openMic = v.mode == frontend::SessionVoiceMode::OpenMic;
+    return c;
+}
+
 void Application::tickNetDriver(double realDt) {
     net::NetMatchDriver& d = *netDriver_;
     d.setHeld(frontend_ && frontend_->flow().simHeld());
@@ -484,7 +501,16 @@ void Application::tickNetDriver(double realDt) {
         const frontend::SessionVoiceSettings& v = udpSession_->voiceSettings();
         d.setTalking(v.mode == frontend::SessionVoiceMode::OpenMic || (v.mode == frontend::SessionVoiceMode::PushToTalk && udpSession_->pushToTalk()));
     }
+    if (udpSession_ && d.voice()) {   // the Audio rows stay live (volume / audience / open mic changed in the pause menu)
+        d.voice()->setConfig(voiceConfigFrom(udpSession_->voiceSettings()));
+    }
     d.frame(realDt);
+    if (udpSession_ && d.voice()) {   // the talking indicators: every match seat with a member (this player too)
+        for (int s = 0; s < udpSession_->matchSeats(); ++s) {
+            const frontend::SessionMemberId& m = udpSession_->matchMember(s);
+            udpSession_->reportVoice(m, d.voice()->headsetState(s), d.voice()->lastVia(s));
+        }
+    }
     if (udpSession_) {   // join in progress: the host's tick (the catch-up limit); a late joiner's replay -> CatchUpProgress
         if (d.localSeat() == 0) {
             udpSession_->noteMatchTick((uint32_t)world_.simTick());
@@ -882,4 +908,98 @@ void Application::runUdpSessionTest() {
     exitCode_ = fails ? 1 : 0;
 }
 
+
+// WFC_VOICETEST [Systems] (headless, no device, no network): the voice lane end to end. Two Locksteps over an in-process loopback pair
+// (a lossy wrapper drops a share of the unreliable VOICE packets); seat 0 talks a synthetic 440 Hz tone (VoiceSession's test talker,
+// 0.3 full scale) for 3 s at real time, seat 1's VoiceSession decodes it (jitter buffer, Opus, concealment) and a tap collects the PCM.
+// Quality: per decoded 20 ms frame, a least-squares fit of a 440 Hz sinusoid (its own phase: delay / concealment jumps do not count);
+// SNR = fit / residual energy, the median over the decoded (not concealed) frames after the codec's start-up.
+// Arms: no loss (median >= 25 dB), 5 % loss (concealment used, median >= 25 dB on the decoded frames), mute (nothing played, the
+// indicator still on); the talking indicator
+// (headset state 2 while speaking). One SUMMARY line; exit 0 = PASS.
+namespace {
+class LossyTransport final : public net::INetTransport {
+public:
+    LossyTransport(net::INetTransport& t, double loss, uint32_t seed) : t_(t), loss_(loss), rng_(seed) {}
+    int self() const override { return t_.self(); }
+    void sendUnreliable(int peer, const uint8_t* p, size_t n) override {
+        rng_ = rng_ * 1664525u + 1013904223u;
+        if (n > 0 && p[0] == 7 && (double)(rng_ >> 8) / 16777216.0 < loss_) { ++dropped; return; }   // VOICE packets only
+        t_.sendUnreliable(peer, p, n);
+    }
+    void sendReliable(int peer, const uint8_t* p, size_t n) override { t_.sendReliable(peer, p, n); }
+    bool poll(net::NetPacket& out) override { return t_.poll(out); }
+    void service() override { t_.service(); }
+    net::NetStats stats() const override { return t_.stats(); }
+    long dropped = 0;
+private:
+    net::INetTransport& t_;
+    double loss_;
+    uint32_t rng_;
+};
+}  // namespace
+
+void Application::runVoiceTest() {
+    int fails = 0;
+    auto check = [&fails](bool ok, const char* what) { LOG_INFO("VOICETEST %s: %s", ok ? "PASS" : "FAIL", what); if (!ok) ++fails; };
+    if (!net::voiceCodecAvailable()) { check(false, "Opus in this build (WFC_OPUS)"); LOG_INFO("VOICETEST SUMMARY: FAIL"); exitCode_ = 1; return; }
+    struct Result { double snrDb = -99.0, amp = 0.0; long frames = 0, concealed = 0, dropped = 0, muted = 0; int state = -1; std::vector<double> snrs, amps; };
+    auto arm = [&](double loss, bool mute) {
+        Result r;
+        auto group = net::createLoopbackGroup(2);
+        LossyTransport ta(*group[0], loss, 77u), tb(*group[1], loss, 99u);
+        net::Lockstep::Config ca; ca.seats = 2; ca.self = 0; ca.delay = 2;
+        net::Lockstep::Config cb = ca; cb.self = 1;
+        net::Lockstep la(ta, ca), lb(tb, cb);
+        net::VoiceSession va(la, nullptr, net::VoiceSession::Config{}), vb(lb, nullptr, net::VoiceSession::Config{});
+        va.setSyntheticTone(440.0f);
+        vb.setPlayTap([&](int seat, const net::VoiceFrame& pcm, bool concealed) {
+            if (seat != 0) return;
+            ++r.frames; if (concealed) { ++r.concealed; return; }
+            if (r.frames <= 10) return;   // the codec's start-up
+            double ss = 0, sc = 0, cc = 0, ys = 0, yc = 0;
+            for (int i = 0; i < net::kVoiceFrameSamples; ++i) {
+                const double ph = 6.283185307 * 440.0 * (double)i / (double)net::kVoiceRate, sn = std::sin(ph), cs = std::cos(ph), y = pcm[(size_t)i];
+                ss += sn * sn; sc += sn * cs; cc += cs * cs; ys += y * sn; yc += y * cs;
+            }
+            const double det = ss * cc - sc * sc;
+            if (std::fabs(det) < 1e-9) return;
+            const double a = (ys * cc - yc * sc) / det, b = (yc * ss - ys * sc) / det;
+            double es = 0, er = 0;
+            for (int i = 0; i < net::kVoiceFrameSamples; ++i) {
+                const double ph = 6.283185307 * 440.0 * (double)i / (double)net::kVoiceRate, f = a * std::sin(ph) + b * std::cos(ph);
+                es += f * f; er += (pcm[(size_t)i] - f) * (pcm[(size_t)i] - f);
+            }
+            r.snrs.push_back(10.0 * std::log10(es / std::max(er, 1e-9)));
+            r.amps.push_back(std::sqrt(a * a + b * b) / 32767.0);
+        });
+        if (mute) vb.setMuted([](int seat) { return seat == 0; });
+        auto team = [](int) { return true; };   // radio: heard 2D (the tap sees it before routing either way)
+        const auto t0 = std::chrono::steady_clock::now();
+        auto secs = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
+        while (secs() < 3.4) {
+            la.pump(); lb.pump();
+            const bool talking = secs() < 3.0;
+            va.update(talking, nullptr, team, nullptr, nullptr, core::Vec3{0, 0, 0}, core::Vec3{1, 0, 0});
+            vb.update(false, nullptr, team, nullptr, nullptr, core::Vec3{0, 0, 0}, core::Vec3{1, 0, 0});
+            if (r.state < 0 && secs() > 1.0) r.state = vb.headsetState(0);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        r.dropped = ta.dropped; r.muted = vb.stats().muted;
+        auto median = [](std::vector<double> v) { if (v.empty()) return -99.0; std::sort(v.begin(), v.end()); return v[v.size() / 2]; };
+        r.snrDb = median(r.snrs); r.amp = median(r.amps);
+        return r;
+    };
+    const Result clean = arm(0.0, false), lossy = arm(0.05, false), muted = arm(0.0, true);
+    LOG_INFO("VOICETEST clean: %ld frames (%ld concealed), SNR %.1f dB, amplitude %.3f (sent 0.300), indicator %d", clean.frames, clean.concealed, clean.snrDb, clean.amp, clean.state);
+    LOG_INFO("VOICETEST 5%% loss: %ld frames (%ld concealed, %ld packets dropped), SNR %.1f dB, amplitude %.3f", lossy.frames, lossy.concealed, lossy.dropped, lossy.snrDb, lossy.amp);
+    LOG_INFO("VOICETEST muted: %ld frames played, %ld muted packets, indicator %d", muted.frames, muted.muted, muted.state);
+    check(clean.frames >= 140 && clean.concealed <= 3 && clean.snrDb >= 25.0 && clean.amp > 0.25 && clean.amp < 0.35,
+          "no loss: ~150 frames heard (only the 3-frame tail concealed), median SNR >= 25 dB, the level kept");
+    check(lossy.dropped > 0 && lossy.concealed > 3 && lossy.snrDb >= 25.0, "5 % loss: the losses concealed, the decoded frames' median SNR >= 25 dB");
+    check(clean.state == 2, "the talking indicator: speaking (2) while the tone plays");
+    check(muted.frames == 0 && muted.muted > 0 && muted.state == 2, "muted talker: nothing played, its indicator still shows");
+    LOG_INFO("VOICETEST SUMMARY: %s (%d failed)", fails ? "FAIL" : "PASS", fails);
+    exitCode_ = fails ? 1 : 0;
+}
 }  // namespace core

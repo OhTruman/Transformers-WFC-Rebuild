@@ -18,6 +18,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "net/VoiceSession.h"
 
 namespace audio { class IAudio; }
 namespace game { class World; struct CharacterSelection; }
@@ -39,7 +40,10 @@ public:
         double peerTimeoutS = 8.0;     // a peer silent this long is dropped (the frontend's ConnectionTimeout)
         std::string recordPath;        // WFC_NET_RECORD-style recording ("" none)
         std::string logPath;           // the per-tick CSV (WFC_NET_LOG layout: simhash, bundle hash, stall, bytes, rtt, wall_ms, D)
-        bool voice = true;             // the voice lane (VoiceSession) on this match
+        bool voice = true;             // the voice lane (VoiceSession) on this match: hearing others
+        bool voiceMic = false;         // this player talks: the microphone opens on the first push / open-mic frame (never under WFC_NOINTERACT)
+        VoiceSession::Config voiceCfg; // volume, audience, open mic (the Audio rows; VoiceSession::setConfig keeps them live)
+        std::function<bool(int seat)> voiceMuted;   // the local Mute list (seat -> muted)
         std::function<void(float)> step;   // World::tick + GameMode::tick, once per complete tick (fixed dt)
         // A seat's Choose Character (event kind 1), on every peer when it arrives: World::queueSeatSelection(seat, sel, atTick).
         std::function<void(int seat, const game::CharacterSelection& sel, uint32_t atTick)> onSelection;
