@@ -3610,3 +3610,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   record; flow test 15 / 15 + team checks) -> two-window retest queued after Systems. UdpSession-path NET.identity PASS on
   221e7b83 in all five profiles (Experimental); net tools synced by path. ONLINE: every layer now proven on one PC except the
   windowed menu match retest.
+2026-10-23 01:37 Rendering CARD FREE (x28 / x29 done; smoke reference fell back to group light on Streets: 0 Beast probe points -> fix the
+  reference source first; sheets pending). Card -> Systems 01:38 (FXLIVELOG + pre-age A/B) -> Frontend two-window retest.
