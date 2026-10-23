@@ -861,24 +861,55 @@ void GfxPresenter::scrollPlayerList(gfx::Player& p, float& scroll, const platfor
     }
 }
 
-// PC ADAPTATION (user playtest 2026-10-23 #17): PauseMenu_GFX disables Choose Character when GRI._bIconicMode is set
-// [CONFIRMED AS: if IconicMode -> chooseCharacter_mc.enabled = false] - in the original only Escalation / co-op had iconic
-// characters, claimed for the whole game. The PC's Iconic Characters option for versus inherited that lock, so a player
-// stayed on the first pick for the whole match. In a versus match (free-for-all / team) the button stays enabled: its
-// DisplayCharacterSelect already lists the iconic characters with their claims (CharacterSelect.swf) and the pick applies at
-// the next respawn as any other. Escalation / campaign keep the original lock.
+// PC ADAPTATION (user playtest 2026-10-23 #17): the PC pause menu (PauseMenu_GFX buildPauseMenu, WIN branch) builds its
+// rows from escalationArray whenever GRI._bIconicMode is set - the same rows as multiplayerArray without "Choose
+// Transformer" (and without Switch Teams) [CONFIRMED AS]. In the original only Escalation had iconic characters, claimed
+// for the whole game; the PC's Iconic Characters option for versus inherited it, so a player stayed on the first pick
+// for the whole match. In a versus match (free-for-all / team) the menu gets the original multiplayerArray instead, with
+// Switch Teams by the original rule (not auto-balanced, not free-for-all); Choose Transformer's DisplayCharacterSelect
+// lists the iconics with their claims (CharacterSelect.swf) and the pick applies at the next respawn as any other.
+// Escalation / campaign keep the original menu. mc_subMenu rebuilds on a new buildArray (watch('buildArray')).
+namespace {
+gfx::avm1::Object* findScriptWith(gfx::avm1::VM& vm, gfx::MovieClip* c, const char* prop, int depth = 0) {
+    if (!c || depth > 4) return nullptr;
+    if (c->script && vm.get(c->script, prop).isObject()) return c->script;
+    for (auto& [d, ch] : c->children) {
+        if (ch->removed || ch->kind != gfx::DisplayObject::Kind::Clip) continue;
+        if (gfx::avm1::Object* o = findScriptWith(vm, static_cast<gfx::MovieClip*>(ch.get()), prop, depth + 1)) return o;
+    }
+    return nullptr;
+}
+}
 void GfxPresenter::syncPauseChooseCharacter(gfx::Player& p, frontend::GameFlow& flow) {
     const frontend::MatchLaunch& m = flow.currentMatch();
     if (flow.level() != frontend::LevelKind::Match || !flow.iconicMode() || (m.gameTeamStatus != 1 && m.gameTeamStatus != 3)) return;
-    gfx::MovieClip* b = findNamed(p.root(), "chooseCharacter_mc");
-    if (!b || !b->script) return;
+    gfx::MovieClip* menu = findNamed(p.root(), "mainMenu_mc");
+    if (!menu || !menu->script) return;
     gfx::avm1::VM& vm = p.vm();
-    if (vm.toBool(vm.get(b->script, "enabled"))) return;
-    vm.set(b->script, "enabled", gfx::avm1::Value(true));
-    if (!pauseChooseTraced_) {
-        pauseChooseTraced_ = true;
-        frontend::FlowTrace::emit("pause.chooseCharacter", {{"enabled", "true"}, {"why", "iconic versus (PC ADAPTATION)"}, {"mode", m.modeTag}});
+    using V = gfx::avm1::Value;
+    if (!vm.get(menu->script, "__wfcVersusRows").isUndef()) return;
+    vm.set(menu->script, "__wfcVersusRows", V(true));
+    const V cur = vm.get(menu->script, "buildArray");
+    if (!cur.isObject() || cur.o->kind != gfx::avm1::ObjKind::Array) return;
+    for (const V& e : cur.o->elems)
+        if (e.isObject() && vm.toString(vm.get(e.o, "ID")) == "ChooseChar") return;   // already the multiplayer rows
+    gfx::avm1::Object* holder = findScriptWith(vm, p.root(), "multiplayerArray");
+    const V mp = holder ? vm.get(holder, "multiplayerArray") : V();
+    if (!mp.isObject() || mp.o->kind != gfx::avm1::ObjKind::Array) return;
+    std::vector<V> rows = mp.o->elems;
+    const bool swap = !vm.toBool(vm.get(holder, "AutoBalance")) && vm.toString(vm.get(holder, "GameTeamStatus")) != "GTS_FreeForAllGame";
+    if (swap && rows.size() > 1) {
+        gfx::avm1::Object* it = vm.newPlain();
+        vm.set(it, "panelHeight", V(29.0));
+        vm.set(it, "panelWidth", V(413.0));
+        vm.set(it, "clickFunction", vm.get(holder, "swapTeamsClickFunction"));
+        vm.set(it, "ID", V(std::string("Swap")));
+        vm.set(it, "text", V(std::string("$UIText.Lobby.SwitchTeams")));
+        rows.insert(rows.begin() + 1, V(it));
     }
+    vm.set(menu->script, "buildArray", V(vm.newArray(rows)));
+    frontend::FlowTrace::emit("pause.versusRows", {{"rows", std::to_string(rows.size())}, {"swapTeams", frontend::FlowTrace::boolean(swap)},
+                                                   {"why", "iconic versus: multiplayerArray (PC ADAPTATION)"}, {"mode", m.modeTag}});
 }
 
 // PC ADAPTATION (user playtest 2026-10-23 #6): SettingsMenu.swf's sub-menu stacks its rows upward from Commit Changes

@@ -1,15 +1,15 @@
 diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
-index c5cc621..5246fbb 100644
+index 3c5c4a2..6e2a76d 100644
 --- a/src/core/Application_Frontend.cpp
 +++ b/src/core/Application_Frontend.cpp
-@@ -1484,7 +1484,13 @@ void Application::routeMatchToFrontend(float dt) {
-         cs.chassisId = fc.chassis[team == 1 ? 1 : 0].empty() ? fc.chassis[0] : fc.chassis[team == 1 ? 1 : 0];
+@@ -1487,7 +1487,13 @@ void Application::routeMatchToFrontend(float dt) {
          cs.customSlot = fc.name;
          fillFullSelection(cs, fc);
--        world_.submit([me, cs](game::World& w) { w.match().selectCharacter(me, cs); });
-+        // The result is logged (playtest 2026-10-23 #17): Match refuses an iconic chassis another participant holds
-+        // (GRI.ValidateCharacterSelection) and keeps the old selection - silent before.
-+        world_.submit([me, cs](game::World& w) {
+         if (netDriver_) netDriver_->chooseCharacter(cs);   // online: a tick-stamped event, applied on every peer at the same tick
+-        else world_.submit([me, cs](game::World& w) { w.match().selectCharacter(me, cs); });
++        else world_.submit([me, cs](game::World& w) {
++            // The result is logged (playtest 2026-10-23 #17): Match refuses an iconic chassis another participant holds
++            // (GRI.ValidateCharacterSelection) and keeps the old selection - silent before.
 +            const bool ok = w.match().selectCharacter(me, cs);
 +            LOG_INFO("FLOW match.selectCharacterResult ok=%s player=%d chassis=%s custom=%s", ok ? "true" : "false", me, cs.chassisId.c_str(),
 +                     cs.customSlot.c_str());
