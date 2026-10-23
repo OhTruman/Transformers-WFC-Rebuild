@@ -199,6 +199,10 @@ public:
     // M75 loading-screen warm-up: one hidden, unculled draw of the world into the scene target (w x h) so the driver's
     // first-draw work (state-dependent shader finalisation, texture residency) is paid under the loading screen
     void warmupWorld(int meshId, int w, int h);
+    // (chapter loader) the RT data (masked atlas, reflection hits, RT GI) waits for every unit: begin before the units load,
+    // end with their world meshes - each one (and each unit's BSP) joins the RT static world, then the RT data is built once
+    void beginChapterUnits() { chapterDefer_ = true; }
+    void endChapterUnits(const std::vector<int>& worldMeshes);
     // M74 energy death: the draw owner's dynamic materials swap to their package's Defrag instance at `defrag`
     void setDrawEnergyDeath(float defrag) {
         if (defrag < 0.0f) { ownerDefrag_.erase(drawOwner_); clearDrawMaterialParam("Defrag"); return; }
@@ -1084,6 +1088,8 @@ private:
     struct SublevelRT { std::string unit, dir; int bsp = -1, decal = -1; };
     std::vector<SublevelRT> sublevels_;           // (chapter loader) the merged units, in load order
     bool bspHosted_ = false;                         // (chapter loader) a world mesh already draws the BSP / decals
+    bool chapterDefer_ = false;                      // (chapter loader) units still loading: the RT data waits
+    void rtLoadData();                               // the load-time RT data: R1 pages, GI texels, masked atlas, hits, GI setup
     void ppvFogFrame();
     bool x3FogOn_ = false; float x3FogMaxH_ = 0.0f, x3FogScale_ = 0.0f;   // X3's medium: the data's first 'fog' component
     core::Vec3 clearFogIn_{0, 0, 0};                 // the frame clear colour: that first component's in-scattering

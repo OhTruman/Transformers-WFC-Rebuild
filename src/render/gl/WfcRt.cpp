@@ -299,7 +299,9 @@ void Pipeline::rtBuildWorld(int meshId) {
     if (set == 1 && noBsp) { LOG_INFO("RT world: level BSP set left out (WFC_RT_NOBSP)"); return; }
     LOG_INFO("RT world: %zu static opaque subs of the %s set (mesh %d; %zu vertex-lit, %zu not MDI-drawn) -> D3D12 (%zu sky subs, %zu CastShadow-false"
              " subs and %zu actor-placed (mover / toggled) subs left out)", subs, set ? "level BSP" : "world", meshId, vlmSubs, nonMdiSubs, skipped, noShadow, actorNodes);
-    W.idBase = 0x10000u + (unsigned)set * 2u;           // (the reflection hits look their BLAS up by InstanceID)
+    // (the reflection hits look their BLAS up by InstanceID: blas = keep index x 2 + side - world 0, BSP 1 on an MP map, then a
+    // chapter's further units in order; the instance mask stays the set's bit)
+    W.idBase = 0x10000u + (unsigned)(keepHit ? rtHitKeep_.size() : (size_t)set) * 2u;
     if (keepHit) {
         keep.mesh = meshId; keep.set = set; keep.idx[0] = W.oneSided; keep.idx[1] = W.twoSided;
         keep.uv1.resize(v.size() / 14 * 2);

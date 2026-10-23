@@ -1,0 +1,123 @@
+diff -ru a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
+--- a/src/render/gl/GLRenderer.cpp	2026-10-23 07:15:43.778592500 -0500
++++ b/src/render/gl/GLRenderer.cpp	2026-10-23 07:15:43.945163400 -0500
+@@ -1681,16 +1681,28 @@
+         while (!cd.empty() && (cd.back() == '/' || cd.back() == '\\')) cd.pop_back();
+         if (!wfc_.active()) return 0;
+         int n = 0;
++        // every unit's data first (its lightmap pages before the first world mesh builds the lightmap array), then the world
++        // meshes; the RT data waits for all of them (Pipeline::endChapterUnits)
++        wfc_.beginChapterUnits();
++        std::vector<std::string> loaded;
+         for (const std::string& u : units) {
+             if (!wfc_.loadSublevel(cd + "/" + u)) continue;
+-            ++n;
++            ++n; loaded.push_back(u);
++            wfc_.yieldLoad();
++        }
++        std::vector<int> gpuIds;
++        for (const std::string& u : loaded) {
+             MeshData w;
+             if (assets::loadGlb(cd + "/" + u + "/world.glb", w)) {
+                 const MeshHandle h = uploadMesh(w);
+-                if (h != kInvalidMesh) chapterMeshes_.push_back(h);
++                if (h != kInvalidMesh) {
++                    chapterMeshes_.push_back(h);
++                    if ((size_t)h < gpu_.size() && gpu_[(size_t)h] >= 0) gpuIds.push_back(gpu_[(size_t)h]);
++                }
+             } else LOG_WARN("chapter: %s has no world.glb in its render data", u.c_str());
+             wfc_.yieldLoad();
+         }
++        wfc_.endChapterUnits(gpuIds);
+         LOG_INFO("chapter: %d of %zu unit(s) merged, %zu world mesh(es)", n, units.size(), chapterMeshes_.size());
+         return n;
+     }
+diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-23 07:15:43.815719900 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 07:15:43.942654900 -0500
+@@ -5223,6 +5223,32 @@
+     h = std::max(1, (int)std::lround(h * fsrScale_));
+ }
+ 
++void Pipeline::rtLoadData() {
++    r1CheckGl();
++    if (r1Map_ && rtShadowAoOn() && !r1Built_) r1Build();   // (R1: the V_bake pages / arrays under the loading screen, not in frame 1)
++    if (!giFinished_ && !giTexels_.empty()) giFinishTexels();   // (R4: the gutter list, the coverage maps freed)
++    // (RT: the masked-world atlas and the reflection hit data under the loading screen too - the hit data's texture readbacks
++    // were a 2-3 s hitch on the first Realistic frame; a mid-map switch to Realistic still builds them at that moment)
++    if (rtShadowAoOn() && !rtFailed_ && !rtMaskedBuilt_) rtBuildMasked();
++    if (rtShadowAoOn() && !rtFailed_ && !rtHitBuilt_ && rtReflPass()) rtBuildHit();
++    if (!giSetupDone_ && giFinished_ && rtHitBuilt_) giSetup();   // (R4: the RT lightmap's buffers, pages, load passes)
++}
++
++// (chapter loader, stage 2a) the multi-draw path takes one world mesh (the first unit's); the RT static world takes them all -
++// before this, a chapter's Realistic traced only its first unit (D5_OME: GLB_ART's shell, not the arena: x45, 7 GI pages)
++void Pipeline::endChapterUnits(const std::vector<int>& worldMeshes) {
++    chapterDefer_ = false;
++    if (!active_) return;
++    auto inRt = [&](int id) { for (const auto& ms : rtSets_) if (ms.first == id) return true; return false; };
++    std::vector<int> add;
++    for (int id : worldMeshes) if (id >= 0 && (size_t)id < meshes_.size() && meshes_[(size_t)id].world && !inRt(id)) add.push_back(id);
++    for (const SublevelRT& sl : sublevels_) if (sl.bsp >= 0 && (size_t)sl.bsp < meshes_.size() && !inRt(sl.bsp)) add.push_back(sl.bsp);
++    for (int id : add) rtBuildWorld(id);
++    LOG_INFO("chapter: %zu unit mesh(es) added to the RT static world (%zu sets in all)", add.size(), rtSets_.size());
++    BindFramebuffer(GL_FRAMEBUFFER, 0);
++    rtLoadData();
++}
++
+ void Pipeline::warmupWorld(int id, int w, int h) {
+     renderSizeOverride(w, h);                          // the warm-up (and its log line) at the 3D target size
+     applyRenderScale(w, h);
+@@ -5328,14 +5354,7 @@
+     counts_ = counts;
+     std::memcpy(frustum_, fr, sizeof fr);
+     BindFramebuffer(GL_FRAMEBUFFER, 0);
+-    r1CheckGl();
+-    if (r1Map_ && rtShadowAoOn() && !r1Built_) r1Build();   // (R1: the V_bake pages / arrays under the loading screen, not in frame 1)
+-    if (!giFinished_ && !giTexels_.empty()) giFinishTexels();   // (R4: the gutter list, the coverage maps freed)
+-    // (RT: the masked-world atlas and the reflection hit data under the loading screen too - the hit data's texture readbacks
+-    // were a 2-3 s hitch on the first Realistic frame; a mid-map switch to Realistic still builds them at that moment)
+-    if (rtShadowAoOn() && !rtFailed_ && !rtMaskedBuilt_) rtBuildMasked();
+-    if (rtShadowAoOn() && !rtFailed_ && !rtHitBuilt_ && rtReflPass()) rtBuildHit();
+-    if (!giSetupDone_ && giFinished_ && rtHitBuilt_) giSetup();   // (R4: the RT lightmap's buffers, pages, load passes)
++    if (!chapterDefer_) rtLoadData();                  // (a chapter: after every unit, endChapterUnits)
+     logMemStats("after the load warm-up");
+     LOG_INFO("wfc: warm-up draw of the world: %d draws at %dx%d in %.0f ms (first-use touch: %d programs, %d textures so far)",
+              draws, w, h, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(),
+diff -ru a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h	2026-10-23 07:15:43.845823200 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-23 07:15:43.940146400 -0500
+@@ -199,6 +199,10 @@
+     // M75 loading-screen warm-up: one hidden, unculled draw of the world into the scene target (w x h) so the driver's
+     // first-draw work (state-dependent shader finalisation, texture residency) is paid under the loading screen
+     void warmupWorld(int meshId, int w, int h);
++    // (chapter loader) the RT data (masked atlas, reflection hits, RT GI) waits for every unit: begin before the units load,
++    // end with their world meshes - each one (and each unit's BSP) joins the RT static world, then the RT data is built once
++    void beginChapterUnits() { chapterDefer_ = true; }
++    void endChapterUnits(const std::vector<int>& worldMeshes);
+     // M74 energy death: the draw owner's dynamic materials swap to their package's Defrag instance at `defrag`
+     void setDrawEnergyDeath(float defrag) {
+         if (defrag < 0.0f) { ownerDefrag_.erase(drawOwner_); clearDrawMaterialParam("Defrag"); return; }
+@@ -1084,6 +1088,8 @@
+     struct SublevelRT { std::string unit, dir; int bsp = -1, decal = -1; };
+     std::vector<SublevelRT> sublevels_;           // (chapter loader) the merged units, in load order
+     bool bspHosted_ = false;                         // (chapter loader) a world mesh already draws the BSP / decals
++    bool chapterDefer_ = false;                      // (chapter loader) units still loading: the RT data waits
++    void rtLoadData();                               // the load-time RT data: R1 pages, GI texels, masked atlas, hits, GI setup
+     void ppvFogFrame();
+     bool x3FogOn_ = false; float x3FogMaxH_ = 0.0f, x3FogScale_ = 0.0f;   // X3's medium: the data's first 'fog' component
+     core::Vec3 clearFogIn_{0, 0, 0};                 // the frame clear colour: that first component's in-scattering
+diff -ru a/src/render/gl/WfcRt.cpp b/src/render/gl/WfcRt.cpp
+--- a/src/render/gl/WfcRt.cpp	2026-10-23 07:15:43.877431100 -0500
++++ b/src/render/gl/WfcRt.cpp	2026-10-23 07:15:43.943658300 -0500
+@@ -299,7 +299,9 @@
+     if (set == 1 && noBsp) { LOG_INFO("RT world: level BSP set left out (WFC_RT_NOBSP)"); return; }
+     LOG_INFO("RT world: %zu static opaque subs of the %s set (mesh %d; %zu vertex-lit, %zu not MDI-drawn) -> D3D12 (%zu sky subs, %zu CastShadow-false"
+              " subs and %zu actor-placed (mover / toggled) subs left out)", subs, set ? "level BSP" : "world", meshId, vlmSubs, nonMdiSubs, skipped, noShadow, actorNodes);
+-    W.idBase = 0x10000u + (unsigned)set * 2u;           // (the reflection hits look their BLAS up by InstanceID)
++    // (the reflection hits look their BLAS up by InstanceID: blas = keep index x 2 + side - world 0, BSP 1 on an MP map, then a
++    // chapter's further units in order; the instance mask stays the set's bit)
++    W.idBase = 0x10000u + (unsigned)(keepHit ? rtHitKeep_.size() : (size_t)set) * 2u;
+     if (keepHit) {
+         keep.mesh = meshId; keep.set = set; keep.idx[0] = W.oneSided; keep.idx[1] = W.twoSided;
+         keep.uv1.resize(v.size() / 14 * 2);

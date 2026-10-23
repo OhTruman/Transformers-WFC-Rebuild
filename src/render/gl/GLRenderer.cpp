@@ -1681,16 +1681,28 @@ public:
         while (!cd.empty() && (cd.back() == '/' || cd.back() == '\\')) cd.pop_back();
         if (!wfc_.active()) return 0;
         int n = 0;
+        // every unit's data first (its lightmap pages before the first world mesh builds the lightmap array), then the world
+        // meshes; the RT data waits for all of them (Pipeline::endChapterUnits)
+        wfc_.beginChapterUnits();
+        std::vector<std::string> loaded;
         for (const std::string& u : units) {
             if (!wfc_.loadSublevel(cd + "/" + u)) continue;
-            ++n;
+            ++n; loaded.push_back(u);
+            wfc_.yieldLoad();
+        }
+        std::vector<int> gpuIds;
+        for (const std::string& u : loaded) {
             MeshData w;
             if (assets::loadGlb(cd + "/" + u + "/world.glb", w)) {
                 const MeshHandle h = uploadMesh(w);
-                if (h != kInvalidMesh) chapterMeshes_.push_back(h);
+                if (h != kInvalidMesh) {
+                    chapterMeshes_.push_back(h);
+                    if ((size_t)h < gpu_.size() && gpu_[(size_t)h] >= 0) gpuIds.push_back(gpu_[(size_t)h]);
+                }
             } else LOG_WARN("chapter: %s has no world.glb in its render data", u.c_str());
             wfc_.yieldLoad();
         }
+        wfc_.endChapterUnits(gpuIds);
         LOG_INFO("chapter: %d of %zu unit(s) merged, %zu world mesh(es)", n, units.size(), chapterMeshes_.size());
         return n;
     }
