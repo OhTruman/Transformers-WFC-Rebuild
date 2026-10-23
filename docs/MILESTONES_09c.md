@@ -3836,3 +3836,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   build_slim. AssetTools: D5 chapter bot_nav.json (123 cells, 1 piece). Rendering: D5 RT calibration (sunless fit; lights
   fit on 259 chapter lights) -> ships in D5_OME_BASE/vbake. Card: Rendering x4345 -> Systems' Streets re-verify -> Frontend
   post-match check.
+2026-10-23 07:02 DECISION campaign package layout: one root <WFC_CAMPAIGN_ROOT>/<chapter>/<unit>/ (= AssetTools/out/campaign_render;
+  chapter.json, collision, nav, render data, vbake/fit.json in the unit); Play.bat sets WFC_CAMPAIGN_ROOT; the renderer's
+  loadChapterUnits takes the chapter dir explicitly (Rendering patch); no unit copies into work/render; D5_OME ships whole,
+  A1 later. build_slim gaps: + bot_skill.json. x43: plume blobs reach the pass (4 blobs, r 4.5-6.8 m); x45: D5 calibration
+  loads. Card: Frontend post-match check -> Systems Streets re-verify.
