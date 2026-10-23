@@ -1,0 +1,21 @@
+diff -ru a/tools/render/build_materials.py b/tools/render/build_materials.py
+--- a/tools/render/build_materials.py	2026-10-23 03:51:50.685245300 -0500
++++ b/tools/render/build_materials.py	2026-10-23 03:52:13.745268500 -0500
+@@ -211,8 +211,15 @@
+     print('materials missing from this map: %d' % len(missing))
+     if missing:
+         ufb = []
+-        for other in sorted(os.listdir(os.path.join(VS, 'Maps'))):
+-            if not other.startswith('MP_') or other == mapname or not missing: continue
++        # (campaign) a chapter's extras are cooked into its sibling sublevels: with VS_MAPS at <chapter>/sublevels
++        # (AssetTools' per-sublevel run), the other sublevels of this chapter are searched instead of the MP maps
++        # (only when VS_MAPS is redirected: the default root keeps the MP-only scan for every map, UI scenes included)
++        if os.path.normcase(os.path.normpath(ue3obj.VS_MAPS)) == os.path.normcase(os.path.normpath(os.path.join(VS, 'Maps'))):
++            others = [o for o in sorted(os.listdir(os.path.join(VS, 'Maps'))) if o.startswith('MP_')]
++        else:
++            others = sorted(d for d in os.listdir(ue3obj.VS_MAPS) if os.path.isdir(os.path.join(ue3obj.VS_MAPS, d)))
++        for other in others:
++            if other == mapname or not missing: continue
+             for pk in map_packages(other)[0]:
+                 pr = Repo([pk])
+                 found = [n for n in missing if usable(pr, n)]
