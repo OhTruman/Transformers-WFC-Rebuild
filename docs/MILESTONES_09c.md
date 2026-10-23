@@ -3982,3 +3982,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   combat, net rows identical). Remaining before the FINAL cut: Gameplay (lift platform move, Omega AI, hit reactions, horde
   melee rule, the six PROV fixes), AssetTools chain A2..D3B (+ per-chapter dedupe / pp / actors / characters), Rendering's
   held patch, Frontend Claim + re-draft; then broad pass #3 + the combined timed gate + refresh.sh.
+2026-10-23 09:28 MERGED 4a7fa719 Rendering A1 follow-ups (every world.glb actor node poseable; benign BSP info); the final gate runner
+  (final-gate.sh: pre = base + control + same-match + stability; gate = PERF_HOLD 10 maps x 2 res x base / head x 2 reps,
+  ~90 min). Gameplay cuts FINAL_BASE_ITEMS (sim-only diffs vs af4d0731). AssetTools exports TnTransformingWorldActors
+  (the A1 lift body) into the units' world.glb.
