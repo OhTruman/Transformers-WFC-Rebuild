@@ -1,0 +1,69 @@
+diff -ru a/src/render/gl/WfcMapFx.cpp b/src/render/gl/WfcMapFx.cpp
+--- a/src/render/gl/WfcMapFx.cpp	2026-10-23 02:14:07.310465800 -0500
++++ b/src/render/gl/WfcMapFx.cpp	2026-10-23 02:14:07.403283900 -0500
+@@ -33,6 +33,9 @@
+ #include <cstdlib>
+ #include <cstring>
+ #include <fstream>
++#include <filesystem>
++#include <list>
++#include <memory>
+ #include <sstream>
+ #include "render/gl/FxInactive.inc"
+ 
+@@ -58,6 +61,29 @@
+     return ss.str();
+ }
+ 
++// (playtest 2026-10-23 #1) parsed map-FX documents, kept by path + size + write time (a data regen re-parses), the 4 most
++// recent: a load parsed map_fx_runtime.json twice (loadMapFx, then loadMapProps' destructible components: ~100 ms each on
++// the lobbies), and a revisited menu screen parsed both again. Null when the file is missing or does not parse.
++std::shared_ptr<const assets::Json> parsedJson(const std::string& path) {
++    struct Entry { std::string path; uintmax_t size; long long time; std::shared_ptr<const assets::Json> doc; };
++    static std::list<Entry> cache;
++    static std::mutex mu;
++    std::lock_guard<std::mutex> lock(mu);
++    std::error_code ec;
++    const uintmax_t size = std::filesystem::file_size(path, ec);
++    if (ec) return nullptr;
++    const long long time = (long long)std::filesystem::last_write_time(path, ec).time_since_epoch().count();
++    for (auto it = cache.begin(); it != cache.end(); ++it)
++        if (it->path == path && it->size == size && it->time == time) { cache.splice(cache.begin(), cache, it); return cache.front().doc; }
++    const std::string txt = readFile(path);
++    auto doc = std::make_shared<assets::Json>();
++    if (txt.empty() || !assets::Json::parse(txt, *doc)) return nullptr;
++    cache.remove_if([&](const Entry& e) { return e.path == path; });
++    cache.push_front({path, size, time, doc});
++    while (cache.size() > 4) cache.pop_back();
++    return doc;
++}
++
+ // A module distribution decoded from the compiled stream; a module whose stream did not carry it evaluates to 0
+ // (logged once per module / property) instead of aborting.
+ void evalDist(const Pipeline::FxModule& m, const char* name, float t, uint32_t& rng, float* out) {
+@@ -174,9 +200,9 @@
+     fxGravityZ_ = kDefaultGravityZ;
+     static const std::pair<const char*, float> kMapGravityZ[] = {{"", 0.0f}};   // (no entries yet)
+     for (const auto& mg : kMapGravityZ) if (*mg.first && dataDir_.find(mg.first) != std::string::npos) fxGravityZ_ = mg.second;
+-    std::string txt = readFile(path);
+-    assets::Json J;
+-    if (txt.empty() || !assets::Json::parse(txt, J)) return false;
++    const std::shared_ptr<const assets::Json> doc = parsedJson(path);
++    if (!doc) return false;
++    const assets::Json& J = *doc;
+     auto lower = [](std::string s) { std::transform(s.begin(), s.end(), s.begin(), ::tolower); return s; };
+     const assets::Json& S = J["systems"];
+     for (const auto& kv : S.obj) {
+@@ -1410,10 +1436,8 @@
+     // written by build_map_fx.py): the lightmap join key of each state mesh
+     std::map<std::string, std::vector<std::string>> destructComps;
+     {
+-        assets::Json D;
+-        std::string t = readFile(mapFxPath());
+-        if (!t.empty() && assets::Json::parse(t, D))
+-            for (const auto& kv : D["destructible_mesh_components"].obj)
++        if (const std::shared_ptr<const assets::Json> D = parsedJson(mapFxPath()))   // (the document loadMapFx parsed)
++            for (const auto& kv : (*D)["destructible_mesh_components"].obj)
+                 for (const auto& mv : kv.second.obj)
+                     for (size_t k = 0; k < mv.second.size(); ++k)
+                         destructComps[kv.first + "|" + mv.first].push_back(mv.second[k].asString());
