@@ -3773,3 +3773,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 04:28 MERGED Kismet VM (Gameplay; KISMETTEST 9 / 9 incl. D5_OME's real 898-op graph; not wired yet). Experimental: voice +
   five profiles PASS on 8b1cd99e. README: Opus / DXC fetch note. Rendering: chapter loader stage 1 built on a hand-made
   D5_OME layout; x41 boot after pt9.
+2026-10-23 05:59 Escalation finding (Experimental / Gameplay): the horde spawns at authored points off our bot nav (Remnant 34 / 61,
+  BrokenHope 30 / 58) and the versus strand-suicide rule killed them 30 s later -> waves cleared with no combat. DECISION:
+  the horde is exempt from strand-suicide for good (original never suicides) + PROV nav-reachable spawn substitution with a
+  log until AssetTools' ESC nav (NavigationCell mesh) covers every spawn point (priority after the D5 inputs).
