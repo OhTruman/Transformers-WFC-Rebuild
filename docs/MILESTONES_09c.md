@@ -3676,3 +3676,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Card -> Rendering x32smoke 02:22 (Frontend's 1.5-min look shares the window, one exe at a time by direct coordination).
 2026-10-23 02:14 Vote-row look PASS (Frontend): rows under the preview, own vote marked, "Finding 1 more player". Next Frontend commit: public
   autostart at 2 / 45 s + no host start in voting lobbies, Escalation GameOverMessage, directorSpawned filter, XP for public.
+2026-10-23 02:32 MERGED 9f304154 MVP / FFA tie as the original; e27d5594 join-in-progress frontend half (dormant); f11e701e campaign audio 1
+  (conversations + matinee sound keys; D5_OME 42 / 42) + FXCATCHUPLOG; 1689e3c2 / 3cdd0772 public auto-start + Escalation end +
+  XP for public + roster filter; da62ceb4 FX JSON cache (#1 revisits 103-184 ms); the overlay root hook v2 + RE's msvc qsort port.
+  Experimental: ESC soak stable (Remnant wave 1 stuck = zone-sort tie -> E2 fix; BrokenHope AllDead = real); UdpSession PASS on
+  e2a58726. Overlay decision: collision for all 10 maps, rebuilt nav only on BrokenHope / Remnant (regressions elsewhere ->
+  AssetTools). Join in progress: Systems' replay catch-up plan approved (2-3 days). Campaign HD: covered by pack D (1 row
+  eye-passed, folded into the next pack D snapshot, not now).
