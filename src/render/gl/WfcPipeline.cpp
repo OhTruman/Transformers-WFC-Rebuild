@@ -3514,7 +3514,10 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
                 std::transform(ml.begin(), ml.end(), ml.begin(), ::tolower);
                 progs_[(size_t)r].material = ml;
             }
-            if (!lightmapped && s.glsl.find("o.Distortion = vec3(0.0);") == std::string::npos &&
+            // (user playtest 2026-10-23 #14) every material with a connected Distortion, lightmapped or not: UE3's distortion
+            // pass does not depend on the static lighting. Vertex-lightmapped subs take the lightmapped program, so Remnant's
+            // Waterfall1 / 2 and CoolantPuddles and Complex's Waterfall2 had lost their authored refraction
+            if (s.glsl.find("o.Distortion = vec3(0.0);") == std::string::npos &&
                 s.glsl.find("o.Distortion =") != std::string::npos) {
                 mainOverride_ = kFSMainDistort;
                 int d = buildProgram(key + "|DIST", s.glsl, slots, s.cube, 3, s.twoSided, false, s.clip, false, s.rtParams);
@@ -4135,9 +4138,12 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform1i(ULOC(P, "uVertexLM"), 0);
     Uniform4f(ULOC(P, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
     if (P.uLensFlare >= 0) { Uniform4fv(P.uLensFlare, 1, lensFlareU_); Uniform1f(P.uLensFlareI, lensFlareI_); }   // (flare elements)
-    {   // (A/B) the per-vertex height fog of before
-        static const int fogVertex = std::getenv("WFC_FOGPERVERTEX") ? 1 : 0;
-        if (fogVertex) Uniform1i(ULOC(P, "uFogVertex"), 1);
+    {   // height fog per vertex in Off / Faithful: the shipped base-pass VS evaluates it per vertex on equally coarse meshes
+        // (RE 2026-10-23: Rust's floor is coarse BSP / LOD0 in the original too; ExtinctionDistance 1e8 never fires), so the
+        // interpolated haze across a large polygon is the original's look. Per pixel is a Realistic enhancement.
+        // WFC_FOGPERVERTEX=1 forces per vertex in every mode, WFC_FOGPERPIXEL=1 per pixel in every mode (A/B)
+        static const int force = std::getenv("WFC_FOGPERVERTEX") ? 1 : std::getenv("WFC_FOGPERPIXEL") ? 0 : -1;
+        Uniform1i(ULOC(P, "uFogVertex"), force >= 0 ? force : (rtMode_ == 2 ? 0 : 1));
     }
     Uniform1i(ULOC(P, "uSkin"), skinMode_);
     Uniform1i(ULOC(P, "uTLSkip"), skinMode_ != 0 || inDynamicDraw_ ? tlWorldOnly_ : 0);   // (forced-dynamic world lights: not on characters)
