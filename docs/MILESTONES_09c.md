@@ -3470,3 +3470,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   for yourself". Merged the stranded lane commits: Systems 83ef6f42 + 292a69b9 (matchmaking design + lobby_service.py), Frontend
   f32235dd (lobby v2 steps 1-4; build OK, tests pass, SIMHASH identical), Experimental views-only.sh. Relaunch briefs sent to
   all 7 lanes (new names in memory). Integration = rebuild-84.
+2026-10-23 00:13 USER PLAYTEST FINDINGS (sent to the Frontend tonight; 18 items; verbatim doc coming as USER_PLAYTEST_2026-10-23.md). Routed:
+  Frontend #2 respawn timer leak, #17 UI half, #1 load times, #4 HD row detection, #6 video settings scroll, #7 scoreboard, #8
+  health bars through walls; Gameplay #11 spread / aim, #12 TTK, #15 switch anims (RE first), #17 World half, #18 bots floating,
+  #10 / #13 Seed collision; Rendering #3 / #16 headlight flicker + shadows, #14 water; Systems #5 death smoke lifetime, #9 boost
+  trails, #4 package side; RE the original values for #11 / #12 / #15 / #8 / #14; AssetTools #10 / #13 geometry, #14 textures,
+  #4 package check. User-visible bugs go ahead of smoke; MP critical path (UdpSession) unchanged.
