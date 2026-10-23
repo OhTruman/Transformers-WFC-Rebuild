@@ -1328,6 +1328,7 @@ void Pipeline::release() {
     const int keepRtMode = rtMode_, keepRtAvail = rtAvailKnown_;   // (the Ray Tracing row / F9: Off at the next map before)
     const bool keepVol = volUser_;                     // (the Volumetric Lighting row)
     const int keepLf = lensFlareMode_;                 // (the Lens Flares row)
+    const int keepSmoke = smokeMode_;                  // (the Smoke row)
     for (LensFlareRT& lf : lensFlares_) if (lf.query) DeleteQueries(1, &lf.query);
     if (lfBoxProg_) DeleteProgram(lfBoxProg_);
     if (lfBoxVbo_) DeleteBuffers(1, &lfBoxVbo_);
@@ -1335,6 +1336,7 @@ void Pipeline::release() {
     *this = Pipeline();
     volUser_ = keepVol;
     lensFlareMode_ = keepLf;
+    smokeMode_ = keepSmoke;
     loadYield_ = std::move(keepYield);
     displayGamma_ = keepGamma;
     fsrScale_ = keepFsrScale; fsrSharpness_ = keepFsrSharp;
@@ -1356,13 +1358,15 @@ void Pipeline::runSettingsSelfTest() {
     const int rm = rtMode_;
     const bool vo = volUser_;
     const int lf = lensFlareMode_;
+    const int sm = smokeMode_;
     displayGamma_ = 2.0f; fsrScale_ = 0.5f; fsrSharpness_ = 0.3f; anisotropy_ = 8; hdTextures_ = true; fsr3On_ = true; modern_ = true;
-    rtMode_ = 2; volUser_ = false; lensFlareMode_ = 1;
+    rtMode_ = 2; volUser_ = false; lensFlareMode_ = 1; smokeMode_ = 1;
     release();
     check(rtMode_ == 2, "Ray Tracing mode");
     check(!volUser_, "Volumetric Lighting");
     check(lensFlareMode_ == 1, "Lens Flares");
-    rtMode_ = rm; volUser_ = vo; lensFlareMode_ = lf;
+    check(smokeMode_ == 1, "Smoke");
+    rtMode_ = rm; volUser_ = vo; lensFlareMode_ = lf; smokeMode_ = sm;
     check(displayGamma_ == 2.0f, "display gamma"); check(fsrScale_ == 0.5f && fsrSharpness_ == 0.3f, "FSR scale / sharpness");
     check(anisotropy_ == 8, "anisotropy"); check(hdTextures_, "HD textures"); check(fsr3On_, "FSR 3.1"); check(modern_, "Modern materials");
     displayGamma_ = g; fsrScale_ = fs; fsrSharpness_ = fsh; anisotropy_ = an; hdTextures_ = hd; fsr3On_ = f3; modern_ = mo;

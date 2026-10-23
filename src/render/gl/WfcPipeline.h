@@ -223,6 +223,10 @@ public:
     // artists' 0..1 ramps), 2 Original (the shipped evaluation at the raw camera distance: their last point); restart-free
     void setLensFlareMode(int m) { lensFlareMode_ = std::min(std::max(m, 0), 2); }
     int lensFlareMode() const;
+    // the Smoke row (user 2026-10-17): 0 Original (the authored sprites, byte-identical), 1 Enhanced (smoke lit by its surroundings,
+    // moving; Realistic: volumetric plumes); restart-free; WFC_SMOKE=0|1 overrides
+    void setSmokeMode(int m) { smokeMode_ = std::min(std::max(m, 0), 1); }
+    int smokeMode() const;
     // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
     void flushPendingDraws() { flushWeaponQueue(); }
     void setDisplayGamma(float g) { displayGamma_ = g > 0.5f && g < 5.0f ? g : 2.2f; }
@@ -973,6 +977,7 @@ private:
     std::vector<LensFlareRT> lensFlares_;
     GLuint lfBoxProg_ = 0, lfBoxVao_ = 0, lfBoxVbo_ = 0;
     float lensFlareU_[4] = {0, 0, 0, 1}, lensFlareI_ = 1.0f;
+    int smokeMode_ = 0;                              // the Smoke row: 0 Original, 1 Enhanced (WFC_SMOKE overrides)
     int lensFlareMode_ = 2;                          // the Lens Flares row: 0 Off, 1 Subtle, 2 Original (WFC_LENSFLARE overrides)
     void loadLensFlares();
     void drawLensFlares();
