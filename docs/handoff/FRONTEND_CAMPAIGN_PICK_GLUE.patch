@@ -1,0 +1,14 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 95723455..fd95c9a0 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -1344,6 +1344,9 @@ void Application::runFrontend() {
+         } else if (automated && !std::getenv("WFC_CHARSELECT")) {
+             // Same contract as Customize.SelectCharacter (the first custom slot), not a second derivation.
+             std::string first = frontend_->roster().customCharacters().empty() ? std::string() : frontend_->roster().customCharacters().front().name;
++            // [Frontend C6] a campaign chapter: the trio's first (Gameplay's default for the in-map pick), never a versus class
++            const frontend::MapInfo* cm = flow.currentMatch().map;
++            if (flow.campaign() && cm && !cm->campaignCharacters.empty()) first = cm->campaignCharacters.front();
+             flow.selectCharacter(frontend_->selectionFor(first));
+         }
+         localDeadForUi_ = spectatingUi_ = false;

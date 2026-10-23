@@ -1924,8 +1924,11 @@ static void testCampaignC6() {
                                 "/" + levelKindName(f.level()) + "/" + (f.hasPendingMatch() ? "pending" : "-");
     const bool coop = f.ui().cls() == UIControllerClass::Coop && f.ui().state() == UIState::WaitingOnGameStart &&
                       f.ui().openMovie() == "UI_GFxCharacterSelect_p.CharacterSelect_GFX_1";
+    // the in-map pick (Customize.SelectCharacter) resolves a trio name to its iconic preset, not a versus slot
+    const GameFlow::SelectedCharacter mega = rt.selectionFor("Megatron");
+    const bool trioPick = mega.type == 1 && mega.bodyAvailable[1] && !mega.chassis[1].empty();
     f.onUIEvent(5);
-    const bool inGame = f.ui().state() == UIState::InGame;
+    const bool inGame = f.ui().state() == UIState::InGame && trioPick;
     f.campaignCheckpointReached(101, -1);
     const bool notIndexed = f.profile().campaign.checkpoint[5] == 0;
     f.campaignCheckpointReached(101, 3);

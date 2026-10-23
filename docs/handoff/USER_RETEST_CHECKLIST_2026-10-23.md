@@ -33,6 +33,8 @@ no-XP) arrive in the next package. Play Private Match (bots) unless a row says o
 | Online private match | Host shows a code; a second PC joins by it (PACKAGE_7_TWO_PC_TEST.md) |
 | Join in progress | Host a match; once it runs, join from the second PC by code: catch-up screen with %, then Choose Character, spawn on the smaller team. Leaving mid-match hands the slot to a bot |
 | Public lobby (Quick Match) | Map vote with preview, autostart once enough players are in; XP only in public games |
-| Voice chat | Push to talk (V) by default; Settings > Voice. Gamer Card button on a player opens Mute / Block (next package) |
+| Voice chat | Push to talk (V) by default, team-only in team matches (as the original); Settings > Voice |
 | Escalation | Remnant and the other Escalation maps: waves, horde, weapon factories, generators. No XP (as the original), end screen shows the wave reached |
-| Campaign | Chapter select and lobby only; chapters do not load in this package yet |
+| Campaign | Solo Campaign > Decepticon chapter V "The Final Guardian" (D5) plays from the menu: pick Megatron / Soundwave / Breakdown in the map, the other two follow as your squad; checkpoints save. Other chapters stay locked until their data is exported (A1 next). Death shows MISSION FAILED with Restart From Last Checkpoint / Restart Chapter |
+| Mute / Block | In a lobby or the pause player list, A on a player opens Mute / Block; a blocked player stays muted when they come back |
+| Lobby Game Stats | After a public match, Y in the game lobby re-opens the XP you earned |

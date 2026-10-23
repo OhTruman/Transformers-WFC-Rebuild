@@ -527,7 +527,8 @@ GameFlow::SelectedCharacter FrontendRuntime::selectionFor(const std::string& nam
     // ... or, in iconic mode, TnPlayerController.SelectCharacter(name, 1): the iconic preset (type 1, its chassis per faction).
     GameFlow::SelectedCharacter s;
     s.name = name;
-    const CharacterPreset* c = flow_.iconicMode() ? roster_.findIconic(name) : nullptr;
+    // campaign chapters pick from the iconic trio (CharacterSelect_GFX) as iconic mode does
+    const CharacterPreset* c = flow_.iconicMode() || flow_.campaign() ? roster_.findIconic(name) : nullptr;
     s.type = c ? 1 : 0;
     if (!c) c = roster_.find(name);
     if (!c) return s;   // unknown slot: selection recorded, no chassis (bodyAvailable false)
