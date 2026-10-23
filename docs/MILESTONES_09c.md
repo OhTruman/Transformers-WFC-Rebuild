@@ -3877,3 +3877,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (48 units collision + physics, navigation 7,849 nodes, navmesh 3,098 cells, bot_nav floor-level 18 pieces / main 3,043).
   GAP: A1's level start is at y ~ 1,094 m with no nav (a vista / flight opening?) -> DECISION fill from collision as flagged
   campaign cells; RE checks the scripted opening. A1 air nav at 4 m voxels (opt-in).
+2026-10-23 07:37 USER DIRECTIVE: implement everything before the playtest; broad-stroke testing only (no per-patch batteries, confirm
+  sheets or card runs for small items; one smoke per batch; Experimental = one broad pass per big batch / package). Sent to
+  all lanes. MERGED 9af9cbeb campaign trio pick + checklist, 514586e5 Escalation nav ON by default (Remnant has combat on
+  overlay h) + the qa:die glue. Smoke stage 2 parked.
