@@ -40,6 +40,7 @@ void GameFlow::sendMemberInfo(int teamRequest) {
     info.hasCharacter = !iconicMode() || !info.iconicCharacter.empty();
     info.level = progression::playerLevel(profile_.progression);
     info.teamRequest = teamRequest;
+    info.mapVote = myVote_;
     session_->setMemberInfo(info);
 }
 
@@ -133,20 +134,20 @@ int GameFlow::localHeadsetState() const {
 }
 
 void GameFlow::fillOnlineLaunch() {   // the match's participants (WFC_SESSIONTEST / Gameplay's Remote participants)
-    if (role_ == SessionRole::Host) {
-        const SessionLobby l = hostLobbySnapshot();
-        match_.onlineSlots = l.slots;
-        match_.self = SessionMemberId{};
-        for (const SessionMemberInfo& m : l.members) match_.onlineNames.push_back({m.id, m.displayName});
-    } else {
-        match_.onlineSlots = memberLobby_.slots;
-        match_.self = selfId_;
-        for (const SessionMemberInfo& m : memberLobby_.members) match_.onlineNames.push_back({m.id, m.displayName});
-    }
+    // Every world builds the match from the one launch record (sendOnlineLaunch / CountdownStarted): the slots, the names
+    // and each side's own team. A later LobbyState (the host keeps publishing through the countdown) must not change it -
+    // a host team picked after the record went out desynced the first two-window match (2026-10-23, status 3 at tick 660).
+    const bool host = role_ == SessionRole::Host;
+    const SessionLobby l = !launchLobby_.slots.empty() ? launchLobby_ : host ? hostLobbySnapshot() : memberLobby_;
+    match_.onlineSlots = l.slots;
+    match_.self = host ? SessionMemberId{} : selfId_;
+    for (const SessionMemberInfo& m : l.members) match_.onlineNames.push_back({m.id, m.displayName});
+    for (const SessionSlot& sl : l.slots)
+        if (sl.kind == SessionSlot::Kind::Human && sl.member == match_.self && (sl.team == 0 || sl.team == 1)) { match_.teamIndex = sl.team; break; }
     int humans = 0;
     for (const SessionSlot& sl : match_.onlineSlots) humans += sl.kind == SessionSlot::Kind::Human;
     FlowTrace::emit("online.launchSlots", {{"slots", std::to_string(match_.onlineSlots.size())}, {"humans", std::to_string(humans)},
-                                           {"self", match_.self.fingerprint}});
+                                           {"self", match_.self.fingerprint}, {"team", std::to_string(match_.teamIndex)}});
 }
 
 void GameFlow::syncVoiceSettings() {   // the Audio rows to the session, whenever they change (and when the session starts)
@@ -226,11 +227,15 @@ void GameFlow::onlineTick() {
     }
     if (level_ == LevelKind::GameLobby && role_ != SessionRole::Offline && !lobby_.countingDown) lobby_.lobbyStatus = onlineGateStatus();
     if (role_ == SessionRole::Host) applyBrowserCap("tick");
+    if (role_ == SessionRole::Host && level_ == LevelKind::GameLobby) voteTick();   // public lobbies (4.1)
     if (role_ == SessionRole::Host && level_ == LevelKind::GameLobby) {   // the host's lobby to every member, on change
         const SessionLobby l = hostLobbySnapshot();
         std::string key = l.gameModeTag + "|" + std::to_string(l.mapId) + "|" + std::to_string(l.mapSelectionMethod) + "|" +
                           std::to_string(l.playerLimit) + "|" + (l.countingDown ? "1" : "0") + "|" + std::to_string(l.countdown);
         for (const auto& [k, v] : l.settings) key += "|" + k + "=" + v;
+        key += "|v" + std::to_string(l.voteRound) + (l.voteOpen ? "o" : "c") + std::to_string(l.voteWinner);
+        for (size_t i = 0; i < l.voteMaps.size(); ++i) key += ":" + std::to_string(l.voteMaps[i]);
+        for (int c : l.voteCounts) key += "," + std::to_string(c);
         for (size_t i = 0; i < l.slots.size(); ++i)
             key += "|" + l.slots[i].member.fingerprint + ":" + std::to_string(l.slots[i].team) + (l.slots[i].connecting ? "c" : "") +
                    (i < l.members.size() && l.members[i].hasCharacter ? "h" : "") + (i < l.members.size() ? l.members[i].iconicCharacter : "");
@@ -247,6 +252,11 @@ SessionLobby GameFlow::hostLobbySnapshot() const {
     l.playerLimit = profile_.bots.extended ? 1 : 0;
     l.countingDown = lobby_.countingDown;
     l.countdown = lobby_.countdown;
+    l.voteMaps = vote_.maps;
+    l.voteCounts = vote_.counts;
+    l.voteRound = vote_.round;
+    l.voteOpen = vote_.open;
+    l.voteWinner = vote_.winner;
     if (const GameSettings* gs = lobby_.settings)
         for (const SettingField& f : gs->fields) {
             const int i = settingIndex(gs, f.name);
@@ -258,6 +268,7 @@ SessionLobby GameFlow::hostLobbySnapshot() const {
     self.displayName = profile_.playerName();   // D1: the account name
     self.iconicCharacter = selected_.valid && selected_.type == 1 ? selected_.name : std::string();
     self.hasCharacter = !iconicMode() || !self.iconicCharacter.empty();
+    self.mapVote = myVote_;
     l.members.push_back(self);
     SessionSlot hs; hs.kind = SessionSlot::Kind::Human; hs.team = lobby_.localTeam >= 0 ? lobby_.localTeam : 0;
     l.slots.push_back(hs);
@@ -445,6 +456,12 @@ void GameFlow::enterMemberLobby(const SessionLobby& lobby) {
 
 void GameFlow::applyMemberLobby() {   // the host's choices on the member's lobby (map, teams); options are display-only
     // (the lobby exit countdown runs on the member itself from CountdownStarted, as on the host)
+    if (memberLobby_.voteRound != vote_.round) myVote_ = -1;   // a new round (None of these re-roll): the vote resets
+    vote_.maps = memberLobby_.voteMaps;
+    vote_.counts = memberLobby_.voteCounts;
+    vote_.round = memberLobby_.voteRound;
+    vote_.open = memberLobby_.voteOpen;
+    vote_.winner = memberLobby_.voteWinner;
     if (memberLobby_.mapId >= 0 && memberLobby_.mapId != lobby_.mapId) setMapId(memberLobby_.mapId);
     // the other humans (the host's list minus this player) and this player's own team from its slot
     onlineMembers_.clear();
@@ -577,7 +594,7 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
         if (role_ == SessionRole::Member) {   // the host's launch record (map, options, seed, roster) for StartLevel
             memberLaunchUrl_ = e.launchUrl;
             launchSeed_ = e.seed;
-            if (!e.lobby.slots.empty()) { memberLobby_.slots = e.lobby.slots; memberLobby_.members = e.lobby.members; }
+            if (!e.lobby.slots.empty()) { memberLobby_.slots = e.lobby.slots; memberLobby_.members = e.lobby.members; launchLobby_ = e.lobby; }
         }
         if (role_ == SessionRole::Member && level_ == LevelKind::GameLobby && !lobby_.countingDown) hostRequestsGameStart();
         break;
