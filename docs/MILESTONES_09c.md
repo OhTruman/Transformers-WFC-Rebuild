@@ -3560,3 +3560,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   in iconic versus (escalationArray was used whenever IconicMode was set); f0a280ed select-result log. Frontend tests pass,
   SIMHASH identical. Frontend's 6-min verify slot (#6, #17, #2 + #7 with 4v4 bots) queued after Systems + Rendering.
 2026-10-23 01:02 RE campaign #3 dialog timing + Matinee §11 merged; RE -> #4 streaming notifies.
+2026-10-23 01:05 MERGED 0d8e3c06 #15 switch anims (presentation) + #18 (B) nav-limited bot dodges as the original (1 -> 0 floating cases; EXPECTED
+  SIM CHANGE, bot dodges: second sim-only diff for the final gate's base). #18 (A) waits on the hull audit; #17 World side
+  passes; bot-accuracy table next.
