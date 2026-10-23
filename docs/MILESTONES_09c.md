@@ -3992,3 +3992,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (PlayerData values, 1 s horde melee). Gameplay left: Omega AI, H3, H5, M1, M5, M11, then FINAL_BASE_ITEMS.
 2026-10-23 10:05 BOUNCED Gameplay runtime 14 (interacts + Omega Supreme + H5): CAMPAIGNTEST 22 / 24 on the head (squad follow + squad
   respawn checks fail, likely Omega's attacks reaching the test squad); Gameplay fixes + reruns once, recut vs 66109cf5.
+2026-10-23 10:09 MERGED a5647405 bridge scan (every original movie call answered) + fb4b3f10 public re-draft by scores (249 frontend tests,
+  FLOW 0). The Frontend's interact prompt glue (201e0902) waits for Gameplay's recut runtime 14; then the Frontend is done
+  for the build.
