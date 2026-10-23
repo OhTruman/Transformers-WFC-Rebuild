@@ -1,0 +1,272 @@
+diff --git a/src/game/BotNav.cpp b/src/game/BotNav.cpp
+index dad81112..2b7dc603 100644
+--- a/src/game/BotNav.cpp
++++ b/src/game/BotNav.cpp
+@@ -35,6 +35,7 @@ bool BotNav::load(const std::string& path) {
+         o.headroom = c["headroom_m"].asFloat();
+         o.vehicle = c["flags"]["vehicle_capable"].asBool();
+         o.versusOnly = c["flags"]["versus_only"].asBool(false);
++        o.moverBase = c["flags"]["mover_base"].asString();
+         o.bmin = o.bmax = o.poly.empty() ? o.centroid : o.poly[0];
+         for (const core::Vec3& p : o.poly) {
+             o.bmin = {std::min(o.bmin.x, p.x), std::min(o.bmin.y, p.y), std::min(o.bmin.z, p.z)};
+@@ -75,10 +76,12 @@ bool BotNav::load(const std::string& path) {
+         const std::string kind = l["kind"].asString();
+         // double_jump_up (AssetTools: JumpHeight + DoubleJumpHeight; the MP robot double jump is CONFIRMED, RE addendum 10). Unknown
+         // kinds are skipped (never mistaken for a drop).
+-        if (kind != "jump_up" && kind != "drop_down" && kind != "double_jump_up" && kind != "walk") continue;
++        // "special" MoverPathNode links (AssetTools: a mover-attached cell to its static neighbours) are walked (PROV); other specials skipped
++        const bool moverLink = kind == "special" && l["special_actor_class"].asString() == "MoverPathNode";
++        if (kind != "jump_up" && kind != "drop_down" && kind != "double_jump_up" && kind != "walk" && !moverLink) continue;
+         L.jump = kind == "jump_up" || kind == "double_jump_up";
+         L.doubleJump = kind == "double_jump_up";
+-        L.walk = kind == "walk";
++        L.walk = kind == "walk" || moverLink;
+         L.robot = L.vehicle = false;
+         const assets::Json& fm = l["forms"];
+         for (size_t k = 0; k < fm.size(); ++k) { L.robot |= fm[k].asString() == "robot"; L.vehicle |= fm[k].asString() == "vehicle"; }
+@@ -184,6 +187,26 @@ int BotNav::findCell(const core::Vec3& p, float maxDist, float maxDrop) const {
+ }
+ 
+ // Connected pieces (portals + links, undirected); blocked cells belong to no piece and connect nothing.
++void BotNav::translateCells(const std::vector<int>& ids, const core::Vec3& d) {
++    std::vector<uint8_t> moved(cells_.size(), 0);
++    for (int id : ids) if (id >= 0 && (size_t)id < cells_.size()) moved[(size_t)id] = 1;
++    const bool xz = std::fabs(d.x) > 1e-4f || std::fabs(d.z) > 1e-4f;
++    if (xz) for (auto& b : grid_) b.erase(std::remove_if(b.begin(), b.end(), [&](int c) { return moved[(size_t)c] != 0; }), b.end());
++    for (size_t i = 0; i < cells_.size(); ++i) {
++        if (!moved[i]) continue;
++        Cell& c = cells_[i];
++        for (core::Vec3& p : c.poly) p = p + d;
++        c.centroid = c.centroid + d; c.bmin = c.bmin + d; c.bmax = c.bmax + d;
++        for (Portal& P : c.portals) { P.a = P.a + d; P.b = P.b + d; }
++        if (xz && !grid_.empty()) {
++            const int ax = std::clamp((int)((c.bmin.x - gx0_) / gcell_), 0, gw_ - 1), bx = std::clamp((int)((c.bmax.x - gx0_) / gcell_), 0, gw_ - 1);
++            const int az = std::clamp((int)((c.bmin.z - gz0_) / gcell_), 0, gh_ - 1), bz = std::clamp((int)((c.bmax.z - gz0_) / gcell_), 0, gh_ - 1);
++            for (int z = az; z <= bz; ++z) for (int x = ax; x <= bx; ++x) grid_[(size_t)z * (size_t)gw_ + (size_t)x].push_back((int)i);
++        }
++    }
++    for (Link& L : links_) { if (moved[(size_t)L.from]) L.fromPos = L.fromPos + d; if (moved[(size_t)L.to]) L.toPos = L.toPos + d; }
++}
++
+ void BotNav::computePieces() {
+     const bool blk = blocked_.size() == cells_.size();
+     auto open = [&](size_t c) { return !blk || !blocked_[c]; };
+diff --git a/src/game/BotNav.h b/src/game/BotNav.h
+index 32f1204a..8a1027b5 100644
+--- a/src/game/BotNav.h
++++ b/src/game/BotNav.h
+@@ -21,7 +21,8 @@ public:
+         core::Vec3 centroid, bmin, bmax;
+         float clearance = 0.0f, headroom = 0.0f;
+         bool vehicle = false;
+-        bool versusOnly = false;   // Escalation nav: a versus cell merged where the original has no NavigationCell
++        bool versusOnly = false;
++        std::string moverBase;     // campaign nav: the InterpActor a mover-attached cell (MoverPathNode) rides (full path)   // Escalation nav: a versus cell merged where the original has no NavigationCell
+         std::vector<Portal> portals;
+         std::vector<int> links;                                          // indices into links_ starting here
+     };
+@@ -49,6 +50,8 @@ public:
+     // After setBlocked: the connected pieces again without the blocked cells (areas sealed off by closed doors leave the main
+     // piece: roaming goals stay reachable and a search across a closed door fails at once instead of exhausting the budget).
+     void recomputePieces() { computePieces(); }
++    // Campaign movers: move these cells (polygons, centroids, bounds, portals, link ends) by d; an xz move re-buckets them.
++    void translateCells(const std::vector<int>& cells, const core::Vec3& d);
+     bool isBlocked(int cell) const { return cell >= 0 && (size_t)cell < blocked_.size() && blocked_[(size_t)cell] != 0; }
+     int pieceOf(int c) const { return c >= 0 && (size_t)c < piece_.size() ? piece_[(size_t)c] : -1; }
+     int mainPieceId() const { return mainPieceId_; }
+diff --git a/src/game/Campaign.h b/src/game/Campaign.h
+index 3416a1d3..cf3da98e 100644
+--- a/src/game/Campaign.h
++++ b/src/game/Campaign.h
+@@ -51,6 +51,8 @@ struct CampaignMover {
+     core::Vec3 pivot{0, 0, 0}, offset{0, 0, 0}, lastOffset{0, 0, 0}, lo{0, 0, 0}, hi{0, 0, 0};
+     std::vector<core::Vec3> tris;   // pivot-relative
+     int pawnSet = -1;
++    std::vector<int> navCells;      // its mover-attached nav cells
++    core::Vec3 navOffset{0, 0, 0};  // the offset those cells were last moved to
+ };
+ 
+ struct CampaignFactory {
+@@ -89,6 +91,8 @@ struct CampaignState {
+     std::vector<Interp> interps;              // one per SeqAct_Interp op
+     int cineOp = -1, cineViewOp = -1;         // the op driving the local camera / the CinematicView
+     std::string cineCamGroup;
++    struct FormOp { int op = -1; bool vehicle = false; std::vector<int> targets; };
++    std::vector<FormOp> formOps;              // step 7: TnSeqAct_ForceIntoForm in progress
+     std::map<std::string, std::vector<int>> bodyPools;   // step 6: AI participants per body (shared by the factories)
+     std::string streamingState;
+     std::map<std::string, bool> unitVisible;
+diff --git a/src/game/Kismet.cpp b/src/game/Kismet.cpp
+index 1ec470db..3b69bd87 100644
+--- a/src/game/Kismet.cpp
++++ b/src/game/Kismet.cpp
+@@ -26,7 +26,7 @@ bool KismetVM::load(const assets::Json& root) {
+                 Var v; v.path = path; v.cls = cls;
+                 const assets::Json& a = o["authored"];
+                 v.i = a["IntValue"].asInt(0); v.f = a["FloatValue"].asFloat(0.0f); v.b = a["bValue"].asInt(0) != 0 || a["bValue"].asBool(false);
+-                v.s = a["StrValue"].asString(); v.obj = a["ObjValue"].asString(); v.findName = a["FindVarName"].asString(); v.varName = a["VarName"].asString();
++                v.s = a["StrValue"].asString(); v.obj = a["ObjValue"].asString(); v.findName = a["FindVarName"].asString(); v.varName = a["VarName"].asString(); v.buddyIndex = a["BuddyIndex"].asInt(1);
+                 varByPath_[path] = (int)vars_.size();
+                 vars_.push_back(v);
+                 continue;
+diff --git a/src/game/Kismet.h b/src/game/Kismet.h
+index 544e4ec3..7158259d 100644
+--- a/src/game/Kismet.h
++++ b/src/game/Kismet.h
+@@ -23,6 +23,7 @@ public:
+     struct Var {
+         std::string path, cls;
+         int i = 0; float f = 0.0f; bool b = false; std::string s, obj, findName;   // SeqVar_Int / Float / Bool / String / Object / Named
++        int buddyIndex = 1;   // TnSeqVar_Buddy BuddyIndex (1-based, CDO default 1)
+         int named = -1;                                                         // SeqVar_Named: the var it resolved to (by VarName)
+         std::string varName;                                                    // the var's own VarName (Named targets)
+     };
+diff --git a/src/game/World.h b/src/game/World.h
+index 050c3e15..d89e4d26 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1438,10 +1438,13 @@ private:
+     void cpApplyStreamingState(const std::string& state);
+     bool cpSetStreamingState(KismetVM& vm, int op);
+     bool cpForceIntoForm(KismetVM& vm, int op);
++    void cpTickForms();
+     MatchLaunch cpLaunch_;                        // the campaign launch (Restart From Last Checkpoint)
+     void cpCollectMovers();                       // WorldCampaignMatinee.cpp
+     void cpSplitMovers(const render::MeshData& in, render::MeshData& out);
+     void cpRegisterMovers();
++    void cpBindMoverNav();
++    void cpSyncMoverNav();
+     void cpLoadMatinees();
+     bool cpInterpActivate(KismetVM& vm, int op, int input);
+     void cpTickMatinees(float dt);
+diff --git a/src/game/WorldCampaign.cpp b/src/game/WorldCampaign.cpp
+index 3a63f9cd..16cd9451 100644
+--- a/src/game/WorldCampaign.cpp
++++ b/src/game/WorldCampaign.cpp
+@@ -239,6 +239,7 @@ void World::setupCampaign(const MatchLaunch& l) {
+         cpLoadFactories();
+         cpLoadActors();
+         cpLoadMatinees();
++        cpBindMoverNav();   // (the nav is loaded by addBots above)
+         {   // the start's streaming state: the launch checkpoint's, else WorldInfo.InitialStreamingState
+             const CampaignChapter::Checkpoint* lc = cpChapter_.checkpoint(cp_.checkpoint);
+             cp_.unitVisible.clear();
+@@ -452,6 +453,7 @@ void World::tickCampaign(float dt) {
+     cpSyncPicks();
+     if (!cp_.gameOver) cpTickFactories(dt);
+     cpTickMatinees(dt);
++    cpTickForms();
+     // TnCampaignGame.Killed: a human killed by anything but DmgType_Suicided -> CampaignGameOver (solo: never downed).
+     const auto& kh = match_.killHistory();
+     for (; cp_.killsSeen < kh.size(); ++cp_.killsSeen) {
+diff --git a/src/game/WorldCampaignMatinee.cpp b/src/game/WorldCampaignMatinee.cpp
+index 8e063ac2..99cddfac 100644
+--- a/src/game/WorldCampaignMatinee.cpp
++++ b/src/game/WorldCampaignMatinee.cpp
+@@ -111,6 +111,31 @@ void World::cpRegisterMovers() {
+         if (!m.tris.empty()) m.pawnSet = collision_.addDynamicSet(m.tris, core::Mat4::translate(m.pivot));
+ }
+ 
++// Mover-attached nav cells (AssetTools bot_nav flags.mover_attached + mover_base: one per MoverPathNode, e.g. A1's intro lift): bound
++// to their mover once the nav is loaded; moved with it when a matinee leaves it at rest (PROV: not while it moves - the squad rides
++// it physically; Gameplay's nav grid is xz, so a vertical lift keeps its buckets).
++void World::cpBindMoverNav() {
++    if (!botNav_.valid()) return;
++    int n = 0;
++    for (CampaignMover& m : cpMovers_) {
++        m.navCells.clear();
++        for (size_t c = 0; c < botNav_.cells().size(); ++c)
++            if (!botNav_.cells()[c].moverBase.empty() && shortName(botNav_.cells()[c].moverBase) == m.name) m.navCells.push_back((int)c);
++        n += (int)m.navCells.size();
++    }
++    if (n > 0) LOG_INFO("campaign: %d mover-attached nav cells bound", n);
++}
++
++void World::cpSyncMoverNav() {
++    for (CampaignMover& m : cpMovers_) {
++        const core::Vec3 d = m.offset - m.navOffset;
++        if (m.navCells.empty() || (std::fabs(d.x) < 0.01f && std::fabs(d.y) < 0.01f && std::fabs(d.z) < 0.01f)) continue;
++        botNav_.translateCells(m.navCells, d);
++        m.navOffset = m.offset;
++        LOG_INFO("campaign: %zu nav cells of %s moved by (%.1f %.1f %.1f)", m.navCells.size(), m.name.c_str(), d.x, d.y, d.z);
++    }
++}
++
+ // ---- the matinee data ----
+ 
+ void World::cpLoadMatinees() {
+@@ -204,6 +229,7 @@ void World::cpTickMatinees(float dt) {
+         if (done) {
+             in.playing = false;
+             cpMatineeEnd(in);
++            cpSyncMoverNav();   // the mover-attached nav cells take the mover's resting pose
+             cp_.vm.finishLatent(in.op, in.dir > 0.0f ? "Completed" : "Reversed");
+         }
+     }
+diff --git a/src/game/WorldCampaignRuntime.cpp b/src/game/WorldCampaignRuntime.cpp
+index 21a6edda..bc1e539b 100644
+--- a/src/game/WorldCampaignRuntime.cpp
++++ b/src/game/WorldCampaignRuntime.cpp
+@@ -288,10 +288,11 @@ std::vector<int> World::cpTargets(KismetVM& vm, int op, const std::string& link)
+         if (!v) continue;
+         if (v->named >= 0) v = vm.var(v->named);
+         if (!v) continue;
+-        if (v->cls == "TnSeqVar_Buddy") {
+-            const int bi = v->i;
+-            if (bi > 0 && (size_t)bi <= cp_.squad.size()) out.push_back(cp_.squad[(size_t)bi - 1]);
+-            else for (int p : cp_.squad) out.push_back(p);
++        if (v->cls == "TnSeqVar_Buddy") {   // FindBuddy [C]: BuddyIndex 1-based (default 1) over the ACTIVE members in squad order
++            const int bi = std::max(1, v->buddyIndex);
++            std::vector<int> active;
++            for (int p : cp_.squad) if (match_.players()[(size_t)p].alive) active.push_back(p);
++            if ((size_t)bi <= active.size()) out.push_back(active[(size_t)bi - 1]);
+         } else if (v->cls == "SeqVar_Player") {
+             for (size_t q = 0; q < match_.players().size(); ++q) if (match_.players()[q].kind != ParticipantKind::Bot) out.push_back((int)q);
+         } else if (v->obj.rfind("pawn:", 0) == 0) out.push_back(std::atoi(v->obj.c_str() + 5));
+@@ -360,16 +361,40 @@ bool World::cpSetStreamingState(KismetVM& vm, int op) {
+     return true;
+ }
+ 
+-// TnSeqAct_ForceIntoForm: the targets change form (PROV: robot - the authored form property is not exported; RE asked).
++// TnSeqAct_ForceIntoForm [C, RE 2026-10-23]: ForcedForm (TF_Robot default / TF_Vehicle); each target not in it transforms the regular way
++// (PC.ForceToForm / AiController.Transform, with the animation); latent until every target is in the form ("Finished"), a target neither
++// in it nor transforming is dropped (AbortFor). PROV: MoveToSafeTransformationLocation is not modelled.
+ bool World::cpForceIntoForm(KismetVM& vm, int op) {
+     KismetVM::Op& o = vm.op(op);
+-    const std::string f = o.authored["Form"].asString() + o.authored["DesiredForm"].asString();
+-    const bool vehicle = f.find("Vehicle") != std::string::npos;
+-    for (int p : cpTargets(vm, op, "Target")) if (Character* c = participantPawnMutable(p)) c->setForm(vehicle ? Form::Vehicle : Form::Robot);
+-    if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
++    CampaignState::FormOp F;
++    F.op = op; F.vehicle = o.authored["ForcedForm"].asString() == "TF_Vehicle";
++    for (int p : cpTargets(vm, op, "Target")) {
++        Character* c = participantPawnMutable(p);
++        if (!c) continue;
++        const Form want = F.vehicle ? Form::Vehicle : Form::Robot;
++        if (c->moveForm() != want && !c->isTransforming()) c->beginTransform();
++        F.targets.push_back(p);
++    }
++    o.latent = true; o.timer = -1.0f;
++    cp_.formOps.push_back(F);
+     return true;
+ }
+ 
++void World::cpTickForms() {
++    for (size_t k = 0; k < cp_.formOps.size();) {
++        CampaignState::FormOp& F = cp_.formOps[k];
++        const Form want = F.vehicle ? Form::Vehicle : Form::Robot;
++        bool all = true;
++        for (size_t t = 0; t < F.targets.size();) {
++            const Character* c = participantPawn(F.targets[t]);
++            if (c && c->moveForm() == want && !c->isTransforming()) { ++t; continue; }
++            if (!c || !c->isTransforming()) { F.targets.erase(F.targets.begin() + (long)t); continue; }   // AbortFor
++            all = false; ++t;
++        }
++        if (all) { cp_.vm.finishLatent(F.op, "Finished"); F = cp_.formOps.back(); cp_.formOps.pop_back(); } else ++k;
++    }
++}
++
+ // Restart From Last Checkpoint (CheckpointManager.RestartFromActiveCheckpoint, the same map): the launch again at the active checkpoint -
+ // AI destroyed, every participant respawned at the checkpoint, the level Kismet begun again with that CP (PROV: the map is not reloaded,
+ // world state set by Kismet is rebuilt by the relaunch). Host only.
