@@ -3919,3 +3919,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 08:20 MERGED d3c3e1af chapter streaming stage 3 + moving map actors (setChapterUnitVisible per unit incl. RT masks;
   setMapActorTransform for InterpActors; the campaign world LUT fix). Card: the Frontend runs the broad campaign milestone
   (D5 + A1 from the menus, Off + Realistic) on d3c3e1af.
+2026-10-23 08:27 MERGED 6ba69d58 campaign runtime 8 (SeqEvent_Touch from TriggerVolume brushes + Trigger cylinders; A1 517 / 637 armed)
+  + the Escalation drop meshes (svDropMesh -> Rendering draws drops). Experimental retracted the fidelity link report (their
+  tooling overlaid an old tools/fidelity CMake); broad pass #1 running on d3c3e1af.
