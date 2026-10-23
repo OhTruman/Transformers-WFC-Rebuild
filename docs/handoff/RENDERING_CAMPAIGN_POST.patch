@@ -1,0 +1,634 @@
+diff -ruN a/src/render/Renderer.h b/src/render/Renderer.h
+--- a/src/render/Renderer.h	2026-10-23 07:50:05.065196000 -0500
++++ b/src/render/Renderer.h	2026-10-23 07:50:05.255348000 -0500
+@@ -159,6 +159,30 @@
+     // left, cinematic cut): temporal upscaling / frame generation drop their history. reason: a short static string
+     // for the log. Large jumps are also detected from the camera itself; this covers the cuts it cannot see.
+     virtual void notifyCameraCut(const char* reason) { (void)reason; }
++    // Campaign post-process (RE CAMPAIGN_POSTPROCESS_RE.md). A chapter's PostProcessVolumes come with its render data
++    // (<chapter>/postprocess_volumes.json, tools/render/build_campaign_pp.py); Kismet toggles them by actor name
++    // (SeqAct_Toggle on a (Dynamic)PostProcessVolume: "PostProcessVolume_15759").
++    virtual void setPostProcessVolumeEnabled(const std::string& volume, bool on) { (void)volume; (void)on; }
++    // A matinee cutscene's per-frame view (Gameplay's SeqAct_Interp playback): the camera itself goes through the normal
++    // camera and notifyCameraCut("matinee") on director cuts; this carries the rest. Unset fields keep the defaults.
++    struct PostOverride {                 // the CameraActor's CamOverridePostProcess (UE3 FPostProcessSettings fields)
++        bool bloom = true, dof = false, sceneEffect = true;
++        float bloomScale = 1.0f, bloomThreshold = 1.0f;
++        float dofFocusDistance = 0.0f, dofNearFalloff = 2000.0f, dofFarFalloff = 2000.0f, dofFalloffExponent = 4.0f;
++        float dofMaxNearBlur = 1.0f, dofMaxFarBlur = 1.0f;
++        float shadows[3] = {0, 0, 0}, highlights[3] = {1, 1, 1}, midtones[3] = {1, 1, 1};
++        float desaturation = 0.0f;
++        std::string lut;                  // ColorCorrectionTexture object path ("" none)
++    };
++    struct CinematicView {
++        bool active = false;              // false: the plain game view (the rest ignored)
++        float aspect = 0.0f;              // > 0: letterboxed to this aspect (CameraActor bConstrainAspectRatio / AspectRatio)
++        float fade[4] = {0, 0, 0, 0};     // the director's Fade track / camera fade: rgb + amount (1 = the colour alone)
++        float colorScale[3] = {1, 1, 1};  // matinee ColorScale (scene colour multiplier)
++        float ppAlpha = 0.0f;             // CamOverridePostProcess blend (0 = the volumes' result, 1 = pp alone)
++        PostOverride pp;
++    };
++    virtual void setCinematicView(const CinematicView& view) { (void)view; }
+     // FSR 3 frame generation (PC ADAPTATION, M5 C; off by default, never chosen by auto-detect). It presents through a
+     // D3D12 swapchain that must exist before the window's first GL present, so it is decided at start-up:
+     // render::setFrameGenerationAtStartup(on) before createGLRenderer (a changed setting applies at the next launch).
+diff -ruN a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
+--- a/src/render/gl/GLRenderer.cpp	2026-10-23 07:50:05.093793800 -0500
++++ b/src/render/gl/GLRenderer.cpp	2026-10-23 07:50:05.262873500 -0500
+@@ -1703,6 +1703,7 @@
+             wfc_.yieldLoad();
+         }
+         wfc_.endChapterUnits(gpuIds);
++        wfc_.loadChapterPost(cd);                   // (the chapter's post-process volumes: <chapter dir>/postprocess_volumes.json)
+         LOG_INFO("chapter: %d of %zu unit(s) merged, %zu world mesh(es)", n, units.size(), chapterMeshes_.size());
+         return n;
+     }
+@@ -1727,6 +1728,8 @@
+         LOG_INFO("renderer: upscaling mode %d (%s)", mode, kName[mode]);
+     }
+     void notifyCameraCut(const char* reason) override { wfc_.notifyCameraCut(reason); }
++    void setPostProcessVolumeEnabled(const std::string& volume, bool on) override { wfc_.setPostVolumeEnabled(volume, on); }
++    void setCinematicView(const CinematicView& view) override { wfc_.setCinematicView(view); }
+     bool frameGenerationAvailable() const override { return frameGenerationRuntimeShipped(); }
+     bool frameGenerationActive() const override { return framegenActive(); }
+     int frameGenerationFactor() const override { return framegenGenerating() ? 2 : 1; }   // (menus: real frames only)
+diff -ruN a/src/render/gl/WfcCampaignPost.cpp b/src/render/gl/WfcCampaignPost.cpp
+--- a/src/render/gl/WfcCampaignPost.cpp	1969-12-31 18:00:00.000000000 -0600
++++ b/src/render/gl/WfcCampaignPost.cpp	2026-10-23 07:50:05.352179400 -0500
+@@ -0,0 +1,236 @@
++// Clean-room reconstruction — the campaign post-process chain (RE CAMPAIGN_POSTPROCESS_RE.md).
++//
++// UE3 (RE): a view takes the highest-Priority enabled PostProcessVolume containing the view point, else the persistent
++// WorldInfo.DefaultPostProcessSettings; each settings group (Bloom / DOF / MotionBlur / Scene) blends from the current
++// values to the new ones over the new settings' *_InterpolationDuration (1 s default; D5's Omega-critical grade 10 s).
++// Kismet toggles volumes by name (setPostVolumeEnabled). The data: <chapter dir>/postprocess_volumes.json and pp/<lut>.png
++// (tools/render/build_campaign_pp.py). Over the chain, a matinee cutscene's view (setCinematicView): the CameraActor's
++// CamOverridePostProcess x its blend alpha, the ColorScale, the fade and the letterbox.
++//
++// Original look: these are the original's own settings, chosen and blended the original's way - no mode gate. MP maps
++// carry no postprocess_volumes.json: ppChapter_ stays false and the map path is untouched.
++#include "render/gl/WfcPipeline.h"
++
++#include <algorithm>
++#include <cmath>
++#include <fstream>
++#include <sstream>
++
++#include "core/Log.h"
++#include "platform/Image.h"
++#include "render/gl/GLExt.h"
++
++namespace render {
++namespace wfc {
++
++using namespace glx;
++
++namespace {
++
++std::string slurp(const std::string& p) {
++    std::ifstream f(p, std::ios::binary);
++    if (!f) return std::string();
++    std::ostringstream ss; ss << f.rdbuf(); return ss.str();
++}
++
++// a 1024 x 32 LUT strip (u = x + 32 z, v = y) as a 3D texture, as the map CLUT is loaded
++GLuint lutFromStrip(const std::string& file, int n) {
++    ImageData strip;
++    if (!platform::decodeImage(file, strip) || !strip.valid() || strip.w < n * n || strip.h < n) return 0;
++    std::vector<uint8_t> vol((size_t)n * n * n * 4);
++    for (int z = 0; z < n; ++z)
++        for (int y = 0; y < n; ++y)
++            for (int x = 0; x < n; ++x)
++                std::memcpy(&vol[(((size_t)z * n + y) * n + x) * 4], &strip.rgba[((size_t)y * strip.w + (size_t)z * n + x) * 4], 4);
++    GLuint t = 0;
++    glGenTextures(1, &t);
++    glBindTexture(GL_TEXTURE_3D, t);
++    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
++    TexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, n, n, n, 0, GL_RGBA, GL_UNSIGNED_BYTE, vol.data());
++    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
++    glBindTexture(GL_TEXTURE_3D, 0);
++    return t;
++}
++
++void interpOf(const assets::Json& S, float out[4]) {
++    out[0] = std::max(S["Bloom_InterpolationDuration"].asFloat(1.0f), 0.0f);
++    out[1] = std::max(S["DOF_InterpolationDuration"].asFloat(1.0f), 0.0f);
++    out[2] = std::max(S["MotionBlur_InterpolationDuration"].asFloat(1.0f), 0.0f);
++    out[3] = std::max(S["Scene_InterpolationDuration"].asFloat(1.0f), 0.0f);
++}
++
++float lerpf(float a, float b, float t) { return a + (b - a) * t; }
++core::Vec3 lerpv(const core::Vec3& a, const core::Vec3& b, float t) { return a + (b - a) * t; }
++
++}  // namespace
++
++void Pipeline::loadChapterPost(const std::string& chapterDir) {
++    for (auto& kv : ppLuts_) if (kv.second) glDeleteTextures(1, &kv.second);
++    ppLuts_.clear(); ppVols_.clear(); ppChapter_ = false; ppTarget_ = -2;
++    std::string dir = chapterDir;
++    while (!dir.empty() && (dir.back() == '/' || dir.back() == '\\')) dir.pop_back();
++    const std::string txt = slurp(dir + "/postprocess_volumes.json");
++    assets::Json J;
++    if (txt.empty() || !assets::Json::parse(txt, J)) {
++        LOG_INFO("campaign post: no postprocess_volumes.json in %s - the persistent level's settings alone", dir.c_str());
++        return;
++    }
++    auto lutOf = [&](const assets::Json& v) -> GLuint {
++        const std::string obj = v["settings"]["ColorCorrectionTexture"].asString();
++        const std::string file = v["lut"].asString();
++        if (obj.empty() || file.empty()) return 0;
++        auto it = ppLuts_.find(obj);
++        if (it != ppLuts_.end()) return it->second;
++        const GLuint t = lutFromStrip(dir + "/" + file, J["luts"][obj]["size"][0].asInt(32));
++        ppLuts_[obj] = t;
++        return t;
++    };
++    parsePost(J["world_default"], ppWorld_.s);
++    interpOf(J["world_default"], ppWorld_.interp);
++    {
++        assets::Json W; W.obj["settings"] = J["world_default"]; W.obj["lut"] = J["world_lut"];
++        ppWorld_.lut = lutOf(W);
++    }
++    const assets::Json& V = J["volumes"];
++    for (size_t i = 0; i < V.size(); ++i) {
++        const assets::Json& v = V[i];
++        PpVol pv;
++        pv.name = v["name"].asString();
++        pv.priority = v["priority"].asFloat(0.0f);
++        pv.enabled = v["enabled"].asBool(true);
++        parsePost(v["settings"], pv.s);
++        interpOf(v["settings"], pv.interp);
++        pv.lut = lutOf(v);
++        // the brush's triangles as planes facing out (the vertex centroid inside: convex elements)
++        const assets::Json& P = v["polygons_m"];
++        core::Vec3 cen{0, 0, 0}; int nv = 0;
++        for (size_t p = 0; p < P.size(); ++p)
++            for (size_t q = 0; q < P[p].size(); ++q) { cen = cen + core::Vec3{P[p][q][0].asFloat(), P[p][q][1].asFloat(), P[p][q][2].asFloat()}; ++nv; }
++        if (nv) cen = cen * (1.0f / (float)nv);
++        for (size_t p = 0; p < P.size(); ++p) {
++            if (P[p].size() < 3) continue;
++            auto vert = [&](size_t q) { return core::Vec3{P[p][q][0].asFloat(), P[p][q][1].asFloat(), P[p][q][2].asFloat()}; };
++            const core::Vec3 a = vert(0);
++            core::Vec3 n = core::cross(vert(1) - a, vert(2) - a);
++            const float len = core::length(n);
++            if (len < 1e-8f) continue;
++            n = n * (1.0f / len);
++            float d = -core::dot(n, a);
++            if (core::dot(n, cen) + d > 0.0f) { n = n * -1.0f; d = -d; }
++            pv.planes.push_back({n.x, n.y, n.z, d});
++        }
++        ppVols_.push_back(std::move(pv));
++    }
++    ppChapter_ = true;
++    size_t on = 0;
++    for (const PpVol& v : ppVols_) on += v.enabled ? 1 : 0;
++    LOG_INFO("campaign post: %zu volumes (%zu enabled), %zu LUTs, world default bloom %.2f / DOF %d (%s)", ppVols_.size(), on,
++             ppLuts_.size(), ppWorld_.s.bloomScale, (int)ppWorld_.s.dof, J["chapter"].asString().c_str());
++}
++
++void Pipeline::setPostVolumeEnabled(const std::string& name, bool on) {
++    for (PpVol& v : ppVols_)
++        if (v.name == name) {
++            if (v.enabled != on) LOG_INFO("campaign post: %s %s (Kismet)", name.c_str(), on ? "on" : "off");
++            v.enabled = on;
++            return;
++        }
++    LOG_WARN("campaign post: no volume %s to toggle", name.c_str());
++}
++
++// before the post pass: the volume at the camera, the per-group blend toward it, the cinematic layer; writes post_ and the
++// shader's LUT pair / colour scale / fade / letterbox
++void Pipeline::chapterPostFrame() {
++    // the enable flags folded into the values, so every field blends (bloom off = scale 0, DOF off = no blur)
++    auto effective = [](Post p) {
++        if (!p.bloom) { p.bloomScale = 0.0f; p.bloom = true; }
++        if (!p.dof) { p.dofMaxBlur[0] = p.dofMaxBlur[1] = 0.0f; p.dof = true; }
++        return p;
++    };
++    postColorScale_[0] = postColorScale_[1] = postColorScale_[2] = 1.0f;
++    postFade_[0] = postFade_[1] = postFade_[2] = postFade_[3] = 0.0f;
++    postLetterbox_[0] = postLetterbox_[1] = 0.5f;
++    postLutA_ = postLutB_ = 0; postLutLerp_ = 0.0f;
++    if (!ppChapter_) return;
++    // the target: the highest-Priority enabled volume containing the camera, else the world default
++    int target = -1;
++    for (size_t i = 0; i < ppVols_.size(); ++i) {
++        const PpVol& v = ppVols_[i];
++        if (!v.enabled || v.planes.empty() || (target >= 0 && v.priority <= ppVols_[(size_t)target].priority)) continue;
++        bool in = true;
++        for (const auto& p : v.planes)
++            if (p[0] * camPos_.x + p[1] * camPos_.y + p[2] * camPos_.z + p[3] > 0.01f) { in = false; break; }
++        if (in) target = (int)i;
++    }
++    const PpVol& T = target >= 0 ? ppVols_[(size_t)target] : ppWorld_;
++    if (target != ppTarget_) {
++        // a new target: blend from the chain's values shown last frame (mid-blend included); the first frame of a chapter
++        // starts at its target, no blend. The LUT pair restarts from the side that dominated.
++        if (ppTarget_ == -2) { ppFrom_ = effective(T.s); ppFromLut_ = T.lut; }
++        else { ppFrom_ = ppCur_; ppFromLut_ = ppCurLutLerp_ >= 0.5f ? ppToLut_ : ppFromLut_; }
++        ppTo_ = effective(T.s); ppToLut_ = T.lut;
++        std::copy(T.interp, T.interp + 4, ppToInterp_);
++        ppT0_ = time_;
++        LOG_INFO("campaign post: view now in %s (blend %.1f s)", target >= 0 ? T.name.c_str() : "the world default", ppToInterp_[3]);
++        ppTarget_ = target;
++    }
++    auto alpha = [&](int g) { const float d = ppToInterp_[g]; return d <= 1e-3f ? 1.0f : std::min(std::max((time_ - ppT0_) / d, 0.0f), 1.0f); };
++    const float aB = alpha(0), aD = alpha(1), aS = alpha(3);
++    Post p = ppTo_;
++    p.bloomScale = lerpf(ppFrom_.bloomScale, ppTo_.bloomScale, aB);
++    p.bloomThreshold = lerpf(ppFrom_.bloomThreshold, ppTo_.bloomThreshold, aB);
++    for (int k = 0; k < 4; ++k) p.dofPacked[k] = lerpf(ppFrom_.dofPacked[k], ppTo_.dofPacked[k], aD);
++    for (int k = 0; k < 2; ++k) p.dofMaxBlur[k] = lerpf(ppFrom_.dofMaxBlur[k], ppTo_.dofMaxBlur[k], aD);
++    p.shadows = lerpv(ppFrom_.shadows, ppTo_.shadows, aS);
++    p.highlights = lerpv(ppFrom_.highlights, ppTo_.highlights, aS);
++    p.midtones = lerpv(ppFrom_.midtones, ppTo_.midtones, aS);
++    p.desat = lerpf(ppFrom_.desat, ppTo_.desat, aS);
++    postLutA_ = ppFromLut_; postLutB_ = ppToLut_; postLutLerp_ = ppFromLut_ == ppToLut_ ? 1.0f : aS;
++    ppCur_ = p; ppCurLutLerp_ = postLutLerp_;
++    // the cinematic layer: CamOverridePostProcess x its alpha, ColorScale, fade, letterbox
++    if (cin_.active) {
++        const IRenderer::PostOverride& o = cin_.pp;
++        const float a = std::min(std::max(cin_.ppAlpha, 0.0f), 1.0f);
++        if (a > 0.0f) {
++            Post c;
++            c.bloom = o.bloom; c.dof = o.dof;
++            c.bloomScale = o.bloomScale; c.bloomThreshold = o.bloomThreshold;
++            c.dofPacked[0] = o.dofFocusDistance; c.dofPacked[1] = 1.0f / std::max(o.dofNearFalloff, 1.0f);
++            c.dofPacked[2] = o.dofFalloffExponent; c.dofPacked[3] = 1.0f / std::max(o.dofFarFalloff, 1.0f);
++            c.dofMaxBlur[0] = o.dofMaxNearBlur; c.dofMaxBlur[1] = o.dofMaxFarBlur;
++            c.shadows = {o.shadows[0], o.shadows[1], o.shadows[2]};
++            c.highlights = {o.highlights[0], o.highlights[1], o.highlights[2]};
++            c.midtones = {o.midtones[0], o.midtones[1], o.midtones[2]};
++            c.desat = o.desaturation;
++            if (!o.sceneEffect) { c.shadows = {0, 0, 0}; c.highlights = {1, 1, 1}; c.midtones = {1, 1, 1}; c.desat = 0.0f; }
++            c = effective(c);
++            p.bloomScale = lerpf(p.bloomScale, c.bloomScale, a); p.bloomThreshold = lerpf(p.bloomThreshold, c.bloomThreshold, a);
++            // (DOF: the camera's focus replaces the volume's once it weighs in at all - a focus distance does not lerp sensibly)
++            if (o.dof) for (int k = 0; k < 4; ++k) p.dofPacked[k] = c.dofPacked[k];
++            for (int k = 0; k < 2; ++k) p.dofMaxBlur[k] = lerpf(p.dofMaxBlur[k], c.dofMaxBlur[k], a);
++            p.shadows = lerpv(p.shadows, c.shadows, a); p.highlights = lerpv(p.highlights, c.highlights, a);
++            p.midtones = lerpv(p.midtones, c.midtones, a); p.desat = lerpf(p.desat, c.desat, a);
++            if (!o.lut.empty()) {
++                auto it = ppLuts_.find(o.lut);
++                if (it != ppLuts_.end() && it->second) { postLutA_ = postLutLerp_ >= 0.5f ? postLutB_ : postLutA_; postLutB_ = it->second; postLutLerp_ = a; }
++            }
++        }
++        for (int k = 0; k < 3; ++k) postColorScale_[k] = cin_.colorScale[k];
++        for (int k = 0; k < 4; ++k) postFade_[k] = cin_.fade[k];
++        if (cin_.aspect > 0.0f && vpW_ > 0 && vpH_ > 0) {
++            const float view = (float)vpW_ / (float)vpH_;
++            if (cin_.aspect > view) postLetterbox_[1] = 0.5f * view / cin_.aspect;        // bars top and bottom
++            else postLetterbox_[0] = 0.5f * cin_.aspect / view;                            // (a narrower shot: bars at the sides)
++        }
++    }
++    p.bloom = p.bloomScale > 0.0f;
++    p.dof = p.dofMaxBlur[0] > 0.0f || p.dofMaxBlur[1] > 0.0f;
++    post_ = p;
++}
++
++}  // namespace wfc
++}  // namespace render
+diff -ruN a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-23 07:50:05.125402100 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 07:50:05.270900900 -0500
+@@ -855,6 +855,12 @@
+ uniform sampler2D uDepth;
+ uniform sampler3D uClut;
+ uniform int uBloomOn, uClutOn, uDofOn;
++uniform sampler3D uClut2;      // (campaign) the LUT being blended to, uClutLerp its weight (uClut2On 0: identity)
++uniform int uClut2On;
++uniform float uClutLerp;
++uniform vec3 uColorScale;     // (campaign) matinee ColorScale
++uniform vec4 uFade;           // (campaign) camera fade: rgb + amount
++uniform vec2 uLetterbox;      // (campaign) the visible half extent in uv (0.5, 0.5: none)
+ uniform vec4 uDofPacked;
+ uniform vec2 uDofMaxBlur;
+ uniform vec2 uNearFar;
+@@ -918,12 +924,19 @@
+         c = max(mix(vec3(l), c, uToneGrade.y), 0.0);
+         c = wfcFilmShoulder(c, 0.6);
+     }
++    c *= uColorScale;
+     c = clamp(c - uShadows, 0.0, 1.0) * uInvHighLights;
+     c = pow(max(c, vec3(0.0001)), uMidTones);
+     c = c * (1.0 - uDesat) + vec3(dot(c, vec3(0.3, 0.59, 0.11)) * uDesat);
+     c = clamp(c, 0.0, 1.0);
+     c = pow(max(c, vec3(0.0001)), vec3(uInvGamma));
+-    if (uClutOn != 0) c = texture(uClut, c * uClutScaleBias.x + uClutScaleBias.y).rgb;
++    {
++        vec3 la = uClutOn != 0 ? texture(uClut, c * uClutScaleBias.x + uClutScaleBias.y).rgb : c;
++        vec3 lb = uClut2On != 0 ? texture(uClut2, c * uClutScaleBias.x + uClutScaleBias.y).rgb : c;
++        c = mix(la, lb, uClutLerp);
++    }
++    c = mix(c, uFade.rgb, uFade.a);
++    if (abs(vUV.x - 0.5) > uLetterbox.x || abs(vUV.y - 0.5) > uLetterbox.y) c = vec3(0.0);
+     oColor = vec4(c, 1.0);
+ }
+ )";
+@@ -1215,6 +1228,8 @@
+     if (mdiRowTex_) { glDeleteTextures(1, &mdiRowTex_); mdiRowTex_ = 0; }
+     for (auto& kv : hdPbrTex_) if (kv.second) glDeleteTextures(1, &kv.second);
+     hdPbrTex_.clear();
++    for (auto& kv : ppLuts_) if (kv.second) glDeleteTextures(1, &kv.second);   // (campaign post: the chapter's LUTs)
++    ppLuts_.clear();
+     if (lmArray_) { glDeleteTextures(1, &lmArray_); lmArray_ = 0; }
+     for (size_t a = 1; a < lmArrays_.size(); ++a) if (lmArrays_[a]) glDeleteTextures(1, &lmArrays_[a]);
+     lmArrays_.clear(); lmArrOf_.clear();
+@@ -1840,31 +1855,7 @@
+ 
+     loadPpvFogs(L);                                  // (post-process volume height fogs: the load's layers above are their base)
+     {
+-        const assets::Json& P = L["postprocess"]["settings"];
+-        auto f = [&](const char* k, float d) { return P[k].asFloat(d); };
+-        post_.bloom = P["bEnableBloom"].asBool(true);
+-        post_.dof = P["bEnableDOF"].asBool(false);
+-        post_.bloomScale = f("Bloom_Scale", 1.0f);
+-        post_.bloomThreshold = f("Bloom_Threshold", 1.0f);
+-        // [MED] UE3 DOF PackedParameters = (FocusDistance, 1/FocusNearFalloff, FalloffExponent,
+-        // 1/FocusFarFalloff), MinMaxBlurClamp = (MaxNear, MaxFar): layout from the decoded gather/uber PS.
+-        post_.dofPacked[0] = f("DOF_FocusDistance", 0.0f);
+-        post_.dofPacked[1] = 1.0f / std::max(f("DOF_FocusNearFalloff", 2000.0f), 1.0f);
+-        post_.dofPacked[2] = f("DOF_FalloffExponent", 4.0f);
+-        post_.dofPacked[3] = 1.0f / std::max(f("DOF_FocusFarFalloff", 2000.0f), 1.0f);
+-        post_.dofMaxBlur[0] = f("DOF_MaxNearBlurAmount", 1.0f);
+-        post_.dofMaxBlur[1] = f("DOF_MaxFarBlurAmount", 1.0f);
+-        auto v3 = [&](const char* k, core::Vec3 d) {
+-            const assets::Json& a = P[k];
+-            return a.isArray() ? core::Vec3{a[0].asFloat(d.x), a[1].asFloat(d.y), a[2].asFloat(d.z)} : d;
+-        };
+-        post_.shadows = v3("Scene_Shadows", {0, 0, 0});
+-        post_.highlights = v3("Scene_HighLights", {1, 1, 1});
+-        post_.midtones = v3("Scene_MidTones", {1, 1, 1});
+-        post_.desat = f("Scene_Desaturation", 0.0f);
+-        if (!P["bEnableSceneEffect"].asBool(true)) {
+-            post_.shadows = {0, 0, 0}; post_.highlights = {1, 1, 1}; post_.midtones = {1, 1, 1}; post_.desat = 0;
+-        }
++        parsePost(L["postprocess"]["settings"], post_);
+         const assets::Json& C = L["postprocess"]["clut"];
+         ImageData strip;
+         // The build writes the strip next to lighting.json; the recorded "file" is relative to the build's cwd, so it
+@@ -5225,6 +5216,34 @@
+     h = std::max(1, (int)std::lround(h * fsrScale_));
+ }
+ 
++// the resolved FPostProcessSettings of a map / volume (lighting.json postprocess.settings, build_campaign_pp.py) -> Post
++void Pipeline::parsePost(const assets::Json& P, Post& out) {
++    auto f = [&](const char* k, float d) { return P[k].asFloat(d); };
++    out.bloom = P["bEnableBloom"].asBool(true);
++    out.dof = P["bEnableDOF"].asBool(false);
++    out.bloomScale = f("Bloom_Scale", 1.0f);
++    out.bloomThreshold = f("Bloom_Threshold", 1.0f);
++    // [MED] UE3 DOF PackedParameters = (FocusDistance, 1/FocusNearFalloff, FalloffExponent,
++    // 1/FocusFarFalloff), MinMaxBlurClamp = (MaxNear, MaxFar): layout from the decoded gather/uber PS.
++    out.dofPacked[0] = f("DOF_FocusDistance", 0.0f);
++    out.dofPacked[1] = 1.0f / std::max(f("DOF_FocusNearFalloff", 2000.0f), 1.0f);
++    out.dofPacked[2] = f("DOF_FalloffExponent", 4.0f);
++    out.dofPacked[3] = 1.0f / std::max(f("DOF_FocusFarFalloff", 2000.0f), 1.0f);
++    out.dofMaxBlur[0] = f("DOF_MaxNearBlurAmount", 1.0f);
++    out.dofMaxBlur[1] = f("DOF_MaxFarBlurAmount", 1.0f);
++    auto v3 = [&](const char* k, core::Vec3 d) {
++        const assets::Json& a = P[k];
++        return a.isArray() ? core::Vec3{a[0].asFloat(d.x), a[1].asFloat(d.y), a[2].asFloat(d.z)} : d;
++    };
++    out.shadows = v3("Scene_Shadows", {0, 0, 0});
++    out.highlights = v3("Scene_HighLights", {1, 1, 1});
++    out.midtones = v3("Scene_MidTones", {1, 1, 1});
++    out.desat = f("Scene_Desaturation", 0.0f);
++    if (!P["bEnableSceneEffect"].asBool(true)) {
++        out.shadows = {0, 0, 0}; out.highlights = {1, 1, 1}; out.midtones = {1, 1, 1}; out.desat = 0;
++    }
++}
++
+ void Pipeline::rtLoadData() {
+     r1CheckGl();
+     if (r1Map_ && rtShadowAoOn() && !r1Built_) r1Build();   // (R1: the V_bake pages / arrays under the loading screen, not in frame 1)
+@@ -9315,6 +9334,7 @@
+     ActiveTexture(GL_TEXTURE0);
+     // Authored settings (TnWorldInfo over Default__WorldInfo), see load(). The quarter-res
+     // gather/blur carries both bloom and the DOF-blurred scene, as in UE3's DOFAndBloom effect.
++    chapterPostFrame();                                // (campaign: the volume chain + the cinematic view write post_)
+     bool dof = post_.dof && !WFC_ENV("WFC_NODOF");
+     volApply();                                         // (X3, Realistic: the volumetric light into the HDR scene)
+     const bool filmic = toneFilmicOn();                 // (X1, Realistic: the tone curve + the soft HDR bloom)
+@@ -9368,7 +9388,8 @@
+     UseProgram(postProg_);
+     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, bloomTex_[0]);
+     ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, depthTex_);
+-    ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_3D, clutTex_);
++    ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_3D, ppChapter_ ? postLutA_ : clutTex_);
++    ActiveTexture(GL_TEXTURE0 + 5); glBindTexture(GL_TEXTURE_3D, ppChapter_ ? postLutB_ : 0);
+     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, fsr3 ? fsr3Out_ : colorTex_);
+     auto U = [&](const char* n) { return GetUniformLocation(postProg_, n); };
+     Uniform1i(U("uScene"), 0);
+@@ -9380,8 +9401,15 @@
+     Uniform4f(U("uDofPacked"), post_.dofPacked[0], post_.dofPacked[1], post_.dofPacked[2], post_.dofPacked[3]);
+     Uniform2f(U("uDofMaxBlur"), post_.dofMaxBlur[0], post_.dofMaxBlur[1]);
+     Uniform2f(U("uNearFar"), znear_, zfar_);
+-    bool clut = clutTex_ && !WFC_ENV("WFC_NOCLUT");
++    bool clut = (ppChapter_ ? postLutA_ : clutTex_) && !WFC_ENV("WFC_NOCLUT");
+     Uniform1i(U("uClutOn"), clut ? 1 : 0);
++    // (campaign: the second LUT of a blend, the matinee colour scale / fade / letterbox; identity on MP maps)
++    Uniform1i(U("uClut2"), 5);
++    Uniform1i(U("uClut2On"), ppChapter_ && postLutB_ && !WFC_ENV("WFC_NOCLUT") ? 1 : 0);
++    Uniform1f(U("uClutLerp"), ppChapter_ ? postLutLerp_ : 0.0f);
++    Uniform3f(U("uColorScale"), postColorScale_[0], postColorScale_[1], postColorScale_[2]);
++    Uniform4f(U("uFade"), postFade_[0], postFade_[1], postFade_[2], postFade_[3]);
++    Uniform2f(U("uLetterbox"), postLetterbox_[0], postLetterbox_[1]);
+     // UE3 ColorCorrectionTexCoordScaleBias for an N^3 LUT: scale (N-1)/N, bias 0.5/N
+     Uniform2f(U("uClutScaleBias"), (float)(clutSize_ - 1) / (float)clutSize_, 0.5f / (float)clutSize_);
+     Uniform3f(U("uShadows"), post_.shadows.x, post_.shadows.y, post_.shadows.z);
+diff -ruN a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h	2026-10-23 07:50:05.155003800 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-23 07:50:05.277924800 -0500
+@@ -918,6 +918,21 @@
+         core::Vec3 shadows{0, 0, 0}, highlights{1, 1, 1}, midtones{1, 1, 1};
+         float desat = 0.0f;
+     } post_;
++    static void parsePost(const assets::Json& P, Post& out);   // FPostProcessSettings (resolved) -> Post
++    // (campaign) the chapter's volumes over the world default; the per-frame blend writes post_ and the LUT pair below
++    struct PpVol { std::string name; float priority = 0.0f; bool enabled = true; std::vector<std::array<float, 4>> planes;
++                   Post s; GLuint lut = 0; float interp[4] = {1, 1, 1, 1}; };   // (interp: bloom, DOF, motion blur, scene)
++    std::vector<PpVol> ppVols_;
++    PpVol ppWorld_;
++    bool ppChapter_ = false;
++    std::map<std::string, GLuint> ppLuts_;            // by ColorCorrectionTexture object path
++    int ppTarget_ = -2;                               // -1 the world default, >= 0 a volume; -2 none yet
++    Post ppFrom_, ppTo_, ppCur_; float ppToInterp_[4] = {1, 1, 1, 1}; float ppT0_ = 0.0f, ppCurLutLerp_ = 1.0f;
++    GLuint ppFromLut_ = 0, ppToLut_ = 0;
++    IRenderer::CinematicView cin_;
++    GLuint postLutA_ = 0, postLutB_ = 0; float postLutLerp_ = 0.0f;   // the post shader's LUT pair (chapter frames)
++    float postColorScale_[3] = {1, 1, 1}, postFade_[4] = {0, 0, 0, 0}, postLetterbox_[2] = {0.5f, 0.5f};
++    void chapterPostFrame();
+     GLuint clutTex_ = 0;
+     int clutSize_ = 32;
+     float znear_ = 0.1f, zfar_ = 20000.0f;
+@@ -1294,6 +1309,10 @@
+     // (0 strongest, 2 mild); scale 1 and sharpness < 0 = off (the original presentation)
+     void setUpscaling(float scale, float sharpness);
+     void notifyCameraCut(const char* reason) { cutPending_ = true; cutPendingWhy_ = reason ? reason : "explicit"; }
++    // campaign post-process chain (WfcCampaignPost.cpp; RE CAMPAIGN_POSTPROCESS_RE.md)
++    void loadChapterPost(const std::string& chapterDir);
++    void setPostVolumeEnabled(const std::string& name, bool on);
++    void setCinematicView(const IRenderer::CinematicView& v) { cin_ = v; }
+     void setFsr3(bool on) { fsr3On_ = on; }            // with setUpscaling's scale: FSR 3.1 instead of FSR 1 (WfcFsr3.cpp)
+     static bool fsr3RuntimeShipped();                  // the FFX loader + Agility runtime beside the exe (file checks)
+     void setAnisotropy(int level);              // 4 (original MaxAnisotropy, default) / 8 / 16
+diff -ruN a/tools/render/build_campaign_pp.py b/tools/render/build_campaign_pp.py
+--- a/tools/render/build_campaign_pp.py	1969-12-31 18:00:00.000000000 -0600
++++ b/tools/render/build_campaign_pp.py	2026-10-23 07:50:05.369739800 -0500
+@@ -0,0 +1,151 @@
++"""Campaign post-process chain (RE CAMPAIGN_POSTPROCESS_RE.md): a chapter's PostProcessVolumes as runtime data.
++
++UE3 (RE): a view takes the highest-Priority enabled PostProcessVolume containing the view point, else the persistent
++WorldInfo.DefaultPostProcessSettings; each settings group (Bloom / DOF / MotionBlur / Scene) blends over its own
++*_InterpolationDuration (1 s default). Kismet toggles volumes (SeqAct_Toggle on a (Dynamic)PostProcessVolume) - the
++renderer takes those by volume name (IRenderer::setPostProcessVolumeEnabled).
++
++Reads (read-only): RE's AssetTools/manifests/authored.db (the volumes, their Settings over Default__PostProcessVolume, the
++brush's BrushAggGeom convex elements, the world default over Default__WorldInfo), AssetTools' chapter.json (the units),
++the cooked packages (each ColorCorrectionTexture, a Texture3D, decoded as build_lighting.postprocess does).
++Writes <out>/postprocess_volumes.json and <out>/pp/<lut>.png (1024 x 32 strips, u = x + 32 z, v = y).
++
++usage: build_campaign_pp.py <CHAPTER> <out dir>      e.g. D5_OME <campaign_render>/D5_OME
++"""
++import json, os, sqlite3, sys
++
++DB = os.environ.get('WFC_AUTHORED_DB', r'F:/Transformers Rebuild/AssetTools/manifests/authored.db')
++CAMPAIGN = os.environ.get('WFC_CAMPAIGN_ROOT', r'F:/Transformers Rebuild/AssetTools/out/campaign_render')
++CLASSES = ('PostProcessVolume', 'DynamicPostProcessVolume')
++
++
++def vec(v):
++    return [v.get('X', 0.0), v.get('Y', 0.0), v.get('Z', 0.0)] if isinstance(v, dict) else v
++
++
++def flat(settings):
++    """authored.db FPostProcessSettings -> plain values (vectors as [x, y, z], object refs as their path)."""
++    out = {}
++    for k, v in (settings or {}).items():
++        if isinstance(v, dict) and set(v) <= {'X', 'Y', 'Z'}:
++            v = vec(v)
++        out[k] = v
++    return out
++
++
++def ue_to_gltf(p):
++    return [p[0] * 0.01, p[2] * 0.01, p[1] * 0.01]
++
++
++def brush_polygons(db, vpath, props):
++    """The volume's convex elements as triangles (glTF m): BrushAggGeom vertices are brush-local; world = local x DrawScale
++    (x DrawScale3D) + Location (D5_OME PPV_12453: the local box + Location lands inside D5_OME_ART's bounds)."""
++    bc = props.get('BrushComponent')
++    row = db.execute('select props from objects where opath=?', (bc,)).fetchone() if bc else None
++    if not row:
++        return [], 'no BrushComponent'
++    agg = (json.loads(row[0]) or {}).get('BrushAggGeom') or {}
++    loc = vec(props.get('Location') or {'X': 0, 'Y': 0, 'Z': 0})
++    s = float(props.get('DrawScale') or 1.0)
++    s3 = vec(props.get('DrawScale3D') or {'X': 1, 'Y': 1, 'Z': 1})
++    note = 'rotated (ignored)' if props.get('Rotation') else ''
++    polys = []
++    for el in agg.get('ConvexElems') or []:
++        V = [vec(v) for v in el.get('VertexData') or []]
++        W = [[loc[i] + V[j][i] * s * s3[i] for i in range(3)] for j in range(len(V))]
++        T = el.get('FaceTriData') or []
++        for t in range(0, len(T) - 2, 3):
++            polys.append([ue_to_gltf(W[T[t]]), ue_to_gltf(W[T[t + 1]]), ue_to_gltf(W[T[t + 2]])])
++    return polys, note
++
++
++def decode_lut(tex, package, out):
++    """A Texture3D LUT from its cooked package -> <out>/pp/<name>.png (build_lighting.postprocess's decode)."""
++    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++    from PIL import Image
++    import xbox_texture
++    from ue3obj import Repo, COOKED
++    cooked = {f.lower(): f for f in os.listdir(COOKED)}
++    pk = cooked.get((package + '.xxx').lower())
++    if not pk:
++        return None
++    repo = Repo([pk])
++    if not repo.find(tex):
++        return None
++    o = repo.obj(tex) or {}
++    sx, sy, sz = o.get('SizeX', 32), o.get('SizeY', 32), o.get('SizeZ', 32)
++    _, tail = repo.native_tail(tex)
++    vol = xbox_texture.decode_volume_argb8(tail[20:20 + sx * sy * sz * 4], sx, sy, sz)
++    strip = vol.transpose(1, 0, 2, 3).reshape(sy, sz * sx, 4)
++    os.makedirs(os.path.join(out, 'pp'), exist_ok=True)
++    rel = 'pp/' + tex.split('.')[-1] + '.png'
++    Image.fromarray(strip).save(os.path.join(out, rel))
++    return {'object': tex, 'file': rel, 'size': [sx, sy, sz]}
++
++
++def main():
++    if len(sys.argv) < 3:
++        print(__doc__)
++        return 2
++    chapter, out = sys.argv[1], sys.argv[2]
++    cj = json.load(open(os.path.join(CAMPAIGN, chapter, 'chapter.json'), encoding='utf-8'))
++    units = {s['level']: s['dir'] for s in cj.get('sublevels', [])}
++    units.setdefault(cj['persistent_level'], cj['persistent_dir'])
++    db = sqlite3.connect('file:%s?mode=ro' % DB.replace('\\', '/'), uri=True)
++
++    def props(path):
++        r = db.execute('select props from objects where opath=?', (path,)).fetchone()
++        return json.loads(r[0]) if r and r[0] else {}
++    vol_default = flat(props('Engine.Default__PostProcessVolume').get('Settings'))
++    wi_default = flat(props('Engine.Default__WorldInfo').get('DefaultPostProcessSettings'))
++    world = dict(wi_default)
++    wi = db.execute("select opath, props from objects where class in ('TnWorldInfo', 'WorldInfo') and opath like ?",
++                    (cj['persistent_level'] + '.%',)).fetchone()
++    if wi:
++        world.update(flat(json.loads(wi[1]).get('DefaultPostProcessSettings')))
++    luts, lut_of = {}, {}
++
++    def lut(ref, package):
++        if not ref or not isinstance(ref, str):
++            return None
++        if ref not in lut_of:
++            lut_of[ref] = decode_lut(ref, package, out)
++            if lut_of[ref]:
++                luts[ref] = lut_of[ref]
++        return lut_of[ref]['file'] if lut_of[ref] else None
++    res = {'chapter': chapter, 'generated_by': 'Rebuild tools/render/build_campaign_pp.py (RE CAMPAIGN_POSTPROCESS_RE.md)',
++           'rule': 'highest-Priority enabled volume containing the view point, else world_default; groups blend over their '
++                   '*_InterpolationDuration', 'world_default': world, 'world_lut': lut(world.get('ColorCorrectionTexture'),
++                                                                                          cj['persistent_level']),
++           'volumes': [], 'luts': luts}
++    notes = []
++    for path, cls, p in db.execute('select opath, class, props from objects where class in (%s)' % ','.join('?' * len(CLASSES)),
++                                   CLASSES):
++        level = path.split('.')[0]
++        if level not in units or '.Default__' in path:
++            continue
++        d = json.loads(p) if p else {}
++        s = dict(vol_default)
++        s.update(flat(d.get('Settings')))
++        polys, note = brush_polygons(db, path, d)
++        if note:
++            notes.append((path.split('.')[-1], note))
++        # (a DynamicPostProcessVolume without an authored bEnabled starts off: Kismet switches it - A1's thumper beam 2045, hard
++        # attached to the thumper's bone, its brush only the authored pose)
++        enabled = d.get('bEnabled', cls != 'DynamicPostProcessVolume') is not False
++        if d.get('Base'):
++            notes.append((path.split('.')[-1], 'attached to %s (the brush at its authored pose)' % d.get('BaseBoneName', d['Base'].split('.')[-1])))
++        res['volumes'].append({'name': path.split('.')[-1], 'unit': units[level], 'class': cls,
++                               'priority': float(d.get('Priority', 0.0) or 0.0), 'enabled': enabled, 'attached': bool(d.get('Base')),
++                               'settings': s, 'lut': lut(s.get('ColorCorrectionTexture'), level), 'polygons_m': polys})
++    os.makedirs(out, exist_ok=True)
++    json.dump(res, open(os.path.join(out, 'postprocess_volumes.json'), 'w', encoding='utf-8'), indent=1)
++    print('%s: %d volumes (%d enabled, %d without a brush), %d LUTs decoded%s -> %s/postprocess_volumes.json'
++          % (chapter, len(res['volumes']), sum(v['enabled'] for v in res['volumes']),
++             sum(not v['polygons_m'] for v in res['volumes']), len(luts),
++             '; notes: %s' % notes if notes else '', out))
++    return 0
++
++
++if __name__ == '__main__':
++    sys.exit(main())
