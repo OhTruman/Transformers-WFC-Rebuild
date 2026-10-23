@@ -326,6 +326,9 @@ public:
     bool friendOnline(const std::string& fp) const { return friendsOnline_.count(fp) > 0; }
     bool haveInvited(const std::string& fp) const { return invitedHere_.count(fp) > 0; }
     std::string takeClipboardRequest() { std::string s; s.swap(clipboardRequest_); return s; }
+    // InteractAccessingMovie_GFX's Interact.NotifyEndMovie (the campaign's "accessing" movie faded out): for Gameplay's interact
+    bool takeInteractMovieEnded() { bool r = interactMovieEnded_; interactMovieEnded_ = false; return r; }
+    bool interactMovieEnded_ = false;
     const std::string& joinAddress() const { return joinAddress_; }
     bool matchInProgressForMember() const { return role_ == SessionRole::Member && memberLobby_.matchRunning; }
     // The other humans in the online lobby (host: from MemberJoined / MemberLeft; member: the host's published list minus

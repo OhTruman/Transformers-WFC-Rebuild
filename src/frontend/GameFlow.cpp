@@ -477,6 +477,31 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     if (fn == "Online.ShowGamerCardUI" && session_ && role_ != SessionRole::Offline) return showPlayerCard(arg(0));
     // OnlineFriendsMenu_GFX (by NickName): Send Invite, Join (an invite's game), clear an invite
     if (fn == "Online.SendGameInvite") return sendGameInvite(arg(0));
+    // I3: a recent player removed from the Friends List (local; nothing is sent)
+    if (fn == "Online.RemoveFriend") {
+        auto& v = profile_.recentPlayers;
+        v.erase(std::remove_if(v.begin(), v.end(), [&](const LocalProfile::RecentPlayer& r) { return r.name == arg(0); }), v.end());
+        profile_.save();
+        FlowTrace::emit("online.removeFriend", {{"name", arg(0)}});
+        return {};
+    }
+    // Console platform services with no PC counterpart (Live guide friends / invite UIs, party chat, friend requests): the rows
+    // that call them are hidden on PC (IsInPartyChatSession false, no friend requests); answered so nothing waits on them.
+    if (fn == "Online.ShowFriendsUI" || fn == "Online.ShowInviteUI" || fn == "Online.ShowPartyChatSessionsUI" ||
+        fn == "Online.SendGameInviteToPartyChatMembers" || fn == "Online.SendFriendInvite" || fn == "Online.RespondToFriendInvite" ||
+        fn == "Online.ClaimCampaignCharacter" || fn == "Online.UnclaimCampaignCharacter") {
+        FlowTrace::emit("bridge.consoleOnly", {{"fn", fn}});
+        return {};
+    }
+    if (fn == "Interact.NotifyEndMovie") {
+        interactMovieEnded_ = true;
+        FlowTrace::emit("campaign.interactMovieEnded", {});
+        return {};
+    }
+    if (fn == "Game.GetCheckpoints" || fn == "Game.SkipToCheckpoint") {   // the pause menu's debug checkpoint list (debug builds only)
+        FlowTrace::emit("bridge.debugOnly", {{"fn", fn}});
+        return {};
+    }
     if (fn == "Online.JoinFriendGame") return joinFriendGame(arg(0));
     if (fn == "Online.ClearGameInvite") {
         invites_.erase(std::remove_if(invites_.begin(), invites_.end(), [&](const GameInvite& i) { return i.name == arg(0); }), invites_.end());
