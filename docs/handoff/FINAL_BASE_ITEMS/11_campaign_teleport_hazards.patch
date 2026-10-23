@@ -1,0 +1,194 @@
+diff --git a/src/game/Campaign.h b/src/game/Campaign.h
+index 570754aa..167bce91 100644
+--- a/src/game/Campaign.h
++++ b/src/game/Campaign.h
+@@ -192,6 +192,7 @@ struct CampaignState {
+     std::vector<CampaignMine> mines;
+     std::map<std::string, bool> actorHidden;   // world actor -> hidden (authored bHidden, then ToggleHidden / Destroy)
+     std::set<std::string> actorDestroyed;      // SeqAct_Destroy'd world actors (they stay hidden)
++    std::map<std::string, float> actorYaw;     // actors.json rotation_deg yaw (UE degrees): teleport destinations
+     std::vector<std::pair<int, std::vector<int>>> transformOps;   // TnSeqAct_TransformWorldProp waiting for Finished: op, actors
+     bool transformMoved = false;               // a matinee moved a transforming actor (nav blocks re-applied at rest)
+     std::map<int, std::string> shootAt;        // SeqAct_TnAiShootAtActor: AI player -> its forced fire target
+diff --git a/src/game/Kismet.cpp b/src/game/Kismet.cpp
+index d688a7b9..d684adbb 100644
+--- a/src/game/Kismet.cpp
++++ b/src/game/Kismet.cpp
+@@ -27,6 +27,7 @@ bool KismetVM::load(const assets::Json& root) {
+                 const assets::Json& a = o["authored"];
+                 v.i = a["IntValue"].asInt(0); v.f = a["FloatValue"].asFloat(0.0f); v.b = a["bValue"].asInt(0) != 0 || a["bValue"].asBool(false);
+                 v.s = a["StrValue"].asString(); v.obj = a["ObjValue"].asString(); v.findName = a["FindVarName"].asString(); v.varName = a["VarName"].asString(); v.buddyIndex = a["BuddyIndex"].asInt(1);
++                v.chassisPath = a["ChassisTypePathName"].asString();
+                 varByPath_[path] = (int)vars_.size();
+                 vars_.push_back(v);
+                 continue;
+diff --git a/src/game/Kismet.h b/src/game/Kismet.h
+index 7158259d..9c4f862e 100644
+--- a/src/game/Kismet.h
++++ b/src/game/Kismet.h
+@@ -24,6 +24,7 @@ public:
+         std::string path, cls;
+         int i = 0; float f = 0.0f; bool b = false; std::string s, obj, findName;   // SeqVar_Int / Float / Bool / String / Object / Named
+         int buddyIndex = 1;   // TnSeqVar_Buddy BuddyIndex (1-based, CDO default 1)
++        std::string chassisPath;   // TnSeqVar_Character ChassisTypePathName (a ROBODEF)
+         int named = -1;                                                         // SeqVar_Named: the var it resolved to (by VarName)
+         std::string varName;                                                    // the var's own VarName (Named targets)
+     };
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index d73a3aa4..6f647909 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -5497,6 +5497,12 @@ void World::loadHazards() {
+         const assets::Json& v = list[i];
+         HazardVolume h;
+         h.actor = v["actor"].asString();
++        {   // campaign: the unit the volume belongs to
++            const std::string o = v["object"].asString();
++            const size_t k = o.find(".TheWorld");
++            h.unit = k == std::string::npos ? std::string() : o.substr(0, k);
++            if (h.unit.size() > 2 && h.unit.compare(h.unit.size() - 2, 2, "_m") == 0) h.unit.resize(h.unit.size() - 2);
++        }
+         h.damageType = v["DamageType"].asString();
+         h.damagePerSec = v["DamagePerSec"].asFloat(0.0f);
+         h.painInterval = v["PainInterval"].isNumber() ? v["PainInterval"].asFloat() : 1.0f;
+@@ -5523,6 +5529,8 @@ void World::loadHazards() {
+ 
+ int World::hazardAt(const core::Vec3& p) const {
+     for (size_t i = 0; i < hazards_.size(); ++i) {
++        const std::string& u = hazards_[i].unit;   // campaign: only while its unit is loaded (streaming)
++        if (campaignMap_ && !u.empty() && u != cpChapter_.persistentDir && !cpUnitLoaded_.count(u)) continue;
+         bool in = !hazards_[i].planes.empty();
+         for (const HazardVolume::Plane& pl : hazards_[i].planes) if (core::dot(pl.n, p) > pl.w) { in = false; break; }
+         if (in) return (int)i;
+diff --git a/src/game/World.h b/src/game/World.h
+index 62b8f411..67d1aeca 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -565,6 +565,7 @@ public:
+     // per second and damage type. Stock UE3 PhysicsVolume pain: on entry (bEntryPain) and every PainInterval while
+     // touching, DamagePerSec * PainInterval [HIGH: stock defaults PainInterval 1, bEntryPain true].
+     struct HazardVolume { std::string actor, damageType; float damagePerSec = 0, painInterval = 1.0f; bool entryPain = true;
++                          std::string unit;   // campaign: its level's unit (object path prefix without _m); active only while loaded
+                           core::Vec3 centroid{0, 0, 0};
+                           struct Plane { core::Vec3 n; float w; };
+                           std::vector<Plane> planes; };   // outward normal n, offset w (inside: n.p <= w)
+@@ -1487,6 +1488,8 @@ private:
+     bool cpMineFactoryActivate(KismetVM& vm, int op, int input, CampaignFactory& F);
+     void cpTickMines(float dt);
+     bool cpHideOpActivate(KismetVM& vm, int op, int input);
++    std::vector<int> cpCharacterTargets(const std::string& robodef);
++    bool cpTeleportActivate(KismetVM& vm, int op, int input);
+     bool cpShootAtPoint(int player, core::Vec3& out) const;
+     bool cpAuxSpawn(const std::string& actor, int k, core::Vec3& out);
+     void cpDrawDestructibles(render::IRenderer& r) const;
+diff --git a/src/game/WorldCampaign.cpp b/src/game/WorldCampaign.cpp
+index b424eb77..40708a55 100644
+--- a/src/game/WorldCampaign.cpp
++++ b/src/game/WorldCampaign.cpp
+@@ -302,6 +302,7 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
+     if (cpTransformWorldProp(vm, op, input)) return true;   // doors / pods
+     if (cpSentryOpActivate(vm, op, input)) return true;     // sentry force target / dormant
+     if (cpHideOpActivate(vm, op, input)) return true;       // SeqAct_ToggleHidden / SeqAct_Destroy on world actors
++    if (cpTeleportActivate(vm, op, input)) return true;     // SeqAct_Teleport
+     if (cpOmegaActivate(vm, op, input)) return true;      // SetOmegaStage / CorruptOmegaBattery
+     if (c == "SeqAct_TnPawnFactory") return cpPawnFactoryActivate(vm, op, input);
+     if (cpInterpActivate(vm, op, input)) return true;   // SeqAct_Interp: Matinee
+@@ -431,6 +432,8 @@ void World::cpRequestMovie(int op, const std::string& movieName) {
+     if (cp_.movieOp >= 0 && cp_.movieOp != op) cp_.vm.finishLatent(cp_.movieOp, "Stopped");
+     cp_.movie = m; cp_.movieOp = op; cp_.movieStop = false; ++cp_.movieSerial;
+     LOG_INFO("campaign: movie %s (request %d)", m.c_str(), cp_.movieSerial);
++    // headless (no movie playback): the movie ends at once, so Kismet waiting on its Stopped (D3B's intro switch) goes on
++    if (std::getenv("WFC_NULLRENDER")) campaignMovieEnded(cp_.movieSerial);
+ }
+ 
+ void World::campaignMovieEnded(int serial) {
+diff --git a/src/game/WorldCampaignRuntime.cpp b/src/game/WorldCampaignRuntime.cpp
+index da86eb98..40197223 100644
+--- a/src/game/WorldCampaignRuntime.cpp
++++ b/src/game/WorldCampaignRuntime.cpp
+@@ -7,6 +7,7 @@
+ 
+ #include <algorithm>
+ #include <array>
++#include <set>
+ #include <cmath>
+ #include <cstdlib>
+ #include <fstream>
+@@ -304,6 +305,7 @@ void World::cpLoadActors() {
+             const std::string name = afterDot(n.has("object") ? n["object"].asString() : n["node"].asString());
+             const assets::Json& L = n["location_gltf"];
+             if (!name.empty() && L.size() >= 3) cp_.actorPos[name] = core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
++            if (!name.empty() && n["rotation_deg"].has("yaw")) cp_.actorYaw[name] = n["rotation_deg"]["yaw"].asFloat(0.0f);
+             if (!name.empty() && std::string(file) == "actors.json") {   // the authored start visibility (Toggle's base)
+                 // drawable classes only: lights, volumes, sounds, brushes, nav points and notes carry bHidden by class default (an editor
+                 // sprite), not as "not drawn" - a hide on a light's name would switch it off in the renderer
+@@ -339,7 +341,9 @@ std::vector<int> World::cpTargets(KismetVM& vm, int op, const std::string& link)
+         if (!v) continue;
+         if (v->named >= 0) v = vm.var(v->named);
+         if (!v) continue;
+-        if (v->cls == "TnSeqVar_Buddy") {   // FindBuddy [C]: BuddyIndex 1-based (default 1) over the ACTIVE members in squad order
++        if (v->cls == "TnSeqVar_Character") {   // the participants playing that ROBODEF
++            for (int p : cpCharacterTargets(v->chassisPath)) out.push_back(p);
++        } else if (v->cls == "TnSeqVar_Buddy") {   // FindBuddy [C]: BuddyIndex 1-based (default 1) over the ACTIVE members in squad order
+             const int bi = std::max(1, v->buddyIndex);
+             std::vector<int> active;
+             for (int p : cp_.squad) if (match_.players()[(size_t)p].alive) active.push_back(p);
+@@ -1109,3 +1113,58 @@ bool World::cpHideOpActivate(KismetVM& vm, int op, int input) {
+ }
+ 
+ } // namespace game
++
++namespace game {
++
++// ---- SeqAct_Teleport + TnSeqVar_Character (every chapter: A1 60 refs ... A3 253) ----
++// TnSeqVar_Character (ChassisTypePathName = a ROBODEF) names the participants playing that character: the chassis whose roster
++// robot definition is that ROBODEF (several chassis can share one: Truck / Truck7). SeqAct_Teleport moves its Target pawns to the
++// Destination actor's location and rotation (stopped, re-grounded within 2 m); non-pawn targets are left (PROV).
++std::vector<int> World::cpCharacterTargets(const std::string& robodef) {
++    static std::map<std::string, std::set<std::string>> chassisOf;
++    if (chassisOf.empty()) {
++        assets::Json r;
++        if (readJsonFile(manifestsRoot() + "/mp_content/roster_package.json", r))
++            for (const auto& kv : r["chassis"].obj) chassisOf[kv.second["robot"]["definition"].asString()].insert(kv.first);
++    }
++    std::vector<int> out;
++    auto it = chassisOf.find(robodef);
++    if (it == chassisOf.end()) return out;
++    for (size_t q = 0; q < match_.players().size(); ++q) {
++        const MatchPlayer& mp = match_.players()[q];
++        if (mp.directorSpawned) continue;   // the factories' AI are not the named characters
++        if (it->second.count(resolveChassis(mp.selection, match_.faction((int)q)))) out.push_back((int)q);
++    }
++    return out;
++}
++
++bool World::cpTeleportActivate(KismetVM& vm, int op, int input) {
++    (void)input;
++    const KismetVM::Op& o = vm.op(op);
++    if (o.cls != "SeqAct_Teleport") return false;
++    std::string dest = vm.objectOf(op, "Destination");
++    if (dest.empty()) dest = o.authored["DestinationActor"].asString();
++    core::Vec3 at;
++    int moved = 0;
++    if (!dest.empty() && cpActorPos(dest, at)) {
++        auto yi = cp_.actorYaw.find(afterDot(dest));
++        for (int p : cpTargets(vm, op, "Target")) {
++            Character* c = participantPawnMutable(p);
++            if (!c) continue;
++            core::Vec3 q = at;
++            float gy; core::Vec3 n;
++            if (collision_.valid() && collision_.groundHeight(q.x, q.z, q.y + 0.5f, 2.0f, gy, n) && gy > q.y - 2.0f) q.y = gy;
++            c->setPosition(q); c->velocity() = core::Vec3{0, 0, 0}; c->groundY = q.y;
++            if (yi != cp_.actorYaw.end()) {   // UE yaw (degrees) -> the pawn's yaw (forwardFromYawPitch convention)
++                const float ue = yi->second * 0.0174533f;
++                c->setYaw(std::atan2(-std::cos(ue), -std::sin(ue)));
++            }
++            ++moved;
++        }
++    }
++    LOG_INFO("campaign: %s -> %s: %d pawns", afterDot(o.path).c_str(), afterDot(dest).c_str(), moved);
++    if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
++    return true;
++}
++
++} // namespace game
