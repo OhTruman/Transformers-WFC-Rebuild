@@ -3954,3 +3954,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   PACKAGE_SIZE_ESTIMATE (27.84 GB today; campaign_render 98 % duplicate lightmaps: 10 chapters ~17 GB -> ~6.5 GB with
   one lightmaps/ per chapter). DECISIONS: HD stays the optional pack; campaign in the base once deduplicated (AssetTools
   exporter + Rendering loader read <chapter>/lightmaps/); the campaign's outside assets join slim_files.tsv.
+2026-10-23 09:02 MERGED 921dcf43 campaign runtime 11 (Matinee AnimControl on skeletal actors: A1 441 / D5 13), d48f995d runtime chapter
+  streaming (unload frees RT sets / meshes / pages; load at Started; A1 = 7 units at load) + shared <chapter>/lightmaps/
+  (A1 2.17 GB -> 45 MB; AssetTools removes the unit copies on my go). Campaign milestone run #2 (Frontend) + broad pass #2
+  (Experimental) on d48f995d now. Gameplay -> pawn-group AnimControl, Omega AI, hit reactions, destructible collision.
