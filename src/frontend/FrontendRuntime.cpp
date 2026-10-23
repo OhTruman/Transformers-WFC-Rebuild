@@ -1555,10 +1555,11 @@ void FrontendRuntime::updateOnlineVoice() {
         }
     } else pttCaptureArmed_ = false;
     const bool online = flow_.online() && flow_.sessionRole() != GameFlow::SessionRole::Offline;
-    if (online != voiceUiOverride_) {   // the player row's A: "Mute / Unmute" (the original texts) while in an online session
+    if (online != voiceUiOverride_) {   // the player row's A: "Mute / Block" (the PC player card) while in an online session
         voiceUiOverride_ = online;
         catalog_.setKeyOverride("$UIText.PlayerList.Gamercard",
-                                online ? catalog_.localizeKey("$UIText.PlayerList.Mute") + " / " + catalog_.localizeKey("$UIText.PlayerList.UnMute") : std::string());
+                                online ? catalog_.localizeKey("$WfcPC.Online.PlayerCardMute") + " / " + catalog_.localizeKey("$WfcPC.Online.PlayerCardBlock")
+                                       : std::string());
     }
     if (online) flow_.setPushToTalkHeld(platform::isKeyHeld(platform::virtualKeyForName(flow_.profile().voice.pttKey)));
 }
