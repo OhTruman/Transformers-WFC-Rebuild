@@ -70,9 +70,9 @@ if [ "${EYE_VIEWS:-1}" != 0 ]; then
   FM=""; for m in $MAPS; do [ -f tools/fidelity/views_flare/$m.txt ] && FM="$FM $m"; done
   if [ -n "$FM" ] && [ "${EYE_FLAREVIEWS:-1}" != 0 ]; then
     mkdir -p $O/flare_list; for m in $FM; do awk 'NF>=2 { print $1"_w1 "$2; print $1"_w2 "$2; print }' tools/fidelity/views_flare/$m.txt > $O/flare_list/$m.txt; done
-    powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/eyepass-views.ps1 -Exe "$exe" -OutDir $O/flareviews -ViewsDir "$(cygpath -w $O/flare_list)" -RenderData "${EYE_RENDER_DATA:+$(cygpath -w "$EYE_RENDER_DATA")}" -Maps $(echo $FM | tr ' ' ',') -Modes $(echo $VM | tr ' ' ',') -Size $VS
+    powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/eyepass-views.ps1 -Exe "$exe" -OutDir $O/flareviews -ViewsDir "$(cygpath -w $PWD/$O/flare_list)" -RenderData "${EYE_RENDER_DATA:+$(cygpath -w "$EYE_RENDER_DATA")}" -Maps $(echo $FM | tr ' ' ',') -Modes $(echo $VM | tr ' ' ',') -Size $VS
     for p in $(mine); do powershell -NoProfile -Command "Stop-Process -Id $p -Force"; echo "reaped $p"; done
-    PYTHONDONTWRITEBYTECODE=1 "$PY" tools/fidelity/eyepass_views_sheet.py $O/flareviews "$FM" "$VM" "$(cygpath -w $O/flare_list)" "Lens flare views (sun-aimed; report-only)" > /dev/null
+    PYTHONDONTWRITEBYTECODE=1 "$PY" tools/fidelity/eyepass_views_sheet.py $O/flareviews "$FM" "$VM" "$(cygpath -w $PWD/$O/flare_list)" "Lens flare views (sun-aimed; report-only)" > /dev/null
     sed -n '/## Lens flare views/,$p' $O/flareviews/EYEPASS.md >> $O/EYEPASS.md
   fi
 fi
