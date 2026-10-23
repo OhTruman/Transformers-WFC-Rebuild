@@ -1803,6 +1803,57 @@ static void testLobbyFlowV2() {
         check(r.ok && searching && reserving && joined && hosted, "lobby.LV5_quick_match",
               std::to_string(searching) + std::to_string(reserving) + std::to_string(joined) + std::to_string(hosted));
     }
+    // LV6: the public lobby's map vote (ONLINE_LOBBY_FLOW_V2 4.1): host side - 3 options + None of these, tallies from the
+    // members' info, the 45 s autostart at 4 humans, a None of these majority re-rolls (round 2, new maps, no None), the vote
+    // closes at 10 s and the launch goes out; member side - the vote from LobbyState, a cast reaches setMemberInfo.
+    {
+        using T = SessionEvent::Type;
+        SessionEvent ho = ev(T::HostOpened); ho.joinCode = "7QK2M-9TDAB";
+        OnlineRig h({after("quickMatch", ho)});
+        h.f().call("Online.PlayPlaylist", {"1", "false"});
+        const bool hosted = runUntil(*h.rt, [&] { return h.f().level() == LevelKind::GameLobby && !h.f().loading().active; }) &&
+                            h.f().sessionRole() == GameFlow::SessionRole::Host;
+        const GameFlow::MapVote& v = h.f().mapVote();
+        const bool opened = v.open && v.round == 1 && v.maps.size() == 3 && v.counts.size() == 4 && h.f().lobby().mapId == v.maps[0];
+        const std::vector<int> round1 = v.maps;
+        auto voter = [&](const char* fp, int vote) { SessionEvent e = memberEv(fp, "Voter", true); e.info.mapVote = vote; return e; };
+        h.f().castMapVote(1);
+        h.fake->inject(voter("WFC-AAAA-AAAA-1", 1));
+        h.fake->inject(voter("WFC-BBBB-BBBB-2", 2));
+        h.fake->inject(voter("WFC-CCCC-CCCC-3", 3));
+        h.frames(3);
+        const bool tallied = v.counts == std::vector<int>({0, 2, 1, 1}) && h.f().lobby().mapId == v.maps[1] && h.f().lobby().countingDown &&
+                             h.f().lobby().countdown >= 44;
+        const FakeSession::Call* pub = h.fake->last("publishLobby");
+        const bool published = pub && pub->lobby.voteRound == 1 && pub->lobby.voteOpen && pub->lobby.voteMaps == round1 &&
+                               pub->lobby.voteCounts == v.counts;
+        // None of these: the host and two members -> 3 of 4 humans, a strict majority -> round 2
+        h.f().castMapVote(3);
+        h.fake->inject(voter("WFC-AAAA-AAAA-1", 3));
+        h.fake->inject(voter("WFC-BBBB-BBBB-2", 3));
+        h.frames(3);
+        bool disjoint = true;
+        for (int id : v.maps) disjoint = disjoint && std::find(round1.begin(), round1.end(), id) == round1.end();
+        const bool rerolled = v.round == 2 && v.open && v.counts.size() == v.maps.size() && !v.maps.empty() && h.f().myMapVote() == -1 &&
+                              (disjoint || v.maps.size() < 3);
+        const bool closed = runUntil(*h.rt, [&] { return !h.f().mapVote().open; }, 3000) && h.f().lobby().countdown <= 10 &&
+                            h.f().mapVote().winner == h.f().lobby().mapId &&
+                            std::find(v.maps.begin(), v.maps.end(), h.f().mapVote().winner) != v.maps.end() && h.fake->count("setLaunch") == 1;
+        // member: the vote arrives with the LobbyState; a cast goes to the host in the member info
+        SessionLobby l; l.gameModeTag = "TDM"; l.mapId = 508; l.voteMaps = {508, 501, 503}; l.voteCounts = {1, 0, 0, 0}; l.voteRound = 1; l.voteOpen = true;
+        SessionEvent j = ev(T::Joined); j.lobby = l; j.member.fingerprint = "WFC-SELF-SELF-9";
+        OnlineRig m({after("join", j)});
+        m.f().call("Online.JoinGame", {"7QK2M-9TDAB"});
+        const bool memberIn = runUntil(*m.rt, [&] { return m.f().level() == LevelKind::GameLobby && !m.f().loading().active; });
+        SessionEvent ls = ev(T::LobbyState); ls.lobby = l;
+        m.fake->inject(ls);
+        m.frames(3);
+        const bool cast = m.f().mapVote().round == 1 && m.f().castMapVote(2) && m.fake->last("setMemberInfo") && m.fake->last("setMemberInfo")->info.mapVote == 2;
+        const bool memberStart = m.f().call("Online.BeginLobbyExitCountdown", {}).s.empty() && m.fake->count("requestStart") == 0;
+        check(h.ok && hosted && opened && tallied && published && rerolled && closed && m.ok && memberIn && cast && memberStart, "lobby.LV6_map_vote",
+              std::to_string(hosted) + std::to_string(opened) + std::to_string(tallied) + std::to_string(published) + std::to_string(rerolled) +
+              std::to_string(closed) + std::to_string(memberIn) + std::to_string(cast) + std::to_string(memberStart));
+    }
     // LV4: a member cannot change the mode
     {
         OnlineRig r;
