@@ -1671,6 +1671,80 @@ void GfxPresenter::syncGameSettings(gfx::Player& p, frontend::GameFlow& flow) {
     }
 }
 
+// PC ADAPTATION (ONLINE_LOBBY_FLOW_V2 4.1, the user's Halo Reach vote): in a public lobby the vote takes the Select Map
+// row's place - one row per option (map name and live tally) plus None of these in round 1, in the lobby's own button
+// form (duplicates of customCharacters_mc, as the Game Settings row). Accept on a row votes; the player's own vote is
+// marked; once the vote closed the winner reads "Next map: ..." and the rows no longer take votes. Host and members alike.
+void GfxPresenter::syncVoteRows(gfx::Player& p, frontend::GameFlow& flow) {
+    const frontend::GameFlow::MapVote& v = flow.mapVote();
+    if (flow.level() != frontend::LevelKind::GameLobby || v.round == 0) return;
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    gfx::MovieClip* cc = findClipNamed(p.root(), "customCharacters_mc");
+    gfx::MovieClip* sm = findClipNamed(p.root(), "selectMap_mc");
+    if (!cc || !sm || !cc->script || !sm->script || !cc->parent || !cc->parent->script) return;
+    gfx::avm1::Object* menu = cc->parent->script;
+    constexpr int kRows = 4;   // 3 options + None of these (round 2: 3, the last row hidden)
+    if (!vm.get(menu, "wfcVote0_mc").isObject()) {
+        const double smY = vm.toNumber(vm.get(sm->script, "_y")), ccY = vm.toNumber(vm.get(cc->script, "_y"));
+        const double pitch = std::fabs(ccY - smY) > 1.0 ? std::fabs(ccY - smY) : 31.0;
+        for (auto& [depth, child] : cc->parent->children) {   // the rows below Select Map make room for the extra rows
+            auto* mc = dynamic_cast<gfx::MovieClip*>(child.get());
+            if (!mc || !mc->script || mc == sm) continue;
+            const double y = vm.toNumber(vm.get(mc->script, "_y"));
+            if (y > smY + 1.0) vm.set(mc->script, "_y", V(y + pitch * (kRows - 1)));
+        }
+        vm.set(sm->script, "_visible", V(false));
+        const V above = vm.get(sm->script, "focusUp"), below = vm.get(sm->script, "focusDown");
+        for (int i = 0; i < kRows; ++i) {
+            const std::string name = "wfcVote" + std::to_string(i) + "_mc";
+            gfx::avm1::Object* init = vm.newPlain();
+            vm.set(init, "_y", V(smY + pitch * i));
+            gfx::MovieClip* dup = p.duplicate(cc, name, 960 + i, init);
+            if (!dup || !dup->script) return;
+            gfx::avm1::Object* o = dup->script;
+            vm.set(o, "focusUp", i == 0 ? above : V("wfcVote" + std::to_string(i - 1) + "_mc"));
+            vm.set(o, "focusDown", i == kRows - 1 ? below : V("wfcVote" + std::to_string(i + 1) + "_mc"));
+            vm.set(o, "onOver", V(vm.newFunction([menu](gfx::avm1::VM& vv, const V&, gfx::avm1::Args&) -> V {
+                const V w = vv.get(menu, "HintWidget");
+                if (w.isObject()) vv.set(w.o, "HintText", V(std::string("$WfcPC.Lobby.VoteRowDesc")));
+                return V();
+            }, "onOver", 0)));
+            frontend::GameFlow* fl = &flow;
+            vm.set(o, "onClick", V(vm.newFunction([fl, i](gfx::avm1::VM&, const V&, gfx::avm1::Args&) -> V {
+                fl->castMapVote(i);
+                return V();
+            }, "onClick", 0)));
+        }
+        if (above.isString()) { const V a = vm.get(menu, vm.toString(above)); if (a.isObject()) vm.set(a.o, "focusDown", V(std::string("wfcVote0_mc"))); }
+        if (below.isString()) { const V b = vm.get(menu, vm.toString(below)); if (b.isObject()) vm.set(b.o, "focusUp", V("wfcVote" + std::to_string(kRows - 1) + "_mc")); }
+        frontend::FlowTrace::emit("lobby.voteRows", {{"built", "true"}, {"rows", std::to_string(kRows)}});
+    }
+    // labels: "<map>   <votes>", the own vote marked, the winner once closed
+    const std::string none = rt_.catalog().localizeKey("$WfcPC.Lobby.VoteNone"), next = rt_.catalog().localizeKey("$WfcPC.Lobby.VoteNext");
+    for (int i = 0; i < kRows; ++i) {
+        const V row = vm.get(menu, "wfcVote" + std::to_string(i) + "_mc");
+        if (!row.isObject()) continue;
+        const bool shown = i < (int)v.counts.size() && (v.open || (i < (int)v.maps.size() && v.maps[(size_t)i] == v.winner));
+        std::string label;
+        if (shown) {
+            std::string name = none;
+            if (i < (int)v.maps.size()) {
+                const frontend::MapInfo* mi = rt_.catalog().mapById(v.maps[(size_t)i]);
+                name = mi && !mi->friendlyName.empty() ? mi->friendlyName : std::to_string(v.maps[(size_t)i]);
+            }
+            label = !v.open ? next + " " + name
+                            : (flow.myMapVote() == i ? "> " : "") + name + "   " + std::to_string(v.counts[(size_t)i]);
+        }
+        if (vm.toBool(vm.get(row.o, "_visible")) != shown) vm.set(row.o, "_visible", V(shown));
+        if (vm.toString(vm.get(row.o, "text")) != label) {
+            vm.set(row.o, "text", V(label));
+            const V lab = vm.get(row.o, "label_txt");
+            if (lab.isObject()) vm.set(lab.o, "htmlText", V(label));
+        }
+    }
+}
+
 void GfxPresenter::syncVolumetricRow(gfx::Player& p) {
     gfx::avm1::VM& vm = p.vm();
     using V = gfx::avm1::Value;
@@ -1980,6 +2054,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
         if (flow.online() && op.object.find("PartyLobby_GFX") != std::string::npos) runFirstRunUi(op.movie->player(), flow, op.object);
         if (op.object.find("PartyLobby_GFX") != std::string::npos) syncHostNowRow(op.movie->player(), flow);   // lobby flow v2
         if (op.object.find("GameLobby_GFX") != std::string::npos) syncGameSettings(op.movie->player(), flow);
+        if (op.object.find("GameLobby_GFX") != std::string::npos) syncVoteRows(op.movie->player(), flow);
         if (op.object.find("PauseMenu_GFX") != std::string::npos) syncPauseChooseCharacter(op.movie->player(), flow);
         syncIconicPlayerList(op.movie->player(), flow);   // the countdown roster / end-of-match list (#7)
         scrollSettingsSubMenu(op.movie->player(), in);   // any settings page (FrontEnd, pause menu, lobby Voice / Game Settings)
