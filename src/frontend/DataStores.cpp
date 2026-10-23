@@ -206,12 +206,13 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
     }
     if (markup == "<TnMenuItems:Maps>") {
         // TnDataProvider_MapInfo providers in section order; disabled = !HasRequiredAssets [RE 3.2].
-        c.columns = {"MapId", "MapFilename", "FriendlyName", "ImagePath", "CompatibleGameTypes", "Faction", "PresenceId"};
+        c.columns = {"MapId", "MapFilename", "FriendlyName", "ImagePath", "CompatibleGameTypes", "Faction", "PresenceId", "Description"};
         for (const MapInfo& m : cat_.maps()) {
             std::string types;
             for (const std::string& t : m.compatibleGameTypes) types += (types.empty() ? "" : ",") + t;
+            // Description: CampaignSelect's chapter text (TransGame.int [<map> TnDataProvider_MapInfo] Description)
             c.rows.push_back({std::to_string(m.mapId), m.mapFilename, m.friendlyName, m.imagePath, types, std::to_string(m.faction),
-                              std::to_string(m.presenceId)});
+                              std::to_string(m.presenceId), cat_.localize("TransGame", m.mapFilename + " TnDataProvider_MapInfo", "Description")});
             c.enabled.push_back(m.hasRequiredAssets);
         }
         return true;

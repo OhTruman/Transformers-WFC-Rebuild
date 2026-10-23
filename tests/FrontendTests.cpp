@@ -1265,19 +1265,18 @@ static void testOnlineStartLoadLeave() {
     r.frames(2);
     const std::vector<SessionSlotSwap> loadSwaps = r.f().takeSlotSwaps();
     const bool dropped = r.f().onlineMembers().size() == 1 && r.f().loading().message == "Waiting for 0 players" && r.f().takeGameMessages().empty() &&
-                         loadSwaps.size() == 1 && loadSwaps[0].member.fingerprint == "WFC-BBBB-BBBB-2";
+                         loadSwaps.empty();   // the bot swap is the lockstep driver's SeatLeave now (Systems 2c6cc2b3), not the flow's
     SessionEvent all = ev(T::AllLoaded); all.value = 600;
     r.fake->inject(all);
     r.frames(2);
     check(dropped && !r.f().inLoadGate() && !r.f().loading().active && !r.f().simHeld(), "online.S15_load_timeout_drop");
-    // S16: a human leaves mid-match: the original kill-feed line and a slot swap to a bot
+    // S16: a human leaves mid-match: the original kill-feed line; the slot's bot comes from the driver's SeatLeave (no flow swap)
     SessionEvent left = ev(T::PeerDropped); left.member.fingerprint = "WFC-AAAA-AAAA-1"; left.leaveReason = SessionLeaveReason::Left;
     r.fake->inject(left);
     r.frames(2);
     const std::vector<std::string> lines = r.f().takeGameMessages();
     const std::vector<SessionSlotSwap> swaps = r.f().takeSlotSwaps();
-    check(lines.size() == 1 && lines[0] == "Alpha has left the game" && swaps.size() == 1 && swaps[0].to == SessionSlotSwap::To::Bot &&
-          swaps[0].member.fingerprint == "WFC-AAAA-AAAA-1" && r.f().onlineMembers().empty(), "online.S16_peer_leaves_bot_swap",
+    check(lines.size() == 1 && lines[0] == "Alpha has left the game" && swaps.empty() && r.f().onlineMembers().empty(), "online.S16_peer_leaves_bot_swap",
           lines.empty() ? "" : lines[0]);
 }
 
@@ -1544,9 +1543,7 @@ static void testOnlineMatchSide() {
     r.f().onlineIdleKick("WFC-BBBB-BBBB-2");   // Gameplay's RemoteIdle on the host -> the session kicks that peer (idle)
     const bool kicked = r.fake->last("kick") && r.fake->last("kick")->arg.find("WFC-BBBB-BBBB-2") != std::string::npos;
     check(kicked, "online.M3b_idle_kick_to_session", r.fake->last("kick") ? r.fake->last("kick")->arg : std::string());
-    check(lines.size() == 2 && lines[0] == "Alpha has left the game" && lines[1] == "Bravo has left the game" && swaps.size() == 2 &&
-          swaps[0].member.fingerprint == "WFC-AAAA-AAAA-1" && swaps[1].member.fingerprint == "WFC-BBBB-BBBB-2" &&
-          swaps[0].to == SessionSlotSwap::To::Bot && kept && cell("PlayerName", 1) == "Alpha" && cell("Score", 1) == "7" &&
+    check(lines.size() == 2 && lines[0] == "Alpha has left the game" && lines[1] == "Bravo has left the game" && swaps.empty() && kept && cell("PlayerName", 1) == "Alpha" && cell("Score", 1) == "7" &&
           cell("HeadsetState", 1) == "0" && r.f().takeGameMessages().empty(), "online.M3_swap_rows_idle_line",
           std::to_string(lines.size()) + " " + cell("PlayerName", 1));
 }

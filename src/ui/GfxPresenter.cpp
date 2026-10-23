@@ -1383,8 +1383,11 @@ bool addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         std::vector<gfx::avm1::Value> sm, wa;
         add(sm, 0, "$WfcPC.Settings.LensFlaresOriginal"); add(sm, 1, "Enhanced");
         row(sm, "<PCSettings:Smoke>", "$WfcPC.Settings.SmokeDesc", "$WfcPC.Settings.Smoke");
-        add(wa, 0, "$WfcPC.Settings.LensFlaresOriginal"); add(wa, 1, "Enhanced");
-        row(wa, "<PCSettings:Water>", "$WfcPC.Settings.WaterDesc", "$WfcPC.Settings.Water");
+        // Water: dev-only (WFC_DEV_ROWS) until Rendering's tuned sheet passes - Enhanced water is not user-ready (Integration)
+        if (std::getenv("WFC_DEV_ROWS")) {
+            add(wa, 0, "$WfcPC.Settings.LensFlaresOriginal"); add(wa, 1, "Enhanced");
+            row(wa, "<PCSettings:Water>", "$WfcPC.Settings.WaterDesc", "$WfcPC.Settings.Water");
+        }
     }
     {   // PC EXTENSION (user playtest 2026-10-13): the FPS counter in the top-right corner
         std::vector<gfx::avm1::Value> fc;
