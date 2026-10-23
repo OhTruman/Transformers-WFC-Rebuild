@@ -1568,13 +1568,15 @@ void Application::routeMatchToFrontend(float dt) {
     {   // [Systems] the campaign Kismet's full-screen movies (SeqAct_MoviePlayer, MissionComplete's outro): the Game.PlayMovie path
         // (movie mode, its Bink audio, skippable as the Extras movies); its end / skip / the op's Stop -> World::campaignMovieEnded
         static int shown = 0;   // the request serial on screen (0 none)
-        if (!pf.campaignMovie.empty() && pf.campaignMovieSerial != shown && flow.scriptMovie().empty()) {
+        static int endedSerial = 0;   // the last serial handed back as ended (the snapshot can still name it for a frame or two)
+        if (!pf.campaignMovie.empty() && pf.campaignMovieSerial != shown && pf.campaignMovieSerial != endedSerial && flow.scriptMovie().empty()) {
             shown = pf.campaignMovieSerial;
             flow.call("Game.PlayMovie", {pf.campaignMovie});
         } else if (shown != 0 && (flow.scriptMovie().empty() || pf.campaignMovieStop || pf.campaignMovieSerial != shown)) {
             if (!flow.scriptMovie().empty() && pf.campaignMovieSerial == shown) flow.scriptMovieStopped();
             const int ended = shown;
             shown = 0;
+            endedSerial = ended;
             world_.submit([ended](game::World& w) { w.campaignMovieEnded(ended); });
         }
     }
