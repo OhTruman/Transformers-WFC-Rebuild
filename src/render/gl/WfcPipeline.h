@@ -622,6 +622,7 @@ private:
     bool giFinished_ = false, giSetupDone_ = false;
     std::vector<int> giHitPageGl_;                      // the reflection hit data's D3D12 lightmap page -> GL page
     std::vector<GLuint> giGlTex_;                       // per GL lightmap page: its shared GI page (0 = none)
+    bool giDumped_ = false;                             // (WFC_GIDUMP: the converged pages written once)
     std::vector<GLuint> giArrays_;                      // per lightmap array (as lmArrays_): the GI pages layer for layer
     std::vector<float> giJob_;                          // the per-frame job's constants (RtGiJob, opaque here)
     size_t giNext_ = 0;                                 // the next texel of the rotating per-frame slice

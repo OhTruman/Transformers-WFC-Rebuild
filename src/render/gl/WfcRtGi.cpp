@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <chrono>
@@ -595,6 +596,35 @@ void Pipeline::giAfterFrame() {
         CopyImageSubData(giGlTex_[(size_t)k], GL_TEXTURE_2D, 0, 0, 0, 0, giArrays_[(size_t)a], kArr, 0, 0, 0, layer, w, h, 1);
     }
     glx::textureCacheInvalidate();
+    // (X7 gutter check) WFC_GIDUMP=<dir>: once the RT lightmap is converged, every GI page as <dir>/gi_<k>.pfm (RGB float, the
+    // GL page, bottom row first as PFM stores it) and its bake page's first coefficient as <dir>/lm_<k>.pfm, to inspect chart edges
+    static const char* dumpDir = std::getenv("WFC_GIDUMP");
+    static const int sweeps = [] { const char* e = std::getenv("WFC_RT_GISWEEPS"); return e ? std::max(0, std::atoi(e)) : 32; }();
+    if (dumpDir && !giDumped_ && sweeps > 0 && giSweeps_ >= sweeps) {
+        giDumped_ = true;
+        auto dump = [&](GLuint tex, const std::string& path) {
+            GLint w = 0, h = 0;
+            glBindTexture(GL_TEXTURE_2D, tex);
+            glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
+            glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
+            std::vector<float> px((size_t)w * (size_t)h * 3);
+            if (w > 0 && h > 0) glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_FLOAT, px.data());
+            glBindTexture(GL_TEXTURE_2D, 0);
+            if (FILE* f = w > 0 ? std::fopen(path.c_str(), "wb") : nullptr) {
+                std::fprintf(f, "PF\n%d %d\n-1.0\n", w, h);
+                std::fwrite(px.data(), sizeof(float), px.size(), f);
+                std::fclose(f);
+            }
+        };
+        int n = 0;
+        for (size_t k = 0; k < giGlTex_.size(); ++k) {
+            if (!giGlTex_[k]) continue;
+            dump(giGlTex_[k], std::string(dumpDir) + "/gi_" + std::to_string(k) + ".pfm");
+            if (k < lmTextures_.size() && lmTextures_[k]) dump(lmTextures_[k], std::string(dumpDir) + "/lm_" + std::to_string(k) + ".pfm");
+            ++n;
+        }
+        LOG_INFO("RT GI: dumped %d converged GI pages (+ their bake pages) to %s", n, dumpDir);
+    }
 }
 
 // S3: a sparse probe grid - the cells near the lightmapped surfaces (each texel, moved 0.6 cells to its open side, marks
