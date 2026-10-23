@@ -450,14 +450,12 @@ void Match::endGame(int winnerPlayer, const std::string& reason) {
         if (teamScore_[0] > teamScore_[1] || n1 == 0) winner = 0;
         else if (teamScore_[1] > teamScore_[0] || n0 == 0) winner = 1;
     } else if (winnerPlayer < 0) {
-        // GetWinningPRI: highest score [HIGH: stock first-highest; tie handling PARTIAL].
-        // GetWinningPRI: the top score; an equal top score is a draw (completion type 2) [CONF RE PLAYTEST §3].
-        int best = -1; bool tie = false;
-        for (size_t i = 0; i < players_.size(); ++i) {
-            if (best < 0 || players_[i].score > players_[(size_t)best].score) { best = (int)i; tie = false; }
-            else if (players_[i].score == players_[(size_t)best].score) tie = true;
-        }
-        winnerPlayer = tie ? -1 : best;
+        // GetWinningPRI: the PRI array walked with a strict > - on an equal top score the first one (join order) is the announced
+        // winner (GRI.Winner); the completion types below still mark the tied players as a draw [CONF RE end-of-match check].
+        int best = -1;
+        for (size_t i = 0; i < players_.size(); ++i)
+            if (best < 0 || players_[i].score > players_[(size_t)best].score) best = (int)i;
+        winnerPlayer = best;
     }
     if (s_.survival) winner = -1;   // no win condition: AllDead ends it
     winnerTeam_ = winner;
@@ -471,13 +469,14 @@ void Match::endGame(int winnerPlayer, const std::string& reason) {
         GameplayEvent& e = recordEvent(GameplayEventType::MatchEnd, winnerPlayer);
         e.value = winner; e.text = reason; e.winnerPlayer = winnerPlayer;
         // Completion per player (stats): 0 win, 1 loss, 2 draw. Team games: by the winning team (none = draw);
-        // FFA: the winner wins, an equal top score draws [CONF RE PLAYTEST §3 / MP_PROGRESSION §1].
+        // FFA (GetGameCompletionType): 1 if anyone scored higher, else 2 if anyone scored the same, else 0 - independent of the
+        // announced winner [CONF RE PLAYTEST §3 / MP_PROGRESSION §1 / end-of-match check].
         int top = -1; for (const MatchPlayer& p : players_) top = std::max(top, p.score);
         int topCount = 0; for (const MatchPlayer& p : players_) topCount += p.score == top;
         e.completion.resize(players_.size(), 1);
         for (size_t i = 0; i < players_.size(); ++i) {
             if (s_.teamGame) e.completion[i] = winner < 0 ? 2 : (players_[i].team == winner ? 0 : 1);
-            else e.completion[i] = (winnerPlayer < 0 && players_[i].score == top) ? 2 : ((int)i == winnerPlayer ? 0 : 1);
+            else e.completion[i] = players_[i].score == top ? (topCount > 1 ? 2 : 0) : 1;
         }
         // GameWin XP quirk (TnVersusGame.CheckEndGame): every player on Winner.Team, where Winner is the PRI passed to EndGame
         // - on a time-limit end GetWinningPRI (top individual score, first found), even on a team tie. DM: no win/lose XP.
@@ -486,10 +485,12 @@ void Match::endGame(int winnerPlayer, const std::string& reason) {
             if (w < 0) for (size_t i = 0; i < players_.size(); ++i) if (w < 0 || players_[i].score > players_[(size_t)w].score) w = (int)i;
             e.xpWinTeam = w >= 0 ? players_[(size_t)w].team : -1;
         }
-        // MVP (achievement 37): every PRI tied for the top personal score, more than one player (versus: both teams present).
+        // MVP (achievement 37, CanAwardMVP + AwardMVPAchievement): CanGainXp, more than one PRI (versus: both teams present); every
+        // PRI tied for the top personal score over all participants, received only by player controllers (bots count, never get it).
         int n0 = 0, n1 = 0; for (const MatchPlayer& p : players_) { n0 += p.team == 0; n1 += p.team == 1; }
-        if (players_.size() > 1 && (!s_.teamGame || (n0 > 0 && n1 > 0)))
-            for (size_t i = 0; i < players_.size(); ++i) if (players_[i].score == top) e.mvp.push_back((int)i);
+        if (s_.canGainXp && players_.size() > 1 && (!s_.teamGame || (n0 > 0 && n1 > 0)))
+            for (size_t i = 0; i < players_.size(); ++i)
+                if (players_[i].score == top && players_[i].kind != ParticipantKind::Bot) e.mvp.push_back((int)i);
     }
     LOG_INFO("match: EndGame reason \"%s\" score %d-%d winner team %d player %d", reason.c_str(), teamScore_[0], teamScore_[1], winner, winnerPlayer);
     // audit line; the time-limit end is the original EndGame(none, "") (empty reason), reported as Time

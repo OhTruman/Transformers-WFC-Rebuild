@@ -2713,6 +2713,7 @@ bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
     if (out.settings.rounds > 0 && opt.count("Rounds")) { out.settings.rounds = std::max(2, std::atoi(opt["Rounds"].c_str())); out.settings.goalScore = 1000000; }
     if (opt.count("TimeLimit")) out.settings.timeLimit = std::max(0, (int)std::atof(opt["TimeLimit"].c_str()));
     // Private Match Bot Settings (Frontend contract; PC ADAPTATION). Clamped again against the slots when the bots are added.
+    if (opt.count("WfcCanGainXp")) out.settings.canGainXp = std::atoi(opt["WfcCanGainXp"].c_str()) != 0;   // GRI.CanGainXp (MVP gate)
     if (opt.count("WfcIdleKick")) out.settings.kickIdle = std::atoi(opt["WfcIdleKick"].c_str()) != 0;   // host option "Kick Idle Players"
     if (opt.count("IconicMode")) out.settings.iconicMode = std::atoi(opt["IconicMode"].c_str()) != 0;   // GRI _bIconicMode (Frontend URL)
     if (opt.count("BotsFriendly")) out.bots.friendly = std::max(0, std::atoi(opt["BotsFriendly"].c_str()));

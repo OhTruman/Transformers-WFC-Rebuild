@@ -24,6 +24,7 @@ struct MatchSettings {
     std::string modeTag = "TDM";       // TDM (TnVersusGame, team) or DM (TnFreeForAllGame, FFA)
     bool teamGame = true;
     bool iconicMode = false;           // ?IconicMode=1 (GRI _bIconicMode): iconic characters are claimed, one holder per match
+    bool canGainXp = true;             // GRI.CanGainXp (= !IsPrivateGame): gates the MVP award; the frontend's XP rule (?WfcCanGainXp)
     bool kickIdle = false;             // ?WfcIdleKick=1: host option "Kick Idle Players" (online only; the original: public matches only)
     int goalScore = 40;                // ?PointsToWin (TDM default 40 of 20/30/40/50; DM 20 of 10/20/30)
     int timeLimit = 900;               // ?TimeLimit seconds (TimeLimits[1] of 600/900/1200)

@@ -216,7 +216,7 @@ struct HudGameState {
     int winnerTeam = -1;                         // GRI.Winner (-1 tie / none)
     std::string result;                          // TnVersusGameOverMessage: "Your team won" / "Your team lost" / "Tie game"
     std::string endReason;                       // EndGame reason: "Score", "" (time), "Forfeit"
-    int winnerPlayer = -1;                       // FFA winner (GetWinningPRI; -1 draw)
+    int winnerPlayer = -1;                       // FFA winner (GetWinningPRI: on a tie the first tied player; -1 none)
     float matchOverTimeLeft = 0.0f;              // MatchOver -> ReturnToGameLobby (15 s)
     // Kill feed (TnDeathMessage broadcasts; Hud_GFX rows live 5 s + 1 s fade, max 5 shown), oldest first.
     std::vector<KillFeedEntry> killFeed;
