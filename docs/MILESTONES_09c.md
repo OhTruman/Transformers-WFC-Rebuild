@@ -3930,3 +3930,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   checkpoint saves, 0 unanswered bridge calls, 0 held ops, no crashes); D5 looks right; A1 WORLD BLACK in both modes
   (bsp.glb missing A1_IAC_Base; fade / unlit lift suspected) -> Rendering + Gameplay; A1 Realistic load 142 s with a 16 s
   gap (17.6 GB private). Card: Rendering x51.
+2026-10-23 08:42 MERGED a4ca2c04 matinee sound keys (Systems; D5 intro cine keys on Gameplay's clock), the package README online section.
+  Systems' list is empty (refresh.sh on overlay h awaits the word). RE: A1 black = Switch IncrementAmount default ->
+  Gameplay fixes + implements the opening (CAMPAIGN_A1_OPENING_RE).
