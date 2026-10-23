@@ -62,6 +62,19 @@ RENDER_IF_PRESENT = ['fog_volumes.json', 'render_index_extra.json']   # + the Es
 # Escalation match silently falls back to the versus nav - Experimental 2026-10-23)
 MANIFEST_IF_PRESENT = ['bot_nav_escalation.json', 'bot_nav_air_escalation.json', 'escalation_nav_blockers.json']
 MANIFEST_MAPS = 'Transformers Rebuild/AssetTools/manifests/maps/'
+# single AssetTools files newer than slim_files.tsv the game reads (ROOT-relative; shipped when present): the versus maps' transforming
+# actors (verify_slim 2026-10-23 on be5b7cdc: a failing open on Streets)
+ASSETTOOLS_IF_PRESENT = ['AssetTools/manifests/maps/mp_transforming_actors.json']
+# whole AssetTools folders newer than slim_files.tsv (ROOT-relative; every file shipped): the Escalation horde bodies, read by
+# ChassisDef as <ExtractedAssets/VerticalSlice>/../../AssetTools/out/escalation_characters/<id>/ (character.json, robot.glb, textures,
+# weapons; 2026-10-23: every ESC_* chassis was UNAVAILABLE in the package)
+ASSETTOOLS_TREES = ['AssetTools/out/escalation_characters',   # + the campaign chapters, shipped whole at their AssetTools path: one
+                    'AssetTools/out/campaign_render/D5_OME',   # campaign root, <WFC_CAMPAIGN_ROOT>/<chapter>/<unit>/ (Play.bat sets it; Integration 2026-10-23; A1 later)
+                    'AssetTools/manifests/maps/transforming_actors',   # the skeletal doors / bridges mp_transforming_actors.json names
+                    'AssetTools/out/campaign_anims']   # animation sets character.json files point at (ESC_Soldier_Tank_Decepticon's Shared_ROBO_ANIM)
+# the head's own data folders (this repo): every file ships from the head being packaged, at Rebuild/<dir>/ (slim_files.tsv listed 7
+# of data/frontend's 9 files - iconic_presets.json and bot_skill.json were missing - and sources them from the live Rebuild tree)
+HEAD_DATA_DIRS = ['data/frontend', 'data/gameplay']
 
 
 def arg(name, default=None):
@@ -166,6 +179,40 @@ def main():
                 manifest_extra.append(dst[len(MANIFEST_MAPS):])
     if manifest_extra:
         print('manifest extras: %d (%s)' % (len(manifest_extra), ', '.join(manifest_extra)))
+    at_extra = 0
+    for rel in ASSETTOOLS_IF_PRESENT:
+        if 'Transformers Rebuild/' + rel not in have_dest and os.path.isfile(os.path.join(ROOT, rel)):
+            rows.append(dict(dest='Transformers Rebuild/' + rel, source=rel, bytes=str(os.path.getsize(os.path.join(ROOT, rel))), action='keep', reason='assettools extra'))
+            have_dest.add('Transformers Rebuild/' + rel); at_extra += 1
+    for tree in ASSETTOOLS_TREES:
+        top = os.path.join(ROOT, tree)
+        if not os.path.isdir(top):
+            problems.append('AssetTools tree missing: %s' % tree); continue
+        for dp, _, fs in os.walk(top):
+            for f in fs:
+                src = os.path.relpath(os.path.join(dp, f), ROOT).replace(os.sep, '/')
+                if 'Transformers Rebuild/' + src not in have_dest:
+                    rows.append(dict(dest='Transformers Rebuild/' + src, source=src, bytes=str(os.path.getsize(os.path.join(dp, f))), action='keep', reason='assettools tree'))
+                    have_dest.add('Transformers Rebuild/' + src); at_extra += 1
+    head_data, head_replaced = 0, 0
+    for d in HEAD_DATA_DIRS:
+        top = os.path.join(REPO, d)
+        if not os.path.isdir(top):
+            problems.append('head data folder missing: %s (build_slim must run from the head tree)' % top); continue
+        for f in sorted(os.listdir(top)):
+            src_abs = os.path.join(top, f)
+            if not os.path.isfile(src_abs):
+                continue
+            dst = 'Transformers Rebuild/Rebuild/' + d + '/' + f
+            src = os.path.relpath(src_abs, ROOT).replace(os.sep, '/')
+            row = dict(dest=dst, source=src, bytes=str(os.path.getsize(src_abs)), action='keep', reason='head data')
+            if dst in have_dest:
+                for i, r in enumerate(rows):
+                    if r['dest'] == dst:
+                        rows[i] = row; head_replaced += 1
+            else:
+                rows.append(row); have_dest.add(dst); head_data += 1
+    print('assettools extras: %d files; head data: %d added, %d from the head instead of the live tree' % (at_extra, head_data, head_replaced))
     bin_rows = []
     for rel in tsv_bin:
         src = os.path.join(bin_dir, rel)
