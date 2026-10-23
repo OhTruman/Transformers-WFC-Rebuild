@@ -4132,3 +4132,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 14:52 Render verdict on handover3: SHIP with one Realistic item: the player's held weapon is a black silhouette in D5 Realistic
   (pre-existing; the gun takes the small-dynamic cell env; likely RT self-shadow by the body). DECISION: fix now (time
   before the reboot / D3B); Rendering runs the A/B on the card and cuts a render-only patch vs c72b7638.
+2026-10-23 17:06 MERGED 454d7bff Realistic held weapons drawn with the bodies on the RT path (they were composited as world pixels with the
+  indoor sun / AO factor 0: black silhouette; outdoors ~1 so MP never showed it). FINAL CODE 454d7bff. Experimental
+  rebuilds the head arm; Systems re-pointed; the Frontend runs handover4. D3B ~16:30, outside list ~16:45.
