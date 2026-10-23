@@ -1281,8 +1281,16 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                         ++fr.smokeBlobN;
                     }
                 }
-                if (frameNo_ % 300 == 0 && (fr.smokeBlobN > 0 || !smokeVolAcc_.empty()))
-                    LOG_INFO("wfc: smoke volume: %d of %zu blobs (frame %d)", fr.smokeBlobN, smokeVolAcc_.size(), (int)frameNo_);
+                {   // (diagnostics) the first 5 frames with blobs, then every 300: the count and the top blob
+                    static int logged = 0;
+                    if ((fr.smokeBlobN > 0 || !smokeVolAcc_.empty()) && (logged < 5 || frameNo_ % 300 == 0)) {
+                        ++logged;
+                        const float* t = fr.smokeBlobs[0];
+                        LOG_INFO("wfc: smoke volume: %d of %zu blobs (frame %d); top: centre %.1f %.1f %.1f r %.2f m, density %.4f / m, camera %.1f m away",
+                                 fr.smokeBlobN, smokeVolAcc_.size(), (int)frameNo_, t[0], t[1], t[2], t[3], fr.smokeBlobs[1][0],
+                                 fr.smokeBlobN > 0 ? core::length(core::Vec3{t[0], t[1], t[2]} - camPos_) : -1.0f);
+                    }
+                }
                 smokeVolAcc_.clear();
                 rtVolFrame_ = frameNo_;
             }
