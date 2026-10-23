@@ -206,6 +206,7 @@ bool World::cpInterpActivate(KismetVM& vm, int op, int input) {
                 if (rev && in.pos <= 0.0f) in.pos = M.length;
             }
             in.playing = true; in.dir = rev ? -1.0f : 1.0f;
+            LOG_INFO("campaign: matinee %s %s at %.2f / %.2f s", shortName(in.action).c_str(), rev ? "reverse" : "play", in.pos, M.length);
             o.latent = true; o.timer = -1.0f;
             cpMatineeApply(in, in.pos, in.pos);   // the start pose / camera at once
         } else if (input == 2) { in.playing = false; o.latent = false; cpMatineeEnd(in); }
@@ -233,6 +234,7 @@ void World::cpTickMatinees(float dt) {
             cp_.vm.finishLatent(in.op, in.dir > 0.0f ? "Completed" : "Reversed");
         }
     }
+    cpFlushCinematicView();
     // pawns standing on a moving InterpActor ride it (PROV base: inside its footprint, on its top)
     for (CampaignMover& m : cpMovers_) {
         const core::Vec3 d = m.offset - m.lastOffset;
@@ -303,25 +305,38 @@ void World::cpMatineeApply(CampaignState::Interp& in, float from, float to) {
             break;
         }
     }
-    if ((haveFade || cp_.cineOp == in.op) && renderer_) {
+    // the view: this matinee's fade, held while it is active (playing or paused); combined per tick (cpFlushCinematicView)
+    in.viewing = haveFade || cp_.cineOp == in.op;
+    if (haveFade) in.lastFade = fade;
+}
+
+// One CinematicView per tick: the strongest fade of the active matinees (a paused hold-black keeps holding: A1 Intro_Setup).
+void World::cpFlushCinematicView() {
+    bool any = false; float fade = 0.0f; std::string who;
+    for (const CampaignState::Interp& in : cp_.interps)
+        if (in.viewing && in.op >= 0 && cp_.vm.op(in.op).latent) { any = true; if (in.lastFade >= fade) { fade = in.lastFade; who = in.action; } }
+    if (!renderer_) return;
+    if (any) {
         render::IRenderer::CinematicView v;
-        v.active = true;
-        v.fade[0] = v.fade[1] = v.fade[2] = 0.0f; v.fade[3] = haveFade ? fade : 0.0f;
+        v.active = true; v.fade[0] = v.fade[1] = v.fade[2] = 0.0f; v.fade[3] = fade;
         renderer_->setCinematicView(v);
-        cp_.cineViewOp = in.op;
+        if (!cp_.viewOn) LOG_INFO("campaign: cinematic view on (%s, fade %.2f)", shortName(who).c_str(), fade);
+        cp_.viewOn = true;
+    } else if (cp_.viewOn) {
+        render::IRenderer::CinematicView v; v.active = false;
+        renderer_->setCinematicView(v);
+        cp_.viewOn = false;
+        LOG_INFO("campaign: cinematic view off");
     }
 }
 
 void World::cpMatineeEnd(CampaignState::Interp& in) {
+    LOG_INFO("campaign: matinee %s ends at %.2f s", shortName(in.action).c_str(), in.pos);
+    in.viewing = false;
     if (cp_.cineOp == in.op) {
         player_.controller().clearSpectatorView();
         if (renderer_) renderer_->notifyCameraCut("matinee end");
         cp_.cineOp = -1; cp_.cineCamGroup.clear();
-    }
-    if (cp_.cineViewOp == in.op && renderer_) {
-        render::IRenderer::CinematicView v; v.active = false;
-        renderer_->setCinematicView(v);
-        cp_.cineViewOp = -1;
     }
 }
 

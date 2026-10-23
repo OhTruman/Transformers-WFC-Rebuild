@@ -121,6 +121,14 @@ bool World::cpPawnFactoryActivate(KismetVM& vm, int op, int input) {
         if (F.op != op) continue;
         KismetVM::Op& o = vm.op(op);
         if (input != 0) return true;   // Stop / other inputs: nothing to do yet
+        if (F.cls == "TnActorFactoryOmegaBatteryDestructible" && !F.points.empty()) {   // a destructible factory: the blueprint at its spawn point
+            for (int c = 0; c < F.count; ++c) {
+                const int di = cpSpawnDestructible(F.aicd, afterDot(F.action) + "_" + std::to_string(c), F.points[(size_t)c % F.points.size()], 0.0f);
+                if (di >= 0) cpBindDesEvents(di);
+            }
+            vm.output(op, std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Spawned") != F.outputs.end() ? "All Pawns Spawned" : "Out");
+            return true;
+        }
         if (F.pool.empty() || F.points.empty()) {
             if (!F.heldLogged) { F.heldLogged = true; LOG_INFO("campaign: factory %s held (%s)", afterDot(F.action).c_str(), F.note.empty() ? "no spawn points" : F.note.c_str()); }
             o.latent = true; o.timer = -1.0f;
@@ -414,9 +422,12 @@ bool World::cpRestartFromCheckpoint() {
 void World::cpLoadTouches() {
     cp_.touches.clear();
     std::map<std::string, std::vector<std::vector<core::Vec3>>> brushes;
-    for (const std::string& u : cpChapter_.allUnits) {
+    std::vector<std::string> files;   // every unit's physics.json + the chapter root's (it also covers levels without a render unit:
+    for (const std::string& u : cpChapter_.allUnits) files.push_back(cpChapter_.dir + u + "/physics.json");   // the _Audio_m zones)
+    files.push_back(cpChapter_.dir + "physics.json");
+    for (const std::string& file : files) {
         assets::Json pj;
-        if (!readJsonFile(cpChapter_.dir + u + "/physics.json", pj)) continue;
+        if (!readJsonFile(file, pj)) continue;
         const assets::Json& vs = pj["volumes"];
         for (size_t i = 0; i < vs.size(); ++i) {
             const assets::Json& P = vs[i]["polygons_gltf"];
