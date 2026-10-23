@@ -4117,3 +4117,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   thousands of class-default rows: volumes, lights, sounds; 35 short-name conflicts across levels: path keys on both sides
   = post-build). CODE CANDIDATE 78caf2bc. Frontend reruns A1 + A2 on it; Experimental rebuilds the gate head; Gameplay
   folds it into FINAL_BASE_ITEMS.
+2026-10-23 14:27 MERGED b315e585 actor subs keyed by object path (Rendering): fixes the 35 short-name collisions once Gameplay sends paths
+  (patch requested) and AssetTools adds extras.actor_path to every chapter (requested). Experimental arms final4 / 78caf2bc
+  built; rebuild at the grant with the final head.
