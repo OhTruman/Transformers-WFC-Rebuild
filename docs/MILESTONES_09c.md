@@ -3568,3 +3568,4 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   #9 = hover_plane_FX mesh emitter Lifetime 0 + the authored bKillOnDeactivate / bKillOnCompleted flags missing from
   map_fx_runtime.json -> Rendering exports the flags + WfcMapFx kills on stop / completion. WFC_UDPHOST / UDPJOIN two-process
   UdpSession match exists (2957 ticks equal; member HostLost crash being fixed). Card -> Rendering 01:05 (7 min) -> Frontend.
+2026-10-23 01:06 NET.identity PASS on 4bcfde3d (phase 2 head, WFC_NET_* row). Float after-soak building on the dodge cap with the refined detector.
