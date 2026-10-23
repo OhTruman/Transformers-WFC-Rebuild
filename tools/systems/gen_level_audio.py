@@ -418,6 +418,19 @@ if len(sys.argv) > 1 and sys.argv[1] == '--campaign':
                      for x in p.get('Subtitles') or [] if x.get('Text')]
             if lines: subs.setdefault(wv, {'duration': round(p.get('Duration', 0.0), 3)})[lang] = lines
     doc['subtitles'] = subs
+    # Each conversation line's sim duration (Gameplay 2026-10-23: every peer ends a line on the same tick, playback or not): the
+    # longest localized wave its cue can play (the authored SoundNodeWave Duration; one wave per dialog cue in practice), -1 unknown.
+    def cue_waves(n, out):
+        if n.get('class') == 'SoundNodeWaveEx': out.append(n.get('node'))
+        for ch in n.get('children') or []: cue_waves(ch, out)
+        return out
+    unknown = 0
+    for op in doc['kismet']['ops']:
+        for ln in op.get('lines', []) if op.get('type') == 'conversation' else []:
+            ds = [subs[w]['duration'] for w in cue_waves((doc['cues'].get(ln['cue']) or {}).get('tree') or {}, []) if w in subs and subs[w].get('duration')]
+            ln['duration'] = max(ds) if ds else -1.0
+            unknown += 0 if ds else 1
+    print('%s: conversation line durations, %d unknown' % (chap, unknown))
     print('%s: subtitles for %d of %d localized waves (%d with French)' % (chap, len(subs), len(waves),
                                                                          sum(1 for v in subs.values() if 'fra' in v)))
     io.open(dst, 'w', encoding='utf-8', newline='\n').write(json.dumps(doc, separators=(',', ':')))
