@@ -260,3 +260,53 @@ snipers and the single Brute use the Escalation sets (MP_ESCALATION §9.2).
 - **Chamber `InitializeRockets`:** 4 drones; each spawn toggles an emitter after a 0.3 s delay (the rocket-prep FX).
 - **TNLMR / Cave:** move-to on spawn; combat-music events.
 - No god-mode or health scripting.
+
+---
+
+## D3A_IAC: Brawl VIP (tank buddy), city tank, AA-gun defence
+
+There's no boss AI. The novel templates are the **Brawl buddy** and the **Defender jets**. HoloBrute, Titan, Brute and Sniper are
+as in MP_ESCALATION §9.2.
+
+### Brawl_VIP_AICD (C)
+- **Template:** CType_Boss, chassis Brawl_ROBODEF.
+- **Action set:** Soldier_Tank_Buddy:
+  - robot: AssaultRifle ShootFromTactical / ShootAtTarget (AwayFromBuddy cost);
+  - **tank: TankCannon ShootFromTactical every 15–25 s**, RocketVehicle ShootAtTarget;
+  - turrets (HeavyIon, Rocket);
+  - ScanningIdle only in the matching form.
+- **Goals and sensors:** Buddy_AiGoalSet (follows / leads: TOGETHERNESS_BUDDY); friendly-agent sensors (BiggestThreat,
+  Retreated node picker).
+
+**Kismet (C):**
+- `SpawnBrawl` → factory (two instances, BrawlAI1 / BrawlAI2):
+  - **BrawlAI1: `SeqAct_ToggleGodMode`, fully invulnerable**;
+  - **BrawlAI2: `TogglePseudoGodMode`, damageable but can't die**.
+  - The buddy can never be lost, so there's no VIP-fail path (unlike A3 Ratchet).
+- **Movement:**
+  - `MarkBrawl` / `UnMarkBrawl` objective markers;
+  - **Buddy_Waypoints:** `TnAiSetMoveToObjective` per stage, `MoveBrawlThroughCity1Door`, `TeleportBrawl1`;
+  - crowd sound beds `Start/StopBrawlCrowd`.
+- **`Critical_AI_Interact` fail-safe** (a reusable sub-sequence):
+  1. the AI is told to use a critical interact;
+  2. after a Delay, if the interact isn't yet in use → **`TnSeqAct_DownRevive`** (revive him if he's downed) → **teleport** to
+     the interact's point → use the interact.
+  - This guarantees that progression-critical buddy interacts happen.
+
+### City tank: Soldier_Tank_Autobot (C)
+- **Sets:** Tank_AiActionSet (Escalation boss tank).
+- **On spawn:** ShootAtActor at a scripted note target (an opening barrage), plus a switch / gate set-up.
+- **`TnSeqEvent_TankStatus`:**
+  - **FuelCellDamaged** → AttackFromActor (repositions it);
+  - **FuelCellDestroyed** → new tactical volume, `MX_TANK_TRANSFORMS` (it transforms to robot), an int flag.
+- All killed → `TankKilled`.
+
+### DefendAAguns: Soldier_Jet_Autobot_Defender (C)
+- **Defender set**, a jet that **hovers to fight**:
+  - jet PlaneMachineGun ShootFromAirTactical / ShootAtTarget (JetSoldier cost modulators);
+  - robot **HoverFromTactical** with HeavyMG-AIHover (min interval 4 s);
+  - **ShootingStrafeFromHover**: a **4 s** strafe every **2–3 s**.
+  - No strafing / bombing runs, unlike the standard jet.
+- **Waves** (JetEnemies_3 / _4): each spawn is assigned a tactical volume around the AA guns and fires attack / dialogue events;
+  each kill fires a delayed follow-up event.
+- The AA guns themselves are pseudo-god-toggled during the defence.
