@@ -460,8 +460,10 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     }
     core::loadYield("World: collision meshes");
     if (!colMesh.empty()) {
-        splitMovers(colMesh, pawnStatic, pawnMovers);
+        if (campaignMap_) { cpCollectMovers(); cpSplitMovers(colMesh, pawnStatic); }   // campaign: the chapter's InterpActors
+        else splitMovers(colMesh, pawnStatic, pawnMovers);
         collision_.build(pawnStatic);
+        if (campaignMap_) cpRegisterMovers();
         core::loadYield("World: movement collision");
         if (assets::loadGlb(mapDir + "collision_weapon.glb", weaponColMesh)) {
             splitMovers(weaponColMesh, weaponStatic, weaponMovers);

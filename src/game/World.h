@@ -1434,6 +1434,15 @@ private:
     bool cpPawnFactoryActivate(KismetVM& vm, int op, int input);
     void cpTickFactories(float dt);
     void cpSyncPicks();
+    void cpCollectMovers();                       // WorldCampaignMatinee.cpp
+    void cpSplitMovers(const render::MeshData& in, render::MeshData& out);
+    void cpRegisterMovers();
+    void cpLoadMatinees();
+    bool cpInterpActivate(KismetVM& vm, int op, int input);
+    void cpTickMatinees(float dt);
+    void cpMatineeApply(CampaignState::Interp& in, float from, float to);
+    void cpMatineeEnd(CampaignState::Interp& in);
+    std::vector<CampaignMover> cpMovers_;         // the chapter's InterpActors (kept across launches: loaded with the map)
     void cpLoadActors();
     bool cpActorPos(const std::string& path, core::Vec3& out) const;
     std::vector<int> cpTargets(KismetVM& vm, int op, const std::string& link);

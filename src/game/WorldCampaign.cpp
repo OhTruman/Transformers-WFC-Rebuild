@@ -233,6 +233,7 @@ void World::setupCampaign(const MatchLaunch& l) {
         if (cp_.kismetLoaded) cpAudioBind();
         cpLoadFactories();
         cpLoadActors();
+        cpLoadMatinees();
     }
     LOG_INFO("campaign: %s (MapId %d) %s, difficulty %d, the human as %s, squad %zu", cpChapter_.chapter.c_str(), cpChapter_.mapId,
              match_.settings().modeTag.c_str(), cp_.difficulty, cpChapter_.trio[(size_t)pick].c_str(), cp_.squad.size());
@@ -272,6 +273,7 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
         return true;
     }
     if (c == "SeqAct_TnPawnFactory") return cpPawnFactoryActivate(vm, op, input);
+    if (cpInterpActivate(vm, op, input)) return true;   // SeqAct_Interp: Matinee
     if (cpAiOpActivate(vm, op, input)) return true;   // MoveToActor / SetMoveToObjective / UseInteract
     if (c == "SeqAct_Conversation" && input == 0) { o.latent = true; o.timer = 3.0f; vm.output(op, "Played"); return true; }
     if (c == "SeqAct_MoviePlayer") {   // [Systems] Play: the full-screen movie, latent until its end (Stopped); Stop: ends it early
@@ -436,6 +438,7 @@ void World::tickCampaign(float dt) {
     if (cp_.kismetBegun && !cp_.gameOver) cp_.vm.tick(dt);
     cpSyncPicks();
     if (!cp_.gameOver) cpTickFactories(dt);
+    cpTickMatinees(dt);
     // TnCampaignGame.Killed: a human killed by anything but DmgType_Suicided -> CampaignGameOver (solo: never downed).
     const auto& kh = match_.killHistory();
     for (; cp_.killsSeen < kh.size(); ++cp_.killsSeen) {

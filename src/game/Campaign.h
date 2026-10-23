@@ -34,6 +34,23 @@ struct CampaignChapter {
 };
 
 // A SeqAct_TnPawnFactory of the level Kismet (AssetTools next_map/<CH>_pawn_factories.json) and its pooled AI participants.
+// A matinee (InterpData) of the chapter: the tracks the runtime plays (movement, event keys, director cuts, fade, FOVAngle).
+struct CampaignMatinee {
+    struct Key { float t = 0.0f; float v[3] = {0, 0, 0}, ai[3] = {0, 0, 0}, lo[3] = {0, 0, 0}; int mode = 0; };   // 0 linear 1 constant 2 curve
+    struct Track { int kind = 0; bool relative = false; std::vector<Key> pos, euler, curve; std::vector<std::pair<float, std::string>> events; };
+    // kind 0 move, 1 event keys, 2 director cuts (camera group names), 3 fade, 4 FOVAngle
+    struct Group { std::string name; bool director = false; std::map<std::string, std::vector<std::string>> actors; std::vector<Track> tracks; };
+    float length = 0.0f;
+    std::vector<Group> groups;
+};
+// An InterpActor of the chapter moved by a matinee: its moving collision set and its pose (glTF metres).
+struct CampaignMover {
+    std::string name;
+    core::Vec3 pivot{0, 0, 0}, offset{0, 0, 0}, lastOffset{0, 0, 0}, lo{0, 0, 0}, hi{0, 0, 0};
+    std::vector<core::Vec3> tris;   // pivot-relative
+    int pawnSet = -1;
+};
+
 struct CampaignFactory {
     std::string action, cls, aicd, chassis, spawnedVar, note;
     int op = -1, team = 0, count = 1, pending = 0, spawned = 0;
@@ -65,6 +82,11 @@ struct CampaignState {
     struct Objective { core::Vec3 pos{0, 0, 0}; float radius = 5.0f; bool persistent = false; };
     std::map<int, Objective> objectives;      // step 4: Kismet AI objectives per match player (MoveToActor / SetMoveToObjective)
     std::map<std::string, core::Vec3> actorPos;   // actor name -> location (navigation.json, actors.json)
+    std::vector<CampaignMatinee> matinees;    // step 5: Matinee
+    struct Interp { int matinee = -1, op = -1; std::string action; float rate = 1.0f, dir = 1.0f, pos = 0.0f; bool looping = false, rewindOnPlay = false, playing = false; };
+    std::vector<Interp> interps;              // one per SeqAct_Interp op
+    int cineOp = -1, cineViewOp = -1;         // the op driving the local camera / the CinematicView
+    std::string cineCamGroup;
     std::string humanChassis;                 // the human's current pick (the squad is the trio minus it)
     KismetVM vm;
     // [Systems] the VM's audio ops (LevelAudioScript hosted): VM op -> its audio op id ("<level>|<path under Main_Sequence>"; "" = not

@@ -498,6 +498,9 @@ public:
     // Gameplay-authoritative visibility of an authored map actor (world.glb actor name, e.g. "InterpActor_6165").
     // Authored bHidden actors start hidden; Kismet-driven state (SeqAct_ToggleHidden by game rule) is pushed here.
     virtual void setActorHidden(const std::string& actor, bool hidden) { (void)actor; (void)hidden; }
+    // Gameplay-authoritative pose of an authored map actor moved by a campaign matinee (an InterpActor: world.glb actor name), UE
+    // units / rotator degrees (pitch, yaw, roll), absolute. Actors never sent keep their authored pose. [Gameplay; Rendering implements]
+    virtual void setMapActorTransform(const std::string& actor, const core::Vec3& posUE, const core::Vec3& rotUEdeg) { (void)actor; (void)posUE; (void)rotUEdeg; }
     // Activate / deactivate an authored map particle component (owner actor name or component path). Components
     // start in their authored bAutoActivate state (pickup factories toggle their effects at runtime).
     virtual void setMapEffectActive(const std::string& ownerOrComponent, bool active) { (void)ownerOrComponent; (void)active; }
