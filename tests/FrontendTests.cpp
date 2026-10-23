@@ -1929,7 +1929,11 @@ static void testFriendsInvites() {
                           ds.call("ReadCollectionValue", {"<OnlinePlayerData:FriendMessages>", "SendingPlayerNick", "0"}).s == "Bravo";
     r.f().popupButton('A');   // Join
     const FakeSession::Call* jc = r.fake->last("join");
-    const bool joined = jc && jc->arg == "WFC-9ZZZ-8YYY-7X" && r.f().gameInvites().empty();
+    bool joined = jc && jc->arg == "WFC-9ZZZ-8YYY-7X" && r.f().gameInvites().empty();
+    r.f().call("Online.RemoveFriend", {"Alpha"});   // I3: removed locally
+    ds.poll();
+    joined = joined && std::none_of(r.f().profile().recentPlayers.begin(), r.f().profile().recentPlayers.end(),
+                                    [](const LocalProfile::RecentPlayer& p) { return p.name == "Alpha"; });
     check(host && row && sent && online && received && joined, "online.I1_I2_friends_invites",
           std::to_string(host) + std::to_string(row) + std::to_string(sent) + std::to_string(online) + std::to_string(received) + std::to_string(joined) +
           " si=" + (si ? si->arg : std::string("-")) + " pop=" + std::to_string(r.f().popup().open) + " pres=" +
