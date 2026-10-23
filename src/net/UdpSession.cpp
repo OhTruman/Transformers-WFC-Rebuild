@@ -797,7 +797,7 @@ void UdpSession::handleSeated(int seat, const std::vector<uint8_t>& d) {
         w.u8(ms);
         sendSeat(seat, w.b);
         peers_[seat].loaded = false; peers_[seat].lateLoadSince = now_;
-        LOG_INFO("session: late join - seat %d takes match seat %d (match tick %u)", seat, ms, matchTick_);
+        LOG_INFO("session: late join - seat %d takes match seat %d (match tick %u); its load window %.0f s", seat, ms, matchTick_, kLateLoadS);
         break;
     }
     case kLateLaunch: {   // the member: the running match's launch record and its seat, or a refusal
@@ -938,7 +938,11 @@ std::vector<SessionEvent> UdpSession::poll(double now) {
             const Peer& pr = kv.second;
             const double limit = pr.lateLoadSince >= 0.0 ? std::max(opt_.connectionTimeoutS, kLateLoadS)
                                  : gate && !pr.loaded ? std::max(opt_.connectionTimeoutS, opt_.loadTimeoutS) : opt_.connectionTimeoutS;
-            if (now_ - pr.lastHeard > limit) gone.push_back(kv.first);
+            if (now_ - pr.lastHeard > limit) {
+                gone.push_back(kv.first);
+                LOG_INFO("session: seat %d silent %.1f s (limit %.0f s: %s)", kv.first, now_ - pr.lastHeard, limit,
+                         pr.lateLoadSince >= 0.0 ? "late-join load" : gate && !pr.loaded ? "load gate" : "connection");
+            }
         }
         for (int s : gone) dropPeer(s, SessionLeaveReason::Timeout, true);
         if (matchReady() && !matchRunning_ && loadedSelf_ && now_ - loadStart_ > opt_.loadTimeoutS)
