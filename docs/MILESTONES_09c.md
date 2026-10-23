@@ -3933,3 +3933,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 08:42 MERGED a4ca2c04 matinee sound keys (Systems; D5 intro cine keys on Gameplay's clock), the package README online section.
   Systems' list is empty (refresh.sh on overlay h awaits the word). RE: A1 black = Switch IncrementAmount default ->
   Gameplay fixes + implements the opening (CAMPAIGN_A1_OPENING_RE).
+2026-10-23 08:44 BROAD PASS #1 (Experimental, d3c3e1af): TDM 20 / 20, campaign D5 + A1 4 / 4, harnesses + net rows all PASS; one
+  finding: Remnant Escalation on the cell nav default = 0 kills (team bots strand) -> DECISION ESCNAV default back OFF
+  (Gameplay's next patch) until the team-bot coverage is solved.
