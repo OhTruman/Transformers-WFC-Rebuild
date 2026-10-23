@@ -291,7 +291,7 @@ bool World::cpActorPos(const std::string& path, core::Vec3& out) const {
 
 void World::cpLoadActors() {
     cp_.actorPos.clear();
-    std::map<std::string, std::array<int, 2>> hiddenRows;   // name -> rows visible / hidden
+    std::map<std::string, std::array<int, 2>> hiddenRows;   // the actor's object path (the renderer's key: extras.actor_path) -> rows visible / hidden
     cp_.actorHidden.clear(); cp_.actorDestroyed.clear();
     bool actorsFile = false;
     for (const char* file : {"navigation.json", "actors.json"}) {
@@ -311,14 +311,14 @@ void World::cpLoadActors() {
                 const bool drawable = cls.find("MeshActor") != std::string::npos || cls.find("InterpActor") != std::string::npos ||
                                       cls.find("KActor") != std::string::npos || cls.find("TransformingWorldActor") != std::string::npos;
                 const bool hid = drawable && n["props"]["bHidden"].asBool(false);
-                ++hiddenRows[name][hid ? 1 : 0];
+                ++hiddenRows[n.has("object") ? n["object"].asString() : name][hid ? 1 : 0];
             }
         }
     }
     LOG_INFO("campaign: %zu actor locations (navigation.json%s)", cp_.actorPos.size(), actorsFile ? " + actors.json" : "");
-    // the authored bHidden: the renderer's actor nodes start visible, so the hidden ones are hidden here (the flag is by actor name and
-    // survives streaming; ToggleHidden / Destroy flip the same flag). Short names repeat across a chapter's levels (AssetTools): a name
-    // hidden in one level and visible in another is left visible (the renderer keys by name; logged).
+    // the authored bHidden: the renderer's actor nodes start visible, so the hidden ones are hidden here, keyed by the full object path
+    // (Rendering fd7ca625 matches it against the node's extras.actor_path; short names repeat across a chapter's levels). The flag
+    // survives streaming; ToggleHidden / Destroy flip the same flag. A row without an object path keys by its short name.
     int conflicts = 0;
     for (const auto& kv : hiddenRows) {
         if (kv.second[1] > 0 && kv.second[0] == 0) cp_.actorHidden[kv.first] = true;
@@ -1082,14 +1082,15 @@ bool World::cpHideOpActivate(KismetVM& vm, int op, int input) {
         }
         if (var->obj.rfind("des:", 0) == 0) { if (destroy) cpRemoveDestructible(std::atoi(var->obj.c_str() + 4)); ++n; continue; }
         const std::string name = afterDot(var->obj);
-        auto hs = cp_.actorHidden.find(name);
+        const std::string key = var->obj.find('.') != std::string::npos ? var->obj : name;   // the object path when the Kismet names one
+        auto hs = cp_.actorHidden.find(key);
         const bool was = hs != cp_.actorHidden.end() && hs->second;
         const bool hidden = destroy ? true : input == 0 ? true : input == 1 ? false : !was;
-        if (destroy && hs != cp_.actorHidden.end() && hs->second && cp_.actorDestroyed.count(name)) continue;
-        cp_.actorHidden[name] = hidden;
-        if (destroy) cp_.actorDestroyed.insert(name);
-        else if (cp_.actorDestroyed.count(name)) continue;   // a destroyed actor stays gone
-        if (renderer_) renderer_->setActorHidden(name, hidden);
+        if (destroy && hs != cp_.actorHidden.end() && hs->second && cp_.actorDestroyed.count(key)) continue;
+        cp_.actorHidden[key] = hidden;
+        if (destroy) cp_.actorDestroyed.insert(key);
+        else if (cp_.actorDestroyed.count(key)) continue;   // a destroyed actor stays gone
+        if (renderer_) renderer_->setActorHidden(key, hidden);
         const int ti = transforming_.find(name);
         if (ti >= 0) { transforming_.setShown((size_t)ti, !hidden); if (destroy) transforming_.setCollide((size_t)ti, false); }
         if (destroy) {
