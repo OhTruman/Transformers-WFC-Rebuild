@@ -5,6 +5,7 @@
 #include "core/Log.h"
 #include "game/World.h"
 #include "game/PickupFactory.h"
+#include "game/Destructible.h"
 
 #include <algorithm>
 #include <cmath>
@@ -152,6 +153,26 @@ void Application::runEscalationTest() {
         check(t > 1.5f && t < 1.85f && std::fabs(p0 - S.power[(size_t)me] - 50.0f) < 0.5f && shown && gi >= 0 && S.generatorOff[(size_t)gi],
               "Ammo generator: 50 power over ~1.67 s (1 per 30 Hz tick), its factory unhidden, its volume off");
         LOG_INFO("ESCTEST ammo bought in %.2f s, power %.0f -> %.0f", t, p0, S.power[(size_t)me]);
+        // G1: the Taken chain. Take the crate (reserve emptied): the level drop re-applies UnHide + the volume off, so it stays out;
+        // the volume reopens 2 s later. A second take at level 0 only hides it.
+        const game::PickupFactory* crate = nullptr;
+        for (const game::PickupFactory* f : world_.pickupFactories()) if (f->name() == "TnAmmoCratePickupFactory_13346") crate = f;
+        auto take = [&] {
+            static core::Vec3 at, away; at = crate->position(); away = at + core::Vec3{6.0f, 0.0f, 0.0f};
+            pin = &away; step(); step();   // a fresh touch (the factory reacts to an overlap beginning)
+            world_.player().pawn().weapon().reserve = 0;
+            pin = &at; for (int k = 0; k < 20 && crate->available(); ++k) step(); pin = nullptr;
+            step(); step();   // the director sees the Taken edge on the next step
+        };
+        if (crate && gi >= 0) {
+            take();
+            check(!crate->hidden() && S.pool[(size_t)gi] == 0.0f && !S.generatorDone[(size_t)gi] && S.generatorOff[(size_t)gi],
+                  "G1: the first take drops the level and re-fires New Power Level: the crate stays out, the volume stays off");
+            run(2.2f);
+            check(!S.generatorOff[(size_t)gi] && crate->available(), "G1: 2 s later the volume is back; the crate respawned (2 s)");
+            take();
+            check(crate->hidden(), "G1: a take at level 0 only hides it (until the generator is bought again)");
+        }
     }
     run(25.5f);
     check(S.phase == Phase::InWave && S.displayWave == 1 && S.currentWave == 1 && world_.hudState().svWave == 2 && S.roundBegins == 2 && S.roundEnds == 1,
@@ -171,6 +192,16 @@ void Application::runEscalationTest() {
         bool zone = false; for (const auto& z : D.zones) if (z.id == "10523") zone = z.active;
         check(t > 3.2f && t < 3.5f && doors && zone, "Door generator 4199: ~3.33 s (3 per tick), doors 11450 / 9615 transform, zone 10523 activated");
         LOG_INFO("ESCTEST door bought in %.2f s, power %.0f, %d purchases", t, S.power[(size_t)me], S.purchases);
+    }
+    {   // Wall_Crashers: a crash wall breaks on a pawn's first touch
+        const game::SurvivalData::CrashWall& cw = D.crashWalls[0];
+        const game::SurvivalData::Shape& v = D.volumes[(size_t)cw.volume].second;
+        static core::Vec3 at; at = (v.mn + v.mx) * 0.5f;
+        pin = &at; step(); step(); pin = nullptr;
+        float hp = 1.0f;
+        for (const game::Destructible* d : world_.destructibles())
+            if (d->name().size() >= cw.wall.size() && d->name().compare(d->name().size() - cw.wall.size(), cw.wall.size(), cw.wall) == 0) hp = d->health();
+        check(D.crashWalls.size() == 4 && S.crashDone[0] && hp <= 0.0f, "Wall_Crashers: a pawn's first touch breaks the crash wall (200 damage)");
     }
     run(25.5f);
     // Loss: every player dead at once.

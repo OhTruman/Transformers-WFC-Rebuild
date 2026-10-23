@@ -94,6 +94,31 @@ for m in ['MP_ESC_BrokenHope', 'MP_ESC_Remnant']:
             'min': [round(min(p[i] for p in pts), 3) for i in range(3)], 'max': [round(max(p[i] for p in pts), 3) for i in range(3)],
             'actions': acts,
         })
+    # Map Kismet the director runs as data (RE ESCALATION_E2B_ANSWERS_RE.md 45a2a08, BrokenHope "Wall_Crashers"):
+    # crash walls - any pawn's first touch of the volume: CauseDamage 200 on the TnStaticDestructibleActor (InitialHealth 1);
+    # round gates - at Round Begin count `round` a player-only touch turns on: Touched -> zone on, UnTouched -> zone off (per pawn event);
+    # window - a player touching `enable` arms an AI-only touch of `volume`: a horde pawn there -> 200 on the wall (health 5).
+    KISMET = {
+        'MP_ESC_BrokenHope': {
+            'crashWalls': [['TriggerVolume_9486', 'TnStaticDestructibleActor_10489'], ['TriggerVolume_11960', 'TnStaticDestructibleActor_6870'],
+                           ['TriggerVolume_10811', 'TnStaticDestructibleActor_15525'], ['TriggerVolume_7836', 'TnStaticDestructibleActor_4868']],
+            'roundGates': [['TriggerVolume_11067', '15078', 4], ['TriggerVolume_14603', '7763', 4], ['TriggerVolume_11856', '7739', 3],
+                           ['TriggerVolume_8879', '6666', 6]],
+            'window': {'enable': 'TriggerVolume_8879', 'volume': 'TriggerVolume_13849', 'wall': 'TnStaticDestructibleActor_5491', 'damage': 200},
+        },
+    }
+    k = KISMET.get(m, {})
+    col = json.load(open(ROOT + '/ExtractedAssets/VerticalSlice/Maps/' + m + '/collision.json'))
+    vols = {v['actor']: v for v in col['volumes']}
+    need = set([w[0] for w in k.get('crashWalls', [])] + [g[0] for g in k.get('roundGates', [])] +
+               ([k['window']['enable'], k['window']['volume']] if 'window' in k else []))
+    tvs = {}
+    for name in sorted(need):
+        polys = vols[name]['polygons_gltf']
+        pts = [p for poly in polys for p in poly]
+        tvs[name] = {'planes': planes(polys), 'min': [round(min(p[i] for p in pts), 3) for i in range(3)],
+                     'max': [round(max(p[i] for p in pts), 3) for i in range(3)]}
+    out['kismet'] = dict(k, volumes=tvs)
     path = os.path.join(OUT, 'escalation_' + m + '.json')
     with open(path, 'w') as f:
         json.dump(out, f, indent=1)

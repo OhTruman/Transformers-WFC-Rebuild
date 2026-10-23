@@ -57,6 +57,25 @@ struct SurvivalData {
         }
     };
     std::vector<Generator> generators;
+    // Map Kismet as data (BrokenHope Wall_Crashers, RE E2b §4): trigger volumes by name; crash walls (any pawn's first touch: 200 on
+    // the destructible); round gates (from Round Begin count `round` a player touch turns the zone on, the untouch off); the window
+    // (a player touching `enable` arms an AI-only touch of `volume`: 200 on `wall`).
+    struct Shape {
+        core::Vec3 mn{0, 0, 0}, mx{0, 0, 0};
+        std::vector<std::array<float, 4>> planes;
+        bool contains(const core::Vec3& p) const {
+            if (p.x < mn.x || p.y < mn.y || p.z < mn.z || p.x > mx.x || p.y > mx.y || p.z > mx.z) return false;
+            for (const auto& q : planes) if (q[0] * p.x + q[1] * p.y + q[2] * p.z > q[3] + 1e-3f) return false;
+            return true;
+        }
+    };
+    std::vector<std::pair<std::string, Shape>> volumes;
+    struct CrashWall { int volume = -1; std::string wall; };
+    std::vector<CrashWall> crashWalls;
+    struct RoundGate { int volume = -1; int zone = -1; int round = 0; };
+    std::vector<RoundGate> roundGates;
+    struct Window { int enable = -1, volume = -1; std::string wall; float damage = 0.0f; };
+    Window window;
     // RE's initial sorted order per type (the original binary's sort of the starting Zones list): ESCTEST's test vector.
     std::array<std::vector<std::string>, kSvTypes> initialSorted;
     static bool load(const std::string& map, SurvivalData& out);
@@ -97,6 +116,9 @@ struct SurvivalState {
     int purchases = 0;
     // Round Begin / Round End (TnSeqEvent_SurvivalEvents 1 / 0) for the map's sequence and the announcer: counters + the last one.
     int roundBegins = 0, roundEnds = 0;
+    std::vector<uint8_t> crashDone, gateOn;               // per crash wall: fired; per round gate: its touch enabled
+    std::vector<std::vector<uint8_t>> gateInside;         // per round gate, per match player: inside last step
+    bool windowArmed = false, windowDone = false;
     int spawns = 0, failedSpawns = 0;
     std::vector<int> spawnOrder;               // the enemy entry of every spawn (tests)
 };
