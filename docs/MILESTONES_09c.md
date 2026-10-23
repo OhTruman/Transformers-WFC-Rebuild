@@ -3995,3 +3995,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 10:09 MERGED a5647405 bridge scan (every original movie call answered) + fb4b3f10 public re-draft by scores (249 frontend tests,
   FLOW 0). The Frontend's interact prompt glue (201e0902) waits for Gameplay's recut runtime 14; then the Frontend is done
   for the build.
+2026-10-23 10:11 AssetTools chain status: A2 DONE (51 units); A3 running; 287 units left at ~2.3 min / unit (~11 h single). DECISION:
+  two chains at once + per-chapter queue items as each finishes (ETA roughly halves); the final gate waits for the chain
+  (CPU) and Gameplay's recut runtime 14 + FINAL_BASE_ITEMS.
