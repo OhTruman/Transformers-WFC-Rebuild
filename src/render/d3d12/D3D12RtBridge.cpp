@@ -404,6 +404,35 @@ public:
         return ok;
 #endif
     }
+    // (chapter streaming) a static set removed: its two instances leave instances_, their BLAS are released, the TLAS rebuilt
+    bool removeStaticSet(unsigned idBase) {
+#if !defined(WFC_RT_SHADERS)
+        (void)idBase; return false;
+#else
+        if (!dev5_ || !waitIdle()) return false;
+        std::vector<D3D12_GPU_VIRTUAL_ADDRESS> gone;
+        instances_.erase(std::remove_if(instances_.begin(), instances_.end(), [&](const D3D12_RAYTRACING_INSTANCE_DESC& d) {
+            if (d.InstanceID < idBase || d.InstanceID >= idBase + 2) return false;
+            gone.push_back(d.AccelerationStructure); return true; }), instances_.end());
+        if (gone.empty()) return true;
+        for (D3D12_GPU_VIRTUAL_ADDRESS va : gone)
+            for (size_t b = 0; b < blas_.size(); ++b)
+                if (blas_[b] && blas_[b]->GetGPUVirtualAddress() == va) { blas_[b]->Release(); blas_.erase(blas_.begin() + (long)b); break; }
+        ID3D12CommandAllocator* al = nullptr; ID3D12GraphicsCommandList4* cl = nullptr;
+        if (FAILED(dev_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&al)) ||
+            FAILED(dev_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, al, nullptr, __uuidof(ID3D12GraphicsCommandList4), (void**)&cl))) {
+            rel(al); return false;
+        }
+        std::vector<ID3D12Resource*> temp;
+        const bool ok = rebuildTlas(cl, temp);
+        cl->Close();
+        const bool idle = ok ? submitTimed(cl, "static set removed") : waitIdle();
+        rel(cl); rel(al);
+        if (idle) for (auto* r : temp) r->Release();
+        if (ok && heap_) writeDescriptors();
+        return ok;
+#endif
+    }
     // the TLAS over instances_ (static sets + masked sets), built on cl; the previous TLAS released (callers waited idle)
     bool rebuildTlas(ID3D12GraphicsCommandList4* cl, std::vector<ID3D12Resource*>& temp) {
         D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
@@ -1704,6 +1733,7 @@ GLuint rtBridgeMaskAtlas(int w, int h) { return ensure() ? g_bridge->maskAtlas(w
 bool rtBridgeAddHitData(const RtHitData& d) { return g_bridge && g_bridge->addHitData(d); }
 bool rtBridgeAddMasked(const RtMaskedWorld& m) { return g_bridge && g_bridge->addMasked(m); }
 bool rtBridgeSetStaticMask(unsigned idBase, unsigned mask) { return g_bridge && g_bridge->setStaticMask(idBase, mask); }
+bool rtBridgeRemoveStaticSet(unsigned idBase) { return g_bridge && g_bridge->removeStaticSet(idBase); }
 void rtBridgeSetSignalBuffers(const GLuint* bufs, int n) { if (g_bridge) g_bridge->setSignalBuffers(bufs, n); }
 bool rtBridgeGiSetup(const RtGiSetup& s, std::vector<GLuint>& glTex) { return g_bridge && g_bridge->giSetup(s, glTex); }
 double rtBridgeVramMB() { return g_bridge ? g_bridge->vramMB() : 0.0; }
@@ -1728,6 +1758,7 @@ GLuint rtBridgeMaskAtlas(int, int) { return 0; }
 bool rtBridgeAddHitData(const RtHitData&) { return false; }
 bool rtBridgeAddMasked(const RtMaskedWorld&) { return false; }
 bool rtBridgeSetStaticMask(unsigned, unsigned) { return false; }
+bool rtBridgeRemoveStaticSet(unsigned) { return false; }
 void rtBridgeSetSignalBuffers(const GLuint*, int) {}
 bool rtBridgeGiSetup(const RtGiSetup&, std::vector<GLuint>& glTex) { glTex.clear(); return false; }
 double rtBridgeVramMB() { return 0.0; }

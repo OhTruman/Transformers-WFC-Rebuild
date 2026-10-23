@@ -317,7 +317,10 @@ int main(int argc, char** argv) {
         auto it = atlasIdx.find(a);
         if (it != atlasIdx.end()) return it->second;
         Atlas at; at.name = a;
-        if (!pngSize(A.render + "/lightmaps/" + a + ".png", at.w, at.h)) { std::printf("no lightmap page %s\n", a.c_str()); return -1; }
+        // (a campaign chapter: the pages shared in <chapter>/lightmaps/, else the unit's own)
+        if (!pngSize(A.render + "/../lightmaps/" + a + ".png", at.w, at.h) && !pngSize(A.render + "/lightmaps/" + a + ".png", at.w, at.h)) {
+            std::printf("no lightmap page %s\n", a.c_str()); return -1;
+        }
         const size_t n = (size_t)at.w * at.h;
         at.cov.assign(n, 0); at.dist.assign(n, 1e9f); at.V.assign(n, 0); at.ndl.assign(n, 0); at.lt.assign(n * 3, 0); at.comp.assign(n, -1);
         at.pos.assign(n, V3{}); at.nrm.assign(n, V3{}); at.dpx.assign(n, V3{}); at.dpy.assign(n, V3{});

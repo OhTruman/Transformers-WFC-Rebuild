@@ -1695,6 +1695,7 @@ public:
         chapterLoading_ = true;
         std::vector<std::string> loaded;
         for (const std::string& u : units) {
+            if (wfc_.hasUnit(u)) continue;              // (streaming: already loaded)
             if (!wfc_.loadSublevel(cd + "/" + u)) continue;
             ++n; loaded.push_back(u);
             wfc_.yieldLoad();
@@ -1744,6 +1745,14 @@ public:
     void notifyCameraCut(const char* reason) override { wfc_.notifyCameraCut(reason); }
     void setPostProcessVolumeEnabled(const std::string& volume, bool on) override { wfc_.setPostVolumeEnabled(volume, on); }
     void setChapterUnitVisible(const std::string& unit, bool visible) override { wfc_.setChapterUnitVisible(unit, visible); }
+    void unloadChapterUnit(const std::string& unit) override {
+        const int gid = wfc_.unitWorldMesh(unit);
+        for (auto it = chapterMeshes_.begin(); it != chapterMeshes_.end(); ++it)
+            if (*it >= 0 && (size_t)*it < gpu_.size() && gpu_[(size_t)*it] == gid && gid >= 0) {
+                meshes_[(size_t)*it] = MeshData{}; gpu_[(size_t)*it] = -1; chapterMeshes_.erase(it); break;
+            }
+        wfc_.unloadChapterUnit(unit);
+    }
     void setCinematicView(const CinematicView& view) override { wfc_.setCinematicView(view); }
     bool frameGenerationAvailable() const override { return frameGenerationRuntimeShipped(); }
     bool frameGenerationActive() const override { return framegenActive(); }

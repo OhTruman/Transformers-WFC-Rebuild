@@ -1,0 +1,284 @@
+diff -ru a/src/render/d3d12/D3D12RtBridge.cpp b/src/render/d3d12/D3D12RtBridge.cpp
+--- a/src/render/d3d12/D3D12RtBridge.cpp	2026-10-23 08:56:43.448129800 -0500
++++ b/src/render/d3d12/D3D12RtBridge.cpp	2026-10-23 08:56:43.569545900 -0500
+@@ -404,6 +404,35 @@
+         return ok;
+ #endif
+     }
++    // (chapter streaming) a static set removed: its two instances leave instances_, their BLAS are released, the TLAS rebuilt
++    bool removeStaticSet(unsigned idBase) {
++#if !defined(WFC_RT_SHADERS)
++        (void)idBase; return false;
++#else
++        if (!dev5_ || !waitIdle()) return false;
++        std::vector<D3D12_GPU_VIRTUAL_ADDRESS> gone;
++        instances_.erase(std::remove_if(instances_.begin(), instances_.end(), [&](const D3D12_RAYTRACING_INSTANCE_DESC& d) {
++            if (d.InstanceID < idBase || d.InstanceID >= idBase + 2) return false;
++            gone.push_back(d.AccelerationStructure); return true; }), instances_.end());
++        if (gone.empty()) return true;
++        for (D3D12_GPU_VIRTUAL_ADDRESS va : gone)
++            for (size_t b = 0; b < blas_.size(); ++b)
++                if (blas_[b] && blas_[b]->GetGPUVirtualAddress() == va) { blas_[b]->Release(); blas_.erase(blas_.begin() + (long)b); break; }
++        ID3D12CommandAllocator* al = nullptr; ID3D12GraphicsCommandList4* cl = nullptr;
++        if (FAILED(dev_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&al)) ||
++            FAILED(dev_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, al, nullptr, __uuidof(ID3D12GraphicsCommandList4), (void**)&cl))) {
++            rel(al); return false;
++        }
++        std::vector<ID3D12Resource*> temp;
++        const bool ok = rebuildTlas(cl, temp);
++        cl->Close();
++        const bool idle = ok ? submitTimed(cl, "static set removed") : waitIdle();
++        rel(cl); rel(al);
++        if (idle) for (auto* r : temp) r->Release();
++        if (ok && heap_) writeDescriptors();
++        return ok;
++#endif
++    }
+     // the TLAS over instances_ (static sets + masked sets), built on cl; the previous TLAS released (callers waited idle)
+     bool rebuildTlas(ID3D12GraphicsCommandList4* cl, std::vector<ID3D12Resource*>& temp) {
+         D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+@@ -1704,6 +1733,7 @@
+ bool rtBridgeAddHitData(const RtHitData& d) { return g_bridge && g_bridge->addHitData(d); }
+ bool rtBridgeAddMasked(const RtMaskedWorld& m) { return g_bridge && g_bridge->addMasked(m); }
+ bool rtBridgeSetStaticMask(unsigned idBase, unsigned mask) { return g_bridge && g_bridge->setStaticMask(idBase, mask); }
++bool rtBridgeRemoveStaticSet(unsigned idBase) { return g_bridge && g_bridge->removeStaticSet(idBase); }
+ void rtBridgeSetSignalBuffers(const GLuint* bufs, int n) { if (g_bridge) g_bridge->setSignalBuffers(bufs, n); }
+ bool rtBridgeGiSetup(const RtGiSetup& s, std::vector<GLuint>& glTex) { return g_bridge && g_bridge->giSetup(s, glTex); }
+ double rtBridgeVramMB() { return g_bridge ? g_bridge->vramMB() : 0.0; }
+@@ -1728,6 +1758,7 @@
+ bool rtBridgeAddHitData(const RtHitData&) { return false; }
+ bool rtBridgeAddMasked(const RtMaskedWorld&) { return false; }
+ bool rtBridgeSetStaticMask(unsigned, unsigned) { return false; }
++bool rtBridgeRemoveStaticSet(unsigned) { return false; }
+ void rtBridgeSetSignalBuffers(const GLuint*, int) {}
+ bool rtBridgeGiSetup(const RtGiSetup&, std::vector<GLuint>& glTex) { glTex.clear(); return false; }
+ double rtBridgeVramMB() { return 0.0; }
+diff -ru a/src/render/d3d12/D3D12RtBridge.h b/src/render/d3d12/D3D12RtBridge.h
+--- a/src/render/d3d12/D3D12RtBridge.h	2026-10-23 08:56:43.477229200 -0500
++++ b/src/render/d3d12/D3D12RtBridge.h	2026-10-23 08:56:43.570549200 -0500
+@@ -93,6 +93,7 @@
+ bool rtBridgeAddHitData(const RtHitData& d);
+ GLuint rtBridgeMaskAtlas(int w, int h);                     // the shared R8 opacity atlas (GL texture), made once
+ bool rtBridgeSetStaticMask(unsigned idBase, unsigned mask);   // (chapter streaming) a static set's mask, 0 = untraced
++bool rtBridgeRemoveStaticSet(unsigned idBase);                // (chapter streaming) a static set freed (BLAS + instances)
+ bool rtBridgeAddMasked(const RtMaskedWorld& m);             // non-opaque BLAS (instance mask 0x8) + lookup buffers
+ // GL buffers written before the signal that D3D12 reads (Systems' skinned positions): signalled and reacquired with
+ // the targets on every round trip until changed (n = 0 clears)
+diff -ru a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
+--- a/src/render/gl/GLRenderer.cpp	2026-10-23 08:56:43.262995100 -0500
++++ b/src/render/gl/GLRenderer.cpp	2026-10-23 08:56:43.578576400 -0500
+@@ -1695,6 +1695,7 @@
+         chapterLoading_ = true;
+         std::vector<std::string> loaded;
+         for (const std::string& u : units) {
++            if (wfc_.hasUnit(u)) continue;              // (streaming: already loaded)
+             if (!wfc_.loadSublevel(cd + "/" + u)) continue;
+             ++n; loaded.push_back(u);
+             wfc_.yieldLoad();
+@@ -1744,6 +1745,14 @@
+     void notifyCameraCut(const char* reason) override { wfc_.notifyCameraCut(reason); }
+     void setPostProcessVolumeEnabled(const std::string& volume, bool on) override { wfc_.setPostVolumeEnabled(volume, on); }
+     void setChapterUnitVisible(const std::string& unit, bool visible) override { wfc_.setChapterUnitVisible(unit, visible); }
++    void unloadChapterUnit(const std::string& unit) override {
++        const int gid = wfc_.unitWorldMesh(unit);
++        for (auto it = chapterMeshes_.begin(); it != chapterMeshes_.end(); ++it)
++            if (*it >= 0 && (size_t)*it < gpu_.size() && gpu_[(size_t)*it] == gid && gid >= 0) {
++                meshes_[(size_t)*it] = MeshData{}; gpu_[(size_t)*it] = -1; chapterMeshes_.erase(it); break;
++            }
++        wfc_.unloadChapterUnit(unit);
++    }
+     void setCinematicView(const CinematicView& view) override { wfc_.setCinematicView(view); }
+     bool frameGenerationAvailable() const override { return frameGenerationRuntimeShipped(); }
+     bool frameGenerationActive() const override { return framegenActive(); }
+diff -ru a/src/render/gl/WfcCampaignPost.cpp b/src/render/gl/WfcCampaignPost.cpp
+--- a/src/render/gl/WfcCampaignPost.cpp	2026-10-23 08:56:43.417524600 -0500
++++ b/src/render/gl/WfcCampaignPost.cpp	2026-10-23 08:56:43.574563000 -0500
+@@ -69,6 +69,8 @@
+ }  // namespace
+ 
+ void Pipeline::loadChapterPost(const std::string& chapterDir) {
++    if (ppChapter_ && chapterDir == ppDir_) return;    // (a unit streamed in: the chapter's volumes are already here)
++    ppDir_ = chapterDir;
+     for (auto& kv : ppLuts_) if (kv.second) glDeleteTextures(1, &kv.second);
+     ppLuts_.clear(); ppVols_.clear(); ppChapter_ = false; ppTarget_ = -2;
+     std::string dir = chapterDir;
+diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-23 08:56:43.295105200 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 08:59:07.330191900 -0500
+@@ -4100,7 +4100,13 @@
+                 const std::string lk = r.dir.empty() ? r.coeff[i] : r.dir + "|" + r.coeff[i];
+                 auto li = lmIndex_.find(lk);
+                 if (li == lmIndex_.end()) {
+-                    GLuint t = texture((r.dir.empty() ? dataDir_ : r.dir) + "/lightmaps/" + r.coeff[i] + ".png", true, true, true);
++                    // (a campaign chapter's pages: one shared set in <chapter>/lightmaps/ - AssetTools stopped copying A1's 1,050
++                    // pages into each of its 48 units - else the unit's own lightmaps/; MP maps have no shared folder)
++                    const std::string unitDir = r.dir.empty() ? dataDir_ : r.dir;
++                    const size_t up = unitDir.find_last_of("/\\");
++                    const std::string shared = up == std::string::npos ? std::string() : unitDir.substr(0, up) + "/lightmaps/" + r.coeff[i] + ".png";
++                    GLuint t = texture(!shared.empty() && platform::dataFileSize(shared) >= 0 ? shared : unitDir + "/lightmaps/" + r.coeff[i] + ".png",
++                                       true, true, true);
+                     lmTextures_.push_back(t);
+                     li = lmIndex_.emplace(lk, (int)lmTextures_.size() - 1).first;
+                 }
+@@ -5266,6 +5272,61 @@
+              sl->light1 - sl->light0, sl->fx1 - sl->fx0, masked);
+ }
+ 
++void Pipeline::freeMesh(int id) {
++    if (id < 0 || (size_t)id >= meshes_.size()) return;
++    GpuMesh& g = meshes_[(size_t)id];
++    if (id == mdiMesh_) {                              // (the multi-draw set was this unit's: the rest draw singly)
++        if (mdiRowTex_) { glDeleteTextures(1, &mdiRowTex_); mdiRowTex_ = 0; }
++        for (GLuint* b : {&mdiRowVbo_, &mdiCmdBuf_}) if (*b) { DeleteBuffers(1, b); *b = 0; }
++        mdiBuckets_.clear(); mdiMesh_ = -1;
++    }
++    if (g.vao) DeleteVertexArrays(1, &g.vao);
++    for (GLuint* b : {&g.vbo, &g.ibo}) if (*b) DeleteBuffers(1, b);
++    g = GpuMesh{};
++}
++
++// (chapter streaming) a unit leaves: its RT sets out of the scene (BLAS freed), its world / BSP / decal meshes and lightmap
++// pages freed, its lights and map FX off; the merged materials stay (shared, small). loadChapterUnits brings it back.
++void Pipeline::unloadChapterUnit(const std::string& unit) {
++    size_t si = 0;
++    while (si < sublevels_.size() && sublevels_[si].unit != unit) ++si;
++    if (si == sublevels_.size()) { LOG_WARN("chapter: no merged unit %s to unload", unit.c_str()); return; }
++    const SublevelRT sl = sublevels_[si];
++    int sets = 0;
++    for (size_t k = 0; k < rtSets_.size();) {
++        if (rtSets_[k].first == sl.world || rtSets_[k].first == sl.bsp) {
++            if (k < rtSetIdBase_.size()) { sets += rtBridgeRemoveStaticSet(rtSetIdBase_[k]) ? 1 : 0; rtSetIdBase_.erase(rtSetIdBase_.begin() + (long)k); }
++            rtSets_.erase(rtSets_.begin() + (long)k); --rtWorldSets_;
++        } else ++k;
++    }
++    for (size_t i = sl.light0; i < sl.light1 && i < lights_.size(); ++i) lights_[i].enabled = false;
++    for (size_t i = sl.fx0; i < sl.fx1 && i < fxInstances_.size(); ++i) fxInstances_[i].hidden = true;
++    int pages = 0;
++    const std::string prefix = sl.dir + "|";
++    for (auto it = lmIndex_.begin(); it != lmIndex_.end();) {
++        if (it->first.compare(0, prefix.size(), prefix) == 0) {
++            if (it->second >= 0 && (size_t)it->second < lmTextures_.size() && lmTextures_[(size_t)it->second]) {
++                const GLuint t = lmTextures_[(size_t)it->second];
++                // (a page of the chapter's shared lightmaps may also be another loaded unit's: freed only with its last user)
++                bool shared = false;
++                for (const auto& o : lmIndex_)
++                    if (o.second != it->second && o.second >= 0 && (size_t)o.second < lmTextures_.size() && lmTextures_[(size_t)o.second] == t &&
++                        o.first.compare(0, prefix.size(), prefix) != 0) { shared = true; break; }
++                if (shared) { lmTextures_[(size_t)it->second] = 0; it = lmIndex_.erase(it); continue; }
++                for (auto c = texCache_.begin(); c != texCache_.end();) c = c->second == t ? texCache_.erase(c) : std::next(c);
++                glDeleteTextures(1, &t);
++                lmTextures_[(size_t)it->second] = 0;
++                ++pages;
++            }
++            it = lmIndex_.erase(it);
++        } else ++it;
++    }
++    freeMesh(sl.world); freeMesh(sl.bsp); freeMesh(sl.decal);
++    sublevels_.erase(sublevels_.begin() + (long)si);
++    LOG_INFO("chapter: %s unloaded (%d RT sets, %d lightmap pages, %zu lights / %zu FX instances off)", unit.c_str(), sets, pages,
++             sl.light1 - sl.light0, sl.fx1 - sl.fx0);
++}
++
+ void Pipeline::rtLoadData() {
+     // (the loading screen presents between the phases: A1 Realistic's were one 16 s step - masked world 2.7 s, GI passes, the
+     // probe grid 5.8 s)
+diff -ru a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h	2026-10-23 08:56:43.328218500 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-23 08:56:43.573559700 -0500
+@@ -206,6 +206,9 @@
+     // and map FX) and leaves the RT scene (instance mask 0); its masked (alpha-tested) RT set is not per unit and stays
+     void setUnitWorldMesh(const std::string& unit, int gpuId);
+     void setChapterUnitVisible(const std::string& unit, bool visible);
++    void unloadChapterUnit(const std::string& unit);    // its meshes, lightmaps and RT sets freed; its lights / FX off
++    bool hasUnit(const std::string& unit) const { for (const SublevelRT& sl : sublevels_) if (sl.unit == unit) return true; return false; }
++    int unitWorldMesh(const std::string& unit) const { for (const SublevelRT& sl : sublevels_) if (sl.unit == unit) return sl.world; return -1; }
+     bool chapterMeshVisible(int gpuId) const {
+         for (const SublevelRT& sl : sublevels_) if (sl.world == gpuId) return sl.visible;
+         return true;
+@@ -706,6 +709,9 @@
+     void rtBuildHit();
+     std::vector<std::pair<int, int>> rtSets_;          // (mesh, set) of the static sets on D3D12
+     std::vector<unsigned> rtSetIdBase_;                // ... their InstanceID base (stage 3: a hidden unit's sets masked out)
++    unsigned rtLateSets_ = 0;                          // static sets added after the hit data (streamed-in units)
++    std::string ppDir_;                                // (campaign post) the chapter whose volumes are loaded
++    void freeMesh(int id);
+     GLuint rtAtlasFbo_ = 0;
+     void rtBuildMasked();
+     float rtSunDir_[3] = {0, 0, 0};                    // towards the traced sun (uRtSunDir; 0 = none)
+diff -ru a/src/render/gl/WfcRt.cpp b/src/render/gl/WfcRt.cpp
+--- a/src/render/gl/WfcRt.cpp	2026-10-23 08:56:43.358321600 -0500
++++ b/src/render/gl/WfcRt.cpp	2026-10-23 08:56:43.571552700 -0500
+@@ -301,7 +301,10 @@
+              " subs and %zu actor-placed (mover / toggled) subs left out)", subs, set ? "level BSP" : "world", meshId, vlmSubs, nonMdiSubs, skipped, noShadow, actorNodes);
+     // (the reflection hits look their BLAS up by InstanceID: blas = keep index x 2 + side - world 0, BSP 1 on an MP map, then a
+     // chapter's further units in order; the instance mask stays the set's bit)
+-    W.idBase = 0x10000u + (unsigned)(keepHit ? rtHitKeep_.size() : (size_t)set) * 2u;
++    // (a chapter unit streamed in after the hit data: InstanceID from 0x20000, outside the hit table - GI reads it as dim, the
++    // reflections fall back to the previous frame; it keeps its bake)
++    const bool late = rtHitBuilt_;
++    W.idBase = late ? 0x20000u + (unsigned)(rtLateSets_++) * 2u : 0x10000u + (unsigned)(keepHit ? rtHitKeep_.size() : (size_t)set) * 2u;
+     if (keepHit) {
+         keep.mesh = meshId; keep.set = set; keep.idx[0] = W.oneSided; keep.idx[1] = W.twoSided;
+         keep.uv1.resize(v.size() / 14 * 2);
+@@ -319,7 +322,7 @@
+     }
+     if (rtBridgeAddStaticWorld(W, 1u << set)) {
+         ++rtWorldSets_; rtSets_.push_back({meshId, set}); rtSetIdBase_.push_back(W.idBase);
+-        if (keepHit) rtHitKeep_.push_back(std::move(keep));
++        if (keepHit && !late) rtHitKeep_.push_back(std::move(keep));
+     }
+     else LOG_WARN("RT depth check: no static world on D3D12 (the round trip runs the copy)");
+ }
+diff -ru a/src/render/gl/WfcRtGi.cpp b/src/render/gl/WfcRtGi.cpp
+--- a/src/render/gl/WfcRtGi.cpp	2026-10-23 08:56:43.387421600 -0500
++++ b/src/render/gl/WfcRtGi.cpp	2026-10-23 08:56:43.572556100 -0500
+@@ -58,7 +58,7 @@
+ // one static mesh's lightmapped subs into their pages (called from rtBuildWorld with the mesh's read-back buffers:
+ // 14 floats per vertex - position, normal, tangent + sign, UV0, UV1)
+ void Pipeline::giRasterMesh(int meshId, const std::vector<uint32_t>& idx, const std::vector<float>& v) {
+-    if (!giOn() || meshId < 0 || rtMode_ != 2) return;   // (Realistic at load; a live switch to it keeps the bake until a reload)
++    if (!giOn() || meshId < 0 || rtMode_ != 2 || giFinished_) return;   // (a unit streamed in later keeps its bake)   // (Realistic at load; a live switch to it keeps the bake until a reload)
+     const GpuMesh& g = meshes_[(size_t)meshId];
+     const bool bsp = meshId == bspMesh_;
+     if (giPageSize_.size() < lmTextures_.size()) giPageSize_.resize(lmTextures_.size(), {0, 0});
+diff -ru a/tools/systems/vbake/vbake_fit.py b/tools/systems/vbake/vbake_fit.py
+--- a/tools/systems/vbake/vbake_fit.py	2026-10-23 09:00:10.465045400 -0500
++++ b/tools/systems/vbake/vbake_fit.py	2026-10-23 09:00:10.520736400 -0500
+@@ -90,7 +90,8 @@
+ 
+     def tex(name):
+         if name not in tex_cache:
+-            im = Image.open(os.path.join(rdir, 'lightmaps', name + '.png')).convert('RGB')
++            shared = os.path.join(os.path.dirname(os.path.normpath(rdir)), 'lightmaps', name + '.png')   # (a chapter's shared pages)
++            im = Image.open(shared if os.path.exists(shared) else os.path.join(rdir, 'lightmaps', name + '.png')).convert('RGB')
+             tex_cache[name] = srgb_to_linear(np.asarray(im, dtype=np.float64) / 255.0)
+         return tex_cache[name]
+ 
+diff -ru a/tools/systems/vbake/vbake_lights_fit.py b/tools/systems/vbake/vbake_lights_fit.py
+--- a/tools/systems/vbake/vbake_lights_fit.py	2026-10-23 09:00:10.546324000 -0500
++++ b/tools/systems/vbake/vbake_lights_fit.py	2026-10-23 09:00:10.603520300 -0500
+@@ -130,7 +130,8 @@
+ 
+     def tex(name):
+         if name not in tex_cache:
+-            im = Image.open(os.path.join(rdir, 'lightmaps', name + '.png')).convert('RGB')
++            shared = os.path.join(os.path.dirname(os.path.normpath(rdir)), 'lightmaps', name + '.png')   # (a chapter's shared pages)
++            im = Image.open(shared if os.path.exists(shared) else os.path.join(rdir, 'lightmaps', name + '.png')).convert('RGB')
+             tex_cache[name] = srgb_to_linear(np.asarray(im, dtype=np.float64) / 255.0)
+         return tex_cache[name]
+ 
+diff -ru a/tools/systems/vbake/vbake_trace.cpp b/tools/systems/vbake/vbake_trace.cpp
+--- a/tools/systems/vbake/vbake_trace.cpp	2026-10-23 09:00:10.390791000 -0500
++++ b/tools/systems/vbake/vbake_trace.cpp	2026-10-23 09:00:10.443973400 -0500
+@@ -317,7 +317,10 @@
+         auto it = atlasIdx.find(a);
+         if (it != atlasIdx.end()) return it->second;
+         Atlas at; at.name = a;
+-        if (!pngSize(A.render + "/lightmaps/" + a + ".png", at.w, at.h)) { std::printf("no lightmap page %s\n", a.c_str()); return -1; }
++        // (a campaign chapter: the pages shared in <chapter>/lightmaps/, else the unit's own)
++        if (!pngSize(A.render + "/../lightmaps/" + a + ".png", at.w, at.h) && !pngSize(A.render + "/lightmaps/" + a + ".png", at.w, at.h)) {
++            std::printf("no lightmap page %s\n", a.c_str()); return -1;
++        }
+         const size_t n = (size_t)at.w * at.h;
+         at.cov.assign(n, 0); at.dist.assign(n, 1e9f); at.V.assign(n, 0); at.ndl.assign(n, 0); at.lt.assign(n * 3, 0); at.comp.assign(n, -1);
+         at.pos.assign(n, V3{}); at.nrm.assign(n, V3{}); at.dpx.assign(n, V3{}); at.dpy.assign(n, V3{});
