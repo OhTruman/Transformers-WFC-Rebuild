@@ -49,6 +49,8 @@ struct SessionMemberInfo {
     std::string iconicCharacter;            // iconic mode: the claimed iconic CharacterName ("" none; one per team)
     std::vector<std::string> loadout;       // weapons / abilities as the lobby message carries them
     int teamRequest = -1;                   // Online.SwitchTeam from this member (-1 none); the host decides
+    // Public lobbies' map vote (ONLINE_LOBBY_FLOW_V2 4.1): 0..2 an option, 3 None of these, -1 no vote. Wire: appended last.
+    int mapVote = -1;
 };
 
 // One participant slot of the lobby / match: a human (local or remote) or a bot. Bot counts from Game Mode Options are
@@ -81,6 +83,12 @@ struct SessionLobby {
     bool matchRunning = false;              // decision D6: a joiner waits in the lobby ("Match in progress")
     bool countingDown = false;
     int countdown = 0;                      // lobby exit countdown, seconds
+    // Public lobbies' map vote (ONLINE_LOBBY_FLOW_V2 4.1; the host tallies). Wire: appended last.
+    std::vector<int> voteMaps;              // the options' map ids
+    std::vector<int> voteCounts;            // one per option, then None of these (round 1 only)
+    int voteRound = 0;                      // 0 no vote (private), 1, 2 (after a None of these re-roll)
+    bool voteOpen = false;
+    int voteWinner = -1;                    // the map id once the vote closed
 };
 
 // The values Create Game hands to host() (Game Mode Options as the host left them).

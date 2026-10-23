@@ -1,0 +1,28 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index f9381c5..8210f86 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -1937,6 +1937,23 @@ void core::Application::runOnlineFlowTest() {
+         check(ma.mapId == 508 && mb.mapId == 508 && ma.modeTag == mb.modeTag, "same map and mode on both (" + ma.modeTag + " " + std::to_string(mb.mapId) + ")");
+         check(ma.seed != 0 && ma.seed == mb.seed, "the host's seed on both (" + std::to_string(ma.seed) + " / " + std::to_string(mb.seed) + ")");
+         check(ma.onlineSlots.size() == mb.onlineSlots.size() && !ma.onlineSlots.empty(), "the host's slots on both (" + std::to_string(mb.onlineSlots.size()) + ")");
++        // Both worlds must build the same match: every slot on the same team, and each side's own team = its slot's team
++        // (a host team picked after the record went out desynced the first two-window match, 2026-10-23).
++        bool sameTeams = ma.onlineSlots.size() == mb.onlineSlots.size();
++        std::string teams;
++        for (size_t i = 0; sameTeams && i < ma.onlineSlots.size(); ++i) {
++            sameTeams = ma.onlineSlots[i].team == mb.onlineSlots[i].team && ma.onlineSlots[i].member == mb.onlineSlots[i].member;
++            teams += std::to_string(ma.onlineSlots[i].team) + "/" + std::to_string(mb.onlineSlots[i].team) + " ";
++        }
++        int hostSlotTeam = -1, memberSlotTeam = -1;
++        for (const frontend::SessionSlot& sl : ma.onlineSlots) {
++            if (sl.kind != frontend::SessionSlot::Kind::Human) continue;
++            if (sl.member.fingerprint.empty()) hostSlotTeam = sl.team; else if (sl.member == mb.self) memberSlotTeam = sl.team;
++        }
++        check(sameTeams, "the same teams in every slot on both (host/member: " + teams + ")");
++        check(ma.teamIndex == hostSlotTeam && mb.teamIndex == memberSlotTeam,
++              "each side's own team = its slot's (host " + std::to_string(ma.teamIndex) + " / " + std::to_string(hostSlotTeam) + ", member " +
++              std::to_string(mb.teamIndex) + " / " + std::to_string(memberSlotTeam) + ")");
+         // The load gate, as the Application drives it: matchLoaded() once the world is in. The host loads first and waits
+         // (its loading screen stays up) until the member has loaded too; then both enter the match.
+         a.matchLoaded();

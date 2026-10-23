@@ -394,13 +394,9 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     }
     if (fn == "Online.BeginLobbyExitCountdown") {
         if (role_ == SessionRole::Member) { FlowTrace::emit("online.memberIgnored", {{"fn", fn}}); return {}; }   // host only
+        if (vote_.round > 0) { FlowTrace::emit("online.voteLobbyStart", {{"why", "a public lobby starts by itself (4.1)"}}); return {}; }
         hostRequestsGameStart();
-        if (session_ && role_ == SessionRole::Host) {   // the launch record first, then Start (the session sends both)
-            std::random_device rd;
-            launchSeed_ = rd() | 1u;
-            session_->setLaunch(buildLaunchUrl(), launchSeed_, hostLobbySnapshot());
-            session_->requestStart();
-        }
+        sendOnlineLaunch();
         return {};
     }
     if (fn == "Online.HostPrivateNow") { hostPrivateNow(); return {}; }   // lobby flow v2: Private Match
@@ -988,6 +984,7 @@ void GameFlow::gameLobbyBegin() {
     lobby_.countingDown = lobby_.countdownRubicon = lobby_.finalCountdown = false;
     lobby_.countdown = 0;
     lobby_.localTeam = -1;
+    launchLobby_ = SessionLobby{};
     FlowTrace::emit("gamelobby.game", {{"gameClass", levelUrl_.option("Game")}, {"tag", tag}, {"settings", gs ? gs->className : "?"},
                                        {"private", FlowTrace::boolean(isPrivate)}, {"mapSelectionMethod", std::to_string(lobby_.mapSelectionMethod)}});
     // GRI.OnEnterLobbyFromMap(GRI.GetMapID()): MapId == -1 or Rotate or campaign -> ChooseNextMap, else SetMapId.
@@ -1088,6 +1085,100 @@ int GameFlow::pickTeam() {
         if (au != de) return au < de ? 0 : 1;
     }
     return std::uniform_int_distribution<int>(0, 1)(rng_);
+}
+
+void GameFlow::sendOnlineLaunch() {
+    if (!session_ || role_ != SessionRole::Host) return;
+    // The host's own team is decided here, before the record goes out: FinalCountdown would otherwise pick it later at
+    // random (pickTeam) while the members already hold a record with the host's slot on team 0 - the two worlds then
+    // disagree on the host's team and desync at the first spawn (two-window test 2026-10-23 01:30, status 3 at tick 660).
+    // TnTeamHandlerTwoTeams.PickTeam: the smaller team of the members, random on a tie.
+    if (lobby_.localTeam < 0 && lobby_.gameTeamStatus == 3) {
+        int n[2] = {0, 0};
+        for (const OnlineMember& m : onlineMembers_) if (m.team == 0 || m.team == 1) n[m.team]++;
+        lobby_.localTeam = n[0] != n[1] ? (n[0] < n[1] ? 0 : 1) : std::uniform_int_distribution<int>(0, 1)(rng_);
+        FlowTrace::emit("online.hostTeam", {{"team", std::to_string(lobby_.localTeam)}, {"members", std::to_string(n[0]) + "/" + std::to_string(n[1])}});
+    }
+    // the launch record first, then Start (the session sends both)
+    std::random_device rd;
+    launchSeed_ = rd() | 1u;
+    launchLobby_ = hostLobbySnapshot();
+    session_->setLaunch(buildLaunchUrl(), launchSeed_, launchLobby_);
+    session_->requestStart();
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Public lobbies: autostart + the map vote (ONLINE_LOBBY_FLOW_V2 4.1). PC ADAPTATION: the original rotated the playlist
+// maps with a veto; the user chose the Halo Reach vote. The original autostart is kept: BeginIntermissionCountdown (45 s)
+// once NumRequiredPlayers humans are in [RE fc12ceb]; it stops again if they drop below before the launch.
+
+void GameFlow::voteBegin(int round, const std::vector<int>& exclude) {
+    std::vector<const MapInfo*> pool = cat_->compatibleMaps(lobby_.gameModeTag, true);
+    pool.erase(std::remove_if(pool.begin(), pool.end(), [&](const MapInfo* m) {
+        return std::find(exclude.begin(), exclude.end(), m->mapId) != exclude.end(); }), pool.end());
+    if (pool.empty()) pool = cat_->compatibleMaps(lobby_.gameModeTag, true);   // a small playlist: repeats rather than no vote
+    std::shuffle(pool.begin(), pool.end(), rng_);
+    vote_ = MapVote{};
+    for (size_t i = 0; i < pool.size() && i < 3; ++i) vote_.maps.push_back(pool[i]->mapId);
+    vote_.round = round;
+    vote_.open = !vote_.maps.empty();
+    vote_.counts.assign(vote_.maps.size() + (round == 1 ? 1 : 0), 0);
+    myVote_ = -1;
+    std::string ids;
+    for (int id : vote_.maps) ids += (ids.empty() ? "" : ",") + std::to_string(id);
+    FlowTrace::emit("lobby.vote", {{"state", "open"}, {"round", std::to_string(round)}, {"maps", ids}, {"none", FlowTrace::boolean(round == 1)}});
+    if (!vote_.maps.empty()) setMapId(vote_.maps[0]);   // the preview shows the leading option
+}
+
+bool GameFlow::castMapVote(int option) {
+    if (!vote_.open || option < 0 || option >= (int)vote_.counts.size()) return false;
+    myVote_ = option;
+    FlowTrace::emit("lobby.vote", {{"state", "cast"}, {"option", std::to_string(option)}, {"role", sessionRoleName(role_)}});
+    if (role_ == SessionRole::Member && session_) sendMemberInfo();
+    return true;
+}
+
+void GameFlow::voteTick() {
+    if (role_ != SessionRole::Host || level_ != LevelKind::GameLobby || vote_.round == 0) return;
+    const int humans = 1 + (int)onlineMembers_.size();
+    if (!lobby_.countingDown && vote_.open && humans >= lobby_.numRequiredPlayers) {
+        lobby_.countingDown = true;
+        lobby_.countdown = kLobbyIntermissionTime;
+        lobby_.countdownTimer = 0.0f;
+        FlowTrace::emit("gamelobby.countdown", {{"seconds", std::to_string(kLobbyIntermissionTime)}, {"kind", "BeginIntermissionCountdown"},
+                                                {"humans", std::to_string(humans)}});
+    } else if (lobby_.countingDown && !lobby_.countdownRubicon && humans < lobby_.numRequiredPlayers) {
+        lobby_.countingDown = false;
+        lobby_.countdown = 0;
+        FlowTrace::emit("gamelobby.countdown", {{"state", "stopped"}, {"why", "below NumRequiredPlayers"}, {"humans", std::to_string(humans)}});
+    }
+    if (!vote_.open) return;
+    std::vector<int> counts(vote_.counts.size(), 0);
+    auto add = [&](int v) { if (v >= 0 && v < (int)counts.size()) ++counts[(size_t)v]; };
+    add(myVote_);
+    for (const OnlineMember& m : onlineMembers_) add(m.info.mapVote);
+    vote_.counts = counts;
+    const size_t none = vote_.maps.size();
+    if (vote_.round == 1 && none < counts.size() && counts[none] * 2 > humans) {   // None of these: a strict majority of the humans
+        FlowTrace::emit("lobby.vote", {{"state", "reroll"}, {"none", std::to_string(counts[none])}, {"humans", std::to_string(humans)}});
+        voteBegin(2, vote_.maps);
+        return;
+    }
+    int lead = 0;
+    for (size_t i = 1; i < none; ++i) if (counts[i] > counts[(size_t)lead]) lead = (int)i;
+    if (vote_.maps[(size_t)lead] != lobby_.mapId) setMapId(vote_.maps[(size_t)lead]);
+    if (lobby_.countingDown && lobby_.countdown <= kShortCountdown) {   // closes with 10 s left; ties / no votes: random among the tied
+        std::vector<int> tied;
+        for (size_t i = 0; i < none; ++i) if (counts[i] == counts[(size_t)lead]) tied.push_back((int)i);
+        const int w = tied[(size_t)std::uniform_int_distribution<int>(0, (int)tied.size() - 1)(rng_)];
+        vote_.open = false;
+        vote_.winner = vote_.maps[(size_t)w];
+        setMapId(vote_.winner);
+        FlowTrace::emit("lobby.vote", {{"state", "closed"}, {"winner", std::to_string(vote_.winner)}, {"votes", std::to_string(counts[(size_t)w])},
+                                       {"tied", std::to_string(tied.size())}});
+        lobby_.countdownRubicon = true;   // the launch is decided: no more stops
+        sendOnlineLaunch();
+    }
 }
 
 void GameFlow::gameLobbyTick(float dt) {

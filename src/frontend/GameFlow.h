@@ -328,6 +328,12 @@ public:
     // Public matches (ONLINE_LOBBY_FLOW_V2 4, user: no server list): Quick Match = the original Find Match playlist choice;
     // online it searches the mode's best-ping match (a gathering lobby or a match with open seats), else hosts one.
     bool quickMatch(int playlistId);
+    // The public lobby's map vote (ONLINE_LOBBY_FLOW_V2 4.1, PC ADAPTATION of the original veto; the user chose Halo Reach's
+    // style): 3 options from the playlist's maps + None of these (round 1), live tallies, one changeable vote per human.
+    struct MapVote { std::vector<int> maps, counts; int round = 0; bool open = false; int winner = -1; };
+    const MapVote& mapVote() const { return vote_; }
+    int myMapVote() const { return myVote_; }
+    bool castMapVote(int option);   // 0..2 an option, 3 None of these (round 1); false if not open / out of range
     static const std::vector<std::string>& lobbyModes();   // the versus modes the Game Settings page offers
     // The Game Settings page's rows after Game Mode: the mode's own host options (fields with a header), then the PC rows
     // (Player Limit, the bot rows, Bot Difficulty, Iconic Characters, Kick Idle Players). Values are the labels the
@@ -462,7 +468,14 @@ private:
     void onlineJoinFailed(SessionJoinFailure why);
     void enterMemberLobby(const SessionLobby& lobby);
     void applyMemberLobby();
+    void voteBegin(int round, const std::vector<int>& exclude);
+    void voteTick();                // host: autostart, tally, None of these re-roll, close at the countdown's 10 s
+    void sendOnlineLaunch();        // host: the launch record (url, seed, roster) + Start, as Online.BeginLobbyExitCountdown
+    MapVote vote_;
+    int myVote_ = -1;
     SessionLobby hostLobbySnapshot() const;
+    SessionLobby launchLobby_;      // the launch record's roster: as the host sent it / as the member got it (CountdownStarted);
+                                    // every world builds its match from it, never from a later LobbyState
     std::string txt(const char* dollarKey) const;
     void onlineTick();                                  // poll the session (GameFlow_Online.cpp)
     void onSessionEvent(const SessionEvent& e);
