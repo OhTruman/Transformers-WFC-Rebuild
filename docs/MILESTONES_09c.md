@@ -3654,3 +3654,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   silent) -> GO on the campaign HD pass as the one long GPU job (chunked, resumable). Escalation spawn points exported.
 2026-10-23 02:02 Rendering CARD FREE (smoke match arms + #1 menu run done; sheet / numbers pending). Card -> Frontend 02:02 two-window exit
   retest on 2528df5e.
+2026-10-23 02:03 ONLINE_PC_DEVIATIONS merged; decisions: promote stays; no public list (doc §4 stale); public versus hosts can't start early
+  (auto-start as the original); join in progress = instant spawn on the smaller team (phase 1b). Load-times patch not yet on
+  rt2 (Rendering commits it); an empty staged copy was removed.
