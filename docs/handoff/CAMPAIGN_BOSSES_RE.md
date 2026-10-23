@@ -309,4 +309,112 @@ as in MP_ESCALATION §9.2.
   - No strafing / bombing runs, unlike the standard jet.
 - **Waves** (JetEnemies_3 / _4): each spawn is assigned a tactical volume around the AA guns and fires attack / dialogue events;
   each kill fires a delayed follow-up event.
-- The AA guns themselves are pseudo-god-toggled during the defence.
+- A `TogglePseudoGodMode` sits in the DefendAAguns sequence, but its Target variable is unbound in the data (H: no effect, or bound at runtime).
+
+---
+
+## D3B_IAC: the Omega Supreme ship balcony fight (Balcony_DSN, Omega_Ship_Balcony_Fight)
+
+A **scripted boss with no boss AI**:
+- the ship is an `ActorFactoryAI` pawn (`OSshipPawn`) moved entirely by **Matinee**;
+- its weapons are **sentries attached to it**;
+- the fight is driven by Kismet damage accumulators.
+
+C throughout (Kismet + linked SeqVar values).
+
+### Health and stages
+- **On spawn:**
+  - `TogglePseudoGodMode(OSshipPawn)`: it can't die from health; the fight ends by script.
+  - `OSshipMaxHealth` = **25000**.
+  - Hit threshold = Max / 20 = **1250**.
+  - Stage thresholds: **8000** (stage 2), **16000** (stage 3), **24000** (death).
+- **Only heavy weapons count.** Every damage event filters on HeavyIonBlaster, HeavyTankShell, MountedIonBlaster and
+  MountedRocketTurret, so the players must use the balcony **turrets / tank**. Small-arms damage is ignored, except for barks
+  (below).
+- **Accumulators** (stock SeqEvent_TakeDamage: damage accumulates until the threshold, then it fires):
+
+  | Event | Threshold | Effect |
+  |---|---|---|
+  | each **1250** (repeatable) | 1250 | a 20-way Switch toggles successive damage FX emitters + an impact sound |
+  | **8000** | 8000 | `OSshipStage = 2`, a destructible hit (Aux1 100), stage-2 remote event, competitive score |
+  | **16000** | 16000 | stage-3 event (`OSshipStage = 3`, **OSshipAIspawnNum = 5**), score |
+  | **24000** | 24000 | **death**: toggle, competitive score; then `EndOSshipFight` |
+
+- **Per-stage pacing:** move-rate / beam-rate pairs `OSshipMoveRate` / `OSshipBeamRate` = **0.5 / 0.4 → 0.6 / 0.5 → 0.7 / 0.6**.
+  These are the Matinee play rates, so it moves and beams faster each stage.
+
+### Attack loop
+- **Gate → CompareInt(OSshipStage vs 2)** chooses a **looping Switch** of matinees:
+
+  | Stage | Loop |
+  |---|---|
+  | 1 | Death Beam 1 → Rockets 1 → General Move |
+  | 2 | Spawn Fliers → General Move → Death Beam 1 → Rockets 1 |
+  | 3 | Spawn Fliers → General Move → Rockets 2 → Death Beam 1 |
+
+  Each entry is a RandomSwitch over the A / B variants of that matinee. Its `Completed` → `OSshipBalconyMove` → the next loop step.
+- **Matinee event keys drive the weapons:**
+  - `BeamOn` / `BeamOff` → `OSshipBossBeamOn/Off` (the death beam);
+  - `TurretsOn` / `TurretsOff` → **`TnAiSentrySetDormant`** on the ship's attached MG sentries and its two **big rocket turrets**
+    (`OSbossBigTurret1/2`), with random sentry targets re-picked on wake;
+  - `GodModeON` / `GodModeOFF` → **`ToggleGodMode` + `ToggleHealthDisplay` + ToggleTargetableComponent** on the ship: it's
+    invulnerable and its health bar is hidden while it flies off / spawns fliers, and vulnerable and shown in attack positions;
+  - `Spawn` → flier spawn emitters (`SpawnBalconyShipAI`).
+- **Sentries:** 6 `TnActorFactorySentryAI` sentries spawned on ship skeletal-mesh spawn points (no collision check) and
+  **AttachToActor**'d to the ship.
+
+### Hooks
+- **Small-arms bark:** any other damage ≥ 1 (**ReTrigger 20 s**) → compare the instigator with Soundwave / Megatron / Breakdown →
+  a random "...<name>!" line telling them to use the turrets.
+- **`EndOSshipFight`:**
+  - stops every matinee, `DestroyOSbossSentries`, health display off;
+  - the "Run Away" matinee (rate 0.3), a destructible hit + force feedback;
+  - `KILL PLAYER ON OMEGA` (InstantKill for anyone standing on the ship).
+
+---
+
+## D5_OME: Omega Supreme (per-action decode)
+
+The state machine (sentries → Wounded → battery heal → corrupted → Critical → heart → death) and the OmegaStatus outputs are in
+**SETPIECES §1**. This section adds the AI action parameters and the Kismet battery loop (C).
+
+### Template (C)
+- **Pawn:** `OmegaSupreme_AICD` → TnOmegaSupremePawn, chassis OmegaSupreme_ROBODEF, **5000 HP**: never killed by health
+  (SETPIECES §1 clamps him at 1 HP).
+- **Goal set:** TR_AiGoalSet_OmegaSupreme.
+- **Threat evaluators:**
+  - **RoundRobin +3 for 7 s** (like Trypticon);
+  - TargetDowned −10;
+  - **SentryGroupDamage**: players who damage his sentries draw his attention;
+  - a PawnClass evaluator for TnSentryPawn: his own sentries aren't targets;
+  - weapon-based.
+
+### Actions (C)
+
+| Action | Weapon arm | Parameters |
+|---|---|---|
+| **LockOnTarget → ShootLockedOnWeapon** (missiles) | OmegaRocketArm (left-arm tracking) | lock **2 s** (high-threat warning 1 s), then `Missile_Shoot` every **1–5 s** |
+| **LockOnTarget → LockedOnShootingFrenzy** | OmegaShootingFrenzyArm | tell `ShootingFrenzy_Tell`; lock 2 s, warning 1 s; `Melee_ShootingFrenzy` every **25 s** |
+| **RocketBarrageOmega** | – | `Melee_RocketBarrage` (blend 1.5) every **15 s**; fires OmegaStatus 5 |
+| **AreaOfEffectAttack** | – | `Melee_AOE` when the target is within **3200 UU** |
+| **LockOnTarget (grab) → Grab → ThrowEnemy** | OmegaTractorBeamArm | **4 s** warning (lock-on threat shown), **needs LOS** (second LOS socket WeaponSocket_Primary), every **20 s**. Tractor: speed 3000 / accel 5000, lift 1 s at 1000 / accel 2000, rotation 180°/s, attached at WeaponSocket_R. `Melee_ClawCrush_Omega`, release at **5.3 s**; detach **1000 damage** (TnDamageTypeOmegaTractorBeamGrab), impulse 1e6. Fires OmegaStatus 8 |
+| **LockOnBattery → HealWithGrabbedObject** | tractor beam | healthy heal `HitReactions_React_HealingBattery_F`; corrupted heal `…CorruptBattery_F`, with corruption spikes attaching at **0 s (hand), 1.5 s (arm), 3.0 s (shoulder)** |
+| **ThrowDestructible** | – | `Melee_BatteryThrow`, release at 1.0 s (throws the battery away when Critical) |
+| **ExposeHeart** | – | `HitReactions_React_FallToKnee_F`; **ExposeHeartDelay 23 s** |
+| EquipWeapon ×3, Emote (`HitReactions_React_Stand_F`), OmegaDeath, ScanningIdle | | |
+
+### Kismet battery loop (C, D5_OME_DSN Main_Sequence)
+- **OmegaStatus Healthy** → every `Battery_0N` sub-sequence's "Healthy Destroy Battery" input:
+  - the battery destructible is (re)spawned by its `TnActorFactoryOmegaBattery…` factory;
+  - `ToggleBatteryToUncorrupted` resets its material.
+- **OmegaStatus Wounded** → **`Battery_Randomness`**: one of Battery_01 / 02 and one of 03 / 04 are picked at random. Each picked
+  battery:
+  - plays its spawn matinee (2.53 s);
+  - opens the gates of its **6 pawn factories** (`MaxNumSpawnedInWorld` 15: the Autobot jet waves);
+  - competitive score.
+- **Corrupting a battery:** a player uses `TnInteractCorruptOmegaBattery` (Begin Use) → `SeqAct_TnCorruptOmegaBattery` →
+  `CorruptBatteryMaterial`; VO lines for the 1st–4th corruption.
+- **GrabbedBattery** → `OMEGA_GrabbedBattery` + each battery's "Grabbed Battery" input (hide it, toggle FX).
+- **Corrupted / Critical / SentryDestroyed / LockingGrabOnPlayer** → dialogue barks.
+- **HeartArmorDestroyed** → a remote event, competitive score, dialogue.
+- `SetOmegaStage ×3` for the stage / checkpoint resumes (SETPIECES §1).
