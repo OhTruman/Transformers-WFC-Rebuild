@@ -93,6 +93,9 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
     float4 lv = float4(1, 1, 1, 1), tv = float4(1, 1, 1, 1);
     const float nShadow = fmod(Extra2.z, 8.0), nTrans = floor(Extra2.z / 8.0);
     if (inside && d < 1.0 && nTrans > 0.5) {   // (item 4) the transient lights: shadowed by everything
+        // (user playtest 2026-10-23 #16) the ray stops Extra2.x short of the lamp: headlights and muzzle flashes sit on their
+        // owner's hull / gun, which otherwise shadowed its own light (the pool in front of and under a vehicle flickered)
+        const float clr = Extra2.x > 0.0 ? Extra2.x : 0.05;
         const float3 p = worldAt(px, d);
         const float3 eye = worldAt(px, 0.0);
         const float3 o = p + n * (0.01 + Params.y * length(p - eye));
@@ -101,8 +104,8 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
             const float4 L = ShadowLights[(uint)Extra2.w + 4 + k];
             const float3 dl = L.xyz - o;
             const float dist = length(dl);
-            if (dist >= L.w || dist < 0.05) continue;
-            tv[k] = occluded(o, dl / dist, dist - 0.05, (uint)Params.z | 0x4u) ? 0.0 : 1.0;
+            if (dist >= L.w || dist < clr) continue;
+            tv[k] = occluded(o, dl / dist, dist - clr, (uint)Params.z | 0x4u) ? 0.0 : 1.0;
             ++rays;
         }
     }

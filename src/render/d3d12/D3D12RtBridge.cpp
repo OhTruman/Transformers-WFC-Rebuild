@@ -1147,6 +1147,7 @@ private:
                 lightBuf_->Unmap(0, nullptr);
             }
             cE[50] = (float)(std::min(fr.shadowLightN, 4) + 8 * std::min(fr.transLightN, 4)); cE[51] = (float)(slot * 28);
+            cE[48] = fr.transClear;
         }
         list_->SetComputeRootSignature(rs_);
         list_->SetPipelineState(psoSao_);

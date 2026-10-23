@@ -15,6 +15,9 @@ inline bool tone() { static const bool v = envOn("WFC_RT_TONE"); return v; }    
 inline bool lmSpec() { static const bool v = envOn("WFC_RT_LMSPEC"); return v; }                   // X2 on
 inline float lmSpecGain() { static const float v = envNum("WFC_RT_LMSPECGAIN", 2.5f); return v; }  // X2 gain
 inline float tlGain() { static const float v = std::max(0.0f, envNum("WFC_RT_TLGAIN", 2.0f)); return v; }   // row 4
+// (user playtest 2026-10-23 #16) a transient shadow ray ends this far short of its lamp (m): headlights / muzzle flashes sit on
+// their owner's hull / gun, which shadowed its own light at the old 0.05. WFC_TLCLEAR=<m> (0.05 = the old ray, A/B)
+inline float tlShadowClear() { static const float v = std::max(0.01f, envNum("WFC_TLCLEAR", 0.5f)); return v; }
 inline float giSat() { static const float v = std::max(0.0f, envNum("WFC_RT_GISAT", 2.5f)); return v; }     // X4
 inline float giEmissive() { static const float v = std::max(0.0f, envNum("WFC_RT_GIEMISSIVE", 4.0f)); return v; }   // Molten a
 inline float charAoRadius() { static const float v = envNum("WFC_RT_CHARAORADIUS", 3.0f); return v; }   // X5-1
