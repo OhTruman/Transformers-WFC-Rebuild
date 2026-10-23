@@ -3612,3 +3612,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   windowed menu match retest.
 2026-10-23 01:37 Rendering CARD FREE (x28 / x29 done; smoke reference fell back to group light on Streets: 0 Beast probe points -> fix the
   reference source first; sheets pending). Card -> Systems 01:38 (FXLIVELOG + pre-age A/B) -> Frontend two-window retest.
+2026-10-23 01:38 Gorge pre-age capture INCONCLUSIVE (unlockstepped views, particle phase); the pre-age fix stands on RE + review; Systems owns a
+  numeric proof (FXLIVELOG burst size on the catch-up tick). Smoke first look: tiny diff (no probe grid on Streets) -> Rendering
+  fixes the reference source (computeEnv at player starts / nav points) before a sheet. CAMPAIGN_BOSSES_RE §A1 merged.
