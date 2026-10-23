@@ -3974,3 +3974,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 09:22 Run #2 eye pass (Rendering): cyan line CLOSED (void-only artefact); the persistent bsp.glb error is benign (empty BSP in
   the original); D5 PASS again; A1's black band = the opening in the lift pod with nothing drawn beyond (not sky either):
   state membership vs black surfaces -> RE asked what the original shows there and in which level / state.
+2026-10-23 09:23 RE on A1's black regions: not streaming: the lift platform (TnTransformingWorldActor_6275, RelativeToInitial track
+  0 -> -68,736 UU over 19.94 s) should carry the players to the bottom (Elevator_Art / CommandCenter_Art, both in
+  LevelStart); our pod stays at the start height -> the move track isn't applied to that actor class or the pawns aren't
+  carried: Gameplay.
