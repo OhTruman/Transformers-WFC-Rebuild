@@ -3810,3 +3810,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   late-launch-begun fix; late pick hold (pt9's no-spawn, both halves in); member-to-member relay (wire v4); chapter loader
   stage 1 (+ WFC_CHAPTER_VIEW); RE squad AI (AI buddies never revive; solo human never downed). x43: the plume path is
   broken (no ship; blob log fixed). Card: Frontend pt9 (spawn expected) -> Rendering x43 + x44chapterview (~4 min).
+2026-10-23 06:37 RE online rules merged: post-match 15 s EndGameStats -> same host's lobby (Y Game Stats); party stays together, no
+  leader / host migration in the original (ours: D12 promote + HostLost -> party lobby stay); voice team-only in team
+  matches, open in FFA / after EndGame (Systems); mute / report = PC addition behind Gamer Card (Frontend). Rendering:
+  per-plume blob split built (x43 rerun tests it). Card: Frontend pt9 on e5674e33.
