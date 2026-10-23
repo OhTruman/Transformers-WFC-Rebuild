@@ -15454,5 +15454,21 @@
    ],
    "yaw": -3.14159
   }
- ]
+ ],
+ "dropMeshes": {
+  "HeavyMG": "WEP_HeavyMG_p.WEP_HeavyMG_SKEL",
+  "PlasmaCannon": "WEP_PlasmaCannon_p.WEP_PlasmaCannon_SKEL",
+  "Shotgun": "WEP_Shotgun_p.WEP_Shotgun_SKEL",
+  "FlakGrenades": "WEP_Grenade_p.WEP_Grenade_Flak_STAT",
+  "EmpShotgun": "WEP_EMPShotgun_p.WEP_EMPShotgun_SKEL",
+  "FlashBangs": "WEP_Grenade_p.WEP_GrenadePickUp_STAT",
+  "HeavyPistol": "WEP_HeavyPistol_p.WEP_HeavyPistol_SKEL",
+  "KamikazeMines": "WEP_KamikazeMine_p.WEP_KamikazeMinePickUp_STAT",
+  "RepairRay": "WEP_RepairBeam_p.WEP_RepairBeam_SKEL",
+  "GatlingGun": "WEP_TurretIonGun_p.WEP_TurretIonGun_SKEL",
+  "HeavyRocketTurret": "WEP_TurretRocket_p.WEP_TurretRocket_SKEL",
+  "GrenadeLauncher": "WEP_GrenadeLauncher_p.WEP_GrenadeLauncher_SKEL",
+  "BurstRifle": "WEP_BurstRifle_p.WEP_BurstRifle_SKEL",
+  "HealGrenades": "WEP_Grenade_p.WEP_Grenade_Heal_STAT"
+ }
 }

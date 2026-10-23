@@ -9,6 +9,7 @@
 #include "game/Kismet.h"
 
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -93,6 +94,9 @@ struct CampaignState {
     std::string cineCamGroup;
     struct FormOp { int op = -1; bool vehicle = false; std::vector<int> targets; };
     std::vector<FormOp> formOps;              // step 7: TnSeqAct_ForceIntoForm in progress
+    struct Touch { int op = -1; bool playerOnly = true, cylinder = false; std::vector<std::vector<core::Vec3>> polys; core::Vec3 lo{0, 0, 0}, hi{0, 0, 0}, center{0, 0, 0};
+                   float radius = 0.0f, halfHeight = 0.0f; std::set<int> inside; };
+    std::vector<Touch> touches;               // step 8: SeqEvent_Touch
     std::map<std::string, std::vector<int>> bodyPools;   // step 6: AI participants per body (shared by the factories)
     std::string streamingState;
     std::map<std::string, bool> unitVisible;

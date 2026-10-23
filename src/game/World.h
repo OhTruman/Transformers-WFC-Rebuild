@@ -892,6 +892,7 @@ public:
     // Escalation: the director state and the map's data (tests, HUD).
     const SurvivalState& survival() const { return sv_; }
     const SurvivalData& survivalData() const { return svData_; }
+    std::string svDropMesh(const std::string& weaponId) const;   // Escalation: a dropped weapon's mesh (content-relative glTF; Rendering)
     int svTestSpawn(const std::string& typePrefix);   // WFC_ESCTEST: spawn one horde entry of that type now (its match player, or -1)
     // Campaign chapters (WorldCampaign.cpp)
     bool campaignMap() const { return campaignMap_; }
@@ -1439,6 +1440,8 @@ private:
     bool cpSetStreamingState(KismetVM& vm, int op);
     bool cpForceIntoForm(KismetVM& vm, int op);
     void cpTickForms();
+    void cpLoadTouches();
+    void cpTickTouches();
     MatchLaunch cpLaunch_;                        // the campaign launch (Restart From Last Checkpoint)
     void cpCollectMovers();                       // WorldCampaignMatinee.cpp
     void cpSplitMovers(const render::MeshData& in, render::MeshData& out);
