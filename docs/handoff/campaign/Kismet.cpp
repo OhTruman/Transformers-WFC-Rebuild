@@ -4,6 +4,7 @@
 #include "core/Log.h"
 
 #include <algorithm>
+#include <map>
 
 namespace game {
 
@@ -14,7 +15,7 @@ static std::string parentOf(const std::string& path) {
 static bool endsWith(const std::string& s, const std::string& t) { return s.size() >= t.size() && s.compare(s.size() - t.size(), t.size(), t) == 0; }
 
 bool KismetVM::load(const assets::Json& root) {
-    ops_.clear(); vars_.clear(); byPath_.clear(); varByPath_.clear(); queue_.clear(); time_ = 0.0f;
+    ops_.clear(); vars_.clear(); byPath_.clear(); varByPath_.clear(); stacks_.clear(); seqChildren_.clear(); seqRoots_.clear(); pending_.clear(); time_ = 0.0f; tickNo_ = 0;
     const assets::Json& levels = root["levels"];
     if (!levels.isObject()) return false;
     // Pass 1: variables and ops by path.
@@ -33,6 +34,7 @@ bool KismetVM::load(const assets::Json& root) {
             Op op; op.path = path; op.cls = cls; op.seq = parentOf(path); op.authored = o["authored"];
             for (size_t k = 0; k < o["inputs"].size(); ++k) op.inputs.push_back(o["inputs"][k].asString());
             op.hasIncoming = o["incoming"].size() > 0;
+            op.enabled = op.authored["bEnabled"].asBool(true);   // authored disabled events start disabled (RE K2)
             byPath_[path] = (int)ops_.size();
             ops_.push_back(op);
         }
@@ -54,6 +56,24 @@ bool KismetVM::load(const assets::Json& root) {
             }
             op.gateOpen = op.authored["bOpen"].asBool(true);
         }
+    {   // the sequence tree: a queue per owning sequence; children = the Sequence ops of a sequence, in load order
+        std::map<std::string, int> sid;
+        auto idOf = [&](const std::string& p) {
+            auto it = sid.find(p);
+            if (it != sid.end()) return it->second;
+            const int n = (int)stacks_.size(); sid[p] = n; stacks_.emplace_back(); seqChildren_.emplace_back(); return n;
+        };
+        for (Op& op : ops_) op.seqId = idOf(op.seq);
+        std::vector<int> parent(stacks_.size(), -1);
+        for (const Op& op : ops_)
+            if (op.cls == "Sequence") {
+                const int c = idOf(op.path), p = op.seqId;
+                if ((size_t)c >= parent.size()) parent.resize((size_t)c + 1, -1);
+                if (c != p && parent[(size_t)c] < 0) { parent[(size_t)c] = p; seqChildren_[(size_t)p].push_back(c); }
+            }
+        parent.resize(stacks_.size(), -1);
+        for (size_t k = 0; k < stacks_.size(); ++k) if (parent[k] < 0) seqRoots_.push_back((int)k);
+    }
     for (Var& v : vars_)
         if (v.cls == "SeqVar_Named" && !v.findName.empty())
             for (size_t k = 0; k < vars_.size(); ++k) if (vars_[k].varName == v.findName && vars_[k].cls != "SeqVar_Named") { v.named = (int)k; break; }
@@ -83,27 +103,29 @@ std::string KismetVM::objectOf(int op, const std::string& link) const {
     return {};
 }
 
-void KismetVM::impulse(int op, int input) { if (op >= 0) queue_.push_back({op, input}); }
+void KismetVM::impulse(int op, int input) { if (op >= 0) { pending_.push_back({op, input}); flush(); } }
 
+// An output's targets in link order; they reach the stack reversed when the op's step ends (flush), so they run depth-first in order.
 void KismetVM::output(int op, const std::string& name) {
     for (const auto& o : ops_[(size_t)op].outputs)
-        if (o.first == name) for (const Link& l : o.second) queue_.push_back(l);
+        if (o.first == name) for (const Link& l : o.second) pending_.push_back(l);
 }
 
-// SequenceEvent.CheckActivate [H, UE3]: enabled, MaxTriggerCount (0 = unlimited; the base default 1, RemoteEvent / Console /
-// SequenceActivated 0), ReTriggerDelay (default 0 here [H: RE asked]).
+// SequenceEvent.CheckActivate: enabled, MaxTriggerCount (0 = unlimited), ReTriggerDelay. Defaults from the CDO chain where the export
+// has none [C, RE KISMET_VM_CORE_RE section 1]: SequenceEvent 1 / 0 s; SequenceActivated, Console, TnSeqEvent_Interact unlimited; Touch 0.1 s.
 bool KismetVM::fireEvent(int i, const std::string& outName) {
     Op& e = ops_[(size_t)i];
     if (!e.enabled) return false;
-    const bool unlimitedClass = e.cls == "SeqEvent_RemoteEvent" || e.cls == "SeqEvent_Console" || e.cls == "SeqEvent_SequenceActivated";
+    const bool unlimitedClass = e.cls == "SeqEvent_Console" || e.cls == "SeqEvent_SequenceActivated" || e.cls == "TnSeqEvent_Interact";
     const int maxCount = e.authored["MaxTriggerCount"].isNumber() ? e.authored["MaxTriggerCount"].asInt(1) : (unlimitedClass ? 0 : 1);
     if (maxCount > 0 && e.triggerCount >= maxCount) return false;
-    const float delay = e.authored["ReTriggerDelay"].asFloat(0.0f);
+    const float delay = e.authored["ReTriggerDelay"].asFloat(e.cls == "SeqEvent_Touch" ? 0.1f : 0.0f);
     if (e.triggerCount > 0 && time_ - e.lastTrigger < delay) return false;
     ++e.triggerCount; e.lastTrigger = time_;
     ++activations[e.cls];
     if (log) LOG_INFO("KISMET t %.2f event %s %s", time_, e.cls.c_str(), e.path.c_str());
     output(i, outName);
+    flush();
     return true;
 }
 
@@ -121,17 +143,20 @@ int KismetVM::consoleEvent(const std::string& name) {
     return fireEvents("SeqEvent_Console", [&](const Op& o) { return o.authored["ConsoleEventName"].asString() == name; });
 }
 
-void KismetVM::begin(const std::string& checkpoint) {
+void KismetVM::begin(const std::string& checkpoint, bool restart) {
+    activeCheckpoint = checkpoint;
     auto bound = [&](const Op& o) {
         const std::string org = o.authored["Originator"].asString();
-        return org.empty() || org.find("Checkpoint") == std::string::npos || (!checkpoint.empty() && endsWith(org, checkpoint));
+        bool fire;
+        if (org.find("Checkpoint") != std::string::npos) fire = !checkpoint.empty() && endsWith(org, checkpoint);
+        else fire = checkpoint.empty() || o.authored["bFireForAllCheckpoints"].asBool(false);
+        if (fire) ops_[(size_t)find(o.path)].triggerCount = 0;   // TriggerCount = 0, then CheckActivate
+        return fire;
     };
-    fireEvents("SeqEvent_PreGameplaySetup", bound);
+    if (!restart) { fireEvents("SeqEvent_PreGameplaySetup", bound); run(); }
+    fireEvents("SeqEvent_SequenceActivated", [](const Op& o) { return endsWith(o.seq, ".PersistentLevel.Main_Sequence") || o.seq == "Main_Sequence"; });
     run();
-    fireEvents("SeqEvent_SequenceActivated", [](const Op& o) { return !o.hasIncoming; });
-    run();
-    fireEvents("SeqEvent_GameplayStarted", bound);
-    run();
+    fireEvents("SeqEvent_GameplayStarted", bound);   // queued: runs with the first normal tick [C]
 }
 
 // Stock UE3 ops [H].
@@ -139,7 +164,10 @@ bool KismetVM::builtin(int i, int input) {
     Op& o = ops_[(size_t)i];
     const std::string& c = o.cls;
     if (c == "SeqAct_Delay") {   // Start / Stop / Pause; Finished at 0, Aborted on Stop
-        if (input == 0) { o.timer = floatOf(i, "Duration", o.authored["Duration"].asFloat(1.0f)); o.latent = true; o.paused = false; }
+        if (input == 0) {   // UpdateOp runs in the activation step [C]: the first dt comes off now
+            o.timer = floatOf(i, "Duration", o.authored["Duration"].asFloat(1.0f)) - dt_; o.latent = true; o.paused = false; o.startTick = tickNo_;
+            if (o.timer <= 0.0f) { o.latent = false; output(i, "Finished"); }
+        }
         else if (input == 1) { if (o.latent) { o.latent = false; output(i, "Aborted"); } }
         else if (input == 2) o.paused = !o.paused;
         return true;
@@ -222,7 +250,10 @@ bool KismetVM::builtin(int i, int input) {
         if (seq >= 0) output(seq, o.authored["OutputLabel"].asString());
         return true;
     }
-    if (c == "Sequence") {   // a parent's link into a sub-sequence: input k -> its k-th SequenceActivated [H: RE asked]
+    if (c == "Sequence") {   // input k -> InputLinks[k].LinkedOp [C] when exported (sequence_inputs), else the k-th SequenceActivated [H]
+        const assets::Json& si = o.authored["sequence_inputs"];
+        for (size_t q = 0; q < si.size(); ++q)
+            if (si[q]["index"].asInt(-1) == input) { const int ev = find(si[q]["linked_op"].asString()); if (ev >= 0) fireEvent(ev); return true; }
         int k = 0;
         for (size_t q = 0; q < ops_.size(); ++q)
             if (ops_[q].cls == "SeqEvent_SequenceActivated" && ops_[q].seq == o.path) { if (k++ == input) { fireEvent((int)q); break; } }
@@ -245,31 +276,46 @@ bool KismetVM::builtin(int i, int input) {
     return false;
 }
 
+// USequence::UpdateOp [C]: the root sequences, each draining its own queue and then its nested sequences in array order. Work queued
+// into a sequence whose pass already ran this call (a parent, an earlier sibling) waits for the next tick.
 void KismetVM::run() {
-    int guard = 0;
-    while (!queue_.empty()) {
-        if (++guard > 20000) { ++queueCapHits; LOG_WARN("KISMET: impulse loop cap at t %.2f (%zu queued)", time_, queue_.size()); queue_.clear(); break; }
-        const Link l = queue_.front(); queue_.pop_front();
+    flush();
+    for (int r : seqRoots_) drain(r);
+}
+
+// ExecuteActiveOps [C]: pop the last queued op, run it, push its targets reversed; at most 1000 steps per queue per call, the rest waits
+// for the next tick (not dropped).
+void KismetVM::drain(int seq) {
+    int steps = 0;
+    while (!stacks_[(size_t)seq].empty()) {
+        if (++steps > 1000) { ++queueCapHits; if (log) LOG_INFO("KISMET: 1000-step cap at t %.2f (%zu carried over)", time_, stacks_[(size_t)seq].size()); break; }
+        const Link l = stacks_[(size_t)seq].back(); stacks_[(size_t)seq].pop_back();
         Op& o = ops_[(size_t)l.op];
         ++activations[o.cls];
         if (log) LOG_INFO("KISMET t %.2f %s [%d] %s", time_, o.cls.c_str(), l.input, o.path.c_str());
-        if (builtin(l.op, l.input)) continue;
-        if (o.cls.find("SeqEvent") != std::string::npos) { output(l.op, "Out"); continue; }   // an event's input (Toggle on events: host)
-        if (host_ && host_->activate(*this, l.op, l.input)) continue;
+        if (builtin(l.op, l.input)) { flush(); continue; }
+        if (o.cls.find("SeqEvent") != std::string::npos) { output(l.op, "Out"); flush(); continue; }   // an event's input (Toggle on events: host)
+        if (host_ && host_->activate(*this, l.op, l.input)) {   // a host latent op takes its first update in the activation step
+            if (o.latent && o.startTick != tickNo_) { o.startTick = tickNo_; host_->updateLatent(*this, l.op, dt_); }
+            flush(); continue;
+        }
         ++defaulted[o.cls];
         if (!o.outputs.empty()) output(l.op, o.outputs.front().first);   // the generic In -> Out
+        flush();
     }
+    for (size_t k = 0; k < seqChildren_[(size_t)seq].size(); ++k) drain(seqChildren_[(size_t)seq][k]);
 }
 
 void KismetVM::tick(float dt) {
-    time_ += dt;
-    run();   // anything queued between ticks (host events)
-    for (size_t i = 0; i < ops_.size(); ++i) {   // latent updates [H: before new activations of this tick]
+    time_ += dt; dt_ = dt; ++tickNo_;
+    run();   // this tick's new work (with the carried-over steps); new latent ops take their first update in it
+    for (size_t i = 0; i < ops_.size(); ++i) {   // then every older latent op once [C: re-queued after the drain]
         Op& o = ops_[i];
-        if (!o.latent) continue;
+        if (!o.latent || o.startTick == tickNo_) continue;
         if (o.cls == "SeqAct_Delay") {
             if (!o.paused && (o.timer -= dt) <= 0.0f) { o.latent = false; output((int)i, "Finished"); }
         } else if (host_) host_->updateLatent(*this, (int)i, dt);
+        flush();
     }
     run();
 }

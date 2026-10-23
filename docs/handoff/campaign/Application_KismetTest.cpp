@@ -33,7 +33,7 @@ void Application::runKismetTest() {
     {   // Delay: Start -> Finished after Duration; Stop -> Aborted; Pause holds the timer
         game::KismetVM vm; Recorder r; vm.setHost(&r);
         vm.load(graph(
-            "{\"object\":\"S.E\",\"class\":\"SeqEvent_RemoteEvent\",\"authored\":{\"EventName\":\"go\"},\"inputs\":[],\"outputs\":{\"Out\":[{\"op\":\"S.D\",\"input_index\":0}]},\"variables\":{},\"incoming\":[]},"
+            "{\"object\":\"S.E\",\"class\":\"SeqEvent_RemoteEvent\",\"authored\":{\"EventName\":\"go\",\"MaxTriggerCount\":0},\"inputs\":[],\"outputs\":{\"Out\":[{\"op\":\"S.D\",\"input_index\":0}]},\"variables\":{},\"incoming\":[]},"
             "{\"object\":\"S.D\",\"class\":\"SeqAct_Delay\",\"authored\":{\"Duration\":0.5},\"inputs\":[\"Start\",\"Stop\",\"Pause\"],\"outputs\":{\"Finished\":[{\"op\":\"S.F\",\"input_index\":0}],\"Aborted\":[{\"op\":\"S.A\",\"input_index\":0}]},\"variables\":{},\"incoming\":[{}]},"
             "{\"object\":\"S.F\",\"class\":\"X_Finished\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{},\"variables\":{},\"incoming\":[{}]},"
             "{\"object\":\"S.A\",\"class\":\"X_Aborted\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{},\"variables\":{},\"incoming\":[{}]}"));
@@ -52,14 +52,14 @@ void Application::runKismetTest() {
             "{\"object\":\"S.O\",\"class\":\"X_Out\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{},\"variables\":{},\"incoming\":[{}]}"));
         const int g = vm.find("S.G");
         vm.impulse(g, 0); vm.impulse(g, 0); vm.tick(dt);
-        vm.impulse(g, 1); vm.impulse(g, 0); vm.tick(dt);
+        vm.impulse(g, 1); vm.tick(dt); vm.impulse(g, 0); vm.tick(dt);   // (one impulse per tick: queued impulses run LIFO)
         check(r.hits.size() == 2, "Gate AutoCloseCount 1: passes once, closes, Open re-opens");
     }
     {   // RemoteEvent fan-out to two listeners; a base event (MaxTriggerCount 1) fires once; RemoteEvents are unlimited
         game::KismetVM vm; Recorder r; vm.setHost(&r);
         vm.load(graph(
             "{\"object\":\"S.R1\",\"class\":\"SeqEvent_RemoteEvent\",\"authored\":{\"EventName\":\"x\"},\"inputs\":[],\"outputs\":{\"Out\":[{\"op\":\"S.A\",\"input_index\":0}]},\"variables\":{},\"incoming\":[]},"
-            "{\"object\":\"S.R2\",\"class\":\"SeqEvent_RemoteEvent\",\"authored\":{\"EventName\":\"x\"},\"inputs\":[],\"outputs\":{\"Out\":[{\"op\":\"S.B\",\"input_index\":0}]},\"variables\":{},\"incoming\":[]},"
+            "{\"object\":\"S.R2\",\"class\":\"SeqEvent_RemoteEvent\",\"authored\":{\"EventName\":\"x\",\"MaxTriggerCount\":0},\"inputs\":[],\"outputs\":{\"Out\":[{\"op\":\"S.B\",\"input_index\":0}]},\"variables\":{},\"incoming\":[]},"
             "{\"object\":\"S.T\",\"class\":\"SeqEvent_Touch\",\"authored\":{},\"inputs\":[],\"outputs\":{\"Out\":[{\"op\":\"S.C\",\"input_index\":0}]},\"variables\":{},\"incoming\":[]},"
             "{\"object\":\"S.A\",\"class\":\"X\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{},\"variables\":{},\"incoming\":[{}]},"
             "{\"object\":\"S.B\",\"class\":\"X\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{},\"variables\":{},\"incoming\":[{}]},"
@@ -67,7 +67,22 @@ void Application::runKismetTest() {
         vm.remoteEvent("x"); vm.remoteEvent("x");
         vm.fireEvent(vm.find("S.T")); vm.fireEvent(vm.find("S.T"));
         vm.tick(dt);
-        check(r.hits.size() == 5, "RemoteEvent fans out to every listener, unlimited; a base event fires once (MaxTriggerCount 1)");
+        check(r.hits.size() == 4, "RemoteEvent fans out to every listener; the CDO default MaxTriggerCount 1 (R1, Touch once), an exported 0 = unlimited (R2 twice)");
+    }
+    {   // ExecuteActiveOps order (RE K5): a finished op's targets run in link order, depth-first (A -> [B, C], B -> D: B, D, C)
+        game::KismetVM vm; Recorder r; vm.setHost(&r);
+        struct Pass : game::KismetVM::Host {
+            std::vector<std::string> order;
+            bool activate(game::KismetVM& vm, int op, int) override { order.push_back(vm.op(op).path); vm.output(op, "Out"); return true; }
+        } pass;
+        vm.setHost(&pass);
+        vm.load(graph(
+            "{\"object\":\"S.A\",\"class\":\"X\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{\"Out\":[{\"op\":\"S.B\",\"input_index\":0},{\"op\":\"S.C\",\"input_index\":0}]},\"variables\":{},\"incoming\":[]},"
+            "{\"object\":\"S.B\",\"class\":\"X\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{\"Out\":[{\"op\":\"S.D\",\"input_index\":0}]},\"variables\":{},\"incoming\":[{}]},"
+            "{\"object\":\"S.C\",\"class\":\"X\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{},\"variables\":{},\"incoming\":[{}]},"
+            "{\"object\":\"S.D\",\"class\":\"X\",\"authored\":{},\"inputs\":[\"In\"],\"outputs\":{},\"variables\":{},\"incoming\":[{}]}"));
+        vm.impulse(vm.find("S.A"), 0); vm.tick(dt);
+        check(pass.order.size() == 4 && pass.order[1] == "S.B" && pass.order[2] == "S.D" && pass.order[3] == "S.C", "LIFO: targets in link order, depth-first (A, B, D, C)");
     }
     {   // SeqCond_Increment A += 1 vs B; a link into a sub-sequence fires its SequenceActivated
         game::KismetVM vm; Recorder r; vm.setHost(&r);
@@ -108,9 +123,9 @@ void Application::runKismetTest() {
         } stub;
         vm.setHost(&stub);
         check(ok && vm.load(j) && vm.opCount() > 800, "D5_OME graph loads (ops and links from the flat per-level lists)");
-        vm.begin("Checkpoint_4578");
+        vm.begin("");   // a chapter start (CP none): the unbound PreGameplaySetup_11738 sets Checkpoint_4578 active
         bool cp = false; for (const std::string& c : stub.checkpoints) cp = cp || c.find("Checkpoint_4578") != std::string::npos;
-        check(cp, "D5 start at Checkpoint_4578: PreGameplaySetup sets it active");
+        check(cp, "D5 chapter start: PreGameplaySetup_11738 sets Checkpoint_4578 active");
         for (int k = 0; k < 120 * 60; ++k) vm.tick(dt);
         int total = 0; for (const auto& a : vm.activations) total += a.second;
         check(vm.queueCapHits == 0 && total > 0, "120 s of D5 ticks with no impulse-loop cap hit");

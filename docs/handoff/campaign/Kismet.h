@@ -1,6 +1,8 @@
 #pragma once
-// Campaign Kismet runtime (the sequence VM over AssetTools' next_map/<chapter>_kismet.json: authored graph CONFIRMED; the VM core is
-// stock UE3 semantics [H] until RE confirms the per-tick loop and the trigger defaults). Ops, links and variables load from the flat
+// Campaign Kismet runtime (the sequence VM over AssetTools' next_map/<chapter>_kismet.json: authored graph CONFIRMED; the VM core per
+// RE KISMET_VM_CORE_RE / REVIEW_KISMET_VM_RE [C]: one ActiveSequenceOps queue per Sequence, drained parent first then the nested
+// sequences in array order (USequence::UpdateOp); LIFO with a finished op's targets in link order depth-first, 1000 steps per queue per
+// tick with the leftovers carried over, latent ops updated in their activation step and then once per tick, the CDO trigger defaults). Ops, links and variables load from the flat
 // per-level object lists; sequence nesting is the dotted path. Stock ops (Delay, Gate, RemoteEvent, Switch, RandomSwitch, the
 // compare / increment conditions, Set*) run here; every other op class goes to the Host (gameplay: checkpoints, pawn factories, AI
 // moves, conversations, matinee, ...). An op neither handles fires its first output (the generic In -> Out default, RE WFC "Batch 2").
@@ -31,6 +33,8 @@ public:
         std::vector<std::pair<std::string, std::vector<Link>>> outputs;
         std::vector<std::pair<std::string, std::vector<int>>> vars;   // variable link name -> var indices
         bool hasIncoming = false;
+        int startTick = -1;                   // the tick a latent op was activated in (its first update ran then)
+        int seqId = -1;                       // the owning sequence's queue
         // runtime
         int triggerCount = 0; float lastTrigger = -1.0e9f; bool enabled = true;
         bool latent = false, paused = false; float timer = 0.0f;
@@ -62,9 +66,15 @@ public:
     int fireEvents(const std::string& cls, const std::function<bool(const Op&)>& filter = {});
     int remoteEvent(const std::string& eventName);    // every SeqEvent_RemoteEvent with that EventName
     int consoleEvent(const std::string& name);        // SeqEvent_Console ConsoleEventName
-    // Level start [H order]: PreGameplaySetup, the startup SequenceActivated events, then GameplayStarted - the Originator-bound ones
-    // only for the active checkpoint (its path suffix), the unbound ones always.
-    void begin(const std::string& checkpoint);
+    // Level start: PreGameplaySetup (skipped on an in-place checkpoint restart [C]), the SequenceActivated events directly in a level's
+    // Main_Sequence [HIGH], then GameplayStarted - the Originator-bound ones only for the active checkpoint (its path suffix), the
+    // unbound ones always [HIGH].
+    // PerformPreGameplaySetup(CP) [C, RE KISMET_VM_CORE section 6]: CP = none on a map load, the restored checkpoint on a checkpoint start.
+    // Startup events (PreGameplaySetup and GameplayStarted alike): Originator none -> CP none or bFireForAllCheckpoints; Checkpoint-bound
+    // -> only that CP's (chosen once from the argument). Each fire resets TriggerCount first. The pre-gameplay pass runs only the
+    // PreGameplaySetup chains; GameplayStarted waits for the first normal tick.
+    void begin(const std::string& checkpoint, bool restart = false);
+    std::string activeCheckpoint;   // the host keeps it current (SeqAct_SetActiveCheckpoint); begin() seeds it (diagnostics)
     void tick(float dt);
     float time() const { return time_; }
     void finishLatent(int op, const std::string& outName) { ops_[(size_t)op].latent = false; output(op, outName); }
@@ -86,7 +96,13 @@ private:
     std::vector<Op> ops_;
     std::vector<Var> vars_;
     std::map<std::string, int> byPath_, varByPath_;
-    std::deque<Link> queue_;
+    std::vector<std::vector<Link>> stacks_;   // per sequence: ActiveSequenceOps, LIFO (the last queued runs first)
+    std::vector<std::vector<int>> seqChildren_;   // nested sequences in array (load) order
+    std::vector<int> seqRoots_;
+    std::vector<Link> pending_;   // the current op's impulsed targets in link order (pushed reversed when it finishes)
+    int tickNo_ = 0; float dt_ = 0.0f;
+    void flush() { for (size_t k = pending_.size(); k-- > 0;) stacks_[(size_t)ops_[(size_t)pending_[k].op].seqId].push_back(pending_[k]); pending_.clear(); }
+    void drain(int seq);
     Host* host_ = nullptr;
     float time_ = 0.0f;
     uint32_t rng_ = 0x4b15e7u;
