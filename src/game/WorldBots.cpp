@@ -32,7 +32,9 @@ bool World::ensureBotNav() {
     botNavTried_ = true;
     // DEV / TEST: WFC_BOTNAV=<dir> loads <dir>/<map>/bot_nav.json (a regenerated nav set, before it is installed in the assets).
     const char* navDir = std::getenv("WFC_BOTNAV");
-    const std::string path = navDir ? std::string(navDir) + "/" + mapName_ + "/bot_nav.json" : overlayed(mapDir() + "bot_nav.json");
+    // campaign chapters: <chapter>/bot_nav.json (AssetTools, from the chapter's NavigationCells)
+    const std::string path = navDir ? std::string(navDir) + "/" + mapName_ + "/bot_nav.json"
+                           : campaignMap_ ? cpChapter_.dir + "bot_nav.json" : overlayed(mapDir() + "bot_nav.json");
     if (navDir) LOG_INFO("bots: nav override %s", path.c_str());
     if (!botNav_.load(path)) LOG_WARN("bots: no nav data at %s (AssetTools bot_nav.py); bots will hold position and fight", path.c_str());
     if (botNav_.valid()) {   // closed transforming doors: the nav cells under them are unusable
@@ -220,6 +222,7 @@ bool World::botModeGoal(BotBrain& b, const Character& pc, BotGoal& g) {
     const unsigned role = (unsigned)b.player * 2654435761U >> 28;   // 0..15, fixed per participant
     auto at = [&](BotGoalKind k, const core::Vec3& p, float r, bool mission) { g.kind = k; g.pos = botSnap(p); g.radius = r; b.mission = mission; g.hasTouch = true; g.touch = p; return true; };
     const auto& objs = mapState_.objectives();
+    if (cpSquadGoal(b, g)) return true;   // campaign AI squad: Move-To-Buddy (Kill outranks it)
     switch (matchMode_) {
         case MatchMode::KOTH: {
             // Power Struggle: hold the active zone (most of the team), hunt with the rest.
@@ -456,7 +459,7 @@ void World::botThink(BotBody o, BotBrain& b) {
     else if (!b.hasGoal || b.goal.kind == BotGoalKind::Attack || (b.goal.kind == BotGoalKind::Support && b.healTarget < 0) ||
              (hdist(b.goal.pos, pc.position()) < b.goal.radius &&   // reached; Smart: on the goal's floor too (as botSteer's arrival)
               !(anySmart_ && botIsSmart(b.player) && smartTune().goalFloorM > 0.0f && std::fabs(b.goal.pos.y - pc.position().y) > smartTune().goalFloorM)) ||
-             now - b.goalTime > 40.0f ||
+             now - b.goalTime > 40.0f || cpLeaderMoved(b) ||   // campaign squad: the buddy moved on
              (b.goal.kind == BotGoalKind::Roam && !b.path.empty() && b.wp >= b.path.size() && !b.wantRepath))   // the path ended short of the goal: idled up to 40 s (WFC_STUCKWATCH Berth)
         ng = botObjectiveGoal(b, pc);
     else ng = b.goal;

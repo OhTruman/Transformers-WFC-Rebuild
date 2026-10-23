@@ -54,6 +54,8 @@ struct MatchSettings {
     int maxBotsPerTeam = 5;       // bots per team
     bool extendedSlots = false;
     bool survival = false;        // Escalation (GameModeTag ESC): the director spawns the horde; TnRespawnHelperRoundEnd (no timer)
+    bool campaign = false;        // campaign chapters (GameModeTag SOLO / CP / CCP, TnCampaignGame): no respawn timer (World respawns the AI
+                                  // squad; a human death is the game over)
     static constexpr int kExtendedPerTeam = 32, kExtendedPlayers = 64;
     void applyExtendedSlots() { extendedSlots = true; maxPerTeam = kExtendedPerTeam; maxBotsPerTeam = kExtendedPerTeam; maxPlayers = kExtendedPlayers; }
     static MatchSettings forMode(const std::string& tag);   // authored defaults per TnOnlineGameSettings<tag>
@@ -72,6 +74,9 @@ struct MatchEvent {
         MatchEnded,           // EndGame -> MatchOver: winner (team index / player index / -1 tie), reason
         ReturnToLobby, RoundEnded, RoundStarted,        // MatchOver.OnCountdownComplete -> TnGame.ReturnToGameLobby (host handoff)
         RemoteIdle,           // online host rule: Remote participant `player` idle for World::kRemoteIdleKickSeconds; the session kicks that peer
+        // Campaign (RE CAMPAIGN_RUNTIME_EVENTS_RE section 7): SendGameOverEvent (value 14 = the UI event), NotifyReachedCheckpoint (text = the
+        // checkpoint actor, value = its DisplayOrder), StartCompleteMission (text = the chapter, value = MapId).
+        CampaignGameOver, CheckpointReached, MissionComplete,
     };
     Type type;
     int player = -1, other = -1;       // victim / killer, spawned player, winning player (FFA)
@@ -128,7 +133,7 @@ struct MatchPlayer {
 
 class Match {
 public:
-    enum class State { None, PendingMatch, InProgress, MatchOver, Returned };
+    enum class State { None, PendingMatch, InProgress, MatchOver, Returned, InProgressOver };   // InProgressOver: TnCampaignGame after CampaignGameOver
 
     struct Start { std::string actor, cluster; int team = 255; bool ffa = false; core::Vec3 pos; float yaw = 0.0f;
                    bool generated = false; };   // generated: extended-match spawn point (World::generateExtraStarts), after the authored ones
@@ -222,6 +227,10 @@ public:
     void restartPlayerAt(int p, const core::Vec3& pos, float yaw);
     void respawnPlayer(int p) { if (p >= 0 && (size_t)p < players_.size() && !players_[(size_t)p].alive) restartPlayer(p); }
     void endSurvival(const std::string& reason) { endGame(-1, reason); }
+    // Campaign chapters (World): the chapter's starts, InProgress.CampaignGameOver -> InProgressOver, the campaign events.
+    void setCampaignStarts(const std::vector<Start>& s) { starts_ = s; clusters_.clear(); }
+    void campaignGameOver() { if (state_ == State::InProgress) { state_ = State::InProgressOver; stateTime_ = 0.0f; } }
+    void emitCampaignEvent(MatchEvent::Type t, int player, const std::string& text, int value) { emit(t, player, value, text); }
     int drawInt(int n) { return randomInt(n); }
     float drawFloat() { rng_ = rng_ * 1664525u + 1013904223u; return (float)((rng_ >> 8) & 0xFFFFFFu) / 16777216.0f; }
     // Join in progress: a dormant seat wakes (name, member, team; no character: Choose Character, then an immediate spawn while

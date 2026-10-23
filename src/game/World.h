@@ -21,6 +21,7 @@
 #include "game/TransformingActorsDraw.h"
 #include "game/Match.h"
 #include "game/Survival.h"
+#include "game/Campaign.h"
 #include "game/ChassisDef.h"
 #include "game/MatchOpponent.h"
 #include "game/BotRoster.h"
@@ -86,6 +87,9 @@ struct MatchLaunch {
     uint32_t seed = 0;                 // online: the host's match seed (every peer alike); 0 = the local source (offline)
     std::vector<RemoteSeat> humans;    // online: EVERY human in the host's seat order (this machine's included); empty offline
     int localSeat = -1;                // online: this machine's index in humans (match player localSeat on every peer)
+    // Campaign (the Frontend C6 contract): ?Checkpoint=<path> (absent = the chapter start), ?WfcDifficulty=0|1|2, ?MapId; PROV ?Character
+    // (the in-map CharacterSelect: a trio CharacterName or 0..2; default the first).
+    std::string checkpoint; int difficulty = 1; int mapId = -1; std::string character;
     bool online = false;               // a session launch (from the launch record): every human through the wire path; offline false
     static bool fromURL(const std::string& url, MatchLaunch& out);
 };
@@ -227,6 +231,8 @@ struct HudGameState {
     // Escalation (MP_ESCALATION_RE §8; 0 / -1 / false outside it): the wave (DisplayWave + 1), the PreGame / next-wave countdown (whole
     // s), the game over (TnSurvivalGameOverMessage wave = svWave). E2: the local seat's power and the generator prompt; E4: downed / revive.
     int svWave = 0; int svNextWaveTime = -1; bool svGameOver = false;
+    // Campaign: the game over shown (UI event 14 -> CampaignGameOver_GFX), MissionComplete, the active checkpoint actor.
+    bool cpActive = false, cpGameOver = false, cpMissionComplete = false; std::string cpCheckpoint;
     int svPower = 0; std::string svGeneratorName; int svGeneratorNeeded = -1;
     bool svDowned = false; float svDownedHealth = 0.0f; bool svReviveTarget = false; float svReviveProgress = -1.0f;
     // TDM player tags (TnObjectiveMarkerTypeTransformerVersus): hidden for self and the dead; allies labelled,
@@ -886,6 +892,12 @@ public:
     // Escalation: the director state and the map's data (tests, HUD).
     const SurvivalState& survival() const { return sv_; }
     const SurvivalData& survivalData() const { return svData_; }
+    // Campaign chapters (WorldCampaign.cpp)
+    bool campaignMap() const { return campaignMap_; }
+    const CampaignChapter& campaignChapter() const { return cpChapter_; }
+    const CampaignState& campaign() const { return cp_; }
+    bool cpKismetActivate(KismetVM& vm, int op, int input);   // the level Kismet's host ops
+    void cpKismetLatent(KismetVM& vm, int op, float dt);
     // The map's transforming actors (Rendering: draw each actor's glb at matrix with its clip at t, unless hidden).
     const TransformingActors& transformingActors() const { return transforming_; }
     const CollisionWorld& pawnCollisionWorld() const { return collision_; }
@@ -1397,6 +1409,15 @@ private:
     void tickMatch(float dt);
     // Escalation (WorldSurvival.cpp): the horde slots + the spawn finder at launch; the director per step (after match_.tick).
     void setupSurvival();
+    // Campaign (WorldCampaign.cpp): the squad + Kismet at launch; the game over / squad respawn / Kismet per step (after match_.tick).
+    void setupCampaign(const MatchLaunch& l);
+    void tickCampaign(float dt);
+    bool loadCampaignMesh(const std::string& file, render::MeshData& out);
+    void cpSetStarts(const std::string& checkpoint);
+    void cpGameOver(int victim);
+    const Character* cpLeader(int bot) const;
+    bool cpSquadGoal(BotBrain& b, BotGoal& g);
+    bool cpLeaderMoved(const BotBrain& b) const;
     void tickSurvival(float dt);
     float svZoneScore(int zone, int type) const;
     void svSort(int type);
@@ -1416,6 +1437,11 @@ private:
     bool svLaunching_ = false;   // the next resetForNewLevel is an Escalation level (transforming actors: the SV start state)
     SurvivalData svData_;
     SurvivalState sv_;
+    CampaignChapter cpChapter_;                 // the loaded chapter (campaignMap_)
+    CampaignState cp_;
+    bool campaignMap_ = false;
+    std::string cpLaunchCheckpoint_;
+    std::unique_ptr<KismetVM::Host> cpHost_;
     std::vector<ColActor> colActors_;
     void syncMapPresentation(render::IRenderer& r) const;   // Gameplay world state -> renderer, each frame
     std::vector<StartPoint> starts_;

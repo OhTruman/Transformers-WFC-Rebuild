@@ -14,7 +14,7 @@ const char* matchStateName(Match::State s) {
     switch (s) {
         case Match::State::None: return "None"; case Match::State::PendingMatch: return "PendingMatch";
         case Match::State::InProgress: return "InProgress"; case Match::State::MatchOver: return "MatchOver";
-        case Match::State::Returned: return "Returned";
+        case Match::State::Returned: return "Returned"; case Match::State::InProgressOver: return "InProgressOver";
     }
     return "?";
 }
@@ -40,6 +40,10 @@ MatchSettings MatchSettings::forMode(const std::string& tag) {
     // to size: one participant per spawn-list entry x MaxCount) [CONF RE MP_ESCALATION_RE §1].
     else if (tag == "ESC") { s.teamGame = true; s.goalScore = 0; s.timeLimit = 0; s.gameType = "TNGT_SV"; s.teamScoreAmount = 0;
                              s.reportKills = false; s.reportPoints = false; s.survival = true; s.matchAutoStartCountdown = 15; s.maxPlayers = 128; s.maxPerTeam = 128; s.maxBotsPerTeam = 128; }
+    // SOLO / CP / CCP (TnCampaignGameSolo / TnCoopGame): no score goal, no time limit; StartMatch as soon as the host has a character
+    // (CanStartMatch; the 1 s timer here) [C, RE CAMPAIGN_RUNTIME_EVENTS_RE section 2].
+    else if (tag == "SOLO" || tag == "CP" || tag == "CCP") { s.teamGame = true; s.goalScore = 0; s.timeLimit = 0; s.gameType = "TNGT_CAMPAIGN"; s.teamScoreAmount = 0;
+                             s.reportKills = false; s.reportPoints = false; s.campaign = true; s.matchAutoStartCountdown = 0; }
     else { s.modeTag = "TDM"; s.teamGame = true; s.goalScore = 40; s.timeLimit = 900; s.gameType = "TNGT_TDM"; }
     return s;
 }
@@ -169,7 +173,7 @@ void Match::tick(float dt) {
             if (p.timeToRespawn <= 0.0f) restartPlayer((int)i);
         }
         if (s_.teamGame) updateClusters(dt);
-        if (s_.teamGame && !s_.survival) tickForfeit(dt);
+        if (s_.teamGame && !s_.survival && !s_.campaign) tickForfeit(dt);
         if (state_ != State::InProgress) return;
         if (s_.rounds > 0) tickRounds(dt);
     } else if (state_ == State::MatchOver && stateTime_ >= s_.matchOverCountdown) {
@@ -344,7 +348,7 @@ void Match::killed(int killer, int victim, bool suicide, const std::string& dama
     }
     // RespawnHelper.Died -> OnDeath: TimeToRespawn = ShouldInstantRespawn ? 0 : WaveRespawnTime (5 s).
     // Survival: TnRespawnHelperRoundEnd - no timer; the director respawns the dead players at the wave end (the horde never).
-    if (state_ == State::InProgress) V.timeToRespawn = s_.survival ? -1.0f : s_.waveRespawnTime;
+    if (state_ == State::InProgress) V.timeToRespawn = s_.survival || s_.campaign ? -1.0f : s_.waveRespawnTime;
 }
 
 std::vector<KillFeedEntry> Match::killFeed() const {

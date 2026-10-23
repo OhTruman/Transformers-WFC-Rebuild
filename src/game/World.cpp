@@ -307,7 +307,23 @@ void World::load(render::IRenderer& renderer) {
 bool World::loadVerticalSlice(render::IRenderer& renderer) {
     const std::string root = assetRoot();
     render::MeshData mapMesh;
-    renderer.loadMapRenderData(mapName_);   // original-data shader path (if generated)
+    // Campaign chapters (D5_OME_BASE_m / D5_OME_BASE / D5_OME): AssetTools' per-unit chapter data; the renderer takes the persistent
+    // level and merges the other units itself (Rendering's chapter loader); collision / spawns / nav come from the units here.
+    campaignMap_ = false;
+    {
+        const std::string ch = CampaignChapter::chapterOf(mapName_);
+        if (!ch.empty() && CampaignChapter::load(ch, cpChapter_)) {
+            campaignMap_ = true; mapName_ = ch;
+            LOG_INFO("campaign: chapter %s (MapId %d), %zu units at the start (state %s)", ch.c_str(), cpChapter_.mapId, cpChapter_.units.size(), cpChapter_.initialState.c_str());
+        } else if (!ch.empty()) LOG_ERROR("campaign: chapter %s has no data under %s", ch.c_str(), CampaignChapter::root().c_str());
+    }
+    renderer.loadMapRenderData(campaignMap_ ? cpChapter_.persistentDir : mapName_);   // original-data shader path (if generated)
+    int chapterUnitsDrawn = 0;
+    if (campaignMap_) {
+        std::vector<std::string> others;
+        for (const std::string& u : cpChapter_.units) if (u != cpChapter_.persistentDir) others.push_back(u);
+        chapterUnitsDrawn = renderer.loadChapterUnits(others);
+    }
     core::loadYield("World: map render data");   // [frontend] the loading screen presents between load steps
     // The match's authored rule classes gate rule-dependent presentation (objective bases, Conquest totems,
     // objective-factory effects) exactly as GameInfo.HasRule gates the world state. [integration] Gameplay's
@@ -316,7 +332,9 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     renderer.setActiveGameRules(gameRulesForMode(matchMode_));
 
     renderer_ = &renderer;
-    bool okMap = assets::loadGlb(mapDir() + "world.glb", mapMesh);
+    // campaign: the persistent level's world.glb (no triangles of its own) when the renderer drew the units, else every unit merged
+    bool okMap = campaignMap_ ? (chapterUnitsDrawn > 0 ? (assets::loadGlb(mapDir() + "world.glb", mapMesh), true) : (loadCampaignMesh("world.glb", mapMesh), true))
+                              : assets::loadGlb(mapDir() + "world.glb", mapMesh);
     core::loadYield("World: world.glb");
     if (!okMap) return false;
     auto resolveOne = [&](const std::string& uri) { return resolveTexture(uri); };
@@ -419,7 +437,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     };
     render::MeshData colMesh, pawnStatic, weaponColMesh, weaponStatic;
     std::vector<std::pair<std::string, std::vector<core::Vec3>>> pawnMovers, weaponMovers;
-    bool authored = assets::loadGlb(overlayed(mapDir + "collision_pawn.glb"), colMesh);
+    bool authored = campaignMap_ ? loadCampaignMesh("collision_pawn.glb", colMesh) : assets::loadGlb(overlayed(mapDir + "collision_pawn.glb"), colMesh);
     if (!authored) assets::loadGlb(mapDir + "collision.glb", colMesh);
     // Per-node bounds of the authored movement collision (for tracing contacts back to authored actors).
     colActors_.clear();
@@ -504,6 +522,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
         LOG_INFO("World: %s spawn at %.1f, %.1f, %.1f facing yaw %.2f", gameModeName(matchMode_),
                  spawnPos_.x, spawnPos_.y, spawnPos_.z, spawnYaw_);
     }
+    if (campaignMap_) { spawnPos_ = cpChapter_.playerStart.pos; spawnYaw_ = 0.0f; }   // the chapter start (TnCampaignPlayerStart)
     respawnPlayer();
     // Test spawn selection (not a menu): WFC_START=<0..83> picks one of the 84 authored player starts,
     // WFC_START_ACTOR=<name> picks by actor name; F6 / F7 cycle starts at run time (debug).
@@ -2603,7 +2622,8 @@ void World::stepRemainder(float dt) {
 // end; World applies them to the local pawn and the map actors.
 void World::startLocalMatch(const MatchSettings& s, int localTeam) {
     joinStep();
-    if (match_.starts().empty()) {
+    if (campaignMap_ && s.campaign) cpSetStarts(cpLaunchCheckpoint_);   // the active checkpoint / the chapter start (+ squad aux spots)
+    else if (match_.starts().empty()) {
         std::string root = assetRoot();
         match_.loadSpawnData(mapDir() + "gameplay.json");
     }
@@ -2717,6 +2737,10 @@ bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
     if (opt.count("WfcCanGainXp")) out.settings.canGainXp = std::atoi(opt["WfcCanGainXp"].c_str()) != 0;   // GRI.CanGainXp (MVP gate)
     if (opt.count("WfcIdleKick")) out.settings.kickIdle = std::atoi(opt["WfcIdleKick"].c_str()) != 0;   // host option "Kick Idle Players"
     if (opt.count("IconicMode")) out.settings.iconicMode = std::atoi(opt["IconicMode"].c_str()) != 0;   // GRI _bIconicMode (Frontend URL)
+    if (opt.count("Checkpoint")) out.checkpoint = opt["Checkpoint"];   // campaign (C6): a menu checkpoint
+    if (opt.count("WfcDifficulty")) out.difficulty = std::clamp(std::atoi(opt["WfcDifficulty"].c_str()), 0, 2);
+    if (opt.count("MapId")) out.mapId = std::atoi(opt["MapId"].c_str());
+    if (opt.count("Character")) out.character = opt["Character"];
     if (opt.count("BotsFriendly")) out.bots.friendly = std::max(0, std::atoi(opt["BotsFriendly"].c_str()));
     if (opt.count("BotsEnemy")) out.bots.enemy = std::max(0, std::atoi(opt["BotsEnemy"].c_str()));
     if (opt.count("BotDifficulty")) out.bots.difficulty = std::clamp(std::atoi(opt["BotDifficulty"].c_str()), 0, kMaxBotDifficulty);
@@ -3112,7 +3136,12 @@ bool World::launchMatch(const MatchLaunch& l) {
     for (MatchMode m : {MatchMode::DM, MatchMode::TDM, MatchMode::CTF, MatchMode::KOTH, MatchMode::EXT, MatchMode::DOM})
         if (l.modeTag == gameModeName(m)) { mode = m; known = true; }
     if (l.modeTag == "ESC") { mode = MatchMode::TDM; known = true; }   // Escalation: the TDM map state (no versus objectives) + the director
+    if (l.settings.campaign) { mode = MatchMode::TDM; known = true; }   // campaign: the TDM map state (no versus objectives) + TnCampaignGame
     if (!known) { LOG_WARN("match: unknown mode %s", l.modeTag.c_str()); return false; }
+    if (l.settings.campaign != campaignMap_) {
+        LOG_WARN("match: %s %s - campaign modes run on campaign chapters only", l.map.c_str(), l.modeTag.c_str());
+        return false;
+    }
     // All six versus modes run on the shared framework (CTF rounds / EXT bomb: Pass 22).
     matchMode_ = mode;
     mapState_.setMode(mode);
@@ -3135,7 +3164,8 @@ bool World::launchMatch(const MatchLaunch& l) {
     }
     int svTeam = -1;   // Escalation: every player on the map's co-op team (CoopInfo faction)
     if (l.settings.survival) { SurvivalData d; if (SurvivalData::load(canonicalMapName(l.map), d)) svTeam = d.coopTeam; }
-    startLocalMatch(l.settings, svTeam >= 0 ? svTeam : l.localTeam);   // [integration M08b] the lobby team
+    cpLaunchCheckpoint_ = l.checkpoint;
+    startLocalMatch(l.settings, svTeam >= 0 ? svTeam : l.settings.campaign ? cpChapter_.faction : l.localTeam);   // [integration M08b] the lobby team
     // Real voices: the original's 96 (FmodAudioDevice MaxChannels) for its <= 10-player matches; the ExtendedPlayers extension
     // (up to 64 participants, ours) gets 128 so distant bots' sounds are not refused as often (63 bots, paced: Systems).
     if (audio_) audio_->setChannelLimit(l.settings.extendedSlots ? 128 : 96);
@@ -3169,6 +3199,7 @@ bool World::launchMatch(const MatchLaunch& l) {
         for (const RemoteSeat& r : l.remotes) { RemoteSeat h = r; if (svTeam >= 0) h.team = svTeam; addRemoteParticipant(h, svTeam >= 0); }   // online: the other peers' humans (before the bot fill counts them)
     const int nb = addBots(l.bots);
     setupSurvival();   // Escalation: the horde slots (no-op otherwise)
+    setupCampaign(l);   // campaign: the human's pick, the AI squad, the level Kismet (no-op otherwise)
     if (nb > 0) awards_.setXpScale(BotXpPolicy::scale(botDifficulty_));   // XP in bot matches by bot difficulty (user decision)
     evictUnusedAssets();
     LOG_INFO("match: launched %s %s (goal %d, time %d s, bots %d: friendly %d enemy %d %s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore,
@@ -4270,6 +4301,7 @@ HudGameState World::hudState() const {
         }
         h.tags.push_back(t);
     }
+    h.cpActive = cp_.active; h.cpGameOver = cp_.gameOverSent; h.cpMissionComplete = cp_.missionComplete; h.cpCheckpoint = cp_.checkpoint;
     if (sv_.phase != SurvivalState::Phase::Off) {
         h.svWave = std::max(1, sv_.displayWave + 1);
         if (sv_.phase == SurvivalState::Phase::PreGame) h.svNextWaveTime = (int)std::ceil(std::max(0.0f, svData_.preGameTime - sv_.phaseTime));
@@ -4306,6 +4338,7 @@ void World::tickMatch(float dt) {
     for (MatchOpponent* o : opponents_) if (o->spawned()) match_.setPlayerLocation(o->matchPlayer(), o->position(), o->pawn().cylinderRadius(o->pawn().moveForm()));
     match_.tick(dt);
     tickSurvival(dt);   // Escalation director (no-op otherwise)
+    tickCampaign(dt);   // campaign: Kismet, game over, squad respawn (no-op otherwise)
     // Live objective rules (DOM nodes, KOTH zone) while InProgress: pawns -> captures / scores -> the match rules.
     if (match_.state() == Match::State::InProgress && !match_.betweenRounds()) {
         mapState_.setKillZ(killZ_);
@@ -5348,7 +5381,10 @@ void World::forcedDirPost(Character& c) const {
     }
 }
 
-std::string World::mapDir() const { return assetRoot() + "/Maps/" + mapName_ + "/"; }
+std::string World::mapDir() const {
+    if (campaignMap_) return cpChapter_.dir + cpChapter_.persistentDir + "/";   // the persistent unit (physics.json "world": KillZ)
+    return assetRoot() + "/Maps/" + mapName_ + "/";
+}
 
 std::string World::overlayed(const std::string& path) {
     static const char* root = std::getenv("WFC_OVERLAY_ROOT");
@@ -5373,6 +5409,7 @@ std::string World::canonicalMapName(const std::string& m) {
                                   "MP_IAC_Rust", "MP_IAC_Seed", "MP_KON_Molten", "MP_ORB_Debris", "MP_UND_Complex"};
     auto lower = [](std::string x) { for (char& c : x) c = (char)std::tolower((unsigned char)c); return x; };
     for (const char* k : kMaps) if (lower(base) == lower(k)) return k;
+    { const std::string ch = CampaignChapter::chapterOf(m); if (!ch.empty()) return ch; }   // campaign chapters: by the chapter id
     return base;
 }
 
