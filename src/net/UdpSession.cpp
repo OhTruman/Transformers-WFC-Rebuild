@@ -272,6 +272,10 @@ void UdpSession::host(const SessionHostSettings& settings) {
     hostSettings_ = settings;
     serviceCode_.clear(); registeredAt_ = -1.0; lastRegister_ = -1e9;
     if (role_ != Role::Offline) leave();
+    // A Quick Match that found nothing hosts from here with the SEARCH transport still open (an ephemeral member port, its own seat
+    // 255 = the Reserved placeholder): the host would then own seat 255, requestStart add it again as seat 0 (11 match seats for 10
+    // slots -> no lockstep driver -> a late joiner never served) and the lobby show the wrong port. Hosting always opens its own.
+    if (t_ && role_ == Role::Offline) t_.reset();
     std::string err;
     for (int p = opt_.hostPort; p < opt_.hostPort + 10 && !t_; ++p)
         t_ = createUdpTransport(0, opt_.bindIp + ":" + std::to_string(p), {}, err);

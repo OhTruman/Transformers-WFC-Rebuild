@@ -812,6 +812,28 @@ void Application::runUdpSessionTest() {
               "LAN discovery: findGames lists the public LAN host with a ping (no service)");
         pub.leave(); browser.leave();
     }
+    {   // Quick Match with nothing to join hosts a public lobby: the host must own seat 0 on its own host port, and a launch roster
+        // of its slot + Reserved seats gives exactly that many match seats with the host at 0 (the pt9 two-window failure, 2026-10-23)
+        net::UdpSession::Options qo = o; qo.discoverAddr = "127.0.0.1"; qo.hostPort = 24160;
+        net::UdpSession qh(qo);
+        std::vector<SessionEvent> qe;
+        frontend::SessionMemberInfo qi; qi.displayName = "QuickHost"; qh.setMemberInfo(qi);
+        qh.quickMatch("ReproTDM");
+        const double endq = now() + 6.0;
+        while (now() < endq && !has(qe, T::HostOpened)) { for (auto& e : qh.poll(now())) qe.push_back(e); std::this_thread::sleep_for(std::chrono::milliseconds(2)); }
+        const SessionEvent* qho = find(qe, T::HostOpened);
+        check(qho && qho->address.find(":2416") != std::string::npos, "quick match with nothing to join: hosts on its own host port (not the search port)");
+        frontend::SessionLobby ql;
+        frontend::SessionSlot qs; qs.kind = frontend::SessionSlot::Kind::Human; qs.member = qh.selfId(); qs.team = 0;
+        ql.slots.push_back(qs);
+        for (int i = 0; i < 3; ++i) { frontend::SessionSlot r; r.kind = frontend::SessionSlot::Kind::Reserved; ql.slots.push_back(r); }
+        qh.publishLobby(ql);
+        qh.setLaunch("MP_IAC_Streets?GameModeTag=TDM", 9u, ql);
+        qh.requestStart();
+        check(qh.matchSeats() == 4 && qh.matchSelf() == 0, "quick-match host: 1 human + 3 Reserved = 4 match seats, the host at seat 0");
+        LOG_INFO("UDPSESSIONTEST quick-match host: %s, %d match seats, self %d", qho ? qho->address.c_str() : "-", qh.matchSeats(), qh.matchSelf());
+        qh.leave();
+    }
     if (const char* svc = std::getenv("WFC_UDPSESSIONTEST_SERVICE")) {   // the lobby service (tools/net/lobby_service.py) on loopback
         net::UdpSession::Options so = o; so.discoverAddr = "127.0.0.1"; so.hostPort = 14120;
         net::UdpSession h(so), j(so), q2(so);
