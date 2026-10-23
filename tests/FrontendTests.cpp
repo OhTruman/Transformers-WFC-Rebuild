@@ -1835,7 +1835,8 @@ static void testCampaignC3() {
     f.call("Online.BeginLobbyExitCountdown", {});
     rt.update(platform::InputFrame{}, 1.0f / 60.0f);
     const bool launched = lu.map() == "D1_ORB_Base_m" && lu.option("Checkpoint").find("Checkpoint_5199") != std::string::npos &&
-                          lu.intOption("MapId", -1) == 101 && (cat.mapById(101)->hasRequiredAssets || !f.lobby().countingDown);
+                          lu.intOption("MapId", -1) == 101 && (cat.mapById(101)->hasRequiredAssets || !f.lobby().countingDown) &&
+                          lu.intOption("WfcDifficulty", -1) == f.profile().campaign.difficulty;   // Gameplay's chapter rules
     check(cat.checkpoints().size() == 84 && d1 == 10 && d1Start && named && trio && selected && cleared && launched, "campaign.C3_checkpoints",
           std::to_string(cat.checkpoints().size()) + " d1=" + std::to_string(d1) + " " + std::to_string(d1Start) + std::to_string(named) +
           std::to_string(trio) + std::to_string(selected) + std::to_string(cleared) + std::to_string(launched) + " " + f.currentMatch().url.toString());

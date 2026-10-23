@@ -498,9 +498,14 @@ void Catalog::loadTransLevels(const std::string& extractedRoot, const std::strin
             pending.runtimeDir = dir;
             if (pending.imagePath.empty()) pending.imagePath = "UI_LevelThumbnails_p.LevelMultiGeneric";   // the class default
             pending.cooked = true;   // the chapters ship cooked; selectable once their rebuild runtime + render data exist
-            pending.hasRequiredAssets = runtimeFileExists(runtimeMapRoot + "/" + dir + "/world.glb") &&
-                                        (runtimeFileExists(runtimeMapRoot + "/" + dir + "/render_index.json") ||
-                                         runtimeFileExists(manifestRoot + "/maps/" + dir + "/render_index_generic.json"));
+            // Gameplay's chapter World reads <campaign root>/<chapter>/chapter.json (CampaignChapter::root(): WFC_CAMPAIGN_ROOT, else
+            // AssetTools' campaign_render export) with Rendering's chapter units; a chapter is selectable once that export exists.
+            const char* cr = std::getenv("WFC_CAMPAIGN_ROOT");
+            const std::string campaignRoot = cr ? cr : "F:/Transformers Rebuild/AssetTools/out/campaign_render";
+            pending.hasRequiredAssets = runtimeFileExists(campaignRoot + "/" + dir + "/chapter.json") ||
+                                        (runtimeFileExists(runtimeMapRoot + "/" + dir + "/world.glb") &&
+                                         (runtimeFileExists(runtimeMapRoot + "/" + dir + "/render_index.json") ||
+                                          runtimeFileExists(manifestRoot + "/maps/" + dir + "/render_index_generic.json")));
             maps_.push_back(pending);
         }
         mapSectionId = -1; trio.clear();
