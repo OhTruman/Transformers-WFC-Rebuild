@@ -1388,11 +1388,13 @@ static void testOnlineVoice() {
         d.save();
         std::ifstream a("wfc_profile.ini"); std::stringstream as; as << a.rdbuf(); a.close();
         frontend::LocalProfile c;
-        c.voice.mode = 2; c.voice.audience = 0; c.voice.pttKey = "Mouse 4"; c.voice.muted = {"WFC-AAAA-AAAA-1", "WFC-BBBB-BBBB-2"};
+        // All Radio (1) differs from the default audience either way (Team Radio 0, the original's rule, after Systems' voice channels)
+        c.voice.mode = 2; c.voice.audience = 1; c.voice.pttKey = "Mouse 4"; c.voice.muted = {"WFC-AAAA-AAAA-1", "WFC-BBBB-BBBB-2"};
         c.save();
         std::ifstream b("wfc_profile.ini"); frontend::LocalProfile r; r.loadFrom(b); b.close();
-        check(as.str().find("[Voice]") == std::string::npos && r.voice.mode == 2 && r.voice.audience == 0 && r.voice.pttKey == "Mouse 4" &&
-              r.voice.muted.size() == 2 && r.voice.muted[1] == "WFC-BBBB-BBBB-2" && d.voice.mode == 1 && d.voice.audience == 3, "profile.voice_settings_persisted");
+        check(as.str().find("[Voice]") == std::string::npos && r.voice.mode == 2 && r.voice.audience == 1 && r.voice.pttKey == "Mouse 4" &&
+              r.voice.muted.size() == 2 && r.voice.muted[1] == "WFC-BBBB-BBBB-2" && d.voice.mode == 1 &&
+              d.voice.audience == frontend::LocalProfile::Voice{}.audience, "profile.voice_settings_persisted");
         std::remove("wfc_profile.ini");
     }
     SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD-4H"; o.address = "192.168.1.20:7777";
