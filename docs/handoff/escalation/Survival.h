@@ -25,9 +25,10 @@ struct SurvivalData {
     std::string map;
     int coopTeam = 0;                    // the players' team (CoopInfo faction); the horde is the other
     float preGameTime = 30.0f, timeBetweenWaves = 25.0f, fillWaveReCheckTime = 0.5f;
-    struct Wave { int budget = 0, budgetAlive = 0, deficit = 0; };
+    struct Wave { int budget = 0, budgetAlive = 0, deficit = 0; int decreaseTaken = -1, increaseDealt = -1; };   // buff levels (-1 none)
     std::vector<Wave> waves;
-    struct Enemy { std::string type; int minWave = 0, maxWave = 0, minCount = 0, maxCount = 0, cost = 0, spawnType = 0; float power = 0.0f; };
+    struct Enemy { std::string type; int minWave = 0, maxWave = 0, minCount = 0, maxCount = 0, cost = 0, spawnType = 0; float power = 0.0f;
+                   std::string chassis; std::vector<std::string> robotWeapons, vehicleWeapons; float health = 150.0f; };   // E3a: the body
     std::vector<Enemy> enemies;
     struct Zone {
         std::string id;
@@ -93,7 +94,7 @@ struct SurvivalState {
     int usedThisWave = 0;                      // TotalUsedThisWave
     bool filling = false;
     float fillTimer = 0.0f;
-    struct Slot { int player = -1; int enemy = -1; bool inUse = false; };   // the horde participants, one per entry x MaxCount
+    struct Slot { int player = -1; int enemy = -1; bool inUse = false; float takenMul = 1.0f, dealtMul = 1.0f; };   // the horde participants, one per entry x MaxCount
     std::vector<Slot> slots;
     // Spawn finder: per zone UniversalScoreAdjustment, CurrentScore[type], the round-robin SpawnPointIndex; per type the sorted
     // zone order (re-sorted only for the types a touch names: the original's stale-order behaviour, RE C).

@@ -118,6 +118,29 @@ for m in ['MP_ESC_BrokenHope', 'MP_ESC_Remnant']:
         pts = [p for poly in polys for p in poly]
         tvs[name] = {'planes': planes(polys), 'min': [round(min(p[i] for p in pts), 3) for i in range(3)],
                      'max': [round(max(p[i] for p in pts), 3) for i in range(3)]}
+    # The horde bodies (E3a): per enemy entry the chassis (AssetTools out/escalation_characters/<id> as "ESC_<id>"; the MG soldiers are
+    # the roster's Car8 / Car9 bodies), the robot / vehicle weapons and the ROBODEF health [RE MP_ESCALATION_RE §7.1 / §9.2, C].
+    # PROV: Spider (melee / explode from its action set) and the Tank's robot cannon have no weapon in our table yet; the Brute's
+    # 100,000 health is killed through its backpack weak point (E3b) - until then its health is PROV 1500.
+    HORDE = {
+        'Spider': ([], [], 20), 'Soldier_MachineGun_Decepticon': (['AssaultRifle'], ['AssaultRifleVehicle'], 150),
+        'Soldier_MachineGun_Autobot': (['AssaultRifle'], ['AssaultRifleVehicle'], 150),
+        'Soldier_Rocket_Decepticon': (['RocketLauncher'], ['RocketVehicle'], 150), 'Soldier_Rocket_Autobot': (['RocketLauncher'], ['RocketVehicle'], 150),
+        'Soldier_Shotgun_Decepticon': (['EmpShotgun'], ['AssaultRifleVehicle'], 150), 'Soldier_Shotgun_Autobot': (['EmpShotgun'], ['AssaultRifleVehicle'], 150),
+        'CQCSpecialist_Decepticon': (['PlasmaCannon'], [], 90), 'CQCSpecialist_Autobot': (['PlasmaCannon'], [], 90),
+        'Soldier_Jet_Decepticon': (['HeavyMG'], ['PlaneMachineGun'], 250),
+        'Brute_Decepticon': (['HalberdAxe'], [], 1500), 'Brute_Autobot': (['WarHammer'], [], 1500),
+        'Titan_Decepticon': (['GatlingGun'], [], 1250), 'Titan_Autobot': (['GatlingGun'], [], 1250),
+        'Soldier_Tank_Decepticon': ([], ['TankCannon'], 6000), 'HoloBrute_Autobot': (['CeremonialStaff'], [], 1800),
+    }
+    index = json.load(open(ROOT + '/AssetTools/manifests/escalation/escalation_characters_index.json'))['characters']
+    for e in out['enemies']:
+        t = e['type'].replace('_AICD', '')
+        robot, vehicle, health = HORDE.get(t, ([], [], 150))
+        if t.startswith('Soldier_MachineGun_'): chassis = 'Car8' if t.endswith('Decepticon') else 'Car9'
+        elif t in index: chassis = 'ESC_' + t
+        else: chassis = ''
+        e.update({'chassis': chassis, 'robotWeapons': robot, 'vehicleWeapons': vehicle, 'health': health})
     out['kismet'] = dict(k, volumes=tvs)
     # TnWeaponPickupFactory (AssetTools weapon_pickups): our weapon id = the inventory class without TransContent.TnWeapon.
     out['weaponPickups'] = [{'actor': w['actor'], 'weapon': w['inventory_type'].split('.')[-1].replace('TnWeapon', ''),

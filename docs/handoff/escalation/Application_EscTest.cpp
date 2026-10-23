@@ -79,6 +79,8 @@ void Application::runEscalationTest() {
     m.playerMutable(ally->matchPlayer()).team = D.coopTeam;
     check(m.players()[(size_t)me].team == 0, "the player is on BrokenHope's co-op team (Autobots)");
     check(D.weaponPickups.size() == 17, "17 weapon pickup factories (hidden until bought)");
+    check(D.enemies[0].chassis == "ESC_Spider" && D.enemies[0].health == 20.0f && D.waves[9].decreaseTaken == 0 && D.waves[13].increaseDealt == 0,
+          "the horde table: Spider body ESC_Spider 20 HP; wave 10 DecreaseDamageTaken L0, wave 14 IncreaseDamage L0");
     run(15.5f);
     int hordeAlive = 0;
     for (const auto& s : S.slots) hordeAlive += m.players()[(size_t)s.player].alive;
@@ -98,6 +100,11 @@ void Application::runEscalationTest() {
     run(1.0f);
     check(S.phase == Phase::InWave && S.displayWave == 0 && S.currentWave == 0 && S.spawns >= 1, "wave 1 begins 30 s after level start (F1), first enemy at once");
     run(3.0f);
+    {   // the first spawn is a Spider in its own body with 20 HP
+        const game::Character* sp = nullptr;
+        for (const auto& s : S.slots) if (s.inUse && D.enemies[(size_t)s.enemy].type == "Spider_AICD") sp = world_.participantPawn(s.player);
+        check(sp && sp->chassis().id == "ESC_Spider" && sp->health().max == 20.0f, "a Spider spawns in the ESC_Spider body with 20 HP");
+    }
     bool spidersFirst = S.spawnOrder.size() >= 2 && D.enemies[(size_t)S.spawnOrder[0]].type == "Spider_AICD" && D.enemies[(size_t)S.spawnOrder[1]].type == "Spider_AICD";
     check(spidersFirst, "wave 1: the Spider entry (MinCount 2) is forced first");
     {
