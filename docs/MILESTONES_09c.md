@@ -3623,3 +3623,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   after "Shutdown complete" (NetMatchDriver::~NetMatchDriver -> Lockstep::bye on a destroyed transport) -> Systems. MERGED
   2cc1edb9 #7 scoreboard spacing (versus lists used the 104 px iconic portrait rows; now DisableIconicDisplay -> 25 px) + the
   5b vote hook + test. Card -> Rendering smoke (8 min) -> Systems.
+2026-10-23 01:48 CAMPAIGN_BOSSES_RE COMPLETE (every chapter). Gameplay: nothing missing on their side for the online human seat / HUD / names /
+  spectating (two real-session peers, 150 s, verified) -> Escalation E1 now. Rendering: smoke views show no smoke (cameras hold
+  none); the match arms need a 5-min relay (runner race fixed). Card -> Systems 01:55 -> Frontend pt4 (3 min) -> Rendering (5 min).
