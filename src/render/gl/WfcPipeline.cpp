@@ -1046,6 +1046,16 @@ size_t progCacheMax() {                                  // WFC_PROGCACHEMAX=<n>
     static const size_t n = std::getenv("WFC_PROGCACHEMAX") ? (size_t)std::atol(std::getenv("WFC_PROGCACHEMAX")) : 1500;
     return n;
 }
+// (playtest 2026-10-23 #1) frontend-scene textures survive the scene's release: a menu screen revisited (main menu / party /
+// game lobby) finds its ~150 textures uploaded instead of decoding them again. Keyed as Pipeline::texture plus the HD-texture
+// state; bounded (least recently used beyond the cap deleted); cleared with the program cache. Match textures are never pooled.
+struct PooledTex { GLuint id = 0; bool srgbBlocks = false; uint64_t lastUse = 0; };
+std::map<std::string, PooledTex> gTexPool;
+uint64_t gTexPoolUse = 0;
+size_t texPoolMax() {                                    // WFC_TEXPOOLMAX=<n> (0 = no pool: the old behaviour)
+    static const size_t n = std::getenv("WFC_TEXPOOLMAX") ? (size_t)std::atol(std::getenv("WFC_TEXPOOLMAX")) : 600;
+    return n;
+}
 } // namespace
 
 GLuint link(GLuint vs, GLuint fs, const std::string& tag) {
@@ -1178,6 +1188,8 @@ void Pipeline::clearProgramCache() {
     for (auto& kv : gProgCache) if (ctx && kv.second.id) DeleteProgram(kv.second.id);
     gProgCache.clear();
     gProgCacheById.clear();
+    for (auto& kv : gTexPool) if (ctx && kv.second.id) glDeleteTextures(1, &kv.second.id);
+    gTexPool.clear();
 }
 
 // ------------------------------------------------------------------------- unloading (level travel)
@@ -1281,8 +1293,30 @@ void Pipeline::release() {
             gProgCache.erase(it);
         }
     }
+    std::set<GLuint> pooled;                             // (playtest 2026-10-23 #1) a frontend scene's textures go to the pool
+    if (frontendScene_ && texPoolMax() > 0) {
+        for (auto& kv : texCache_) {
+            if (!kv.second) continue;
+            PooledTex& p = gTexPool[kv.first + (hdTextures_ ? "|hd" : "|sd")];
+            if (p.id && p.id != kv.second) glDeleteTextures(1, &p.id);
+            p.id = kv.second; p.srgbBlocks = srgbBlockTex_.count(kv.second) != 0; p.lastUse = ++gTexPoolUse;
+            pooled.insert(kv.second);
+            kv.second = 0;
+        }
+        if (gTexPool.size() > texPoolMax()) {            // trim: least recently pooled first
+            std::vector<std::pair<uint64_t, std::string>> lru;
+            for (const auto& kv : gTexPool) lru.push_back({kv.second.lastUse, kv.first});
+            std::sort(lru.begin(), lru.end());
+            for (size_t i = 0; i < lru.size() && gTexPool.size() > texPoolMax(); ++i) {
+                auto pt = gTexPool.find(lru[i].second);
+                pooled.erase(pt->second.id);
+                glDeleteTextures(1, &pt->second.id);
+                gTexPool.erase(pt);
+            }
+        }
+    }
     for (auto& kv : texCache_) tex(kv.second);
-    for (GLuint& t : lmTextures_) tex(t);
+    for (GLuint& t : lmTextures_) if (!pooled.count(t)) tex(t); else t = 0;   // (lightmap ids alias texCache_ entries)
     for (int k = 0; k < kShadowRing; ++k) {            // the shadow depth ring (shadowFbo_ / shadowDepthTex_ alias a slot)
         if (shadowRingFbo_[k] == shadowFbo_) shadowFbo_ = 0;
         if (shadowRingTex_[k] == shadowDepthTex_) shadowDepthTex_ = 0;
@@ -1312,8 +1346,8 @@ void Pipeline::release() {
     distCut_ = -1;
     BindFramebuffer(GL_FRAMEBUFFER, 0);
     LOG_INFO("wfc: released map render data (%zu meshes, %zu programs (%d reused from the program cache, %zu cached), "
-             "%zu textures)", meshes_.size(), progIds.size(), progCacheHits_, gProgCache.size(),
-             texCache_.size() + lmTextures_.size());
+             "%zu textures; %d taken from the frontend texture pool, %zu pooled now)", meshes_.size(), progIds.size(), progCacheHits_, gProgCache.size(),
+             texCache_.size() + lmTextures_.size(), texPoolHits_, gTexPool.size());
     srgbBlockTex_.clear();
     fogShapeLogged_.clear();
     gMemLightmapBytes = gMemTextureBytes = gMemMeshBytes = gMemSrgbTexBytes = 0; gMemDdsTextures = 0; gMemHdTextures = 0; gMemPbrMaps = 0; gMemPbrBytes = 0; gMemLightmaps = gMemTextures = gMemMeshes = 0;   // MEMSTATS
@@ -2515,6 +2549,19 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
     std::string key = file + (srgb ? "|s" : "|l") + (clampU ? "c" : "w") + (clampV ? "c" : "w");
     auto it = texCache_.find(key);
     if (it != texCache_.end()) return it->second;
+    {   // (playtest 2026-10-23 #1) a texture a released frontend scene left in the pool: uploaded already
+        auto pt = gTexPool.find(key + (hdTextures_ ? "|hd" : "|sd"));
+        if (pt != gTexPool.end()) {
+            const GLuint id = pt->second.id;
+            if (pt->second.srgbBlocks) srgbBlockTex_.insert(id);
+            gTexPool.erase(pt);
+            glBindTexture(GL_TEXTURE_2D, id);
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)anisotropy_);   // (the setting may have changed)
+            texCache_[key] = id;
+            ++texPoolHits_;
+            return id;
+        }
+    }
     FirstUseTimer fu{"texture", file, frameNo_};
     ImageData img;
     GLuint id = 0;

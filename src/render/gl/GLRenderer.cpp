@@ -755,6 +755,7 @@ public:
         sceneMesh_ = uploadMesh(world);
         uploadingFrontendWorld_ = false;
         wfc_.prewarmPlacedFx();              // M58: its emitters' programs / textures / meshes, under the loading screen
+        wfc_.setFrontendScene(true);         // (playtest 2026-10-23 #1) its textures stay pooled for a revisit
         sceneDir_ = dir;
         LOG_INFO("frontend scene %s loaded (%zu submeshes)", dir.c_str(), world.subs.size());
         return sceneMesh_ != kInvalidMesh;

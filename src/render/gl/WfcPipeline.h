@@ -234,6 +234,8 @@ public:
     // WFC_WATER=0|1 overrides
     void setWaterMode(int m) { waterMode_ = std::min(std::max(m, 0), 1); }
     int waterMode() const;
+    // (playtest 2026-10-23 #1) mark the loaded map as a frontend scene: at release its textures stay uploaded in a pool for revisits
+    void setFrontendScene(bool on) { frontendScene_ = on; }
     // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
     void flushPendingDraws() { flushWeaponQueue(); }
     void setDisplayGamma(float g) { displayGamma_ = g > 0.5f && g < 5.0f ? g : 2.2f; }
@@ -988,6 +990,8 @@ private:
     float lensFlareU_[4] = {0, 0, 0, 1}, lensFlareI_ = 1.0f;
     int smokeMode_ = 0;                              // the Smoke row: 0 Original, 1 Enhanced (WFC_SMOKE overrides)
     int waterMode_ = 0;                              // the Water row: 0 Original, 1 Enhanced (WFC_WATER overrides)
+    bool frontendScene_ = false;                     // (playtest #1) this pipeline holds a frontend scene: its textures go to the pool at release
+    int texPoolHits_ = 0;                            // (textures taken from the pool by this pipeline)
     // (Smoke row, Enhanced; WfcSmoke.cpp) the smoke sprite variants per material, the build flag programFor / buildProgram read,
     // the drawn group's centre (its light environment) and the map's reference irradiance the authored colours stand for
     std::unordered_map<std::string, int> spriteSmokeProg_;
