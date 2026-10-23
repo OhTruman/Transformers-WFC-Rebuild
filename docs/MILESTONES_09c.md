@@ -3535,3 +3535,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   AssetTools audit + PC-adapt overlays; (B) zeroed vertical velocity sim bug -> Gameplay traces. RE: PPV height fog decoded
   (volume-gated, transitions; Remnant's applies inside PostProcessVolume_10624) -> Rendering runtime item; Matinee tangents:
   IMT_UseBrokenTangentEval (no gap scaling) corrects the Matinee doc.
+2026-10-23 00:47 Flare views PASS (Experimental): draw on sun-aimed cameras, none when occluded; notes: halo strong on axis (shipped), 8-bit
+  banding -> output dithering item for Rendering. Card -> Frontend 00:55 (7 min) -> Rendering (8 min).
