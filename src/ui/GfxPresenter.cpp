@@ -861,6 +861,81 @@ void GfxPresenter::scrollPlayerList(gfx::Player& p, float& scroll, const platfor
     }
 }
 
+// PC ADAPTATION (user playtest 2026-10-23 #17): PauseMenu_GFX disables Choose Character when GRI._bIconicMode is set
+// [CONFIRMED AS: if IconicMode -> chooseCharacter_mc.enabled = false] - in the original only Escalation / co-op had iconic
+// characters, claimed for the whole game. The PC's Iconic Characters option for versus inherited that lock, so a player
+// stayed on the first pick for the whole match. In a versus match (free-for-all / team) the button stays enabled: its
+// DisplayCharacterSelect already lists the iconic characters with their claims (CharacterSelect.swf) and the pick applies at
+// the next respawn as any other. Escalation / campaign keep the original lock.
+void GfxPresenter::syncPauseChooseCharacter(gfx::Player& p, frontend::GameFlow& flow) {
+    const frontend::MatchLaunch& m = flow.currentMatch();
+    if (flow.level() != frontend::LevelKind::Match || !flow.iconicMode() || (m.gameTeamStatus != 1 && m.gameTeamStatus != 3)) return;
+    gfx::MovieClip* b = findNamed(p.root(), "chooseCharacter_mc");
+    if (!b || !b->script) return;
+    gfx::avm1::VM& vm = p.vm();
+    if (vm.toBool(vm.get(b->script, "enabled"))) return;
+    vm.set(b->script, "enabled", gfx::avm1::Value(true));
+    if (!pauseChooseTraced_) {
+        pauseChooseTraced_ = true;
+        frontend::FlowTrace::emit("pause.chooseCharacter", {{"enabled", "true"}, {"why", "iconic versus (PC ADAPTATION)"}, {"mode", m.modeTag}});
+    }
+}
+
+// PC ADAPTATION (user playtest 2026-10-23 #6): SettingsMenu.swf's sub-menu stacks its rows upward from Commit Changes
+// at a fixed 31 px step with no scrolling (the original Graphics page had 6 rows). With the PC rows the Graphics page has
+// 15 and reached the top of the screen. A sub-menu with more than kSettingsRows rows now shows a window of that many: the
+// window follows the focused row (keys / pad) and the mouse wheel, the rows outside it are hidden, and the window sits
+// where the bottom rows always were. Pages with kSettingsRows rows or fewer are untouched.
+namespace { constexpr int kSettingsRows = 10; constexpr double kSettingsStep = 31.0; }
+void GfxPresenter::scrollSettingsSubMenu(gfx::Player& p, const platform::InputFrame& in) {
+    gfx::MovieClip* menu = findNamed(p.root(), "subMenu_mc");
+    if (!menu || !menu->script) return;
+    std::vector<gfx::MovieClip*> rows;
+    for (int i = 0;; ++i) {
+        gfx::MovieClip* r = nullptr;
+        const std::string want = "listItem" + std::to_string(i) + "_mc";
+        for (auto& [d, ch] : menu->children)
+            if (!ch->removed && ch->kind == gfx::DisplayObject::Kind::Clip && ch->name == want) { r = static_cast<gfx::MovieClip*>(ch.get()); break; }
+        if (!r || !r->script) break;
+        rows.push_back(r);
+    }
+    const int n = (int)rows.size();
+    if (n <= kSettingsRows) return;
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    // The focused row (the menu class' _currentFocus); -1 = none of the rows (e.g. the mouse is elsewhere)
+    int focus = -1;
+    const V cf = vm.get(menu->script, "_currentFocus");
+    for (int i = 0; i < n && cf.isObject(); ++i) if (cf.o == rows[(size_t)i]->script) focus = i;
+    const V topV = vm.get(menu->script, "__wfcTop"), lastV = vm.get(menu->script, "__wfcFocus");
+    int top = topV.isUndef() ? n - kSettingsRows : (int)vm.toNumber(topV);
+    const int last = lastV.isUndef() ? -2 : (int)vm.toNumber(lastV);
+    if (focus >= 0 && focus != last) {   // a new focus: bring it into the window
+        if (focus < top) top = focus;
+        if (focus > top + kSettingsRows - 1) top = focus - kSettingsRows + 1;
+    }
+    if (in.mouseWheel != 0) top -= in.mouseWheel > 0 ? 1 : -1;
+    top = std::clamp(top, 0, n - kSettingsRows);
+    vm.set(menu->script, "__wfcTop", V((double)top));
+    vm.set(menu->script, "__wfcFocus", V((double)focus));
+    // Row j of the window [top, top + kSettingsRows) takes the slot of row j + (n - kSettingsRows - top): the window's
+    // last row sits where Commit Changes (the last row) was authored.
+    const double shift = (double)(n - kSettingsRows - top) * kSettingsStep;
+    for (int j = 0; j < n; ++j) {
+        gfx::avm1::Object* o = rows[(size_t)j]->script;
+        const double cur = vm.toNumber(vm.get(o, "_y"));
+        const V set = vm.get(o, "__wfcSetY");
+        double base = cur;   // the authored y, unless this function placed the row (a script move resets the base)
+        if (!set.isUndef() && std::fabs(vm.toNumber(set) - cur) < 0.01) base = vm.toNumber(vm.get(o, "__wfcBaseY"));
+        vm.set(o, "__wfcBaseY", V(base));
+        const double y = base + shift;
+        if (std::fabs(y - cur) > 0.01) vm.set(o, "_y", V(y));
+        vm.set(o, "__wfcSetY", V(vm.toNumber(vm.get(o, "_y"))));
+        const bool show = j >= top && j < top + kSettingsRows;
+        if (rows[(size_t)j]->visible != show) vm.set(o, "_visible", V(show));
+    }
+}
+
 void GfxPresenter::checkKillFeed(float dt) {
     if (!hud_ || feedManagerPath_.empty()) return;
     // Only while something can change: the 0.2 s reveal of a new line, then the shift into the slots (invisible work
@@ -1863,6 +1938,8 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
         if (flow.online() && op.object.find("PartyLobby_GFX") != std::string::npos) runFirstRunUi(op.movie->player(), flow, op.object);
         if (op.object.find("PartyLobby_GFX") != std::string::npos) syncHostNowRow(op.movie->player(), flow);   // lobby flow v2
         if (op.object.find("GameLobby_GFX") != std::string::npos) syncGameSettings(op.movie->player(), flow);
+        if (op.object.find("PauseMenu_GFX") != std::string::npos) syncPauseChooseCharacter(op.movie->player(), flow);
+        scrollSettingsSubMenu(op.movie->player(), in);   // any settings page (FrontEnd, pause menu, lobby Voice / Game Settings)
         if (flow.iconicMode() && flow.lobby().gameTeamStatus != 2 && op.object.find("GameLobby_GFX") != std::string::npos &&
             (!flow.lobby().settings || flow.lobby().settings->teamTypeValue == 3))
             syncIconicVersusMenu(op.movie->player());
