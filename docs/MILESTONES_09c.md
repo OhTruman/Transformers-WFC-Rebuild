@@ -3525,3 +3525,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   semantics (Remnant = a recorded MP change with an eye row); inline light-map lists, per-chapter material lists, the per-sublevel
   split (392 folders, 996 MB, PASS) delivered; MERGED c2e5950f the MP-neutral VS_ROOT / VS_MAPS tools diff. Seed nav rebuilt on the
   adapted collision (overlay_20261023b, 90 files; Systems switches refresh.sh); the centre bot strand = steering, Gameplay re-tests.
+2026-10-23 00:45 MERGED 48914ec7 headlight stable shadow slots (#3, Realistic; x24: Rust 300 -> 105, Streets 266 -> 109 slot changes / 600 f),
+  e7a4976f #14 water distortion variant on LM / VLM subs (Remnant waterfalls + coolant, Complex Waterfall2, force fields, glass;
+  all modes on those surfaces) + fog per-vertex for Off / Faithful (= shipped, byte-identical to pre-c2fb7eb5; per-pixel stays
+  Realistic-only), 087ead81 fog extinction compare as shipped. 8a6e1d67 (lamp clearance) conflicts on rt_shadow_ao.hlsl ->
+  Rendering re-cuts. SIMHASH identical. Card: Experimental flare views 00:40 -> Frontend 7 min -> Rendering #14 5 min.
