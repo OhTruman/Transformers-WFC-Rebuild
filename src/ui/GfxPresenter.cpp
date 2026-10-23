@@ -1387,8 +1387,12 @@ bool addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
     }
     {   // PC EXTENSION (user decisions; Rendering setSmokeMode / setWaterMode): Original = the shipped look (default)
         std::vector<gfx::avm1::Value> sm, wa;
-        add(sm, 0, "$WfcPC.Settings.LensFlaresOriginal"); add(sm, 1, "Enhanced");
-        row(sm, "<PCSettings:Smoke>", "$WfcPC.Settings.SmokeDesc", "$WfcPC.Settings.Smoke");
+        // Smoke: dev-only (WFC_DEV_ROWS) as Water until Rendering's sheet passes (stage 1 failed by eye; stage 2 may make
+        // Enhanced smoke Realistic-only, then the row shows only with Lighting Realistic) - Integration 2026-10-23
+        if (std::getenv("WFC_DEV_ROWS")) {
+            add(sm, 0, "$WfcPC.Settings.LensFlaresOriginal"); add(sm, 1, "Enhanced");
+            row(sm, "<PCSettings:Smoke>", "$WfcPC.Settings.SmokeDesc", "$WfcPC.Settings.Smoke");
+        }
         // Water: dev-only (WFC_DEV_ROWS) until Rendering's tuned sheet passes - Enhanced water is not user-ready (Integration)
         if (std::getenv("WFC_DEV_ROWS")) {
             add(wa, 0, "$WfcPC.Settings.LensFlaresOriginal"); add(wa, 1, "Enhanced");
