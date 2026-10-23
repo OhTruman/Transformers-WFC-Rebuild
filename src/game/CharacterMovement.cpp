@@ -796,6 +796,7 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
         core::Vec3 d = in.dodgeDir == 3 ? X : in.dodgeDir == 4 ? X * -1.0f : in.dodgeDir == 2 ? Y : Y * -1.0f;
         v = d * RPd.dodgeSpeed;
         c.dodgeRemain_ = RPd.dodgeTime;
+        c.maxDodgeDist_ = c.pendingMaxDodge_; c.pendingMaxDodge_ = 0.0f; c.dodgeStart_ = c.position();   // AI dodge cap (0: none)
         c.landedSinceDodge_ = false;
         c.setOnGround(false);
         hv = core::Vec3{v.x, 0, v.z};
@@ -832,6 +833,10 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
         v.x += dv.x; v.z += dv.z; v.y = 0.0f;
         hv = core::Vec3{v.x, 0, v.z};
     } else if (dodging) {
+        if (c.maxDodgeDist_ > 0.0f) {   // HasExceededMaxDodgeDistance (AI dodges)
+            const core::Vec3 dd = c.position() - c.dodgeStart_;
+            if (std::sqrt(dd.x * dd.x + dd.z * dd.z) >= c.maxDodgeDist_) c.dodgeRemain_ = 0.0f;
+        }
         c.dodgeRemain_ -= dt;   // PHYS_Flying: no gravity, the velocity carries (Acceleration = Normal(Velocity))
     } else if (lunging) {
         // velocity set above
@@ -895,6 +900,7 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
         float l = core::length(h);
         if (l > cap && l > 1e-4f) h = h * (cap / l);
         v = core::Vec3{h.x, 0.0f, h.z};
+        if (c.maxDodgeDist_ > 0.0f) { v = core::Vec3{0, 0, 0}; c.maxDodgeDist_ = 0.0f; }   // an AI dodge stops dead (EndState)
     }
 
     // --- Ground resolution ---

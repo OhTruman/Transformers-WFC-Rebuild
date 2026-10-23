@@ -193,6 +193,9 @@ public:
     core::Vec3 overrideAccel_{0, 0, 0}; unsigned forcedDirTouch_ = 0;
     // Dodging (TnAcrobaticsManager state 5): PHYS_Flying at DodgeSpeed for DodgeTime; CanDodge = landed since the last dodge.
     float dodgeRemain_ = 0.0f;
+    // AI dodges (TnAiActionDodge*): MaxDodgeDistance from the nav WalkLine (0 = none: a human dodge); armed by the bot, taken at the
+    // dodge start; the start position for HasExceededMaxDodgeDistance.
+    float pendingMaxDodge_ = 0.0f, maxDodgeDist_ = 0.0f; core::Vec3 dodgeStart_{0, 0, 0};
     bool landedSinceDodge_ = true;
     // Killstreak buffs: TnBuffHealthRegenKillStreak (FloatModifier 2, 30 s), TnBuffFastAbilityCooldown (x5, 30 s),
     // TnBuffLockAmmoClip (10 s: shots cost no clip ammo) [CONF authored buff defaults; effect placement HIGH].
@@ -706,6 +709,7 @@ private:
         int walk[4] = {-1, -1, -1, -1}, jog[4] = {-1, -1, -1, -1};   // Nav_Strafe{Walk,Jog}_{F,B,R,L}
         std::vector<float> upperMask;            // C_Spine01_Lumbar01_XB subtree
         int reloadClip = -1, idleClip = -1, landClip = -1, land2Clip = -1, land3Clip = -1;   // Nav_Land / _02 / _03
+        int equipClip = -1, unequipClip = -1;   // ADD_Shooting_equip_weapon / ADD_Shooting_UnEquip_Weapon (additive, upper body)
     } robotRig_;
     struct VehicleRig {
         bool built = false;
@@ -745,6 +749,7 @@ private:
     float pivotProgress(const assets::SkinnedModel& mdl, int clip, float t) const;
     RecoilControl recoilSpine_{ionBlasterSpineRecoil()}, recoilHand_{ionBlasterRightHandRecoil()};
     float reloadW_ = 0.0f, reloadT_ = 0.0f;
+    float unequipW_ = 0.0f, unequipT_ = 0.0f, equipW_ = 0.0f, equipT_ = 0.0f; int switchPhase_ = 0;   // the weapon switch overlay
     bool prevReloading_ = false;
     std::vector<float> reloadMask_;
     int actionClip_ = -1;

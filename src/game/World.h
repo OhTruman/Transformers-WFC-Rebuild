@@ -915,6 +915,8 @@ public:
         return o && o->spawned() ? &o->intent() : nullptr;
     }
     bool ensureBotNav();
+    // TnAiActionDodgePlanningUtil.CheckDodgeAvailable: the walkable fraction of 18 m along the pawn's left (1) / right (2) on the nav.
+    float botDodgeClear(const Character& pc, int side) const;
     // Per-step bot cost (diagnostics; WFC_BOTTEST / perf).
     double botMsAverage() const { return botTicks_ ? botMsAccum_ / (double)botTicks_ : 0.0; }
     double botMsMax() const { return botMsMax_; }

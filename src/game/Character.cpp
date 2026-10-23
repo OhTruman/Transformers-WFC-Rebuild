@@ -98,6 +98,8 @@ void Character::buildRobotRigUncached(const assets::SkinnedModel& mdl) {
     R.built = true;
     R.upperMask = assets::subtreeMask(mdl, mdl.nodeByName("C_Spine01_Lumbar01_XB"));
     R.reloadClip = mdl.clipByName("Shooting_Reload_IonBlaster_ROBO");
+    R.equipClip = mdl.clipByName("ADD_Shooting_equip_weapon");
+    R.unequipClip = mdl.clipByName("ADD_Shooting_UnEquip_Weapon");
     if (R.reloadClip < 0) R.reloadClip = mdl.clipOfCategoryNamed("reload", "IonBlaster");
     // NAV_Idle is Optimus's own gameplay idle (Optimus_ROBO_ANIM); Cust_Idle is the
     // customization-screen idle and Nav_Idle_Base the shared-animset fallback.
@@ -434,6 +436,26 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
         traceClip(mdl, R.reloadClip, reloadT_, false, reloadW_);
         assets::blendPose(finalPose_, layerPose_, reloadW_, finalPose_, &reloadMask_);
         assets::blendPoseMeshSpace(mdl, finalPose_, layerPose_, reloadW_, R.upperMask, finalPose_);
+    }
+    {   // Weapon switch [CONF RE playtest #15]: ADD_Shooting_UnEquip_Weapon while putting down (blend 0.3 in, 0.0 out at the swap),
+        // ADD_Shooting_equip_weapon while equipping (0.2 in, 0.3 out); additive over the upper body.
+        const int phase = switchTo_ < 0 ? 0 : (activeWeapon_ != switchTo_ ? 1 : 2);
+        if (phase == 1 && switchPhase_ != 1) unequipT_ = 0.0f;
+        if (phase == 2 && switchPhase_ != 2) equipT_ = 0.0f;
+        switchPhase_ = phase;
+        unequipT_ += dt; equipT_ += dt;
+        unequipW_ = phase == 1 ? std::min(1.0f, unequipW_ + dt / 0.3f) : 0.0f;
+        equipW_ = phase == 2 ? std::min(1.0f, equipW_ + dt / 0.2f) : std::max(0.0f, equipW_ - dt / 0.3f);
+        if (robotRig && unequipW_ > 0.0f && R.unequipClip >= 0) {
+            assets::samplePose(mdl, R.unequipClip, unequipT_, false, layerPose_, /*additive*/ true);
+            traceClip(mdl, R.unequipClip, unequipT_, false, unequipW_);
+            assets::addPose(finalPose_, layerPose_, unequipW_, &R.upperMask);
+        }
+        if (robotRig && equipW_ > 0.0f && R.equipClip >= 0) {
+            assets::samplePose(mdl, R.equipClip, equipT_, false, layerPose_, /*additive*/ true);
+            traceClip(mdl, R.equipClip, equipT_, false, equipW_);
+            assets::addPose(finalPose_, layerPose_, equipW_, &R.upperMask);
+        }
     }
 
     // 3b) Melee action layer: the attack clip over locomotion (BlendIn / BlendOut 0.15 s, TnMeleeSet); whirlwind upper body.

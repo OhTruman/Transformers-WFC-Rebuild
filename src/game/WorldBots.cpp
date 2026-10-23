@@ -624,7 +624,20 @@ bool World::botTryAbility(BotBody o, BotBrain& b, const char* id) {
             if (pc.isMeleeing()) return false;
             startMeleeFor(pc, o.matchPlayer(), true, b.yaw);
             if (!pc.isMeleeing()) return false;
-        } else if (a.id == "Dodge") b.pendingDodge = b.frand() < 0.5f ? 1 : 2;
+        } else if (a.id == "Dodge") {
+            // TnAiActionDodgePlanningUtil [CONF RE playtest #18]: left / right (random first) with the nav WalkLine clear >= 0.3;
+            // MaxDodgeDistance = clear x 18 m - the collision radius; neither side clear: no dodge (no cooldown).
+            const int first = b.frand() < 0.5f ? 1 : 2;
+            int side = 0; float clear = 0.0f;
+            for (int k = 0; k < 2 && side == 0; ++k) {
+                const int s = k == 0 ? first : 3 - first;
+                const float cl = botDodgeClear(pc, s);
+                if (cl >= 0.3f) { side = s; clear = cl; }
+            }
+            if (side == 0) return false;
+            b.pendingDodge = side;
+            pc.pendingMaxDodge_ = std::max(0.01f, clear * 18.0f - pc.cylinderRadius(Form::Robot));
+        }
         else if (a.id == "Cloaking") pc.cloakRemain_ = 20.0f;                     // AddBuff(TnBuffCloak)
         else if (a.id == "Hover") { b.pendingHover = true; pc.hoverRequested_ = true; }
         else if (a.id == "Warcry") applyWarcry(pc, o.matchPlayer());
@@ -640,6 +653,19 @@ bool World::botTryAbility(BotBody o, BotBrain& b, const char* id) {
         return true;
     }
     return false;
+}
+
+float World::botDodgeClear(const Character& pc, int side) const {
+    if (!botNav_.valid()) return 1.0f;   // no nav: the original's cap cannot be computed (the dodge runs its time)
+    const core::Vec3 X = core::forwardFromYawPitch(pc.yaw(), 0.0f);
+    core::Vec3 Y = core::normalize(core::cross(X, core::Vec3{0, 1, 0}));
+    if (side == 1) Y = Y * -1.0f;
+    BotNav::Agent ag; ag.radius = pc.cylinderRadius(Form::Robot);
+    const core::Vec3 p = pc.position();
+    if (botNav_.directWalkable(p, p + Y * 18.0f, ag)) return 1.0f;
+    float lo = 0.0f, hi = 18.0f;   // the WalkLine stop point: the longest walkable prefix
+    for (int i = 0; i < 8; ++i) { const float m = 0.5f * (lo + hi); if (botNav_.directWalkable(p, p + Y * m, ag)) lo = m; else hi = m; }
+    return lo / 18.0f;
 }
 
 void World::botPathFailed(BotBrain& b, bool vehicle) {
