@@ -147,3 +147,10 @@ straight to the game-over UI (`TnUIControllerCoop.OnCharacterSelected`).
 3. **Leave:** the character returns to the AI squad; no game over; no difficulty re-apply.
 4. **Game over** = any human killed (not by leaving) or everyone on the team down. AI buddies standing prevent the "all down"
    end. 1 s delay; damage zeroed; host-only restarts.
+
+
+**Correction (2026-10-23, CAMPAIGN_SQUAD_AI_RE):**
+- AI squad members **never revive**: no buddy goal set has the Revive goal.
+- The "AI squad member bled out" game-over clause is dead code, because buddies are never downed.
+- With both humans downed and a buddy up there is no immediate game over, but nobody can revive them, so the first bleed-out ends the game.
+- In **solo** the human is never downed (`GlobalCanBeDowned` requires more than 1 player).
