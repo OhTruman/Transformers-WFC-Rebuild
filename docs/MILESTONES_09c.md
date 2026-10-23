@@ -3947,3 +3947,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 08:54 MERGED 4e23161e campaign load fix (loading screen between RT phases; decal grid built once: -15 s + 630 MB churn on A1).
   Rendering -> real streaming (load / unload units at runtime, RT add / remove) on Gameplay's loadChapterUnits({unit})
   at Started contract; cyan horizon line deferred to the next milestone run with play views.
+2026-10-23 08:56 MERGED c8e6850d campaign runtime 10: real streaming on the game side (initial state's units only at load: A1 6 + 1 of
+  47; load at Started / unload at hidden via IRenderer::unloadChapterUnit). Rendering implements the unload + RT add /
+  remove next. GameplayStarted checkpoint rule confirmed C by RE.
