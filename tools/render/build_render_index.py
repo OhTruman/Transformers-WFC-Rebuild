@@ -19,7 +19,7 @@ index (actor, mesh, glTF path, UE matrix, yaw rate, cull distance).
 usage: build_render_index.py <MAP> <out_dir>      (no-op when the map ships a runtime render_index.json)
        build_render_index.py --check
 """
-import json, os, re, sys
+import json, math, os, re, sys
 
 VS_MAPS = os.environ.get('WFC_VS_ROOT', r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice') + '/Maps'  # WFC_VS_ROOT: campaign VerticalSlice root (AssetTools/work/campaign_pilot/VerticalSlice); unset = ExtractedAssets (MP unchanged)
 CONTENT = r'F:/Transformers Rebuild/ExtractedAssets/content'
@@ -28,6 +28,8 @@ MANI = os.environ.get('WFC_ASSETTOOLS_MANIFESTS', r'F:/Transformers Rebuild/Asse
 # Class template values the generic index does not repeat per factory. Taken from Streets' runtime index, where every
 # factory of the class carries the same value (TransGame.Default__TnAmmoCratePickup.MeshComponentA) [CONF data].
 AMMO_CULL_DISTANCE = 8000.0
+# The weapon factories' idle spin (UE yaw units / s): pending RE (TnWeaponPickupFactory class defaults); 0 = no spin
+WEAPON_PICKUP_YAW_RATE = 0
 
 
 def gltf_to_ue(m):
@@ -78,6 +80,32 @@ def convert(mapname, generic):
     return out, missing
 
 
+
+def escalation_weapon_visuals(mapname):
+    """Escalation's weapon factories (AssetTools manifests/maps/<MAP>/escalation_geometry.json weapon_pickups) as runtime
+    pickup visuals: the weapon's own skeletal mesh as the PickupMesh, at the factory. The game hides each one
+    (IRenderer::setActorHidden) while its factory is hidden (not bought yet) or its weapon is taken. Written to
+    render_index_extra.json: the Escalation maps ship a runtime render_index.json, which stays as it is."""
+    out, missing = [], []
+    ep = os.path.join(MANI, 'maps', mapname, 'escalation_geometry.json')
+    if os.path.exists(ep):
+        for w in json.load(open(ep, encoding='utf-8')).get('weapon_pickups', []):
+            mesh = (w.get('pickup_mesh') or {}).get('mesh') or ''
+            if not mesh:
+                continue
+            x, y, z = w['location_ue']
+            a = math.radians(float(w.get('yaw_deg', 0.0)))
+            c, s = math.cos(a), math.sin(a)
+            e = {'actor': w['object'], 'class': w.get('class', 'TnWeaponPickupFactory'), 'mesh': mesh, 'gltf': mesh_gltf(mesh),
+                 'ue_matrix': [[c, s, 0.0, 0.0], [-s, c, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [x, y, z, 1.0]],
+                 'rotation_rate': {'Pitch': 0, 'Yaw': WEAPON_PICKUP_YAW_RATE, 'Roll': 0},
+                 'kind': 'weapon pickup mesh (TnWeaponPickupFactory PickupMesh, %s)' % w.get('inventory_type', '')}
+            if not os.path.exists(os.path.join(CONTENT, e['gltf'][8:])):
+                missing.append(e['gltf'])
+            out.append(e)
+    return out, missing
+
+
 def check():
     rt = json.load(open(os.path.join(VS_MAPS, 'MP_IAC_Streets', 'render_index.json'), encoding='utf-8'))
     gen = json.load(open(os.path.join(MANI, 'maps', 'MP_IAC_Streets', 'render_index_generic.json'), encoding='utf-8'))
@@ -110,6 +138,13 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == '--check':
         sys.exit(check())
     mapname, out_dir = sys.argv[1], sys.argv[2]
+    extra, xmissing = escalation_weapon_visuals(mapname)
+    if extra:
+        os.makedirs(out_dir, exist_ok=True)
+        with open(os.path.join(out_dir, 'render_index_extra.json'), 'w', encoding='utf-8') as f:
+            json.dump({'map': mapname, 'generated_by': 'Rebuild tools/render/build_render_index.py (Escalation weapon factories '
+                       'from AssetTools escalation_geometry.json)', 'pickup_factory_visuals': extra}, f, indent=1)
+        print('render index extra: %s: %d Escalation weapon factories, %d missing glTF' % (mapname, len(extra), len(xmissing)))
     if os.path.exists(os.path.join(VS_MAPS, mapname, 'render_index.json')):
         print('render index: %s ships a runtime render_index.json (used as is)' % mapname)
         return

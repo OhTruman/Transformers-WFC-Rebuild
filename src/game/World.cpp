@@ -4560,6 +4560,13 @@ void World::syncMapPresentation(render::IRenderer& r) const {
         if (ext != pushedPoolCap_) { r.setEmitterPoolCap(ext != 0); pushedPoolCap_ = ext; }
     }
     for (const MapState::ActorVisibility& v : mapState_.actorVisibility()) r.setActorHidden(v.actor, v.hidden);
+    // (Escalation) the weapon factories' pickup meshes (render data render_index_extra.json; hidden by the renderer until told):
+    // shown while Escalation runs, the factory is bought (unhidden) and its weapon is there - every frame, as the actors above
+    for (size_t i = 0; i < svData_.weaponPickups.size(); ++i) {
+        const bool live = sv_.phase != SurvivalState::Phase::Off && i < sv_.weaponPicks.size() && !sv_.weaponPicks[i].hidden &&
+                          sv_.weaponPicks[i].available;
+        r.setActorHidden(svData_.weaponPickups[i].actor, !live);
+    }
     // [integration 09c] The effect keys are built once per factory (rebuilt only when the factory set changes): building
     // "<actor>|custom" / "|highlight" per factory per frame was ~12 % of main-thread allocations at 10 v 10 (Systems' ALLOCPROF).
     if (pickupFxKeys_.size() != pickupFactories_.size()
