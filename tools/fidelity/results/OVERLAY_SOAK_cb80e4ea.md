@@ -60,3 +60,7 @@ Original collision only (not with the overlay):
 - MP_UND_Gorge (-78.7 -3.3 -57.6) floor -2.23 (1.04 m), 1 hit(s)
 
 Read: **the three real crack spots are gone** - Debris (-134.9 121.3 31.4) and Gorge (-68.0 -4.6 -53.6) / (-83.2 -3.4 -57.6); Gorge 7 hits -> 0; total 18 (overlay d) -> 12 (baseline, original collision: 6). What remains is mostly AssetTools' 'behavioural, same geometry in live and shipping' list (Complex (42.9, 6.0) x3 and (10.3, -10.4), Molten (112.1, -109.3) x2, Streets (115.9, -421.4), the two BrokenHope vehicle-form hits). New single hits: Seed (223.5 9.0 -106.7), Seed (-59.2 -3.2 -50.4), Debris (31.2 115.2 44.6) - any collision change re-rolls the whole match (bots go elsewhere), so single new spots are not proof of a regression; worth a probe.
+
+## Frozen overlay_20261023f (2026-10-23 04:07-04:09)
+
+Byte-identical to the candidate (diff: only CANDIDATE.json / FROZEN.json). Same exe, seeds and rule: 20 / 20 exit 0 at 300 s, 0 ERROR, 0 FLOAT stall, the same 12 fall-through hits at the same spots as the candidate run (deterministic). **PASS** for the shipping overlay; the 3 crack spots stay gone. Logs work/stabsoak/overlay_f/.
