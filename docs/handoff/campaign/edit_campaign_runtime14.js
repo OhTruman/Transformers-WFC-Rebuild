@@ -53,9 +53,33 @@ ed('src/game/Campaign.h', [
      '    std::string interactPrompt;                // the local player\'s interact in reach (its class; empty = none)\n' +
      '    std::vector<uint8_t> interactHeldPrev;\n' +
      '    CampaignOmega omega;\n' +
+     '    bool omegaHold = false;                    // CAMPAIGNTEST: Omega stays passive\n' +
      '    bool cinematicMode = false;'],
 ]);
+ed('src/core/Application_CampaignTest.cpp', [
+    ['    check(world_.launchMatch(L), "launchMatch(SOLO) on D5_OME");\n',
+     '    check(world_.launchMatch(L), "launchMatch(SOLO) on D5_OME");\n' +
+     '    world_.cpHoldOmegaForTest(true);   // the boss stays passive: these checks are the squad\'s and the game over\'s\n'],
+    ['          world_.launchMatch(L2), "a launch at Checkpoint_10917 (Stage 2)");\n',
+     '          world_.launchMatch(L2), "a launch at Checkpoint_10917 (Stage 2)");\n    world_.cpHoldOmegaForTest(true);\n'],
+]);
+ed('src/game/WorldBots.cpp', [
+    ['        botPathUpkeep(*o, b, dt);\n        pending.push_back({o, &b, MoveIntent{}});\n',
+     '        botPathUpkeep(*o, b, dt);\n' +
+     '        // Omega Supreme: no steering / fire (his boss AI: WorldCampaignOmega.cpp); his think still runs - skipping the whole brain\n' +
+     '        // froze D5\'s squad in CAMPAIGNTEST (the Move-To-Buddy check)\n' +
+     '        if (cp_.active && b.player == cp_.omega.p) continue;\n' +
+     '        pending.push_back({o, &b, MoveIntent{}});\n'],
+    ['        const Character* c = participantPawn(p);\n        if (!c) continue;\n        const float d = core::length(targetable(*c) - eye);\n',
+     '        const Character* c = participantPawn(p);\n        if (!c) continue;\n' +
+     '        // Omega Supreme is AI-targetable only while Corrupted (his sentries are; PROV: not modelled as actors) [C, SETPIECES 1]\n' +
+     '        if (cp_.active && p == cp_.omega.p && cp_.omega.stage != CampaignOmega::Corrupted) continue;\n' +
+     '        const float d = core::length(targetable(*c) - eye);\n'],
+]);
 ed('src/game/World.h', [
+    ['    const CampaignState& campaign() const { return cp_; }\n',
+     '    const CampaignState& campaign() const { return cp_; }\n' +
+     '    void cpHoldOmegaForTest(bool on) { cp_.omegaHold = on; }   // CAMPAIGNTEST\n'],
     ['    void cpTickDestructibles(float dt);\n',
      '    void cpTickDestructibles(float dt);\n' +
      '    bool cpToggleDestructible(KismetVM& vm, int op, int input);\n' +

@@ -68,7 +68,9 @@ void World::cpLoadInteracts() {
 }
 
 void World::cpInteractFire(CampaignInteract& I, const char* out, int user) {
+    const bool ai = user >= 0 && (size_t)user < match_.players().size() && match_.players()[(size_t)user].kind == ParticipantKind::Bot;
     for (int op : I.events) {
+        if (ai && cp_.vm.op(op).authored["bPlayerOnly"].asBool(true)) continue;   // bPlayerOnly (default true) ignores AI users
         for (int v : cp_.vm.varLink(op, "Instigator")) if (KismetVM::Var* var = cp_.vm.var(v)) var->obj = "pawn:" + std::to_string(user);
         cp_.vm.fireEvent(op, out);
     }

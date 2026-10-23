@@ -320,25 +320,131 @@ std::vector<int> World::cpTargets(KismetVM& vm, int op, const std::string& link)
     return out;
 }
 
-// SeqAct_TnAiMoveToActor (one move, In), SeqAct_TnAiSetMoveToObjective (Enable / Disable, Range), SeqAct_TnAiUseInteract (move to the
-// interact object; PROV: the interact itself is the generic Out), SeqAct_TnAiShootAtActor / UseTurret (PROV: the generic Out) [H].
+// TnAiController.RangeSet [C, RE batch 3.5] -> the arrival radius (the band's outer edge, metres): Touch 0-175, Striking -600, Close
+// -1500, Medium -3000, Far -5000, Retreated -7000 UU; SetMoveToObjective's default is RANGE_Touch.
+static float rangeRadius(const std::string& r) {
+    if (r == "RANGE_Striking") return 6.0f;
+    if (r == "RANGE_Close") return 15.0f;
+    if (r == "RANGE_Medium") return 30.0f;
+    if (r == "RANGE_Far" || r == "RANGE_Long") return 50.0f;
+    if (r == "RANGE_Retreated") return 70.0f;
+    return 1.75f;
+}
+
+// SeqAct_TnAiMoveToActor (one move, In), SeqAct_TnAiSetMoveToObjective (Enable / Disable, Range), SeqAct_TnAiUseInteract (Use / Abort /
+// End: the AI paths to the interact, uses it in reach - Begin Use on its bPlayerOnly-false events - End Use when its sequence ends or on
+// Abort / End; "Out" at once, "AI Command Receive" when AI-driven), SeqAct_TnAiShootAtActor (Enable / Disable / Toggle: a persistent
+// forced fire target until Disable), SeqAct_TnAiUseTurret (Stay In Turret / Can Leave Turret; PROV: no mounting yet - the AI holds at
+// the turret, fighting from there, until Can Leave) [C, RE batch 3.1-3.3].
 bool World::cpAiOpActivate(KismetVM& vm, int op, int input) {
     KismetVM::Op& o = vm.op(op);
     const std::string& c = o.cls;
+    const std::vector<int> who = cpTargets(vm, op, "Target");
+    if (c == "SeqAct_TnAiShootAtActor") {
+        const std::string at = vm.objectOf(op, "Shoot At Actor");
+        for (int p : who) {
+            const bool on = input == 0 ? true : input == 1 ? false : cp_.shootAt.find(p) == cp_.shootAt.end();
+            if (on && !at.empty()) cp_.shootAt[p] = at; else cp_.shootAt.erase(p);
+        }
+        LOG_INFO("campaign: %s: %zu AI %s %s", afterDot(o.path).c_str(), who.size(), input == 1 ? "stop shooting" : "shoot at", afterDot(at).c_str());
+        if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
+        return true;
+    }
+    if (c == "SeqAct_TnAiUseTurret") {
+        const std::string tur = vm.objectOf(op, "Turret Object");
+        core::Vec3 at;
+        for (int p : who) {
+            if (input == 0 && !tur.empty() && cpActorPos(tur, at)) cp_.objectives[p] = {at, 1.75f, true};
+            else cp_.objectives.erase(p);
+        }
+        if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
+        return true;
+    }
     const bool move = c == "SeqAct_TnAiMoveToActor", objective = c == "SeqAct_TnAiSetMoveToObjective", interact = c == "SeqAct_TnAiUseInteract";
     if (!move && !objective && !interact) return false;
-    const std::vector<int> who = cpTargets(vm, op, "Target");
     std::string dest = vm.objectOf(op, move ? "Destination" : objective ? "Objective Point" : "Interact Object");
     if (dest.empty() && interact) dest = o.authored["Interact"].asString();
+    if (interact) {
+        const std::string nm = afterDot(dest);
+        for (int p : who) {
+            if (input == 0) cp_.aiUse[p] = nm;
+            else {   // Abort / End Interact: the release
+                cp_.aiUse.erase(p);
+                for (CampaignInteract& I : cp_.interacts) if (I.user == p) { cpInteractFire(I, "End Use", p); I.user = -1; }
+            }
+        }
+        vm.output(op, "Out");
+        bool ai = false;
+        for (int p : who) ai |= match_.players()[(size_t)p].kind == ParticipantKind::Bot;
+        if (ai) vm.output(op, "AI Command Receive");
+        if (input != 0) return true;
+    }
     core::Vec3 at{0, 0, 0};
     const bool found = !dest.empty() && cpActorPos(dest, at);
     if (objective && input == 1) { for (int p : who) cp_.objectives.erase(p); }
     else if (found) {
-        const std::string range = o.authored["Range"].asString();
-        const float r = range == "RANGE_Long" ? 25.0f : range == "RANGE_Medium" ? 12.0f : 5.0f;   // PROV radii
-        for (int p : who) cp_.objectives[p] = {at, r, !move && !interact};
+        // (at least 3 m: our nav arrival is not exact to the Touch band's 1.75 m - a squad member short of it would wait there for good)
+        const float r = std::max(3.0f, interact ? 1.75f : rangeRadius(o.authored["Range"].asString()));
+        for (int p : who) cp_.objectives[p] = {at, r, objective};
     } else if (!dest.empty()) LOG_INFO("campaign: %s: destination %s not located (actors.json pending)", afterDot(o.path).c_str(), afterDot(dest).c_str());
-    if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
+    if (!interact && !o.outputs.empty()) vm.output(op, o.outputs.front().first);
+    return true;
+}
+
+// The AI interact uses in progress: in the interact's use range (and it enabled, free) -> Begin Use; the interact tick ends it.
+void World::cpTickAiUse() {
+    for (auto it = cp_.aiUse.begin(); it != cp_.aiUse.end();) {
+        const Character* c = participantPawn(it->first);
+        CampaignInteract* I = nullptr;
+        for (CampaignInteract& x : cp_.interacts) if (x.name == it->second) I = &x;
+        if (!c || !I || !match_.players()[(size_t)it->first].alive) { it = cp_.aiUse.erase(it); continue; }
+        const float dx = I->pos.x - c->position().x, dz = I->pos.z - c->position().z;
+        const float reach = std::max(4.0f, I->useRange);
+        if (I->enabled && I->user < 0 && dx * dx + dz * dz <= reach * reach) {
+            I->user = it->first; I->t = 0.0f;
+            cpInteractFire(*I, "Begin Use", it->first);
+            cp_.objectives.erase(it->first);
+            it = cp_.aiUse.erase(it);
+            continue;
+        }
+        ++it;
+    }
+}
+
+// SeqAct_TnAiShootAtActor's forced target for this AI: the actor's location (a destructible: its bounds' centre; a pawn).
+bool World::cpShootAtPoint(int player, core::Vec3& out) const {
+    auto it = cp_.shootAt.find(player);
+    if (it == cp_.shootAt.end()) return false;
+    const std::string nm = afterDot(it->second);
+    for (const CampaignDestructible& d : cp_.destructibles) if (!d.gone && d.name == nm) { out = (d.lo + d.hi) * 0.5f; return true; }
+    if (it->second.rfind("des:", 0) == 0) {
+        const int i = std::atoi(it->second.c_str() + 4);
+        if (i >= 0 && (size_t)i < cp_.destructibles.size() && !cp_.destructibles[(size_t)i].gone) { out = (cp_.destructibles[(size_t)i].lo + cp_.destructibles[(size_t)i].hi) * 0.5f; return true; }
+        return false;
+    }
+    return cpActorPos(it->second, out);
+}
+
+// A checkpoint's authored AuxilliarySpawnPoints (AssetTools <CH>/checkpoint_spawns.json) for the squad: the k-th (0-based).
+bool World::cpAuxSpawn(const std::string& actor, int k, core::Vec3& out) {
+    if (!cp_.auxLoaded) {
+        cp_.auxLoaded = true;
+        assets::Json j;
+        if (readJsonFile(cpChapter_.dir + "checkpoint_spawns.json", j)) {
+            const assets::Json& rows = j["rows"];
+            for (size_t r = 0; r < rows.size(); ++r) {
+                std::vector<core::Vec3>& pts = cp_.auxSpawns[rows[r]["actor"].asString()];
+                const assets::Json& ap = rows[r]["auxilliary_spawn_points"];
+                for (size_t a = 0; a < ap.size(); ++a) {
+                    const assets::Json& L = ap[a]["location_gltf"];
+                    if (L.size() >= 3) pts.push_back(core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()});
+                }
+            }
+        }
+    }
+    auto it = cp_.auxSpawns.find(actor);
+    if (it == cp_.auxSpawns.end() || k < 0 || (size_t)k >= it->second.size()) return false;
+    out = it->second[(size_t)k];
     return true;
 }
 

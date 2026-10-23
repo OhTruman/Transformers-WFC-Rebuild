@@ -67,7 +67,6 @@ void World::cpOmegaBind() {
         if (!c) continue;
         O = CampaignOmega{};
         O.p = p; O.anchor = c->position(); O.yaw = c->yaw();
-        bots_.erase(std::remove_if(bots_.begin(), bots_.end(), [&](const BotBrain& b) { return b.player == p; }), bots_.end());
         for (MatchOpponent* o : opponents_) if (o->matchPlayer() == p) { o->health().max = 5000.0f; o->health().current = 5000.0f; }
         O.stage = CampaignOmega::Intro;
         O.timer = cpOmegaClip("Omega_Supreme_Intro", 15.0f);
@@ -192,7 +191,8 @@ void World::cpTickOmega(float dt) {
     }
     Character* c = participantPawnMutable(O.p);
     if (!c || match_.state() != Match::State::InProgress) return;
-    c->setPosition(O.anchor); c->velocity() = core::Vec3{0, 0, 0};   // stationary
+    if (core::length(c->position() - O.anchor) > 0.5f) { c->setPosition(O.anchor); c->velocity() = core::Vec3{0, 0, 0}; }   // stationary
+    if (cp_.omegaHold) return;   // CAMPAIGNTEST: held (the squad / game-over checks run beside him)
     if (O.stage == CampaignOmega::Dead) return;
     if (O.stage == CampaignOmega::Dying) {
         if ((O.timer -= dt) <= 0.0f) { O.stage = CampaignOmega::Dead; cpOmegaStatus(3); }   // RobotDying -> 3 Dying
