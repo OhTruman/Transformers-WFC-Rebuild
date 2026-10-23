@@ -4058,3 +4058,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 11:28 MERGED 76d8b4f5 campaign sentries + pawn factory death outputs (Single / All Pawns Killed never fired: every scripted fight
   waiting on them stalled) + chapter start = first checkpoint (A2 started inside the Soundwave arena). Gate item 2 DONE.
   Cyan sheet: camera + boom faithful (8 m orbit); the Remnant human start pick vs the original is with RE. Roller mines next.
+2026-10-23 11:36 MERGED 903b2ab7 roller mines + FINAL_BASE_ITEMS 07. ALL THREE GATE ITEMS DONE. CODE COMPLETE: FINAL CANDIDATE 903b2ab7.
+  In flight: Frontend's full milestone rerun on it; Experimental's pre stage re-run (base 01-07 vs head); Systems
+  re-points refresh.sh; AssetTools chapters (~16:30) + outside list. Then: reboot (user) -> PERF_HOLD timed gate ->
+  cut word -> refresh.sh -> verify_slim -> hand-over.
