@@ -4135,3 +4135,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 17:06 MERGED 454d7bff Realistic held weapons drawn with the bodies on the RT path (they were composited as world pixels with the
   indoor sun / AO factor 0: black silhouette; outdoors ~1 so MP never showed it). FINAL CODE 454d7bff. Experimental
   rebuilds the head arm; Systems re-pointed; the Frontend runs handover4. D3B ~16:30, outside list ~16:45.
+2026-10-23 17:08 ALL 10 CHAPTERS SHIPPED (AssetTools 2cabbb4; D3B at 16:59). Outside-render list final: 8,678 files / 2.98 GB (now incl.
+  world.glb-referenced textures + shared transforming GLBs). Air queue resumed (optional; ships what exists at the cut).
+  Remaining: Gameplay D3B check, Frontend handover4, Experimental head arm, Systems guard dry-run, the user's reboot.
