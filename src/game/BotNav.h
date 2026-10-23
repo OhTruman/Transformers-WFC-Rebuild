@@ -46,6 +46,9 @@ public:
     // After setBlocked: the connected pieces again without the blocked cells (areas sealed off by closed doors leave the main
     // piece: roaming goals stay reachable and a search across a closed door fails at once instead of exhausting the budget).
     void recomputePieces() { computePieces(); }
+    bool isBlocked(int cell) const { return cell >= 0 && (size_t)cell < blocked_.size() && blocked_[(size_t)cell] != 0; }
+    int pieceOf(int c) const { return c >= 0 && (size_t)c < piece_.size() ? piece_[(size_t)c] : -1; }
+    int mainPieceId() const { return mainPieceId_; }
     void setBlocked(int cell, bool b) {
         if (blocked_.size() != cells_.size()) blocked_.assign(cells_.size(), 0);
         if (cell >= 0 && (size_t)cell < blocked_.size()) blocked_[(size_t)cell] = b ? 1 : 0;

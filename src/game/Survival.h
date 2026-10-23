@@ -121,6 +121,10 @@ struct SurvivalState {
     int purchases = 0;
     // Round Begin / Round End (TnSeqEvent_SurvivalEvents 1 / 0) for the map's sequence and the announcer: counters + the last one.
     int roundBegins = 0, roundEnds = 0;
+    // The Escalation nav (E2b part 3): loaded for this match; each generator's NavigationCells (opened on purchase); start-blocked count.
+    bool escNav = false;
+    std::vector<std::pair<std::string, std::vector<int>>> generatorCells;
+    int navBlockedAtStart = 0;
     std::vector<uint8_t> crashDone, gateOn;               // per crash wall: fired; per round gate: its touch enabled
     std::vector<std::vector<uint8_t>> gateInside;         // per round gate, per match player: inside last step
     bool windowArmed = false, windowDone = false;
