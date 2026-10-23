@@ -125,3 +125,14 @@
   - C6: particle gravity.
 - **Everything else is ● edge cases or stock behaviour with documented defaults.**
 - **None blocks a build.** Each row's default is what ships unless the evidence lands.
+
+
+**Update (2026-10-23):** **A1, A2, A3 and A5 are now C** (KISMET_VM_CORE §6). The startup set is chosen natively:
+- unbound / WorldInfo events fire only on a non-checkpoint start, unless bFireForAllCheckpoints;
+- checkpoint-bound events fire only for the restored CP;
+- trigger counts are reset;
+- PreGameplaySetup chains run in the setup pass; GameplayStarted runs on the first normal tick;
+- root-sequence SequenceActivated fires at sequence begin;
+- late-streamed levels fire their unbound startup events.
+
+The remaining H is only the first-tick relative order of GameplayStarted vs root SequenceActivated.

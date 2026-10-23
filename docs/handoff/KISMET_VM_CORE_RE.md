@@ -120,3 +120,47 @@ ReTriggerDelay all apply**. Thirteen RemoteEvents use ReTriggerDelay 3 / 20, and
 - The native Originator filter for startup events (HIGH by data).
 - The +0x94 delayed-activation list's exact semantics (H: ActivateDelay).
 - The pre-gameplay-capable op predicate.
+
+## 6. Startup events: native rule (C, 2026-10-23; closes §3's HIGH items and RE_FINAL_AUDIT A1 / A2 / A5)
+
+**Who calls `AWorldInfo::PerformPreGameplaySetup(CP)` = 0x82D41A70** (exec 0x82C4D770 passes the script's CP argument through):
+- **Map load** (0x82AD0B80 → 0x82D43178(**CP = none**)), only when **no checkpoint restore is pending**;
+- **checkpoint restore** (0x8278B2F8, the notify-0x35 restore path) → **CP = the checkpoint being restored**;
+- the script `GameInfo.ResetLevel` (not when restarting) → CP = none;
+- (0x82CCE820, CP = an actor in a given level, else none: an editor / PIE path).
+
+**The first thing it does is fire the startup events (0x82D3BF00).** Every `SeqEvent_GameplayStartupBase` (**PreGameplaySetup and
+GameplayStarted alike**) in every loaded level's sequences, recursively:
+1. **Originator = none, or a WorldInfo:** activate **if `CP == none` or `bFireForAllCheckpoints`** (+0xAC bit 31, the only
+   GameplayStartupBase bool).
+2. **Originator = anything else (a Checkpoint):** not in that loop. **Only when CP is set:** every event in `CP.GeneratedEvents`
+   whose Originator **is that CP** and is a startup event is activated.
+3. **Activation:** `TriggerCount = 0` (so MaxTriggerCount never blocks a startup event), then `CheckActivate(…, bPushTop = true)`.
+   bEnabled and the client-side checks still apply.
+
+**So:**
+
+| Start | Unbound / WorldInfo events | `bFireForAllCheckpoints` events | Checkpoint-bound events |
+|---|---|---|---|
+| Chapter start (no checkpoint) | **fire** | fire | **none**, not even for a checkpoint the Kismet then makes active |
+| Start / restore at checkpoint X | **don't fire** | fire | **X's only** |
+
+- The set is chosen **once, at the call**. A PreGameplaySetup chain that sets another checkpoint active does **not** add that
+  checkpoint's bound events to the same start.
+
+**Ordering:** the pre-gameplay pass (UpdatePreGameplayOp 0x82F4E2D8) defers every queued op whose class isn't
+**SeqEvent_PreGameplaySetup** (`DAT_8385ED80` = USeqEvent_PreGameplaySetup::StaticClass, from 0x82F385C0). So:
+- the PreGameplaySetup events and their chains run inside the setup;
+- **the GameplayStarted events (and anything else queued) run on the first normal Kismet tick.**
+- H: the relative order of GameplayStarted vs root SequenceActivated chains in that first tick (queue-order detail).
+
+**Root SequenceActivated at level begin** (0x82F4E008, the USequence begin virtual, which recurses into nested sequences first):
+- for a sequence **whose Outer is a Level** (the level's root Main_Sequence; class check against ULevel), every
+  `SeqEvent_SequenceActivated` in it with **bEnabled**, a passing net / client-side check (+0x84 bits 31 / 29) and
+  `TriggerCount < MaxTriggerCount` (or Max 0) is activated.
+- **Sub-sequence SequenceActivated events are never auto-fired.** This also explains the script ResetLevel's
+  `Level(…Outer)` test (A3): it's the same root-sequence rule.
+
+**Levels streamed in later** (0x82D59FA0, when a level reaches the fully-visible state and the world's setup-done flag +0x2B9 is
+set): **0x82D3BDC8 fires that level's unbound / WorldInfo startup events**, both kinds, with no checkpoint or flag condition.
+Checkpoint-bound ones are not fired there.
