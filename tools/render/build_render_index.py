@@ -28,8 +28,12 @@ MANI = os.environ.get('WFC_ASSETTOOLS_MANIFESTS', r'F:/Transformers Rebuild/Asse
 # Class template values the generic index does not repeat per factory. Taken from Streets' runtime index, where every
 # factory of the class carries the same value (TransGame.Default__TnAmmoCratePickup.MeshComponentA) [CONF data].
 AMMO_CULL_DISTANCE = 8000.0
-# The weapon factories' idle spin (UE yaw units / s): pending RE (TnWeaponPickupFactory class defaults); 0 = no spin
-WEAPON_PICKUP_YAW_RATE = 0
+# The weapon pickups' idle motion (RE PICKUP_IDLE_MOTION_RE.md, C): PHYS_Rotating at the weapon's PickupRotationRate, Yaw 10000
+# (TnWeapon CDO: 54.93 deg/s) while available; the cloned pickup mesh tilted by SpawnOffsetAngle pitch 3000 (16.48 deg) and
+# scaled by PickupScale 1.0 - KamikazeMines: no tilt, scale 1.2. No bob.
+WEAPON_PICKUP_YAW_RATE = 10000
+WEAPON_PICKUP_PITCH = 3000
+WEAPON_PICKUP_SCALE = 1.0
 
 
 def gltf_to_ue(m):
@@ -94,10 +98,15 @@ def escalation_weapon_visuals(mapname):
             if not mesh:
                 continue
             x, y, z = w['location_ue']
-            a = math.radians(float(w.get('yaw_deg', 0.0)))
-            c, s = math.cos(a), math.sin(a)
+            mines = 'KamikazeMines' in (w.get('inventory_type') or '')
+            yaw = math.radians(float(w.get('yaw_deg', 0.0)))
+            pitch = 0.0 if mines else WEAPON_PICKUP_PITCH * math.pi / 32768.0
+            k = 1.2 if mines else WEAPON_PICKUP_SCALE
+            cy, sy, cp, sp = math.cos(yaw), math.sin(yaw), math.cos(pitch), math.sin(pitch)
+            # FRotationMatrix(Pitch, Yaw, 0) rows (UE row vectors) x PickupScale; the renderer's spin is about the vertical
+            rows = [[cp * cy * k, cp * sy * k, sp * k], [-sy * k, cy * k, 0.0], [-sp * cy * k, -sp * sy * k, cp * k]]
             e = {'actor': w['object'], 'class': w.get('class', 'TnWeaponPickupFactory'), 'mesh': mesh, 'gltf': mesh_gltf(mesh),
-                 'ue_matrix': [[c, s, 0.0, 0.0], [-s, c, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [x, y, z, 1.0]],
+                 'ue_matrix': [rows[0] + [0.0], rows[1] + [0.0], rows[2] + [0.0], [x, y, z, 1.0]],
                  'rotation_rate': {'Pitch': 0, 'Yaw': WEAPON_PICKUP_YAW_RATE, 'Roll': 0},
                  'kind': 'weapon pickup mesh (TnWeaponPickupFactory PickupMesh, %s)' % w.get('inventory_type', '')}
             if not os.path.exists(os.path.join(CONTENT, e['gltf'][8:])):
