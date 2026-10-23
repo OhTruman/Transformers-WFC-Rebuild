@@ -406,6 +406,100 @@ bool World::cpRestartFromCheckpoint() {
     return launchMatch(l);
 }
 
+// ---- touches (SeqEvent_Touch on TriggerVolumes / Triggers) ----
+
+// Every SeqEvent_Touch the level audio does not host (Systems fires those): its Originator's shape - a TriggerVolume brush (the units'
+// physics.json polygons, convex) or a Trigger (CylinderComponent 40 x 40 UU x DrawScale, actors.json) [H stock defaults]. bPlayerOnly
+// (CDO true) -> humans only; Touched on entry, UnTouched on exit, Empty when the last toucher leaves.
+void World::cpLoadTouches() {
+    cp_.touches.clear();
+    std::map<std::string, std::vector<std::vector<core::Vec3>>> brushes;
+    for (const std::string& u : cpChapter_.allUnits) {
+        assets::Json pj;
+        if (!readJsonFile(cpChapter_.dir + u + "/physics.json", pj)) continue;
+        const assets::Json& vs = pj["volumes"];
+        for (size_t i = 0; i < vs.size(); ++i) {
+            const assets::Json& P = vs[i]["polygons_gltf"];
+            if (P.size() == 0) continue;
+            std::vector<std::vector<core::Vec3>> polys;
+            for (size_t k = 0; k < P.size(); ++k) {
+                std::vector<core::Vec3> poly;
+                for (size_t q = 0; q < P[k].size(); ++q) poly.push_back(core::Vec3{P[k][q][0].asFloat(), P[k][q][1].asFloat(), P[k][q][2].asFloat()});
+                if (poly.size() >= 3) polys.push_back(poly);
+            }
+            brushes[afterDot(vs[i]["actor"].asString())] = polys;
+        }
+    }
+    std::map<std::string, std::pair<core::Vec3, float>> triggers;   // Trigger: location, DrawScale
+    {
+        assets::Json aj;
+        if (readJsonFile(cpChapter_.dir + "actors.json", aj))
+            for (size_t i = 0; i < aj["actors"].size(); ++i) {
+                const assets::Json& r = aj["actors"][i];
+                if (r["class"].asString() != "Trigger" || r["location_gltf"].size() < 3) continue;
+                const assets::Json& L = r["location_gltf"];
+                triggers[r["actor"].asString()] = {core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()}, r["DrawScale"].asFloat(1.0f)};
+            }
+    }
+    int missing = 0;
+    for (int i = 0; i < (int)cp_.vm.opCount(); ++i) {
+        const KismetVM::Op& o = cp_.vm.op(i);
+        if (o.cls != "SeqEvent_Touch" || ((size_t)i < cp_.audioId.size() && !cp_.audioId[(size_t)i].empty())) continue;   // the level audio hosts it
+        CampaignState::Touch T;
+        T.op = i;
+        T.playerOnly = o.authored["bPlayerOnly"].asBool(true);
+        const std::string org = afterDot(o.authored["Originator"].asString());
+        auto b = brushes.find(org);
+        if (b != brushes.end()) {
+            T.polys = b->second;
+            T.lo = T.hi = T.polys[0][0];
+            for (const auto& poly : T.polys) for (const core::Vec3& p : poly) {
+                T.lo = core::Vec3{std::min(T.lo.x, p.x), std::min(T.lo.y, p.y), std::min(T.lo.z, p.z)};
+                T.hi = core::Vec3{std::max(T.hi.x, p.x), std::max(T.hi.y, p.y), std::max(T.hi.z, p.z)};
+            }
+        } else if (auto t = triggers.find(org); t != triggers.end()) {
+            T.cylinder = true; T.center = t->second.first; T.radius = 0.4f * t->second.second; T.halfHeight = 0.4f * t->second.second;
+        } else { ++missing; continue; }
+        cp_.touches.push_back(T);
+    }
+    LOG_INFO("campaign: %zu touch events armed (%d originators without a shape)", cp_.touches.size(), missing);
+}
+
+static bool insideConvex(const std::vector<std::vector<core::Vec3>>& polys, const core::Vec3& lo, const core::Vec3& hi, const core::Vec3& x) {
+    if (x.x < lo.x || x.y < lo.y || x.z < lo.z || x.x > hi.x || x.y > hi.y || x.z > hi.z) return false;
+    const core::Vec3 c = (lo + hi) * 0.5f;
+    for (const auto& p : polys) {
+        core::Vec3 n = core::cross(p[1] - p[0], p[2] - p[0]);
+        if (core::dot(n, c - p[0]) > 0.0f) n = n * -1.0f;   // outward
+        if (core::dot(n, x - p[0]) > 1e-4f) return false;
+    }
+    return true;
+}
+
+void World::cpTickTouches() {
+    if (cp_.touches.empty() || simTick_ % 6 != 0) return;   // 10 Hz
+    for (CampaignState::Touch& T : cp_.touches) {
+        if (!cp_.vm.op(T.op).enabled) continue;
+        for (size_t q = 0; q < match_.players().size(); ++q) {
+            if (T.playerOnly && match_.players()[q].kind == ParticipantKind::Bot) continue;
+            const Character* c = participantPawn((int)q);
+            bool in = false;
+            if (c) {
+                const core::Vec3 x = c->actorLocation();
+                if (T.cylinder) { const core::Vec3 d = x - T.center; in = d.x * d.x + d.z * d.z <= T.radius * T.radius && std::fabs(d.y) <= T.halfHeight + 1.0f; }
+                else in = insideConvex(T.polys, T.lo, T.hi, x);
+            }
+            const bool was = T.inside.count((int)q) != 0;
+            if (in && !was) { T.inside.insert((int)q); cp_.vm.fireEvent(T.op, "Touched"); }
+            else if (!in && was) {
+                T.inside.erase((int)q);
+                cp_.vm.output(T.op, "UnTouched");
+                if (T.inside.empty()) cp_.vm.output(T.op, "Empty");
+            }
+        }
+    }
+}
+
 int World::cpTestFireFactory(int k) {
     if (k < 0 || (size_t)k >= cp_.factories.size() || cp_.factories[(size_t)k].op < 0) return -1;
     cp_.vm.impulse(cp_.factories[(size_t)k].op, 0);
