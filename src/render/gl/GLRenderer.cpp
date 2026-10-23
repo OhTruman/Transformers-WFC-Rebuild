@@ -1299,6 +1299,9 @@ public:
         return out;
     }
     void setActorHidden(const std::string& actor, bool hidden) override { wfc_.setActorHidden(actor, hidden); }
+    void drawDroppedPickup(const std::string& gltf, const core::Vec3& posUE, float lifeLeft, bool mines) override {
+        if (wfc_.active()) wfc_.queueDroppedPickup(gltf, posUE, lifeLeft, mines);
+    }
     void setMapEffectActive(const std::string& what, bool active) override { wfc_.setMapEffectActive(what, active); }
     void setMapEffectState(const std::string& k, bool a, bool h) override { wfc_.setMapEffectState(k, a, h); }
     void setActiveGameRules(const std::vector<std::string>& r) override { wfc_.setActiveGameRules(r); }

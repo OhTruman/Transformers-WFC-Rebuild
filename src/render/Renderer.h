@@ -500,6 +500,12 @@ public:
     // Gameplay-authoritative visibility of an authored map actor (world.glb actor name, e.g. "InterpActor_6165").
     // Authored bHidden actors start hidden; Kismet-driven state (SeqAct_ToggleHidden by game rule) is pushed here.
     virtual void setActorHidden(const std::string& actor, bool hidden) { (void)actor; (void)hidden; }
+    // A dropped weapon this frame (Escalation / campaign: TnDroppedPickupWeapon, RE PICKUP_IDLE_MOTION_RE.md): its pickup mesh
+    // (content-relative glTF), where it lies (UE; the renderer settles it on the floor below), its remaining life (s, from
+    // 120: the spin phase), mines (KamikazeMines: no tilt, scale 1.2). Drawn tilted 16.48 deg, spinning 54.93 deg/s.
+    virtual void drawDroppedPickup(const std::string& gltf, const core::Vec3& posUE, float lifeLeft, bool mines) {
+        (void)gltf; (void)posUE; (void)lifeLeft; (void)mines;
+    }
     // Gameplay-authoritative pose of an authored map actor moved by a campaign matinee (an InterpActor: world.glb actor name), UE
     // units / rotator degrees (pitch, yaw, roll), absolute. Actors never sent keep their authored pose. [Gameplay; Rendering implements]
     virtual void setMapActorTransform(const std::string& actor, const core::Vec3& posUE, const core::Vec3& rotUEdeg) { (void)actor; (void)posUE; (void)rotUEdeg; }

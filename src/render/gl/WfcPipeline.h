@@ -1520,6 +1520,15 @@ private:
     std::map<std::string, float> pickupSpin_;         // factory (lower) -> accumulated yaw (UU) while available
     std::vector<PickupMeshRT> pickupMeshes_;
     void ensurePickupMesh(PickupMeshRT& pm);   // the pickup factory mesh, loaded on demand / at the warm-up
+    struct DropRT { std::string gltf; float pos[3] = {0, 0, 0}; float lifeLeft = 0.0f; bool mines = false; };
+    std::vector<DropRT> dropQueue_;                   // this frame's dropped weapons (drawn after the factories, then cleared)
+    std::map<std::string, int> dropMeshes_;           // glTF -> mesh id (-2: failed)
+public:
+    void queueDroppedPickup(const std::string& gltf, const core::Vec3& posUE, float lifeLeft, bool mines) {
+        DropRT d; d.gltf = gltf; d.pos[0] = posUE.x; d.pos[1] = posUE.y; d.pos[2] = posUE.z; d.lifeLeft = lifeLeft; d.mines = mines;
+        dropQueue_.push_back(d);
+    }
+private:
     std::set<std::string> pickupMeshHidden_;
     float pickupYaw(const std::string& ownerLower) const;
     bool pickupRuleBlocked(const std::string& ownerLower) const;

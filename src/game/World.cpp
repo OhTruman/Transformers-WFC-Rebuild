@@ -4616,6 +4616,13 @@ void World::syncMapPresentation(render::IRenderer& r) const {
                           sv_.weaponPicks[i].available;
         r.setActorHidden(svData_.weaponPickups[i].actor, !live);
     }
+    // (Escalation / campaign) the dropped weapons: the weapon's pickup mesh where it lies (Rendering spins / tilts / settles it)
+    for (const SurvivalState::Drop& d : sv_.drops) {
+        if (!d.w.def) continue;
+        const std::string g = svDropMesh(d.w.def->id);
+        if (!g.empty()) r.drawDroppedPickup(g, core::Vec3{d.pos.x * 100.0f, d.pos.z * 100.0f, d.pos.y * 100.0f}, d.life,
+                                            std::strstr(d.w.def->id, "Kamikaze") != nullptr);
+    }
     // [integration 09c] The effect keys are built once per factory (rebuilt only when the factory set changes): building
     // "<actor>|custom" / "|highlight" per factory per frame was ~12 % of main-thread allocations at 10 v 10 (Systems' ALLOCPROF).
     if (pickupFxKeys_.size() != pickupFactories_.size()
