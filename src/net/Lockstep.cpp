@@ -22,7 +22,7 @@ void put64(std::vector<uint8_t>& b, uint64_t v) { for (int i = 0; i < 8; ++i) b.
 uint32_t get32(const uint8_t* p) { return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24); }
 uint64_t get64(const uint8_t* p) { return (uint64_t)get32(p) | ((uint64_t)get32(p + 4) << 32); }
 
-enum : uint8_t { kCmds = 1, kHello = 2, kHash = 3, kBye = 4, kPing = 5, kPong = 6, kVoice = 7 };
+enum : uint8_t { kCmds = 1, kHello = 2, kHash = 3, kBye = 4, kPing = 5, kPong = 6, kVoice = 7, kEvent = 8 };
 constexpr uint32_t kRedundancy = 3;   // ticks per regular CMDS packet: the newest + 2 before it (covers isolated losses)
 
 }  // namespace
@@ -67,6 +67,7 @@ Lockstep::Lockstep(INetTransport& t, const Config& c) : t_(t), cfg_(c) {
     cmds_.resize((size_t)cfg_.seats);
     contiguous_.assign((size_t)cfg_.seats, 0);
     peerAck_.assign((size_t)cfg_.seats, 0);
+    eventsReceived_.assign((size_t)cfg_.seats, 0); eventsAnnounced_.resize((size_t)cfg_.seats);
     leadCur_.assign((size_t)cfg_.seats, kNoLead); leadPrev_.assign((size_t)cfg_.seats, kNoLead); leadReported_.assign((size_t)cfg_.seats, kNoLead);
     hello_.assign((size_t)cfg_.seats, 0);
     hello_[(size_t)cfg_.self] = 1;
@@ -137,14 +138,34 @@ void Lockstep::handle(const NetPacket& p) {
             WireCommand w;
             std::copy(d.begin() + 11 + (long)(i * kWireCommandBytes), d.begin() + 11 + (long)((i + 1) * kWireCommandBytes), w.begin());
             const uint32_t tick = first + (uint32_t)i;
-            // a first arrival (resends keep the first copy) once stepping: lead 0 = the step was waiting for it (a stall)
+            // a first arrival (resends keep the first copy) once stepping. The command the step is waiting for (tick == nextStep_)
+            // reports how late it is: minus the ticks this peer has stalled on it, so the sender raises D by the whole shortfall at once
+            // (lead 0 alone hid it: D then crept up one tick per report while the match stalled).
             if (m.emplace(tick, w).second && tick >= nextStep_ && nextStep_ > 1) {
-                const int lead = (int)std::min<int64_t>(kNoLead - 1, (int64_t)tick - (int64_t)nextStep_);
-                leadCur_[(size_t)seat] = std::min(leadCur_[(size_t)seat], lead);
+                int lead = (int)std::min<int64_t>(kNoLead - 1, (int64_t)tick - (int64_t)nextStep_);
+                if (lead == 0 && stallMs_ > 0.0) lead = -(int)std::ceil(stallMs_ / (1000.0 / 60.0));
+                leadCur_[(size_t)seat] = std::min(leadCur_[(size_t)seat], std::max(lead, -100));
             }
         }
         uint32_t& c = contiguous_[(size_t)seat];
         while (m.count(c + 1)) ++c;
+        if (count > 0 && d.size() >= 11 + count * kWireCommandBytes + 2) {   // the event announcement (absent from phase 1 peers)
+            const size_t at = 11 + count * kWireCommandBytes;
+            const uint32_t n = (uint32_t)d[at] | ((uint32_t)d[at + 1] << 8);
+            uint32_t& a = eventsAnnounced_[(size_t)seat][first + (uint32_t)count - 1];
+            a = std::max(a, n);
+        }
+        break;
+    }
+    case kEvent: {
+        if (d.size() < 9) return;
+        Event e;
+        e.seat = seat; e.atTick = get32(&d[2]); e.kind = d[6];
+        const size_t len = (size_t)d[7] | ((size_t)d[8] << 8);
+        if (d.size() < 9 + len) return;
+        e.payload.assign(d.begin() + 9, d.begin() + 9 + (long)len);
+        ++eventsReceived_[(size_t)seat];
+        eventQueue_.push_back(std::move(e));
         break;
     }
     case kHello: {
@@ -216,15 +237,16 @@ void Lockstep::updateDelay() {
     const float tickMs = 1000.0f / 60.0f;
     int want = std::max(2, std::min(15, (int)std::ceil((srtt_ * 0.5f + 4.0f * rttvar_ + 5.0f) / tickMs)));
     // A peer that saw our commands arrive with lead < 1 (late / just in time: the path to it is slower than srtt / 2) needs D up by
-    // the shortfall; the 1 / s fall waits until every reporting peer sees a lead >= 2.
+    // the shortfall (and a 2-tick margin); the 1 / s fall waits until every reporting peer sees a lead >= 4.
     int minLead = kNoLead;
     for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) minLead = std::min(minLead, leadReported_[(size_t)s]);
-    if (minLead < 1) want = std::max(want, std::min(15, delay_ + (1 - minLead)));
+    // hysteresis: keep a 2-tick margin (jitter ~10 ms is under a tick, a lead of 0 / 1 stalls on it); fall only at lead >= 4
+    if (minLead < 2) want = std::max(want, std::min(15, delay_ + (2 - minLead)));
     if (want > delay_) {
         LOG_INFO("NET input delay %d -> %d (rtt %.1f ms, var %.1f, peer lead %d)", delay_, want, srtt_, rttvar_, minLead == kNoLead ? -1 : minLead);
         delay_ = want; lastDelayDropMs_ = nowMs();
         for (int& l : leadReported_) l = kNoLead;   // re-measured at the new D
-    } else if (want < delay_ && minLead >= 2 && nowMs() - lastDelayDropMs_ >= 1000.0) {
+    } else if (want < delay_ && minLead >= 4 && nowMs() - lastDelayDropMs_ >= 1000.0) {
         --delay_; lastDelayDropMs_ = nowMs(); LOG_INFO("NET input delay -> %d (rtt %.1f ms, peer lead %d)", delay_, srtt_, minLead == kNoLead ? -1 : minLead);
     }
 }
@@ -250,6 +272,11 @@ void Lockstep::sendCommands(int peer, bool full) {
         ++count;
     }
     b[countAt] = count;
+    if (count > 0) {   // [phase 2] the event announcement: my events stamped at or before the packet's newest tick (u16 trailer)
+        const uint32_t last = first + count - 1;
+        const size_t n = (size_t)(std::upper_bound(ownEventTicks_.begin(), ownEventTicks_.end(), last) - ownEventTicks_.begin());
+        b.push_back((uint8_t)n); b.push_back((uint8_t)(n >> 8));
+    }
     t_.sendUnreliable(peer, b.data(), b.size());
     lastSendMs_ = nowMs();
 }
@@ -270,6 +297,33 @@ void Lockstep::submitLocal(uint32_t tick, const game::RemoteCommand& c) {
 
 bool Lockstep::haveAll(uint32_t tick) const {
     for (const auto& m : cmds_) if (!m.count(tick)) return false;
+    for (int s = 0; s < cfg_.seats; ++s) {   // every event stamped for this tick (or earlier) arrived
+        if (s == cfg_.self) continue;
+        const auto& a = eventsAnnounced_[(size_t)s];
+        auto it = a.lower_bound(tick);   // the announcement of a packet that covered this tick
+        if (it != a.end() && eventsReceived_[(size_t)s] < it->second) return false;
+    }
+    return true;
+}
+
+uint32_t Lockstep::submitEvent(uint8_t kind, const std::vector<uint8_t>& payload) {
+    const uint32_t at = localHigh_ + 1;   // the next command this seat submits: every peer gets the event before it can step it
+    ownEventTicks_.push_back(at);
+    std::vector<uint8_t> b;
+    put8(b, kEvent); put8(b, (uint8_t)cfg_.self); put32(b, at); put8(b, kind);
+    const size_t len = std::min<size_t>(payload.size(), 65535);
+    put8(b, (uint8_t)len); put8(b, (uint8_t)(len >> 8));
+    b.insert(b.end(), payload.begin(), payload.begin() + (long)len);
+    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) t_.sendReliable(s, b.data(), b.size());
+    Event e; e.seat = cfg_.self; e.atTick = at; e.kind = kind; e.payload.assign(payload.begin(), payload.begin() + (long)len);
+    eventQueue_.push_back(std::move(e));
+    return at;
+}
+
+bool Lockstep::pollEvent(Event& out) {
+    if (eventQueue_.empty()) return false;
+    out = std::move(eventQueue_.front());
+    eventQueue_.pop_front();
     return true;
 }
 
@@ -343,6 +397,7 @@ void Lockstep::stepped(uint32_t tick, uint64_t stateHash) {
 
 void Lockstep::forget(uint32_t belowTick) {
     for (auto& m : cmds_) while (!m.empty() && m.begin()->first < belowTick) m.erase(m.begin());
+    for (auto& a : eventsAnnounced_) while (!a.empty() && a.begin()->first < belowTick) a.erase(a.begin());
 }
 
 void Lockstep::sendVoice(const uint8_t* p, size_t n) {

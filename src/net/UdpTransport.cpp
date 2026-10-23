@@ -1,5 +1,7 @@
 // [Systems] UdpTransport + LoopbackTransport (NetTransport.h). Datagram framing (little endian):
 //   u8 kind (0 unreliable, 1 reliable data, 2 ack), u8 from (seat), u16 reserved, u32 seq (reliable / ack; 0 for unreliable), payload.
+//   kind 3 (stranger, online phase 2): u8 3, then the payload - out of band, to / from an address with no seat yet (a JOIN before
+//   the host seats the member, LAN discovery); delivered by pollStranger with the sender's address.
 // Reliable channel: per peer a send sequence, the unacked packets resent every max(2 x RTT, 40 ms) (cap 250 ms) until acked; the
 // receiver acks every reliable packet (also duplicates: the first ack may have been lost), delivers in sequence order and buffers
 // out-of-order ones. Unreliable packets are delivered as they come (the lockstep layer tolerates loss, reorder and duplicates).
@@ -34,7 +36,7 @@ double nowMs() {
 }
 
 constexpr size_t kHeader = 8;
-enum : uint8_t { kUnreliable = 0, kReliable = 1, kAck = 2 };
+enum : uint8_t { kUnreliable = 0, kReliable = 1, kAck = 2, kStranger = 3 };
 
 void putHeader(std::vector<uint8_t>& b, uint8_t kind, int from, uint32_t seq) {
     b.resize(kHeader);
@@ -106,6 +108,8 @@ public:
     }
     float rttMs() const { return rttMs_; }
     uint64_t resends() const { return resends_; }
+    void setSelf(int self) { self_ = self; }
+    void reset(int peer) { ch_.erase(peer); }   // a re-seated peer starts its reliable channel afresh
 
 private:
     int self_;
@@ -123,6 +127,12 @@ using Socket = int;
 const Socket kBad = -1;
 void closeSock(Socket s) { close(s); }
 #endif
+
+std::string addrString(const sockaddr_in& a) {
+    char ip[INET_ADDRSTRLEN] = {0};
+    inet_ntop(AF_INET, &a.sin_addr, ip, sizeof ip);
+    return std::string(ip) + ":" + std::to_string(ntohs(a.sin_port));
+}
 
 bool parseAddr(const std::string& hp, sockaddr_in& out) {
     const size_t c = hp.rfind(':');
@@ -152,6 +162,68 @@ public:
         ch_.resendDue([this](int peer, const std::vector<uint8_t>& d) { raw(peer, d); });
     }
     NetStats stats() const override { NetStats s = stats_; s.rttMs = ch_.rttMs(); s.resends = ch_.resends(); return s; }
+    bool addPeer(int seat, const std::string& hostPort) override {
+        sockaddr_in a{};
+        if (seat < 0 || seat > 254 || !parseAddr(hostPort, a)) return false;
+        auto it = peers_.find(seat);
+        if (it == peers_.end() || addrString(it->second) != hostPort) ch_.reset(seat);
+        peers_[seat] = a;
+        return true;
+    }
+    void removePeer(int seat) override { peers_.erase(seat); ch_.reset(seat); }
+    void setSelf(int seat) override { self_ = seat; ch_.setSelf(seat); }
+    std::string peerAddress(int seat) const override {
+        auto it = peers_.find(seat);
+        return it == peers_.end() ? std::string() : addrString(it->second);
+    }
+    std::string localAddress() const override {
+        // The LAN IPv4 other PCs reach (the interface a route to the internet would use; no packet is sent) + the bound port.
+        sockaddr_in me{};
+        socklen_t ml = sizeof me;
+        getsockname(sock_, (sockaddr*)&me, &ml);
+        std::string ip = "127.0.0.1";
+        Socket probe = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (probe != kBad) {
+            sockaddr_in dst{};
+            if (parseAddr("8.8.8.8:53", dst) && connect(probe, (const sockaddr*)&dst, sizeof dst) == 0) {
+                sockaddr_in out{};
+                socklen_t ol = sizeof out;
+                if (getsockname(probe, (sockaddr*)&out, &ol) == 0 && out.sin_addr.s_addr != 0) {
+                    char b[INET_ADDRSTRLEN] = {0};
+                    inet_ntop(AF_INET, &out.sin_addr, b, sizeof b);
+                    ip = b;
+                }
+            }
+            closeSock(probe);
+        }
+        return ip + ":" + std::to_string(ntohs(me.sin_port));
+    }
+    bool sendTo(const std::string& hostPort, const uint8_t* p, size_t n) override {
+        sockaddr_in a{};
+        if (!parseAddr(hostPort, a)) return false;
+        std::vector<uint8_t> d;
+        d.reserve(n + 1);
+        d.push_back(kStranger);
+        d.insert(d.end(), p, p + n);
+        sendto(sock_, (const char*)d.data(), (int)d.size(), 0, (const sockaddr*)&a, sizeof a);
+        stats_.bytesSent += d.size(); ++stats_.packetsSent;
+        return true;
+    }
+    bool sendRaw(const std::string& hostPort, const uint8_t* p, size_t n) override {
+        sockaddr_in a{};
+        if (!parseAddr(hostPort, a)) return false;
+        sendto(sock_, (const char*)p, (int)n, 0, (const sockaddr*)&a, sizeof a);
+        stats_.bytesSent += n; ++stats_.packetsSent;
+        return true;
+    }
+    bool pollStranger(std::string& from, std::vector<uint8_t>& data) override {
+        drainSocket();
+        if (strangers_.empty()) return false;
+        from = std::move(strangers_.front().first);
+        data = std::move(strangers_.front().second);
+        strangers_.pop_front();
+        return true;
+    }
 
 private:
     void raw(int peer, const std::vector<uint8_t>& d) {
@@ -172,6 +244,19 @@ private:
             const int n = (int)recvfrom(sock_, (char*)buf, sizeof buf, 0, (sockaddr*)&from, &fl);
             if (n <= 0) break;
             stats_.bytesReceived += (uint64_t)n; ++stats_.packetsReceived;
+            if (buf[0] == kStranger) {   // out of band: keep the sender's address
+                if (strangers_.size() < 256) strangers_.push_back({addrString(from), std::vector<uint8_t>(buf + 1, buf + n)});
+                continue;
+            }
+            // the lobby service's replies (b"WFCL" + JSON) and a STUN reply: handed up whole as stranger datagrams
+            if (n >= 4 && buf[0] == 'W' && buf[1] == 'F' && buf[2] == 'C' && buf[3] == 'L') {
+                if (strangers_.size() < 256) strangers_.push_back({addrString(from), std::vector<uint8_t>(buf, buf + n)});
+                continue;
+            }
+            if (n >= 20 && (buf[0] & 0xC0) == 0 && buf[4] == 0x21 && buf[5] == 0x12 && buf[6] == 0xA4 && buf[7] == 0x42) {
+                if (strangers_.size() < 256) strangers_.push_back({addrString(from), std::vector<uint8_t>(buf, buf + n)});
+                continue;
+            }
             std::vector<uint8_t> ack; int ackTo = -1;
             ch_.receive(buf, (size_t)n, inbox_, ack, ackTo);
             if (!ack.empty()) raw(ackTo, ack);
@@ -182,6 +267,7 @@ private:
     std::map<int, sockaddr_in> peers_;
     ChannelSet ch_;
     std::deque<NetPacket> inbox_;
+    std::deque<std::pair<std::string, std::vector<uint8_t>>> strangers_;
     NetStats stats_;
 };
 
@@ -251,9 +337,13 @@ std::unique_ptr<INetTransport> createUdpTransport(int self, const std::string& b
     Socket s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (s == kBad) { error = "socket() failed"; return nullptr; }
     if (::bind(s, (const sockaddr*)&local, sizeof local) != 0) { closeSock(s); error = "bind " + bind + " failed"; return nullptr; }
+    int bc = 1; setsockopt(s, SOL_SOCKET, SO_BROADCAST, (const char*)&bc, sizeof bc);   // LAN discovery (online phase 2)
 #ifdef _WIN32
     u_long nb = 1; ioctlsocket(s, FIONBIO, &nb);
     int rcv = 1 << 20; setsockopt(s, SOL_SOCKET, SO_RCVBUF, (const char*)&rcv, sizeof rcv);
+    // [online phase 2] no WSAECONNRESET from an ICMP port-unreachable (a peer not up yet / gone): it would fail the next recvfrom
+    BOOL noReset = FALSE; DWORD got = 0;
+    WSAIoctl(s, _WSAIOW(IOC_VENDOR, 12) /* SIO_UDP_CONNRESET */, &noReset, sizeof noReset, nullptr, 0, &got, nullptr, nullptr);
 #else
     fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | O_NONBLOCK);
 #endif

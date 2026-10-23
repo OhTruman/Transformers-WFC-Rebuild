@@ -28,6 +28,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <deque>
 
 namespace game { struct RemoteCommand; }
 
@@ -72,6 +73,14 @@ public:
     void setVoiceAudience(std::function<bool(int, int, uint8_t)> f) { voiceAudience_ = std::move(f); }
     long voiceRelayed() const { return voiceRelayed_; }
     uint32_t endTick() const { return endTick_; }   // a peer finished the run at this tick (0 = none)
+    // [online phase 2] Tick-stamped reliable events (ONLINE_PHASE2_SPLIT.md 3: Choose Character): a second per-seat ordered stream.
+    // submitEvent stamps the next local command tick (localHigh + 1) and sends it to every peer (reliable). Each CMDS packet carries
+    // the sender's count of events stamped at or before its newest tick, and haveAll(T) also waits until that many of the seat's
+    // events arrived - so no peer steps a tick without the events stamped for it (unreliable commands may overtake the reliable
+    // event). pollEvent returns every seat's events (this seat's too) in arrival order; the caller applies them at atTick.
+    struct Event { int seat = -1; uint32_t atTick = 0; uint8_t kind = 0; std::vector<uint8_t> payload; };
+    uint32_t submitEvent(uint8_t kind, const std::vector<uint8_t>& payload);
+    bool pollEvent(Event& out);
     Status status() const { return status_; }
     const std::string& statusText() const { return statusText_; }
     uint32_t localHigh() const { return localHigh_; }
@@ -85,6 +94,10 @@ private:
     std::vector<double> lastFullMs_;          // per peer: the last full-window send
     std::map<uint32_t, double> producedMs_;   // this seat's ticks -> when first sent (ack-overdue test)
     void fail(Status s, const std::string& why);
+    std::vector<uint32_t> ownEventTicks_;                  // this seat's events, their atTick (ascending)
+    std::vector<uint32_t> eventsReceived_;                 // per seat: events arrived
+    std::vector<std::map<uint32_t, uint32_t>> eventsAnnounced_;   // per seat: newest tick of a CMDS packet -> its event count
+    std::deque<Event> eventQueue_;
     INetTransport& t_;
     Config cfg_;
     std::vector<std::map<uint32_t, WireCommand>> cmds_;   // per seat

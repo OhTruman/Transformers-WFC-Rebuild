@@ -14,6 +14,8 @@
 #include <thread>
 #include "core/SimRandom.h"
 #include "core/Application.h"
+#include "net/NetMatchDriver.h"
+#include "net/UdpSession.h"
 #include "core/Config.h"
 #include "core/Debug.h"
 #include "core/Log.h"
@@ -136,6 +138,13 @@ bool Application::init() {
     if (wantsFrontendBoot()) {
         frontend_ = std::make_unique<frontend::FrontendRuntime>();
         if (frontend_->init()) {
+            // [Systems, online phase 2] the real online session, unless a dev FakeSession is set (WFC_FAKESESSION) or WFC_NOSESSION=1.
+            if (!frontend_->flow().online() && !std::getenv("WFC_NOSESSION")) {
+                auto s = std::make_unique<net::UdpSession>();
+                udpSession_ = s.get();
+                frontend_->flow().setSession(std::move(s));
+                LOG_INFO("online: UdpSession set (LAN / direct IP / internet code; listening only after Host / Join)");
+            }
             attachPresenter();
             window_->setMouseCaptured(false);
             mouseCaptured_ = false;
@@ -232,6 +241,7 @@ bool Application::init() {
     if (std::getenv("WFC_TRANSACTTEST")) { runTransformingActorsTest(); return false; }   // transforming doors / bridges (collision, nav)
     if (std::getenv("WFC_SESSIONTEST")) { runSessionTest(); return false; }          // online session match side (Remote / swaps)
     if (std::getenv("WFC_VOICEFRAMETEST")) { runVoiceFrameTest(); return false; }   // [Systems] voice framer + codec, synthetic, no device
+    if (std::getenv("WFC_UDPSESSIONTEST")) { runUdpSessionTest(); return false; }   // [Systems] the real online session on loopback UDP
     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
     if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
     if (std::getenv("WFC_BOTTEST")) { runBotTest(); return false; }                 // offline bots: TDM human + bots, then 7 v 8
@@ -857,6 +867,7 @@ Application::MatchExit Application::runMatch() {
         // Online load gate (ONLINE_MP_ARCHITECTURE 10.4): from this peer's map load until the start tick the World does not
         // step; camera, HUD and audio keep running. Offline / no session: never held.
         if (frontend_ && frontend_->flow().simHeld()) steps = 0;
+        if (netDriver_) { steps = 0; tickNetDriver(realDt); }   // online: the lockstep driver steps the World (Application_Net.cpp)
         float step = clock_.stepSeconds();
         static const bool asyncStep = game::World::asyncStepEnabled();
         static long matchSteps = -1;   // steps since the match went InProgress (WFC_SHOTMATCH)

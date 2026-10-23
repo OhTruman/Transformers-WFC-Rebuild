@@ -33,6 +33,19 @@ public:
     virtual bool poll(NetPacket& out) = 0;                              // non-blocking; drain until false
     virtual void service() = 0;                                         // resends / acks; call often (each loop iteration)
     virtual NetStats stats() const = 0;
+    // [Systems, online phase 2] Dynamic peers for the session layer (UdpSession): a lobby seats members as they join. The
+    // defaults keep the fixed-peer transports (phase 1 harness, loopback) as they were.
+    virtual bool addPeer(int /*seat*/, const std::string& /*hostPort*/) { return false; }   // (re)seat a peer at an address
+    virtual void removePeer(int /*seat*/) {}                                                 // forget it (its channel state too)
+    virtual void setSelf(int /*seat*/) {}                       // a joiner learns its seat from the host's JOIN_OK
+    virtual std::string peerAddress(int /*seat*/) const { return ""; }                      // "a.b.c.d:port" or ""
+    virtual std::string localAddress() const { return ""; }     // this machine's LAN IPv4:port as other PCs reach it
+    // Out-of-band datagrams to / from addresses that have no seat yet (JOIN before the host seats the member; LAN discovery):
+    // sent unframed (kind 3), delivered with the sender's address instead of a seat.
+    virtual bool sendTo(const std::string& /*hostPort*/, const uint8_t* /*p*/, size_t /*n*/) { return false; }
+    virtual bool pollStranger(std::string& /*fromHostPort*/, std::vector<uint8_t>& /*data*/) { return false; }
+    // A datagram exactly as given (no framing byte): the STUN query from this socket (its reply comes back via pollStranger).
+    virtual bool sendRaw(const std::string& /*hostPort*/, const uint8_t* /*p*/, size_t /*n*/) { return false; }
 };
 
 // UDP over one socket. bind = "host:port"; peers = seat -> "host:port" (where this process sends that seat's packets).

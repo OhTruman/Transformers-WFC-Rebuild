@@ -2,6 +2,7 @@
 // The flow itself (levels, lobbies, URLs, UI controller) is src/frontend/GameFlow; this file only owns the
 // process loop: frontend frames, loading the match world the flow launches, and releasing it on return.
 #include "core/Application.h"
+#include "net/NetMatchDriver.h"
 #include "core/FrameProfile.h"
 #include "core/FrontendSceneGL.h"
 #include "core/LoadYield.h"
@@ -586,7 +587,7 @@ bool Application::wantsFrontendBoot() {
                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
                           "WFC_VEHTEST", "WFC_FOVTEST", "WFC_SCREENTEST", "WFC_TILETEST", "WFC_MODETEST", "WFC_CHASSISTEST",
-                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
+                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
                           "WFC_SPAWNFILLTEST", "WFC_EXTRABODYTEST", "WFC_DOUBLEJUMPTEST",
                           "WFC_DETERMINISMTEST", "WFC_WEAPONAUDIT", "WFC_VEHFRAMETEST", "WFC_VEHICLEAUDIT", "WFC_QABOTTEST", "WFC_MARKERSTEST", "WFC_STUCKSPOT_BOT", "WFC_ASYNCSTEPTEST", "WFC_ENGAGETEST", "WFC_EVICTTEST", "WFC_BARRIERWALKTEST"})   // [integration 09c] Gameplay 26d / 26h / 26k harnesses
         if (std::getenv(v)) return false;
@@ -1358,6 +1359,7 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
         frontend::FlowTrace::emit("test.lifecycle", {{"goalScore", std::to_string(lifecycleGoal_)}, {"provenance", "TEST ONLY"}});
     }
     if (!world_.launchMatch(gl)) { LOG_WARN("FLOW Gameplay refused the match (%s %s)", gl.map.c_str(), gl.modeTag.c_str()); return false; }
+    if (gl.online && !gl.humans.empty()) startNetDriver(std::string(), gl.seed, (int)gl.humans.size(), gl.localSeat);   // [Systems] the lockstep driver (URL from the session)
     if (lifecycleGoal_ > 0) world_.addMatchOpponent("LifecycleOpponent", true);
     // [integration M06] Character selection -> Gameplay (GAMEPLAY_FRONTEND_HUD_CONTRACT.md 3): the local player's body
     // comes from the frontend's CustomTransformers selection; CheckReadySpawn waits for it [CONF].
@@ -1484,7 +1486,8 @@ void Application::routeMatchToFrontend(float dt) {
         cs.chassisId = fc.chassis[team == 1 ? 1 : 0].empty() ? fc.chassis[0] : fc.chassis[team == 1 ? 1 : 0];
         cs.customSlot = fc.name;
         fillFullSelection(cs, fc);
-        world_.submit([me, cs](game::World& w) { w.match().selectCharacter(me, cs); });
+        if (netDriver_) netDriver_->chooseCharacter(cs);   // online: a tick-stamped event, applied on every peer at the same tick
+        else world_.submit([me, cs](game::World& w) { w.match().selectCharacter(me, cs); });
         const bool repick = selectionSentSerial_ != 0;
         selectionSentSerial_ = flow.selectionSerial();
         const int f = (size_t)me < pf.faction.size() && pf.faction[(size_t)me] == 1 ? 1 : 0;   // [integration M08] resolved faction (FFA: Decepticon)

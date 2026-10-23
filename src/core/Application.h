@@ -12,6 +12,7 @@
 namespace platform { class IWindow; }
 namespace render { class IRenderer; }
 namespace frontend { class FrontendRuntime; struct MatchLaunch; }
+namespace net { class UdpSession; class NetMatchDriver; }
 namespace ui { class GfxPresenter; }
 
 namespace core {
@@ -35,6 +36,7 @@ private:
     void runNetMatch();        // [Systems] WFC_NET_SLOT: the headless match over the lockstep layer (Application_Net.cpp)
     static bool netMatchRequested();
     void runVoiceFrameTest();   // [Systems] WFC_VOICEFRAMETEST: the voice framer on synthetic input (no device)
+    void runUdpSessionTest();   // [Systems] WFC_UDPSESSIONTEST: two UdpSessions in this process over loopback UDP (host / join / lobby / start / load gate / leave)
     int exitCode_ = -1;        // [Systems] set by the headless / net runs (main returns it when init stops); -1 = the default
 public:
     int exitCode() const { return exitCode_; }
@@ -47,6 +49,12 @@ private:
     void applyBootProfile();              // WFC_BOOT_PROFILE=1: the direct boot applies the profile's display / graphics rows (harness)
     void shutdownFrontend();
     std::unique_ptr<frontend::FrontendRuntime> frontend_;
+    // [Systems, online phase 2] The real session (created at boot for the frontend, listening only after host() / join()) and the
+    // online match driver (from the online launch until the match ends; it steps the World instead of the fixed-step loop).
+    net::UdpSession* udpSession_ = nullptr;   // owned by the frontend flow (setSession)
+    std::unique_ptr<net::NetMatchDriver> netDriver_;
+    void startNetDriver(const std::string& launchUrl, uint32_t seed, int seats, int localSeat);
+    void tickNetDriver(double realDt);
     bool escWasDown_ = false;
     bool uiReleasedMouse_ = false;   // a focused movie (pause, end game) released mouse-look
     ui::GfxPresenter* presenter_ = nullptr;   // owned by frontend_

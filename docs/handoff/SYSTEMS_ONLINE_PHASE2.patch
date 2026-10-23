@@ -1,0 +1,2484 @@
+diff -ruN a/src/core/Application.cpp b/src/core/Application.cpp
+--- a/src/core/Application.cpp	2026-10-23 00:52:46.983095100 -0500
++++ b/src/core/Application.cpp	2026-10-23 00:52:47.000655300 -0500
+@@ -14,6 +14,8 @@
+ #include <thread>
+ #include "core/SimRandom.h"
+ #include "core/Application.h"
++#include "net/NetMatchDriver.h"
++#include "net/UdpSession.h"
+ #include "core/Config.h"
+ #include "core/Debug.h"
+ #include "core/Log.h"
+@@ -136,6 +138,13 @@
+     if (wantsFrontendBoot()) {
+         frontend_ = std::make_unique<frontend::FrontendRuntime>();
+         if (frontend_->init()) {
++            // [Systems, online phase 2] the real online session, unless a dev FakeSession is set (WFC_FAKESESSION) or WFC_NOSESSION=1.
++            if (!frontend_->flow().online() && !std::getenv("WFC_NOSESSION")) {
++                auto s = std::make_unique<net::UdpSession>();
++                udpSession_ = s.get();
++                frontend_->flow().setSession(std::move(s));
++                LOG_INFO("online: UdpSession set (LAN / direct IP / internet code; listening only after Host / Join)");
++            }
+             attachPresenter();
+             window_->setMouseCaptured(false);
+             mouseCaptured_ = false;
+@@ -232,6 +241,7 @@
+     if (std::getenv("WFC_TRANSACTTEST")) { runTransformingActorsTest(); return false; }   // transforming doors / bridges (collision, nav)
+     if (std::getenv("WFC_SESSIONTEST")) { runSessionTest(); return false; }          // online session match side (Remote / swaps)
+     if (std::getenv("WFC_VOICEFRAMETEST")) { runVoiceFrameTest(); return false; }   // [Systems] voice framer + codec, synthetic, no device
++    if (std::getenv("WFC_UDPSESSIONTEST")) { runUdpSessionTest(); return false; }   // [Systems] the real online session on loopback UDP
+     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
+     if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
+     if (std::getenv("WFC_BOTTEST")) { runBotTest(); return false; }                 // offline bots: TDM human + bots, then 7 v 8
+@@ -857,6 +867,7 @@
+         // Online load gate (ONLINE_MP_ARCHITECTURE 10.4): from this peer's map load until the start tick the World does not
+         // step; camera, HUD and audio keep running. Offline / no session: never held.
+         if (frontend_ && frontend_->flow().simHeld()) steps = 0;
++        if (netDriver_) { steps = 0; tickNetDriver(realDt); }   // online: the lockstep driver steps the World (Application_Net.cpp)
+         float step = clock_.stepSeconds();
+         static const bool asyncStep = game::World::asyncStepEnabled();
+         static long matchSteps = -1;   // steps since the match went InProgress (WFC_SHOTMATCH)
+diff -ruN a/src/core/Application.h b/src/core/Application.h
+--- a/src/core/Application.h	2026-10-23 00:52:47.061864900 -0500
++++ b/src/core/Application.h	2026-10-23 00:52:47.077920300 -0500
+@@ -12,6 +12,7 @@
+ namespace platform { class IWindow; }
+ namespace render { class IRenderer; }
+ namespace frontend { class FrontendRuntime; struct MatchLaunch; }
++namespace net { class UdpSession; class NetMatchDriver; }
+ namespace ui { class GfxPresenter; }
+ 
+ namespace core {
+@@ -35,6 +36,7 @@
+     void runNetMatch();        // [Systems] WFC_NET_SLOT: the headless match over the lockstep layer (Application_Net.cpp)
+     static bool netMatchRequested();
+     void runVoiceFrameTest();   // [Systems] WFC_VOICEFRAMETEST: the voice framer on synthetic input (no device)
++    void runUdpSessionTest();   // [Systems] WFC_UDPSESSIONTEST: two UdpSessions in this process over loopback UDP (host / join / lobby / start / load gate / leave)
+     int exitCode_ = -1;        // [Systems] set by the headless / net runs (main returns it when init stops); -1 = the default
+ public:
+     int exitCode() const { return exitCode_; }
+@@ -47,6 +49,12 @@
+     void applyBootProfile();              // WFC_BOOT_PROFILE=1: the direct boot applies the profile's display / graphics rows (harness)
+     void shutdownFrontend();
+     std::unique_ptr<frontend::FrontendRuntime> frontend_;
++    // [Systems, online phase 2] The real session (created at boot for the frontend, listening only after host() / join()) and the
++    // online match driver (from the online launch until the match ends; it steps the World instead of the fixed-step loop).
++    net::UdpSession* udpSession_ = nullptr;   // owned by the frontend flow (setSession)
++    std::unique_ptr<net::NetMatchDriver> netDriver_;
++    void startNetDriver(const std::string& launchUrl, uint32_t seed, int seats, int localSeat);
++    void tickNetDriver(double realDt);
+     bool escWasDown_ = false;
+     bool uiReleasedMouse_ = false;   // a focused movie (pause, end game) released mouse-look
+     ui::GfxPresenter* presenter_ = nullptr;   // owned by frontend_
+diff -ruN a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+--- a/src/core/Application_Frontend.cpp	2026-10-23 00:52:47.144147300 -0500
++++ b/src/core/Application_Frontend.cpp	2026-10-23 00:52:47.160703800 -0500
+@@ -2,6 +2,7 @@
+ // The flow itself (levels, lobbies, URLs, UI controller) is src/frontend/GameFlow; this file only owns the
+ // process loop: frontend frames, loading the match world the flow launches, and releasing it on return.
+ #include "core/Application.h"
++#include "net/NetMatchDriver.h"
+ #include "core/FrameProfile.h"
+ #include "core/FrontendSceneGL.h"
+ #include "core/LoadYield.h"
+@@ -586,7 +587,7 @@
+                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
+                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
+                           "WFC_VEHTEST", "WFC_FOVTEST", "WFC_SCREENTEST", "WFC_TILETEST", "WFC_MODETEST", "WFC_CHASSISTEST",
+-                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
++                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
+                           "WFC_SPAWNFILLTEST", "WFC_EXTRABODYTEST", "WFC_DOUBLEJUMPTEST",
+                           "WFC_DETERMINISMTEST", "WFC_WEAPONAUDIT", "WFC_VEHFRAMETEST", "WFC_VEHICLEAUDIT", "WFC_QABOTTEST", "WFC_MARKERSTEST", "WFC_STUCKSPOT_BOT", "WFC_ASYNCSTEPTEST", "WFC_ENGAGETEST", "WFC_EVICTTEST", "WFC_BARRIERWALKTEST"})   // [integration 09c] Gameplay 26d / 26h / 26k harnesses
+         if (std::getenv(v)) return false;
+@@ -1358,6 +1359,7 @@
+         frontend::FlowTrace::emit("test.lifecycle", {{"goalScore", std::to_string(lifecycleGoal_)}, {"provenance", "TEST ONLY"}});
+     }
+     if (!world_.launchMatch(gl)) { LOG_WARN("FLOW Gameplay refused the match (%s %s)", gl.map.c_str(), gl.modeTag.c_str()); return false; }
++    if (gl.online && !gl.humans.empty()) startNetDriver(std::string(), gl.seed, (int)gl.humans.size(), gl.localSeat);   // [Systems] the lockstep driver (URL from the session)
+     if (lifecycleGoal_ > 0) world_.addMatchOpponent("LifecycleOpponent", true);
+     // [integration M06] Character selection -> Gameplay (GAMEPLAY_FRONTEND_HUD_CONTRACT.md 3): the local player's body
+     // comes from the frontend's CustomTransformers selection; CheckReadySpawn waits for it [CONF].
+@@ -1484,7 +1486,8 @@
+         cs.chassisId = fc.chassis[team == 1 ? 1 : 0].empty() ? fc.chassis[0] : fc.chassis[team == 1 ? 1 : 0];
+         cs.customSlot = fc.name;
+         fillFullSelection(cs, fc);
+-        world_.submit([me, cs](game::World& w) { w.match().selectCharacter(me, cs); });
++        if (netDriver_) netDriver_->chooseCharacter(cs);   // online: a tick-stamped event, applied on every peer at the same tick
++        else world_.submit([me, cs](game::World& w) { w.match().selectCharacter(me, cs); });
+         const bool repick = selectionSentSerial_ != 0;
+         selectionSentSerial_ = flow.selectionSerial();
+         const int f = (size_t)me < pf.faction.size() && pf.faction[(size_t)me] == 1 ? 1 : 0;   // [integration M08] resolved faction (FFA: Decepticon)
+diff -ruN a/src/core/Application_Net.cpp b/src/core/Application_Net.cpp
+--- a/src/core/Application_Net.cpp	2026-10-23 00:52:47.224421300 -0500
++++ b/src/core/Application_Net.cpp	2026-10-23 00:52:47.239974900 -0500
+@@ -22,16 +22,22 @@
+ #include "game/World.h"
+ #include "net/Lockstep.h"
+ #include "net/NetTransport.h"
++#include "net/UdpSession.h"
++#include "net/NetMatchDriver.h"
++#include "frontend/FrontendRuntime.h"
+ #include "net/VoiceCodec.h"
+ #include "net/VoiceFrames.h"
+ #include "net/VoiceSession.h"
+ 
+ #include <algorithm>
++#include <cctype>
+ #include <chrono>
+ #include <cmath>
+ #include <cstdlib>
+ #include <cstring>
++#include <functional>
+ #include <thread>
++#include <type_traits>
+ #include <vector>
+ 
+ namespace {
+@@ -341,4 +347,250 @@
+     exitCode_ = fails ? 1 : 0;
+ }
+ 
++// Gameplay's World::queueSeatSelection(seat, sel, atTick) (the in-match Choose Character applied at the same tick on every peer) when
++// the tree has it; before that merge, the immediate select (NOT tick-synchronised: a warning, the match may desync on a repick).
++template <class W, class = void> struct HasQueueSeatSelection : std::false_type {};
++template <class W> struct HasQueueSeatSelection<W, std::void_t<decltype(std::declval<W&>().queueSeatSelection(0, std::declval<const game::CharacterSelection&>(), 0u))>> : std::true_type {};
++template <class W> void queueSelection(W& w, int seat, const game::CharacterSelection& sel, uint32_t atTick) {
++    if constexpr (HasQueueSeatSelection<W>::value) w.queueSeatSelection(seat, sel, atTick);
++    else {
++        LOG_WARN("online: World::queueSeatSelection missing in this build - seat %d's pick applied at once (tick %u), not tick-synchronised", seat, atTick);
++        w.match().selectCharacter(seat, sel);
++    }
++}
++
++// [Systems, online phase 2] The online match from the frontend: the lockstep driver over the session's match view (match player i =
++// seat i on every peer), started right after World::launchMatch of an online launch. The launch hash is phase 1's: the host's
++// launch URL + seed + seats + this build, so a peer on another build / URL fails at HELLO (JoinFailed{Version} via the session).
++void Application::startNetDriver(const std::string& launchUrl, uint32_t seed, int seats, int localSeat) {
++    netDriver_.reset();
++    if (!udpSession_ || !udpSession_->matchReady() || !udpSession_->matchTransport()) {
++        LOG_WARN("online: an online launch without a ready session roster - the match runs without the lockstep driver");
++        return;
++    }
++    if (udpSession_->matchSeats() != seats || udpSession_->matchSelf() != localSeat) {
++        LOG_WARN("online: the launch has %d seats / local %d but the session roster %d / %d - no driver", seats, localSeat,
++                 udpSession_->matchSeats(), udpSession_->matchSelf());
++        return;
++    }
++    const std::string url = udpSession_->launchUrl().empty() ? launchUrl : udpSession_->launchUrl();
++    uint64_t lh = 1469598103934665603ULL;
++    lh = fnv(lh, url.data(), url.size()); lh = fnv(lh, &seed, sizeof seed); lh = fnv(lh, &seats, sizeof seats);
++    const char* build = __DATE__ " " __TIME__;
++    lh = fnv(lh, build, std::strlen(build));
++    net::NetMatchDriver::Config c;
++    c.seats = seats; c.self = localSeat; c.launchHash = lh; c.delay = 0; c.hashEvery = 60;
++    if (const char* rp = std::getenv("WFC_NET_RECORD")) c.recordPath = rp;
++    c.voice = udpSession_->voiceSettings().mode != frontend::SessionVoiceMode::Off;
++    c.step = [this](float dt) {
++        world_.tick(dt);
++        gameMode_.tick(world_, dt);
++        if (frontend_) { driveLifecycleTest(dt); routeMatchToFrontend(dt); }
++    };
++    c.onSelection = [this](int seat, const game::CharacterSelection& sel, uint32_t atTick) { queueSelection(world_, seat, sel, atTick); };
++    netDriver_ = std::make_unique<net::NetMatchDriver>(world_, *udpSession_->matchTransport(), audio_, c);
++    LOG_INFO("online: the lockstep driver runs the match (seat %d of %d, launch hash %016llx)", localSeat, seats, (unsigned long long)lh);
++}
++
++void Application::tickNetDriver(double realDt) {
++    net::NetMatchDriver& d = *netDriver_;
++    d.setHeld(frontend_ && frontend_->flow().simHeld());
++    if (udpSession_) {   // push-to-talk / open mic from the session's voice settings
++        const frontend::SessionVoiceSettings& v = udpSession_->voiceSettings();
++        d.setTalking(v.mode == frontend::SessionVoiceMode::OpenMic || (v.mode == frontend::SessionVoiceMode::PushToTalk && udpSession_->pushToTalk()));
++    }
++    d.frame(realDt);
++    const bool over = !world_.matchActive();
++    if (d.finished() || over) {
++        const int st = d.status();
++        if (st != 0 && udpSession_) udpSession_->matchFailed(st, world_.simTick());
++        netDriver_.reset();
++        if (udpSession_) udpSession_->matchEnded();
++        LOG_INFO("online: the lockstep driver ended (status %d%s)", st, over ? ", the match ended" : "");
++    }
++}
++
++// WFC_UDPSESSIONTEST (no device, no window, loopback only - 127.0.0.1 binds, so no firewall prompt): two net::UdpSessions in this
++// process. Host -> HostOpened; join by address -> JoinProgress, Joined (member) + MemberJoined (host), the member's info ->
++// MemberJoined (update); publishLobby -> LobbyState; setLaunch + requestStart -> CountdownStarted (launch record) and the match
++// seats; a lockstep-type packet both ways through matchTransport() in match seats; reportLoaded on both -> PeerLoaded / AllLoaded,
++// simHeld; the member leaves -> PeerDropped{Left} on the host. Then a bad code -> JoinFailed{Invalid}, a dead address ->
++// JoinFailed{Timeout} (3 s). One SUMMARY line.
++void Application::runUdpSessionTest() {
++    using frontend::SessionEvent;
++    using T = SessionEvent::Type;
++    int fails = 0;
++    auto check = [&fails](bool ok, const char* what) { LOG_INFO("UDPSESSIONTEST %s: %s", ok ? "PASS" : "FAIL", what); if (!ok) ++fails; };
++    net::UdpSession::Options o;
++    o.bindIp = "127.0.0.1"; o.hostPort = 14100; o.joinTimeoutS = 3.0;
++    o.internet = false;   // no router (UPnP) / internet (STUN) contact from a test
++    {   // the internet code: public + LAN endpoint, both back out, LAN first; typo / prefix handling
++        const std::string code = net::UdpSession::internetCode("203.0.113.7:14000", "192.168.1.23:14000");
++        std::vector<std::string> eps;
++        check(code.size() == 23 && net::UdpSession::decodeTargets(code, eps) && eps.size() == 2 && eps[0] == "192.168.1.23:14000" &&
++                  eps[1] == "203.0.113.7:14000", "internet code round trip (LAN endpoint first)");
++        std::vector<std::string> e2;
++        std::string lower;
++        for (char ch : code) lower += (char)std::tolower((unsigned char)ch);
++        check(net::UdpSession::decodeTargets("WFC-" + lower, e2) && e2 == eps, "internet code: lower case + WFC- prefix accepted");
++        LOG_INFO("UDPSESSIONTEST internet code %s", code.c_str());
++    }
++    net::UdpSession hostS(o), memS(o);
++    const auto t0 = std::chrono::steady_clock::now();
++    auto now = [&t0] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
++    std::vector<SessionEvent> hostEv, memEv;
++    auto pump = [&](double forS, const std::function<bool()>& until) {
++        const double end = now() + forS;
++        while (now() < end) {
++            for (auto& e : hostS.poll(now())) { LOG_INFO("UDPSESSIONTEST host  <- %s", frontend::sessionEventName(e.type)); hostEv.push_back(e); }
++            for (auto& e : memS.poll(now())) { LOG_INFO("UDPSESSIONTEST member <- %s", frontend::sessionEventName(e.type)); memEv.push_back(e); }
++            if (until && until()) return true;
++            std::this_thread::sleep_for(std::chrono::milliseconds(2));
++        }
++        return false;
++    };
++    auto has = [](const std::vector<SessionEvent>& v, T t) { return std::any_of(v.begin(), v.end(), [t](const SessionEvent& e) { return e.type == t; }); };
++    auto find = [](const std::vector<SessionEvent>& v, T t) -> const SessionEvent* {
++        for (auto it = v.rbegin(); it != v.rend(); ++it) if (it->type == t) return &*it;
++        return nullptr;
++    };
++
++    frontend::SessionMemberInfo hi; hi.displayName = "HostPC"; hostS.setMemberInfo(hi);
++    frontend::SessionMemberInfo mi; mi.displayName = "MemberPC"; memS.setMemberInfo(mi);
++    hostS.host(frontend::SessionHostSettings{});
++    pump(1.0, [&] { return has(hostEv, T::HostOpened); });
++    const SessionEvent* ho = find(hostEv, T::HostOpened);
++    check(ho && !ho->joinCode.empty(), "HostOpened with a LAN code");
++    if (ho) {
++        std::string back;
++        check(net::UdpSession::decodeTarget(ho->joinCode, back) && back == ho->address, "the LAN code decodes to the host address");
++        LOG_INFO("UDPSESSIONTEST host address %s code %s", ho->address.c_str(), ho->joinCode.c_str());
++    }
++    memS.join("127.0.0.1:14100");
++    pump(5.0, [&] { return has(memEv, T::Joined) && has(hostEv, T::MemberJoined); });
++    check(has(memEv, T::JoinProgress), "member: JoinProgress");
++    check(has(memEv, T::Joined), "member: Joined");
++    const SessionEvent* mj = find(hostEv, T::MemberJoined);
++    check(mj && mj->member == memS.selfId() && mj->info.displayName == "MemberPC", "host: MemberJoined with the member's id and name");
++    const SessionEvent* jd = find(memEv, T::Joined);
++    check(jd && jd->member == memS.selfId(), "Joined carries the member's own id");
++    mi.hasCharacter = true; mi.characterSlot = "Soldier"; memS.setMemberInfo(mi);
++    hostEv.clear();
++    pump(3.0, [&] { const SessionEvent* e = find(hostEv, T::MemberJoined); return e && e->info.hasCharacter; });
++    { const SessionEvent* e = find(hostEv, T::MemberJoined); check(e && e->info.characterSlot == "Soldier", "host: the member's updated info (MemberJoined again)"); }
++
++    frontend::SessionLobby lobby;
++    lobby.gameModeTag = "TDM"; lobby.mapId = 3; lobby.settings["PointsToWin"] = "1000";
++    frontend::SessionSlot s0; s0.kind = frontend::SessionSlot::Kind::Human; s0.member = hostS.selfId(); s0.team = 0;
++    frontend::SessionSlot s1; s1.kind = frontend::SessionSlot::Kind::Human; s1.member = memS.selfId(); s1.team = 1;
++    frontend::SessionSlot b; b.kind = frontend::SessionSlot::Kind::Bot; b.team = 0;
++    lobby.slots = {s0, b, s1};
++    hostS.publishLobby(lobby);
++    pump(3.0, [&] { return has(memEv, T::LobbyState); });
++    { const SessionEvent* e = find(memEv, T::LobbyState);
++      check(e && e->lobby.slots.size() == 3 && e->lobby.settings.count("PointsToWin") && e->lobby.mapId == 3, "member: LobbyState with the slots and settings"); }
++
++    hostS.setLaunch("MP_IAC_Streets?GameModeTag=TDM?PointsToWin=1000", 77u, lobby);
++    hostS.requestStart();
++    pump(3.0, [&] { return has(memEv, T::CountdownStarted); });
++    { const SessionEvent* e = find(memEv, T::CountdownStarted);
++      check(e && e->seed == 77u && e->launchUrl.find("MP_IAC_Streets") == 0 && e->lobby.slots.size() == 3, "member: CountdownStarted with the launch record"); }
++    check(hostS.matchSeats() == 2 && hostS.matchSelf() == 0 && memS.matchSeats() == 2 && memS.matchSelf() == 1, "match seats: host 0, member 1 (bots excluded)");
++    check(memS.matchMember(0) == hostS.selfId() && hostS.matchMember(1) == memS.selfId(), "match seat -> member id on both");
++    bool gotM = false, gotH = false;
++    if (net::INetTransport* hv = hostS.matchTransport()) { const uint8_t pkt[3] = {1, 9, 9}; hv->sendUnreliable(1, pkt, 3); }
++    if (net::INetTransport* mv = memS.matchTransport()) { const uint8_t pkt[3] = {3, 7, 7}; mv->sendReliable(0, pkt, 3); }
++    pump(3.0, [&] {
++        net::NetPacket p;
++        if (net::INetTransport* mv = memS.matchTransport()) while (mv->poll(p)) gotM |= p.from == 0 && p.data.size() == 3 && p.data[0] == 1;
++        if (net::INetTransport* hv = hostS.matchTransport()) while (hv->poll(p)) gotH |= p.from == 1 && p.data.size() == 3 && p.data[0] == 3;
++        return gotM && gotH;
++    });
++    check(gotM && gotH, "lockstep packets cross the match view both ways, in match seats");
++
++    memS.reportLoaded(1, 2);
++    check(memS.simHeld(), "member: simHeld after reportLoaded");
++    pump(3.0, [&] { return has(hostEv, T::PeerLoaded); });
++    hostS.reportLoaded(1, 2);
++    pump(3.0, [&] { return has(memEv, T::AllLoaded) && has(hostEv, T::AllLoaded); });
++    check(has(hostEv, T::AllLoaded) && has(memEv, T::AllLoaded), "AllLoaded on both");
++    check(!hostS.simHeld() && !memS.simHeld(), "simHeld released at AllLoaded");
++    check(has(memEv, T::PeerLoaded), "member: PeerLoaded (the host)");
++
++    memS.leave();
++    pump(3.0, [&] { return has(hostEv, T::PeerDropped); });
++    { const SessionEvent* e = find(hostEv, T::PeerDropped);
++      check(e && e->member == memS.selfId() && e->leaveReason == frontend::SessionLeaveReason::Left, "host: PeerDropped{Left} in the match"); }
++    hostS.leave();
++
++    {   // LAN discovery: a public host answers findGames (discovery aimed at 127.0.0.1 here, the broadcast address in the game)
++        net::UdpSession::Options lo = o; lo.discoverAddr = "127.0.0.1"; lo.hostPort = 14100;
++        net::UdpSession pub(lo), browser(lo);
++        std::vector<SessionEvent> pe, be;
++        frontend::SessionMemberInfo pi; pi.displayName = "PublicHost"; pub.setMemberInfo(pi);
++        frontend::SessionHostSettings hs; hs.isPublic = true; hs.playlist = "TeamDeathmatch"; hs.gameModeTag = "TDM";
++        pub.host(hs);
++        const double end0 = now() + 1.0;
++        while (now() < end0) { for (auto& e : pub.poll(now())) pe.push_back(e); std::this_thread::sleep_for(std::chrono::milliseconds(2)); }
++        frontend::SessionGameQuery q; q.playlist = "TeamDeathmatch";
++        browser.findGames(q);
++        const double end1 = now() + 4.0;
++        while (now() < end1 && !has(be, T::GameList)) {
++            for (auto& e : pub.poll(now())) pe.push_back(e);
++            for (auto& e : browser.poll(now())) be.push_back(e);
++            std::this_thread::sleep_for(std::chrono::milliseconds(2));
++        }
++        const SessionEvent* gl = find(be, T::GameList);
++        check(gl && gl->games.size() == 1 && gl->games[0].lan && gl->games[0].hostName == "PublicHost" && gl->games[0].pingMs >= 0 && !gl->serviceReachable,
++              "LAN discovery: findGames lists the public LAN host with a ping (no service)");
++        pub.leave(); browser.leave();
++    }
++    if (const char* svc = std::getenv("WFC_UDPSESSIONTEST_SERVICE")) {   // the lobby service (tools/net/lobby_service.py) on loopback
++        net::UdpSession::Options so = o; so.discoverAddr = "127.0.0.1"; so.hostPort = 14120;
++        net::UdpSession h(so), j(so), q2(so);
++        for (net::UdpSession* s : {&h, &j, &q2}) s->setLobbyService(svc);
++        std::vector<SessionEvent> he, je, qe;
++        auto run = [&](double forS, const std::function<bool()>& until) {
++            const double end = now() + forS;
++            while (now() < end) {
++                for (auto& e : h.poll(now())) he.push_back(e);
++                for (auto& e : j.poll(now())) je.push_back(e);
++                for (auto& e : q2.poll(now())) qe.push_back(e);
++                if (until && until()) return;
++                std::this_thread::sleep_for(std::chrono::milliseconds(2));
++            }
++        };
++        run(0.5, nullptr);   // the service address resolves
++        frontend::SessionHostSettings hs; hs.isPublic = true; hs.playlist = "TeamDeathmatch"; hs.gameModeTag = "TDM";
++        frontend::SessionMemberInfo hi2; hi2.displayName = "ServiceHost"; h.setMemberInfo(hi2);
++        h.host(hs);
++        run(4.0, [&] { return has(he, T::HostOpened); });
++        const SessionEvent* ho2 = find(he, T::HostOpened);
++        std::string letters;
++        if (ho2) for (char ch : ho2->joinCode) if (std::isalpha((unsigned char)ch)) letters += ch;
++        check(ho2 && ho2->joinCode.size() == 6 && letters.size() == 6, "service: HostOpened carries the service's 6-letter code");
++        if (ho2) LOG_INFO("UDPSESSIONTEST service code %s", ho2->joinCode.c_str());
++        if (ho2) j.join(ho2->joinCode);
++        run(5.0, [&] { return has(je, T::Joined); });
++        check(has(je, T::Joined), "service: join by the 6-letter code -> Joined");
++        q2.quickMatch("TeamDeathmatch");
++        run(8.0, [&] { return has(qe, T::Joined) || has(qe, T::HostOpened); });
++        check(has(qe, T::SearchProgress), "quick match: SearchProgress");
++        check(has(qe, T::Joined) && !has(qe, T::HostOpened), "quick match: joined the public lobby by ping (did not host)");
++        for (net::UdpSession* s : {&q2, &j, &h}) s->leave();
++    }
++
++    memEv.clear();
++    memS.join("ZZZZZ-ZZZZZ");   // the 2 spare high bits set: rejected
++    pump(0.5, [&] { return has(memEv, T::JoinFailed); });
++    { const SessionEvent* e = find(memEv, T::JoinFailed); check(e && e->joinFailure == frontend::SessionJoinFailure::Invalid, "a bad code -> JoinFailed{Invalid}"); }
++    memEv.clear();
++    memS.join("127.0.0.1:14199");   // nobody there
++    pump(5.0, [&] { return has(memEv, T::JoinFailed); });
++    { const SessionEvent* e = find(memEv, T::JoinFailed); check(e && e->joinFailure == frontend::SessionJoinFailure::Timeout, "a dead address -> JoinFailed{Timeout}"); }
++    memS.leave();
++    LOG_INFO("UDPSESSIONTEST SUMMARY: %s (%d failed)", fails ? "FAIL" : "PASS", fails);
++    exitCode_ = fails ? 1 : 0;
++}
++
+ }  // namespace core
+diff -ruN a/src/net/Lockstep.cpp b/src/net/Lockstep.cpp
+--- a/src/net/Lockstep.cpp	2026-10-23 00:52:47.300682900 -0500
++++ b/src/net/Lockstep.cpp	2026-10-23 00:52:47.315735000 -0500
+@@ -22,7 +22,7 @@
+ uint32_t get32(const uint8_t* p) { return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24); }
+ uint64_t get64(const uint8_t* p) { return (uint64_t)get32(p) | ((uint64_t)get32(p + 4) << 32); }
+ 
+-enum : uint8_t { kCmds = 1, kHello = 2, kHash = 3, kBye = 4, kPing = 5, kPong = 6, kVoice = 7 };
++enum : uint8_t { kCmds = 1, kHello = 2, kHash = 3, kBye = 4, kPing = 5, kPong = 6, kVoice = 7, kEvent = 8 };
+ constexpr uint32_t kRedundancy = 3;   // ticks per regular CMDS packet: the newest + 2 before it (covers isolated losses)
+ 
+ }  // namespace
+@@ -67,6 +67,7 @@
+     cmds_.resize((size_t)cfg_.seats);
+     contiguous_.assign((size_t)cfg_.seats, 0);
+     peerAck_.assign((size_t)cfg_.seats, 0);
++    eventsReceived_.assign((size_t)cfg_.seats, 0); eventsAnnounced_.resize((size_t)cfg_.seats);
+     leadCur_.assign((size_t)cfg_.seats, kNoLead); leadPrev_.assign((size_t)cfg_.seats, kNoLead); leadReported_.assign((size_t)cfg_.seats, kNoLead);
+     hello_.assign((size_t)cfg_.seats, 0);
+     hello_[(size_t)cfg_.self] = 1;
+@@ -137,14 +138,34 @@
+             WireCommand w;
+             std::copy(d.begin() + 11 + (long)(i * kWireCommandBytes), d.begin() + 11 + (long)((i + 1) * kWireCommandBytes), w.begin());
+             const uint32_t tick = first + (uint32_t)i;
+-            // a first arrival (resends keep the first copy) once stepping: lead 0 = the step was waiting for it (a stall)
++            // a first arrival (resends keep the first copy) once stepping. The command the step is waiting for (tick == nextStep_)
++            // reports how late it is: minus the ticks this peer has stalled on it, so the sender raises D by the whole shortfall at once
++            // (lead 0 alone hid it: D then crept up one tick per report while the match stalled).
+             if (m.emplace(tick, w).second && tick >= nextStep_ && nextStep_ > 1) {
+-                const int lead = (int)std::min<int64_t>(kNoLead - 1, (int64_t)tick - (int64_t)nextStep_);
+-                leadCur_[(size_t)seat] = std::min(leadCur_[(size_t)seat], lead);
++                int lead = (int)std::min<int64_t>(kNoLead - 1, (int64_t)tick - (int64_t)nextStep_);
++                if (lead == 0 && stallMs_ > 0.0) lead = -(int)std::ceil(stallMs_ / (1000.0 / 60.0));
++                leadCur_[(size_t)seat] = std::min(leadCur_[(size_t)seat], std::max(lead, -100));
+             }
+         }
+         uint32_t& c = contiguous_[(size_t)seat];
+         while (m.count(c + 1)) ++c;
++        if (count > 0 && d.size() >= 11 + count * kWireCommandBytes + 2) {   // the event announcement (absent from phase 1 peers)
++            const size_t at = 11 + count * kWireCommandBytes;
++            const uint32_t n = (uint32_t)d[at] | ((uint32_t)d[at + 1] << 8);
++            uint32_t& a = eventsAnnounced_[(size_t)seat][first + (uint32_t)count - 1];
++            a = std::max(a, n);
++        }
++        break;
++    }
++    case kEvent: {
++        if (d.size() < 9) return;
++        Event e;
++        e.seat = seat; e.atTick = get32(&d[2]); e.kind = d[6];
++        const size_t len = (size_t)d[7] | ((size_t)d[8] << 8);
++        if (d.size() < 9 + len) return;
++        e.payload.assign(d.begin() + 9, d.begin() + 9 + (long)len);
++        ++eventsReceived_[(size_t)seat];
++        eventQueue_.push_back(std::move(e));
+         break;
+     }
+     case kHello: {
+@@ -216,15 +237,16 @@
+     const float tickMs = 1000.0f / 60.0f;
+     int want = std::max(2, std::min(15, (int)std::ceil((srtt_ * 0.5f + 4.0f * rttvar_ + 5.0f) / tickMs)));
+     // A peer that saw our commands arrive with lead < 1 (late / just in time: the path to it is slower than srtt / 2) needs D up by
+-    // the shortfall; the 1 / s fall waits until every reporting peer sees a lead >= 2.
++    // the shortfall (and a 2-tick margin); the 1 / s fall waits until every reporting peer sees a lead >= 4.
+     int minLead = kNoLead;
+     for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) minLead = std::min(minLead, leadReported_[(size_t)s]);
+-    if (minLead < 1) want = std::max(want, std::min(15, delay_ + (1 - minLead)));
++    // hysteresis: keep a 2-tick margin (jitter ~10 ms is under a tick, a lead of 0 / 1 stalls on it); fall only at lead >= 4
++    if (minLead < 2) want = std::max(want, std::min(15, delay_ + (2 - minLead)));
+     if (want > delay_) {
+         LOG_INFO("NET input delay %d -> %d (rtt %.1f ms, var %.1f, peer lead %d)", delay_, want, srtt_, rttvar_, minLead == kNoLead ? -1 : minLead);
+         delay_ = want; lastDelayDropMs_ = nowMs();
+         for (int& l : leadReported_) l = kNoLead;   // re-measured at the new D
+-    } else if (want < delay_ && minLead >= 2 && nowMs() - lastDelayDropMs_ >= 1000.0) {
++    } else if (want < delay_ && minLead >= 4 && nowMs() - lastDelayDropMs_ >= 1000.0) {
+         --delay_; lastDelayDropMs_ = nowMs(); LOG_INFO("NET input delay -> %d (rtt %.1f ms, peer lead %d)", delay_, srtt_, minLead == kNoLead ? -1 : minLead);
+     }
+ }
+@@ -250,6 +272,11 @@
+         ++count;
+     }
+     b[countAt] = count;
++    if (count > 0) {   // [phase 2] the event announcement: my events stamped at or before the packet's newest tick (u16 trailer)
++        const uint32_t last = first + count - 1;
++        const size_t n = (size_t)(std::upper_bound(ownEventTicks_.begin(), ownEventTicks_.end(), last) - ownEventTicks_.begin());
++        b.push_back((uint8_t)n); b.push_back((uint8_t)(n >> 8));
++    }
+     t_.sendUnreliable(peer, b.data(), b.size());
+     lastSendMs_ = nowMs();
+ }
+@@ -270,6 +297,33 @@
+ 
+ bool Lockstep::haveAll(uint32_t tick) const {
+     for (const auto& m : cmds_) if (!m.count(tick)) return false;
++    for (int s = 0; s < cfg_.seats; ++s) {   // every event stamped for this tick (or earlier) arrived
++        if (s == cfg_.self) continue;
++        const auto& a = eventsAnnounced_[(size_t)s];
++        auto it = a.lower_bound(tick);   // the announcement of a packet that covered this tick
++        if (it != a.end() && eventsReceived_[(size_t)s] < it->second) return false;
++    }
++    return true;
++}
++
++uint32_t Lockstep::submitEvent(uint8_t kind, const std::vector<uint8_t>& payload) {
++    const uint32_t at = localHigh_ + 1;   // the next command this seat submits: every peer gets the event before it can step it
++    ownEventTicks_.push_back(at);
++    std::vector<uint8_t> b;
++    put8(b, kEvent); put8(b, (uint8_t)cfg_.self); put32(b, at); put8(b, kind);
++    const size_t len = std::min<size_t>(payload.size(), 65535);
++    put8(b, (uint8_t)len); put8(b, (uint8_t)(len >> 8));
++    b.insert(b.end(), payload.begin(), payload.begin() + (long)len);
++    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) t_.sendReliable(s, b.data(), b.size());
++    Event e; e.seat = cfg_.self; e.atTick = at; e.kind = kind; e.payload.assign(payload.begin(), payload.begin() + (long)len);
++    eventQueue_.push_back(std::move(e));
++    return at;
++}
++
++bool Lockstep::pollEvent(Event& out) {
++    if (eventQueue_.empty()) return false;
++    out = std::move(eventQueue_.front());
++    eventQueue_.pop_front();
+     return true;
+ }
+ 
+@@ -343,6 +397,7 @@
+ 
+ void Lockstep::forget(uint32_t belowTick) {
+     for (auto& m : cmds_) while (!m.empty() && m.begin()->first < belowTick) m.erase(m.begin());
++    for (auto& a : eventsAnnounced_) while (!a.empty() && a.begin()->first < belowTick) a.erase(a.begin());
+ }
+ 
+ void Lockstep::sendVoice(const uint8_t* p, size_t n) {
+diff -ruN a/src/net/Lockstep.h b/src/net/Lockstep.h
+--- a/src/net/Lockstep.h	2026-10-23 00:52:47.373432600 -0500
++++ b/src/net/Lockstep.h	2026-10-23 00:52:47.388484500 -0500
+@@ -28,6 +28,7 @@
+ #include <map>
+ #include <string>
+ #include <vector>
++#include <deque>
+ 
+ namespace game { struct RemoteCommand; }
+ 
+@@ -72,6 +73,14 @@
+     void setVoiceAudience(std::function<bool(int, int, uint8_t)> f) { voiceAudience_ = std::move(f); }
+     long voiceRelayed() const { return voiceRelayed_; }
+     uint32_t endTick() const { return endTick_; }   // a peer finished the run at this tick (0 = none)
++    // [online phase 2] Tick-stamped reliable events (ONLINE_PHASE2_SPLIT.md 3: Choose Character): a second per-seat ordered stream.
++    // submitEvent stamps the next local command tick (localHigh + 1) and sends it to every peer (reliable). Each CMDS packet carries
++    // the sender's count of events stamped at or before its newest tick, and haveAll(T) also waits until that many of the seat's
++    // events arrived - so no peer steps a tick without the events stamped for it (unreliable commands may overtake the reliable
++    // event). pollEvent returns every seat's events (this seat's too) in arrival order; the caller applies them at atTick.
++    struct Event { int seat = -1; uint32_t atTick = 0; uint8_t kind = 0; std::vector<uint8_t> payload; };
++    uint32_t submitEvent(uint8_t kind, const std::vector<uint8_t>& payload);
++    bool pollEvent(Event& out);
+     Status status() const { return status_; }
+     const std::string& statusText() const { return statusText_; }
+     uint32_t localHigh() const { return localHigh_; }
+@@ -85,6 +94,10 @@
+     std::vector<double> lastFullMs_;          // per peer: the last full-window send
+     std::map<uint32_t, double> producedMs_;   // this seat's ticks -> when first sent (ack-overdue test)
+     void fail(Status s, const std::string& why);
++    std::vector<uint32_t> ownEventTicks_;                  // this seat's events, their atTick (ascending)
++    std::vector<uint32_t> eventsReceived_;                 // per seat: events arrived
++    std::vector<std::map<uint32_t, uint32_t>> eventsAnnounced_;   // per seat: newest tick of a CMDS packet -> its event count
++    std::deque<Event> eventQueue_;
+     INetTransport& t_;
+     Config cfg_;
+     std::vector<std::map<uint32_t, WireCommand>> cmds_;   // per seat
+diff -ruN a/src/net/NatPortMap.cpp b/src/net/NatPortMap.cpp
+--- a/src/net/NatPortMap.cpp	1969-12-31 18:00:00.000000000 -0600
++++ b/src/net/NatPortMap.cpp	2026-10-23 00:52:47.606230700 -0500
+@@ -0,0 +1,259 @@
++// [Systems] UPnP IGD port mapping + STUN coding - see NatPortMap.h. Plain sockets; nothing here keeps state between calls.
++#include "net/NatPortMap.h"
++
++#include "core/Log.h"
++
++#include <cctype>
++#include <chrono>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <random>
++
++#ifdef _WIN32
++#ifndef WIN32_LEAN_AND_MEAN
++#define WIN32_LEAN_AND_MEAN
++#endif
++#include <winsock2.h>
++#include <ws2tcpip.h>
++#else
++#include <arpa/inet.h>
++#include <netdb.h>
++#include <netinet/in.h>
++#include <sys/select.h>
++#include <sys/socket.h>
++#include <unistd.h>
++#endif
++
++namespace net {
++namespace {
++
++#ifdef _WIN32
++using Sock = SOCKET;
++const Sock kNo = INVALID_SOCKET;
++void closeS(Sock s) { closesocket(s); }
++#else
++using Sock = int;
++const Sock kNo = -1;
++void closeS(Sock s) { close(s); }
++#endif
++
++bool wsa() {
++#ifdef _WIN32
++    static bool ok = [] { WSADATA w; return WSAStartup(MAKEWORD(2, 2), &w) == 0; }();
++    return ok;
++#else
++    return true;
++#endif
++}
++
++bool waitReadable(Sock s, int ms) {
++    fd_set f; FD_ZERO(&f); FD_SET(s, &f);
++    timeval tv{ms / 1000, (ms % 1000) * 1000};
++    return select((int)s + 1, &f, nullptr, nullptr, &tv) > 0;
++}
++
++std::string lower(std::string s) { for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; }
++
++// "http://192.168.1.1:5000/rootDesc.xml" -> host, port, path
++bool splitUrl(const std::string& url, std::string& host, int& port, std::string& path) {
++    const size_t a = url.find("://");
++    const size_t h = a == std::string::npos ? 0 : a + 3;
++    const size_t p = url.find('/', h);
++    std::string hp = url.substr(h, p == std::string::npos ? std::string::npos : p - h);
++    path = p == std::string::npos ? "/" : url.substr(p);
++    const size_t c = hp.find(':');
++    host = hp.substr(0, c);
++    port = c == std::string::npos ? 80 : std::atoi(hp.c_str() + c + 1);
++    return !host.empty() && port > 0;
++}
++
++// One HTTP/1.0 request over TCP with a 1.5 s budget; returns the body ("" on failure). localIp: this side of the connection.
++std::string http(const std::string& host, int port, const std::string& request, std::string* localIp = nullptr) {
++    Sock s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
++    if (s == kNo) return "";
++    sockaddr_in a{};
++    a.sin_family = AF_INET; a.sin_port = htons((uint16_t)port);
++    if (inet_pton(AF_INET, host.c_str(), &a.sin_addr) != 1) { closeS(s); return ""; }
++#ifdef _WIN32
++    DWORD to = 1500; setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (const char*)&to, sizeof to); setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (const char*)&to, sizeof to);
++#else
++    timeval to{1, 500000}; setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof to); setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &to, sizeof to);
++#endif
++    if (connect(s, (const sockaddr*)&a, sizeof a) != 0) { closeS(s); return ""; }
++    if (localIp) {
++        sockaddr_in me{}; socklen_t ml = sizeof me;
++        if (getsockname(s, (sockaddr*)&me, &ml) == 0) { char b[INET_ADDRSTRLEN] = {0}; inet_ntop(AF_INET, &me.sin_addr, b, sizeof b); *localIp = b; }
++    }
++    send(s, request.data(), (int)request.size(), 0);
++    std::string resp;
++    char buf[4096];
++    for (;;) {
++        const int n = (int)recv(s, buf, sizeof buf, 0);
++        if (n <= 0) break;
++        resp.append(buf, (size_t)n);
++        if (resp.size() > (1 << 20)) break;
++    }
++    closeS(s);
++    const size_t body = resp.find("\r\n\r\n");
++    if (resp.compare(0, 12, "HTTP/1.1 200") != 0 && resp.compare(0, 12, "HTTP/1.0 200") != 0) return "";
++    return body == std::string::npos ? "" : resp.substr(body + 4);
++}
++
++std::string tag(const std::string& xml, const std::string& name, size_t from = 0, size_t* at = nullptr) {
++    const std::string lx = lower(xml), ln = lower(name);
++    size_t a = lx.find("<" + ln + ">", from);
++    if (a == std::string::npos) {   // with a namespace prefix: <u:NewExternalIPAddress>
++        a = lx.find(":" + ln + ">", from);
++        if (a == std::string::npos) return "";
++        a = lx.find('>', a);
++    } else {
++        a = lx.find('>', a);
++    }
++    const size_t e = lx.find("</", a);
++    if (e == std::string::npos) return "";
++    if (at) *at = e;
++    return xml.substr(a + 1, e - a - 1);
++}
++
++std::string soap(const PortMapResult& m, const std::string& host, int port, const std::string& action, const std::string& args) {
++    const std::string body = "<?xml version=\"1.0\"?><s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" "
++                             "s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\"><s:Body><u:" + action + " xmlns:u=\"" +
++                             m.serviceType + "\">" + args + "</u:" + action + "></s:Body></s:Envelope>";
++    const std::string req = "POST " + m.controlUrl + " HTTP/1.0\r\nHost: " + host + ":" + std::to_string(port) +
++                            "\r\nContent-Type: text/xml; charset=\"utf-8\"\r\nSOAPAction: \"" + m.serviceType + "#" + action +
++                            "\"\r\nContent-Length: " + std::to_string(body.size()) + "\r\nConnection: close\r\n\r\n" + body;
++    return http(host, port, req);
++}
++
++// Router location from SSDP (1.2 s).
++std::string ssdpLocation() {
++    Sock s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
++    if (s == kNo) return "";
++    sockaddr_in to{};
++    to.sin_family = AF_INET; to.sin_port = htons(1900);
++    inet_pton(AF_INET, "239.255.255.250", &to.sin_addr);
++    for (const char* st : {"urn:schemas-upnp-org:device:InternetGatewayDevice:1", "urn:schemas-upnp-org:service:WANIPConnection:1"}) {
++        const std::string q = std::string("M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 1\r\nST: ") + st + "\r\n\r\n";
++        sendto(s, q.data(), (int)q.size(), 0, (const sockaddr*)&to, sizeof to);
++    }
++    std::string loc;
++    const auto t0 = std::chrono::steady_clock::now();
++    while (loc.empty() && std::chrono::steady_clock::now() - t0 < std::chrono::milliseconds(1200)) {
++        if (!waitReadable(s, 200)) continue;
++        char buf[2048];
++        const int n = (int)recvfrom(s, buf, sizeof buf - 1, 0, nullptr, nullptr);
++        if (n <= 0) continue;
++        buf[n] = 0;
++        const std::string r = buf, lr = lower(r);
++        const size_t a = lr.find("\nlocation:");
++        if (a == std::string::npos) continue;
++        size_t b = a + 10;
++        while (b < r.size() && r[b] == ' ') ++b;
++        const size_t e = r.find("\r", b);
++        loc = r.substr(b, e == std::string::npos ? std::string::npos : e - b);
++    }
++    closeS(s);
++    return loc;
++}
++
++}  // namespace
++
++PortMapResult upnpMapUdp(int port, int leaseSeconds, const std::string& description) {
++    PortMapResult m;
++    if (!wsa()) { m.error = "WSAStartup"; return m; }
++    const std::string loc = ssdpLocation();
++    if (loc.empty()) { m.error = "no UPnP router answered"; return m; }
++    std::string host, path;
++    int hport = 0;
++    if (!splitUrl(loc, host, hport, path)) { m.error = "bad location " + loc; return m; }
++    const std::string desc = http(host, hport, "GET " + path + " HTTP/1.0\r\nHost: " + host + ":" + std::to_string(hport) + "\r\nConnection: close\r\n\r\n", &m.localIp);
++    if (desc.empty()) { m.error = "no device description at " + loc; return m; }
++    // The first WANIPConnection (or WANPPPConnection) service and its control URL.
++    for (const char* svc : {"urn:schemas-upnp-org:service:WANIPConnection:", "urn:schemas-upnp-org:service:WANPPPConnection:"}) {
++        const size_t at = lower(desc).find(lower(svc));
++        if (at == std::string::npos) continue;
++        const size_t e = desc.find('<', at);
++        m.serviceType = desc.substr(at, e - at);
++        m.controlUrl = tag(desc, "controlURL", at);
++        break;
++    }
++    if (m.controlUrl.empty()) { m.error = "the router has no WAN connection service"; return m; }
++    if (m.controlUrl.find("://") != std::string::npos) { std::string h; int p = 0; splitUrl(m.controlUrl, h, p, m.controlUrl); }
++    if (m.controlUrl[0] != '/') m.controlUrl = "/" + m.controlUrl;
++    m.externalIp = tag(soap(m, host, hport, "GetExternalIPAddress", ""), "NewExternalIPAddress");
++    const std::string args = "<NewRemoteHost></NewRemoteHost><NewExternalPort>" + std::to_string(port) +
++                             "</NewExternalPort><NewProtocol>UDP</NewProtocol><NewInternalPort>" + std::to_string(port) +
++                             "</NewInternalPort><NewInternalClient>" + m.localIp + "</NewInternalClient><NewEnabled>1</NewEnabled>"
++                             "<NewPortMappingDescription>" + description + "</NewPortMappingDescription><NewLeaseDuration>" +
++                             std::to_string(leaseSeconds) + "</NewLeaseDuration>";
++    const std::string r = soap(m, host, hport, "AddPortMapping", args);
++    m.mapped = r.find("AddPortMappingResponse") != std::string::npos;
++    if (!m.mapped) m.error = "AddPortMapping refused";
++    m.controlUrl = host + ":" + std::to_string(hport) + m.controlUrl;   // keep the router address for the removal
++    LOG_INFO("upnp: router %s, external %s, UDP %d %s%s", loc.c_str(), m.externalIp.empty() ? "?" : m.externalIp.c_str(), port,
++             m.mapped ? "mapped" : "NOT mapped: ", m.mapped ? "" : m.error.c_str());
++    return m;
++}
++
++bool upnpUnmapUdp(const PortMapResult& m, int port) {
++    if (!m.mapped) return false;
++    const size_t slash = m.controlUrl.find('/');
++    const std::string hp = m.controlUrl.substr(0, slash);
++    PortMapResult c = m;
++    c.controlUrl = m.controlUrl.substr(slash);
++    const size_t colon = hp.find(':');
++    const std::string r = soap(c, hp.substr(0, colon), std::atoi(hp.c_str() + colon + 1), "DeletePortMapping",
++                               "<NewRemoteHost></NewRemoteHost><NewExternalPort>" + std::to_string(port) + "</NewExternalPort><NewProtocol>UDP</NewProtocol>");
++    return r.find("DeletePortMappingResponse") != std::string::npos;
++}
++
++std::string resolveIpv4(const std::string& hostPort) {
++    if (!wsa()) return "";
++    const size_t c = hostPort.rfind(':');
++    if (c == std::string::npos) return "";
++    addrinfo hints{};
++    hints.ai_family = AF_INET; hints.ai_socktype = SOCK_DGRAM;
++    addrinfo* res = nullptr;
++    if (getaddrinfo(hostPort.substr(0, c).c_str(), hostPort.c_str() + c + 1, &hints, &res) != 0 || !res) return "";
++    char b[INET_ADDRSTRLEN] = {0};
++    inet_ntop(AF_INET, &((const sockaddr_in*)res->ai_addr)->sin_addr, b, sizeof b);
++    freeaddrinfo(res);
++    return std::string(b) + hostPort.substr(c);
++}
++
++// ---- STUN (RFC 5389): 20-byte header (type, length, magic cookie 0x2112A442, transaction id), attributes TLV ----
++std::vector<uint8_t> stunRequest(uint8_t txid[12]) {
++    std::random_device rd;
++    for (int i = 0; i < 12; ++i) txid[i] = (uint8_t)rd();
++    std::vector<uint8_t> b = {0x00, 0x01, 0x00, 0x00, 0x21, 0x12, 0xA4, 0x42};
++    b.insert(b.end(), txid, txid + 12);
++    return b;
++}
++
++bool isStunPacket(const uint8_t* p, size_t n) {
++    return n >= 20 && (p[0] & 0xC0) == 0 && p[4] == 0x21 && p[5] == 0x12 && p[6] == 0xA4 && p[7] == 0x42;
++}
++
++bool stunParse(const uint8_t* p, size_t n, const uint8_t txid[12], std::string& mapped) {
++    if (!isStunPacket(p, n) || p[0] != 0x01 || p[1] != 0x01 || std::memcmp(p + 8, txid, 12) != 0) return false;   // Binding success
++    size_t i = 20;
++    while (i + 4 <= n) {
++        const int type = (p[i] << 8) | p[i + 1], len = (p[i + 2] << 8) | p[i + 3];
++        const uint8_t* v = p + i + 4;
++        if (i + 4 + (size_t)len > n) break;
++        if ((type == 0x0020 || type == 0x0001) && len >= 8 && v[1] == 0x01) {   // (XOR-)MAPPED-ADDRESS, IPv4
++            uint16_t port = (uint16_t)((v[2] << 8) | v[3]);
++            uint8_t ip[4] = {v[4], v[5], v[6], v[7]};
++            if (type == 0x0020) { port ^= 0x2112; ip[0] ^= 0x21; ip[1] ^= 0x12; ip[2] ^= 0xA4; ip[3] ^= 0x42; }
++            char b[32];
++            std::snprintf(b, sizeof b, "%u.%u.%u.%u:%u", ip[0], ip[1], ip[2], ip[3], (unsigned)port);
++            mapped = b;
++            if (type == 0x0020) return true;
++        }
++        i += 4 + (((size_t)len + 3) & ~(size_t)3);
++    }
++    return !mapped.empty();
++}
++
++}  // namespace net
+diff -ruN a/src/net/NatPortMap.h b/src/net/NatPortMap.h
+--- a/src/net/NatPortMap.h	1969-12-31 18:00:00.000000000 -0600
++++ b/src/net/NatPortMap.h	2026-10-23 00:52:47.664931900 -0500
+@@ -0,0 +1,33 @@
++#pragma once
++// [Systems] Reaching a host across the internet without a server (user decision 2026-10-17: peer-to-peer only, a lobby service
++// later). Two ways to learn / open the host's public endpoint:
++// - UPnP IGD (most home routers): SSDP M-SEARCH on 239.255.255.250:1900 -> the router's description URL -> its WANIPConnection /
++//   WANPPPConnection control URL; SOAP GetExternalIPAddress + AddPortMapping (UDP, the session port, a 2 h lease, renewed by
++//   the host while it hosts) and DeletePortMapping when it stops.
++// - STUN (RFC 5389 Binding request) fallback: sent FROM the session's own socket by UdpSession (the reply carries the address the
++//   internet sees for that socket); here only the request / response coding.
++// Blocking calls with short timeouts (UPnP total <= ~3 s); the session runs them when the player hosts.
++#include <cstdint>
++#include <string>
++#include <vector>
++
++namespace net {
++
++struct PortMapResult {
++    bool mapped = false;           // a UPnP mapping exists for the port
++    std::string externalIp;        // the router's WAN address ("" unknown)
++    std::string controlUrl, serviceType, localIp;   // for the renewal / removal
++    std::string error;             // why not (diagnostics)
++};
++// Find the router and map external UDP `port` -> this machine's `port` (lease seconds; 0 = permanent where allowed).
++PortMapResult upnpMapUdp(int port, int leaseSeconds, const std::string& description);
++bool upnpUnmapUdp(const PortMapResult& m, int port);
++
++// STUN: a Binding request (transaction id = 12 random bytes) and its parsed XOR-MAPPED-ADDRESS ("a.b.c.d:port").
++std::vector<uint8_t> stunRequest(uint8_t txid[12]);
++bool stunParse(const uint8_t* p, size_t n, const uint8_t txid[12], std::string& mapped);
++bool isStunPacket(const uint8_t* p, size_t n);   // a STUN message (magic cookie at bytes 4-7)
++// "name:port" -> "a.b.c.d:port" (IPv4, blocking DNS; "" on failure).
++std::string resolveIpv4(const std::string& hostPort);
++
++}  // namespace net
+diff -ruN a/src/net/NetMatchDriver.cpp b/src/net/NetMatchDriver.cpp
+--- a/src/net/NetMatchDriver.cpp	1969-12-31 18:00:00.000000000 -0600
++++ b/src/net/NetMatchDriver.cpp	2026-10-23 00:52:47.727145100 -0500
+@@ -0,0 +1,200 @@
++// [Systems] NetMatchDriver - see NetMatchDriver.h. The headless runNetMatch loop (Application_Net.cpp) cut into per-frame calls.
++#include "net/NetMatchDriver.h"
++
++#include "core/Log.h"
++#include "game/CharacterRoster.h"
++#include "game/World.h"
++#include "net/Lockstep.h"
++#include "net/NetTransport.h"
++#include "net/VoiceSession.h"
++
++#include <algorithm>
++#include <cstdio>
++#include <cstdlib>
++
++namespace net {
++namespace {
++
++constexpr float kStep = 1.0f / 60.0f;
++constexpr int kMaxStepsPerFrame = 8;   // catch-up cap (a long hitch is not replayed at once)
++constexpr uint8_t kEventSelection = 1;
++
++void putStr(std::vector<uint8_t>& b, const std::string& s) {
++    const size_t n = std::min<size_t>(s.size(), 255);
++    b.push_back((uint8_t)n);
++    b.insert(b.end(), s.begin(), s.begin() + (long)n);
++}
++void putStrs(std::vector<uint8_t>& b, const std::vector<std::string>& v) {
++    b.push_back((uint8_t)std::min<size_t>(v.size(), 255));
++    for (size_t i = 0; i < v.size() && i < 255; ++i) putStr(b, v[i]);
++}
++void putColor(std::vector<uint8_t>& b, const game::CharacterColor& c) {
++    for (int v : {c.r, c.g, c.b, c.a, c.palette}) b.push_back((uint8_t)v);
++    for (float f : {c.x, c.y}) { const int16_t q = (int16_t)std::max(-32768.0f, std::min(32767.0f, f * 1000.0f)); b.push_back((uint8_t)q); b.push_back((uint8_t)((uint16_t)q >> 8)); }
++}
++struct Rd {
++    const std::vector<uint8_t>& d; size_t i = 0; bool ok = true;
++    explicit Rd(const std::vector<uint8_t>& v) : d(v) {}
++    int u8() { if (i >= d.size()) { ok = false; return 0; } return d[i++]; }
++    std::string str() { const size_t n = (size_t)u8(); if (i + n > d.size()) { ok = false; return ""; } std::string s((const char*)d.data() + i, n); i += n; return s; }
++    std::vector<std::string> strs() { std::vector<std::string> v((size_t)u8()); for (auto& s : v) s = str(); return v; }
++    game::CharacterColor color() {
++        game::CharacterColor c;
++        c.r = u8(); c.g = u8(); c.b = u8(); c.a = u8(); c.palette = u8();
++        for (float* f : {&c.x, &c.y}) { const int lo = u8(), hi = u8(); *f = (float)(int16_t)(uint16_t)(lo | (hi << 8)) / 1000.0f; }
++        return c;
++    }
++};
++
++}  // namespace
++
++// The selection on the wire (names, not indices: a data-order change cannot desync). Shared with the recording.
++std::vector<uint8_t> encodeSelection(const game::CharacterSelection& s) {
++    std::vector<uint8_t> b;
++    b.push_back((uint8_t)s.type); b.push_back((uint8_t)s.specialty);
++    putStr(b, s.chassisId); putStr(b, s.customSlot);
++    for (int f = 0; f < 2; ++f) putStr(b, s.chassisByFaction[f]);
++    for (int f = 0; f < 2; ++f) { putColor(b, s.primary[f]); putColor(b, s.secondary[f]); }
++    putStrs(b, s.weapons); putStrs(b, s.vehicleWeapons); putStrs(b, s.melee); putStrs(b, s.abilities); putStrs(b, s.skills);
++    return b;
++}
++bool decodeSelection(const std::vector<uint8_t>& b, game::CharacterSelection& s) {
++    Rd r(b);
++    s.type = r.u8(); s.specialty = (game::Specialty)r.u8();
++    s.chassisId = r.str(); s.customSlot = r.str();
++    for (int f = 0; f < 2; ++f) s.chassisByFaction[f] = r.str();
++    for (int f = 0; f < 2; ++f) { s.primary[f] = r.color(); s.secondary[f] = r.color(); }
++    s.weapons = r.strs(); s.vehicleWeapons = r.strs(); s.melee = r.strs(); s.abilities = r.strs(); s.skills = r.strs();
++    return r.ok;
++}
++
++struct NetMatchDriver::Impl {
++    game::World& world;
++    INetTransport& t;
++    Config cfg;
++    std::unique_ptr<Lockstep> ls;
++    std::unique_ptr<VoiceSession> voice;
++    uint32_t nextLocal = 1;
++    double accum = 0.0;
++    bool stalled = false, held = false, ended = false, talking = false;
++    uint32_t startTick = 1;
++    FILE* rec = nullptr;
++    Impl(game::World& w, INetTransport& tr, const Config& c) : world(w), t(tr), cfg(c) {}
++};
++
++NetMatchDriver::NetMatchDriver(game::World& world, INetTransport& transport, audio::IAudio* audio, const Config& cfg)
++    : impl_(std::make_unique<Impl>(world, transport, cfg)) {
++    Lockstep::Config lc;
++    lc.seats = cfg.seats; lc.self = cfg.self; lc.delay = cfg.delay; lc.hashEvery = cfg.hashEvery;
++    lc.peerTimeoutS = cfg.peerTimeoutS; lc.launchHash = cfg.launchHash;
++    impl_->ls = std::make_unique<Lockstep>(transport, lc);
++    if (!cfg.recordPath.empty()) {
++        impl_->rec = std::fopen(cfg.recordPath.c_str(), "wb");
++        if (impl_->rec) {   // the phase 1 WFC_NET_RECORD layout (WFC_NET_REPLAY reads it); events are not in it yet
++            const uint32_t ver = 1, ns = (uint32_t)cfg.seats;
++            std::fwrite("WFCR", 1, 4, impl_->rec); std::fwrite(&ver, 4, 1, impl_->rec);
++            std::fwrite(&cfg.launchHash, 8, 1, impl_->rec); std::fwrite(&ns, 4, 1, impl_->rec);
++        }
++    }
++    if (cfg.voice) {
++        impl_->voice = std::make_unique<VoiceSession>(*impl_->ls, audio, VoiceSession::Config{});
++        game::World* w = &world;
++        impl_->ls->setVoiceAudience([w](int talker, int listener, uint8_t flags) {   // as runNetMatch: match player = seat
++            const auto& ps = w->match().players();
++            if (talker < 0 || listener < 0 || (size_t)talker >= ps.size() || (size_t)listener >= ps.size()) return false;
++            if ((flags & 1) && ps[(size_t)talker].team == ps[(size_t)listener].team && ps[(size_t)talker].team != 255) return true;
++            if (!(flags & 2)) return false;
++            const game::Character* x = w->participantPawn(talker);
++            const game::Character* y = w->participantPawn(listener);
++            return x && y && core::length(x->position() - y->position()) < 64.0f + 4.0f;
++        });
++    }
++    LOG_INFO("NET driver: seat %d of %d, D %s, voice %s", cfg.self, cfg.seats, cfg.delay > 0 ? std::to_string(cfg.delay).c_str() : "auto",
++             cfg.voice ? "on" : "off");
++}
++
++NetMatchDriver::~NetMatchDriver() {
++    if (impl_->ls && !impl_->ended) impl_->ls->bye((uint32_t)impl_->world.simTick());
++    if (impl_->rec) std::fclose(impl_->rec);
++}
++
++int NetMatchDriver::frame(double dtSeconds) {
++    Impl& m = *impl_;
++    Lockstep& ls = *m.ls;
++    ls.pump();
++    // Events (every seat's, this one's too): applied by the World at their tick.
++    Lockstep::Event ev;
++    while (ls.pollEvent(ev)) {
++        if (ev.kind == kEventSelection) {
++            game::CharacterSelection sel;
++            if (decodeSelection(ev.payload, sel)) { if (m.cfg.onSelection) m.cfg.onSelection(ev.seat, sel, ev.atTick); }
++            else LOG_WARN("NET driver: a bad selection event from seat %d", ev.seat);
++        }
++    }
++    if (m.voice) {   // the listener = the local pawn (its right vector from the facing yaw)
++        game::World& w = m.world;
++        const game::Character* me = w.participantPawn(m.cfg.self);
++        const core::Vec3 lp = me ? me->position() + core::Vec3{0, 1.8f, 0} : core::Vec3{0, 0, 0};
++        const float yaw = me ? me->yaw() : 0.0f;
++        const core::Vec3 right = core::normalize(core::cross(core::forwardFromYawPitch(yaw, 0.0f), core::Vec3{0, 1, 0}));
++        const int self = m.cfg.self;
++        m.voice->update(m.talking,
++                        [&w](int seat, core::Vec3& out) { const game::Character* c = w.participantPawn(seat); if (!c) return false; out = c->position() + core::Vec3{0, 1.8f, 0}; return true; },
++                        [&w, self](int seat) { const auto& ps = w.match().players(); return (size_t)seat < ps.size() && (size_t)self < ps.size() && ps[(size_t)seat].team == ps[(size_t)self].team && ps[(size_t)seat].team != 255; },
++                        [&w](const core::Vec3& a, const core::Vec3& b) { return w.soundBlocked(a, b); },
++                        [&w]() { return w.currentReverbPreset(); }, lp, right);
++    }
++    if (ls.status() != Lockstep::Status::Running) { m.ended = true; return 0; }
++    if (m.held) { m.accum = 0.0; return 0; }
++    m.accum = std::min(m.accum + dtSeconds, (double)kStep * kMaxStepsPerFrame);
++    int steps = 0;
++    m.stalled = false;
++    while (m.accum >= kStep && steps < kMaxStepsPerFrame) {
++        const uint32_t n = (uint32_t)m.world.simTick() + 1;
++        if (ls.endTick() > 0 && n > ls.endTick()) { m.ended = true; break; }
++        while (m.nextLocal <= n + (uint32_t)ls.delay()) {   // this seat's commands up to N + D (the local controller's input now)
++            game::RemoteCommand c = m.world.encodeLocalCommand();
++            c.tick = m.nextLocal;
++            ls.submitLocal(m.nextLocal, c);
++            ++m.nextLocal;
++        }
++        if (!ls.haveAll(n)) { m.stalled = true; ls.stalled(dtSeconds * 1000.0); break; }
++        for (int s = 0; s < m.cfg.seats; ++s) {
++            game::RemoteCommand c;
++            ls.command(s, n, c);
++            m.world.applyRemoteCommand(s, c);
++        }
++        if (m.rec) {
++            std::fwrite(&n, 4, 1, m.rec);
++            for (int s = 0; s < m.cfg.seats; ++s) { WireCommand w{}; ls.wire(s, n, w); std::fwrite(w.data(), 1, w.size(), m.rec); }
++        }
++        if (m.cfg.step) m.cfg.step(kStep);
++        const uint64_t h = m.world.simStateHash();
++        ls.stepped(n, h);
++        ls.reportHash(n, h);
++        if (n > 64) ls.forget(n - 64);
++        m.accum -= kStep;
++        ++steps;
++    }
++    if (ls.status() != Lockstep::Status::Running) m.ended = true;
++    return steps;
++}
++
++bool NetMatchDriver::stalled() const { return impl_->stalled; }
++bool NetMatchDriver::held() const { return impl_->held; }
++void NetMatchDriver::setHeld(bool held, uint32_t startTick) { impl_->held = held; if (startTick) impl_->startTick = startTick; }
++bool NetMatchDriver::finished() const { return impl_->ended; }
++int NetMatchDriver::status() const { return (int)impl_->ls->status(); }
++int NetMatchDriver::droppedSeat() const { return -1; }   // [PARTIAL] the session reports drops (PeerDropped) for now
++int NetMatchDriver::localSeat() const { return impl_->cfg.self; }
++int NetMatchDriver::delay() const { return impl_->ls->delay(); }
++float NetMatchDriver::rttMs() const { return impl_->ls->rttMs(); }
++VoiceSession* NetMatchDriver::voice() { return impl_->voice.get(); }
++void NetMatchDriver::setTalking(bool talking) { impl_->talking = talking; }
++
++void NetMatchDriver::chooseCharacter(const game::CharacterSelection& sel) {
++    const uint32_t at = impl_->ls->submitEvent(kEventSelection, encodeSelection(sel));
++    LOG_INFO("NET driver: Choose Character -> event at tick %u", at);
++}
++
++}  // namespace net
+diff -ruN a/src/net/NetMatchDriver.h b/src/net/NetMatchDriver.h
+--- a/src/net/NetMatchDriver.h	1969-12-31 18:00:00.000000000 -0600
++++ b/src/net/NetMatchDriver.h	2026-10-23 00:52:47.792368800 -0500
+@@ -0,0 +1,73 @@
++#pragma once
++// [Systems] The online match in the real window (ONLINE_PHASE2_SPLIT.md item 2a): the per-frame driver of the lockstep match,
++// called by the Application's normal frame loop instead of runNetMatch's headless loop (which stays for the harness).
++//
++// Contract with Gameplay (agreed 2026-10-17):
++// - The Application keeps its per-frame World::handleInput (camera / controller; online the pawn moves only through commands).
++// - frame(dt): pump the transport; submit this seat's commands up to tick N + D (World::encodeLocalCommand, re-stamped to its
++//   target tick); when tick N is complete for every seat, World::applyRemoteCommand(seat, cmd) for each seat, then the step
++//   callback once (World::tick + GameMode::tick); hashes / record / BYE as phase 1. While tick N is incomplete nothing steps
++//   (stalled(): the HUD may show it); handleInput / drawing keep running and presentation interpolates.
++// - Events: a second per-seat reliable ordered stream of tick-stamped events, applied on every peer before the step of their tick
++//   and recorded / replayed like commands. Kind 1 = Choose Character: chooseCharacter(sel) sends {seat, atTick = simTick + D + 1,
++//   sel (wire: names, not indices)}; every peer calls World::queueSeatSelection(seat, sel, atTick) on arrival.
++// - held(): from the session's reportLoaded until AllLoaded's start tick (the load gate): no step, no submit.
++// - The match seats are the launch record's humans (match player i = seat i on every peer); localSeat() = MatchLaunch::localSeat.
++#include <cstdint>
++#include <functional>
++#include <memory>
++#include <string>
++
++namespace audio { class IAudio; }
++namespace game { class World; struct CharacterSelection; }
++
++namespace net {
++
++class INetTransport;
++class Lockstep;
++class VoiceSession;
++
++class NetMatchDriver {
++public:
++    struct Config {
++        int seats = 2;                 // humans in the launch record
++        int self = 0;                  // this machine's seat (MatchLaunch::localSeat)
++        uint64_t launchHash = 0;       // the launch record's hash (HELLO: a mismatch ends the match, JoinFailed{Version})
++        int hashEvery = 60;            // state hash exchange period in ticks (desync detection)
++        int delay = 0;                 // input delay in ticks; 0 = auto (RTT + the arrival-lead feedback)
++        double peerTimeoutS = 8.0;     // a peer silent this long is dropped (the frontend's ConnectionTimeout)
++        std::string recordPath;        // WFC_NET_RECORD-style recording ("" none)
++        bool voice = true;             // the voice lane (VoiceSession) on this match
++        std::function<void(float)> step;   // World::tick + GameMode::tick, once per complete tick (fixed dt)
++        // A seat's Choose Character (event kind 1), on every peer when it arrives: World::queueSeatSelection(seat, sel, atTick).
++        std::function<void(int seat, const game::CharacterSelection& sel, uint32_t atTick)> onSelection;
++    };
++    // `transport` is the session's match view (seats = match seats); the driver owns the Lockstep built over it.
++    NetMatchDriver(game::World& world, INetTransport& transport, audio::IAudio* audio, const Config& cfg);
++    ~NetMatchDriver();
++    NetMatchDriver(const NetMatchDriver&) = delete;
++    NetMatchDriver& operator=(const NetMatchDriver&) = delete;
++
++    // Once per rendered frame (dt = the frame's wall time). Returns the sim steps taken (0 when stalled / held, up to a catch-up
++    // cap when behind).
++    int frame(double dtSeconds);
++
++    bool stalled() const;              // tick N waits for a seat's commands
++    bool held() const;                 // the load gate (no step until the start tick)
++    void setHeld(bool held, uint32_t startTick = 0);
++    bool finished() const;             // the match ended normally (every seat's BYE / the match end) or failed (see status)
++    int status() const;                // phase 1 exit codes: 0 running / ended, 3 desync, 4 peer timeout, 5 host lost, 6 launch mismatch
++    int droppedSeat() const;           // the seat a timeout / leave is about (-1 none)
++    int localSeat() const;
++    int delay() const;                 // the current input delay D (ticks)
++    float rttMs() const;
++    void chooseCharacter(const game::CharacterSelection& sel);   // the local seat's in-match pick (Choose Character screen)
++    VoiceSession* voice();             // null without the voice lane
++    void setTalking(bool talking);     // push-to-talk / open mic state from the session's voice settings
++
++private:
++    struct Impl;
++    std::unique_ptr<Impl> impl_;
++};
++
++}  // namespace net
+diff -ruN a/src/net/NetTransport.h b/src/net/NetTransport.h
+--- a/src/net/NetTransport.h	2026-10-23 00:52:47.452704700 -0500
++++ b/src/net/NetTransport.h	2026-10-23 00:52:47.468759200 -0500
+@@ -33,6 +33,19 @@
+     virtual bool poll(NetPacket& out) = 0;                              // non-blocking; drain until false
+     virtual void service() = 0;                                         // resends / acks; call often (each loop iteration)
+     virtual NetStats stats() const = 0;
++    // [Systems, online phase 2] Dynamic peers for the session layer (UdpSession): a lobby seats members as they join. The
++    // defaults keep the fixed-peer transports (phase 1 harness, loopback) as they were.
++    virtual bool addPeer(int /*seat*/, const std::string& /*hostPort*/) { return false; }   // (re)seat a peer at an address
++    virtual void removePeer(int /*seat*/) {}                                                 // forget it (its channel state too)
++    virtual void setSelf(int /*seat*/) {}                       // a joiner learns its seat from the host's JOIN_OK
++    virtual std::string peerAddress(int /*seat*/) const { return ""; }                      // "a.b.c.d:port" or ""
++    virtual std::string localAddress() const { return ""; }     // this machine's LAN IPv4:port as other PCs reach it
++    // Out-of-band datagrams to / from addresses that have no seat yet (JOIN before the host seats the member; LAN discovery):
++    // sent unframed (kind 3), delivered with the sender's address instead of a seat.
++    virtual bool sendTo(const std::string& /*hostPort*/, const uint8_t* /*p*/, size_t /*n*/) { return false; }
++    virtual bool pollStranger(std::string& /*fromHostPort*/, std::vector<uint8_t>& /*data*/) { return false; }
++    // A datagram exactly as given (no framing byte): the STUN query from this socket (its reply comes back via pollStranger).
++    virtual bool sendRaw(const std::string& /*hostPort*/, const uint8_t* /*p*/, size_t /*n*/) { return false; }
+ };
+ 
+ // UDP over one socket. bind = "host:port"; peers = seat -> "host:port" (where this process sends that seat's packets).
+diff -ruN a/src/net/UdpSession.cpp b/src/net/UdpSession.cpp
+--- a/src/net/UdpSession.cpp	1969-12-31 18:00:00.000000000 -0600
++++ b/src/net/UdpSession.cpp	2026-10-23 00:52:47.857090100 -0500
+@@ -0,0 +1,977 @@
++// [Systems] UdpSession - see UdpSession.h. Wire (little endian; strings u16 length + bytes):
++//   out of band (INetTransport::sendTo / pollStranger, before the host seats a member):
++//     0x50 JOIN      u32 protocol, member info            0x51 JOIN_OK u8 seat            0x52 JOIN_FAIL u8 SessionJoinFailure
++//   reliable channel, seated (types 0x40-0x4B; the lockstep's own packets are 1-7 on the same socket):
++//     0x40 LOBBY     lobby (host -> members; the first one completes a join)
++//     0x41 PEERS     u8 n, n x {u8 seat, str fingerprint, str address} (host -> members: who to reach directly)
++//     0x42 INFO      member info (member -> host: MemberJoined on the host)
++//     0x43 LAUNCH    str url, u32 seed, lobby roster, u8 n, n x u8 session seat (match seat order) -> CountdownStarted
++//     0x44 LOADED    u64 simId, u64 loadHash (member -> host)
++//     0x45 PEERLOAD  str fingerprint (host -> members)      0x46 ALLLOADED u32 start tick
++//     0x47 LEAVE     (member -> host: it left; host -> members: the host ended the session)
++//     0x48 KICK      u8 SessionKickReason (host -> member)  0x49 DROPPED str fingerprint, u8 SessionLeaveReason, u8 inMatch
++//     0x4A VERSION   (host -> member: its load hash differs; JoinFailed{Version})
++//     0x4B RETURN    (host -> members: the match ended; a LOBBY follows)
++//   unreliable: 0x4F KEEPALIVE (every 1 s to every peer; also a LEAVE / KICK copy goes unreliable twice before a socket closes)
++#include "net/UdpSession.h"
++
++#include "core/Log.h"
++#include "net/NetTransport.h"
++#include "assets/Json.h"
++
++#include <future>
++#include <thread>
++
++#include <algorithm>
++#include <cctype>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <deque>
++#include <random>
++
++namespace net {
++namespace {
++
++using namespace frontend;
++constexpr uint32_t kProtocol = 0x57464302;   // "WFC" v2 (online phase 2a)
++enum : uint8_t {
++    kJoin = 0x50, kJoinOk = 0x51, kJoinFail = 0x52,
++    kLobby = 0x40, kPeers = 0x41, kInfo = 0x42, kLaunch = 0x43, kLoaded = 0x44, kPeerLoaded = 0x45, kAllLoaded = 0x46,
++    kLeave = 0x47, kKick = 0x48, kDropped = 0x49, kVersion = 0x4A, kReturn = 0x4B, kKeepalive = 0x4F,
++    kDiscover = 0x53, kAnnounce = 0x54, kPing = 0x55, kPong = 0x56,   // out of band: LAN discovery, candidate pings
++};
++constexpr double kSearchCollectS = 1.0, kPingRoundS = 0.3;
++constexpr int kPingRounds = 3, kMaxPingMs = 250;
++std::string versionTag() { char b[64]; std::snprintf(b, sizeof b, "%08x-%s", kProtocol, __DATE__); return b; }
++std::string jsonEsc(const std::string& s) {
++    std::string o;
++    for (char c : s) { if (c == '"' || c == '\\') o += '\\'; if ((unsigned char)c >= 0x20) o += c; }
++    return o;
++}
++bool isSessionType(uint8_t t) { return t >= 0x40 && t <= 0x4F; }
++
++struct W {
++    std::vector<uint8_t> b;
++    explicit W(uint8_t type) { b.push_back(type); }
++    void u8(int v) { b.push_back((uint8_t)v); }
++    void u16(int v) { b.push_back((uint8_t)v); b.push_back((uint8_t)(v >> 8)); }
++    void u32(uint32_t v) { for (int i = 0; i < 4; ++i) b.push_back((uint8_t)(v >> (8 * i))); }
++    void u64(uint64_t v) { for (int i = 0; i < 8; ++i) b.push_back((uint8_t)(v >> (8 * i))); }
++    void i32(int v) { u32((uint32_t)v); }
++    void str(const std::string& s) { const size_t n = std::min<size_t>(s.size(), 65535); u16((int)n); b.insert(b.end(), s.begin(), s.begin() + (long)n); }
++    void strs(const std::vector<std::string>& v) { u16((int)v.size()); for (const auto& s : v) str(s); }
++    void info(const SessionMemberInfo& m) {
++        str(m.id.fingerprint); str(m.displayName); u8((int)m.platform); i32(m.level); u8(m.hasCharacter ? 1 : 0); str(m.characterSlot);
++        str(m.iconicCharacter); strs(m.loadout); i32(m.teamRequest);
++    }
++    void lobby(const SessionLobby& l) {
++        str(l.gameModeTag); u16((int)l.settings.size()); for (const auto& kv : l.settings) { str(kv.first); str(kv.second); }
++        i32(l.mapId); i32(l.mapSelectionMethod); i32(l.playerLimit);
++        u16((int)l.slots.size());
++        for (const SessionSlot& s : l.slots) { u8((int)s.kind); str(s.member.fingerprint); i32(s.team); u8(s.connecting ? 1 : 0); }
++        u16((int)l.members.size()); for (const SessionMemberInfo& m : l.members) info(m);
++        u8(l.matchRunning ? 1 : 0); u8(l.countingDown ? 1 : 0); i32(l.countdown);
++    }
++};
++struct R {
++    const uint8_t* p; size_t n, i = 1; bool ok = true;
++    R(const std::vector<uint8_t>& d) : p(d.data()), n(d.size()) {}
++    bool need(size_t k) { if (i + k > n) ok = false; return ok; }
++    int u8() { return need(1) ? p[i++] : 0; }
++    int u16() { if (!need(2)) return 0; const int v = p[i] | (p[i + 1] << 8); i += 2; return v; }
++    uint32_t u32() { if (!need(4)) return 0; uint32_t v = 0; for (int k = 0; k < 4; ++k) v |= (uint32_t)p[i + k] << (8 * k); i += 4; return v; }
++    uint64_t u64() { if (!need(8)) return 0; uint64_t v = 0; for (int k = 0; k < 8; ++k) v |= (uint64_t)p[i + k] << (8 * k); i += 8; return v; }
++    int i32() { return (int)u32(); }
++    std::string str() { const int k = u16(); if (!need((size_t)k)) return ""; std::string s((const char*)p + i, (size_t)k); i += (size_t)k; return s; }
++    std::vector<std::string> strs() { std::vector<std::string> v((size_t)u16()); for (auto& s : v) s = str(); return v; }
++    SessionMemberInfo info() {
++        SessionMemberInfo m;
++        m.id.fingerprint = str(); m.displayName = str(); m.platform = (SessionPlatform)u8(); m.level = i32(); m.hasCharacter = u8() != 0;
++        m.characterSlot = str(); m.iconicCharacter = str(); m.loadout = strs(); m.teamRequest = i32();
++        return m;
++    }
++    SessionLobby lobby() {
++        SessionLobby l;
++        l.gameModeTag = str();
++        for (int k = u16(); k > 0 && ok; --k) { std::string a = str(); l.settings[a] = str(); }
++        l.mapId = i32(); l.mapSelectionMethod = i32(); l.playerLimit = i32();
++        l.slots.resize((size_t)u16());
++        for (SessionSlot& s : l.slots) { s.kind = (SessionSlot::Kind)u8(); s.member.fingerprint = str(); s.team = i32(); s.connecting = u8() != 0; }
++        l.members.resize((size_t)u16());
++        for (SessionMemberInfo& m : l.members) m = info();
++        l.matchRunning = u8() != 0; l.countingDown = u8() != 0; l.countdown = i32();
++        return l;
++    }
++};
++
++const char kB32[] = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";   // Crockford base32: no I L O U
++
++std::string randomFingerprint() {
++    std::random_device rd;
++    std::string s = "WFC-";
++    for (int i = 0; i < 8; ++i) { if (i == 4) s += '-'; s += kB32[rd() % 32]; }
++    return s;
++}
++
++}  // namespace
++
++// ---- the lockstep's view of the session socket, in match seats ----
++class UdpSession::MatchView final : public INetTransport {
++public:
++    explicit MatchView(UdpSession& s) : s_(s) {}
++    int self() const override { return s_.matchSelf_; }
++    void sendUnreliable(int peer, const uint8_t* p, size_t n) override { if (const int ss = toSession(peer); ss >= 0) s_.t_->sendUnreliable(ss, p, n); }
++    void sendReliable(int peer, const uint8_t* p, size_t n) override { if (const int ss = toSession(peer); ss >= 0) s_.t_->sendReliable(ss, p, n); }
++    bool poll(NetPacket& out) override {
++        s_.pump();
++        if (inbox.empty()) return false;
++        out = std::move(inbox.front());
++        inbox.pop_front();
++        return true;
++    }
++    void service() override { if (s_.t_) s_.t_->service(); }
++    NetStats stats() const override { return s_.t_ ? s_.t_->stats() : NetStats{}; }
++    std::deque<NetPacket> inbox;
++
++private:
++    int toSession(int matchSeat) const {
++        return matchSeat >= 0 && (size_t)matchSeat < s_.matchToSession_.size() && s_.t_ ? s_.matchToSession_[(size_t)matchSeat] : -1;
++    }
++    UdpSession& s_;
++};
++
++struct UdpSession::Discovery {
++    std::future<PortMapResult> map;
++    std::future<std::string> stun;   // the STUN server's resolved address
++    PortMapResult result;
++    int port = 0;
++};
++
++UdpSession::UdpSession() : UdpSession(Options{}) {}
++UdpSession::UdpSession(const Options& o) : opt_(o) { self_.id.fingerprint = randomFingerprint(); }
++UdpSession::~UdpSession() { if (role_ != Role::Offline) leave(); }
++
++void UdpSession::emit(SessionEvent e) {
++    if (search_ == Search::Quick && e.type == SessionEvent::Type::JoinFailed) { tryNextCandidate(); return; }
++    if (search_ == Search::Quick && (e.type == SessionEvent::Type::Joined || e.type == SessionEvent::Type::MatchInProgress)) search_ = Search::None;
++    e.time = now_;
++    out_.push_back(std::move(e));
++}
++
++std::string UdpSession::lanCode(const std::string& ipPort) {
++    const size_t c = ipPort.rfind(':');
++    unsigned a[4] = {0, 0, 0, 0};
++    if (c == std::string::npos || std::sscanf(ipPort.c_str(), "%u.%u.%u.%u", &a[0], &a[1], &a[2], &a[3]) != 4) return "";
++    const unsigned port = (unsigned)std::atoi(ipPort.c_str() + c + 1);
++    uint64_t v = ((uint64_t)a[0] << 40) | ((uint64_t)a[1] << 32) | ((uint64_t)a[2] << 24) | ((uint64_t)a[3] << 16) | (port & 0xffff);
++    std::string s(10, '0');
++    for (int i = 9; i >= 0; --i) { s[(size_t)i] = kB32[v & 31]; v >>= 5; }   // 48 bits in 10 x 5 (2 spare high bits)
++    return s.substr(0, 5) + "-" + s.substr(5);
++}
++
++namespace {
++bool packEndpoint(const std::string& ipPort, uint64_t& v48) {
++    unsigned a[4];
++    const size_t c = ipPort.rfind(':');
++    if (c == std::string::npos || std::sscanf(ipPort.c_str(), "%u.%u.%u.%u", &a[0], &a[1], &a[2], &a[3]) != 4) return false;
++    v48 = ((uint64_t)a[0] << 40) | ((uint64_t)a[1] << 32) | ((uint64_t)a[2] << 24) | ((uint64_t)a[3] << 16) | ((uint64_t)std::atoi(ipPort.c_str() + c + 1) & 0xffff);
++    return true;
++}
++std::string unpackEndpoint(uint64_t v) {
++    char b[32];
++    std::snprintf(b, sizeof b, "%u.%u.%u.%u:%u", (unsigned)(v >> 40) & 255, (unsigned)(v >> 32) & 255, (unsigned)(v >> 24) & 255,
++                  (unsigned)(v >> 16) & 255, (unsigned)v & 0xffff);
++    return b;
++}
++}  // namespace
++
++std::string UdpSession::internetCode(const std::string& publicIpPort, const std::string& lanIpPort) {
++    uint64_t p = 0, l = 0;
++    if (!packEndpoint(publicIpPort, p) || !packEndpoint(lanIpPort, l)) return lanCode(lanIpPort);
++    // 96 bits -> 20 base32 symbols (100 bits; the top 4 must be 0): public endpoint first, then the LAN one
++    std::string s(20, '0');
++    for (int i = 19; i >= 0; --i) {
++        s[(size_t)i] = kB32[l & 31];
++        l = (l >> 5) | ((p & 31) << 43);
++        p >>= 5;
++    }
++    return s.substr(0, 5) + "-" + s.substr(5, 5) + "-" + s.substr(10, 5) + "-" + s.substr(15);
++}
++
++bool UdpSession::decodeTargets(const std::string& typed, std::vector<std::string>& out) {
++    out.clear();
++    std::string t;
++    for (char ch : typed) if (!std::isspace((unsigned char)ch) && ch != '-') t += (char)std::toupper((unsigned char)ch);
++    if (t.size() > 3 && t.compare(0, 3, "WFC") == 0 && t.size() != 10 && t.size() != 20) t = t.substr(3);
++    if (t.size() == 20 && t.find('.') == std::string::npos) {   // an internet code: public + LAN
++        uint64_t p = 0, l = 0;
++        for (char ch : t) {
++            if (ch == 'O') ch = '0';
++            if (ch == 'I' || ch == 'L') ch = '1';
++            const char* f = std::strchr(kB32, ch);
++            if (!f || !*f) return false;
++            const uint64_t d = (uint64_t)(f - kB32);
++            p = (p << 5) | (l >> 43);
++            l = ((l << 5) & 0xFFFFFFFFFFFFull) | d;
++        }
++        if (p >> 48) return false;   // the 4 spare bits must be 0 (a typo check)
++        out.push_back(unpackEndpoint(l));
++        if (unpackEndpoint(p) != out[0]) out.push_back(unpackEndpoint(p));
++        return true;
++    }
++    std::string one;
++    if (!decodeTarget(typed, one)) return false;
++    out.push_back(one);
++    return true;
++}
++
++bool UdpSession::decodeTarget(const std::string& typed, std::string& ipPort) {
++    std::string t;
++    for (char ch : typed) if (ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n') t += ch;
++    if (t.size() > 4 && (t.compare(0, 4, "WFC-") == 0 || t.compare(0, 4, "wfc-") == 0)) t = t.substr(4);   // an optional prefix
++    if (t.empty()) return false;
++    if (t.find('.') != std::string::npos) {   // an address: a.b.c.d[:port]
++        unsigned a[4];
++        if (std::sscanf(t.c_str(), "%u.%u.%u.%u", &a[0], &a[1], &a[2], &a[3]) != 4 || a[0] > 255 || a[1] > 255 || a[2] > 255 || a[3] > 255) return false;
++        ipPort = t.find(':') == std::string::npos ? t + ":14000" : t;
++        return true;
++    }
++    std::string c;
++    for (char ch : t) if (ch != '-') c += (char)std::toupper((unsigned char)ch);
++    if (c.size() != 10) return false;
++    uint64_t v = 0;
++    for (char ch : c) {
++        if (ch == 'O') ch = '0';
++        if (ch == 'I' || ch == 'L') ch = '1';
++        const char* f = std::strchr(kB32, ch);
++        if (!f || !*f) return false;
++        v = (v << 5) | (uint64_t)(f - kB32);
++    }
++    if (v >> 48) return false;   // the 2 spare bits must be 0 (a typo check)
++    char b[32];
++    std::snprintf(b, sizeof b, "%u.%u.%u.%u:%u", (unsigned)(v >> 40) & 255, (unsigned)(v >> 32) & 255, (unsigned)(v >> 24) & 255,
++                  (unsigned)(v >> 16) & 255, (unsigned)v & 0xffff);
++    ipPort = b;
++    return true;
++}
++
++// ---- host ----
++void UdpSession::host(const SessionHostSettings& settings) {
++    hostSettings_ = settings;
++    serviceCode_.clear(); registeredAt_ = -1.0; lastRegister_ = -1e9;
++    if (role_ != Role::Offline) leave();
++    std::string err;
++    for (int p = opt_.hostPort; p < opt_.hostPort + 10 && !t_; ++p)
++        t_ = createUdpTransport(0, opt_.bindIp + ":" + std::to_string(p), {}, err);
++    if (!t_) {
++        LOG_WARN("session: cannot open UDP %d-%d (%s)", opt_.hostPort, opt_.hostPort + 9, err.c_str());
++        SessionEvent e; e.type = SessionEvent::Type::HostFailed; e.hostFailure = SessionHostFailure::NoPath; emit(e);
++        return;
++    }
++    role_ = Role::Host;
++    peers_.clear(); nextSeat_ = 1; matchToSession_.clear(); matchSelf_ = -1; view_.reset(); matchRunning_ = false;
++    publicEp_.clear(); stunAddr_.clear(); stunSentAt_ = -1.0;
++    hostPending_ = true; hostStart_ = now_; discDone_ = false;
++    if (opt_.internet) {   // UPnP + DNS on a worker (blocking calls, ~3 s at most); the STUN query goes from the session socket
++        disc_ = std::make_shared<Discovery>();
++        const std::string la = t_->localAddress();
++        disc_->port = std::atoi(la.c_str() + la.rfind(':') + 1);
++        const int port = disc_->port;
++        disc_->map = std::async(std::launch::async, [port] { return upnpMapUdp(port, 7200, "WFC Rebuild"); });
++        const std::string stun = opt_.stunServer;
++        disc_->stun = std::async(std::launch::async, [stun] { return stun.empty() ? std::string() : resolveIpv4(stun); });
++    } else {
++        finishHostOpened();
++    }
++}
++
++void UdpSession::finishHostOpened() {
++    if (!hostPending_ || !t_) return;
++    if (!serviceAddr_.empty() && serviceCode_.empty() && now_ - hostStart_ < 1.5) return;   // the service code first (tickService registers)
++    hostPending_ = false;
++    SessionEvent e; e.type = SessionEvent::Type::HostOpened;
++    e.address = t_->localAddress();
++    e.joinCode = !serviceCode_.empty() ? serviceCode_ : publicEp_.empty() ? lanCode(e.address) : internetCode(publicEp_, e.address);
++    LOG_INFO("session: hosting at %s, public %s (code %s), member id %s", e.address.c_str(), publicEp_.empty() ? "unknown (LAN only)" : publicEp_.c_str(),
++             e.joinCode.c_str(), self_.id.fingerprint.c_str());
++    emit(e);
++}
++
++// ---- join ----
++void UdpSession::join(const std::string& target) {
++    if (role_ != Role::Offline) leave();
++    std::vector<std::string> cands;
++    std::string letters;
++    for (char ch : target) if (std::isalpha((unsigned char)ch)) letters += (char)std::toupper((unsigned char)ch);
++    if (letters.size() == 6 && target.find('.') == std::string::npos && !decodeTargets(target, cands)) {   // a lobby service code
++        if (serviceAddr_.empty()) { SessionEvent e; e.type = SessionEvent::Type::JoinFailed; e.joinFailure = SessionJoinFailure::Invalid; emit(e); return; }
++        std::string err;
++        t_ = createUdpTransport(255, opt_.bindIp + ":0", {}, err);
++        if (!t_) { SessionEvent e; e.type = SessionEvent::Type::JoinFailed; e.joinFailure = SessionJoinFailure::Timeout; emit(e); return; }
++        joinCandidates_.clear(); joining_ = true; joinStart_ = now_; lastJoinSend_ = -1e9; joinTarget_.clear();
++        peers_.clear(); matchToSession_.clear(); matchSelf_ = -1; view_.reset(); matchRunning_ = false;
++        sendService("{\"op\":\"lookup\",\"code\":\"" + letters + "\",\"lan\":\"" + t_->localAddress() + "\"}");
++        SessionEvent e; e.type = SessionEvent::Type::JoinProgress; e.connecting = true; emit(e);
++        LOG_INFO("session: joining service code %s via %s", letters.c_str(), serviceAddr_.c_str());
++        return;
++    }
++    if (!decodeTargets(target, cands) || cands.empty()) {
++        SessionEvent e; e.type = SessionEvent::Type::JoinFailed; e.joinFailure = SessionJoinFailure::Invalid; emit(e);
++        return;
++    }
++    joinCandidates_ = cands;
++    const std::string addr = cands[0];
++    std::string err;
++    t_ = createUdpTransport(255, opt_.bindIp + ":0", {}, err);
++    if (!t_) {
++        SessionEvent e; e.type = SessionEvent::Type::JoinFailed; e.joinFailure = SessionJoinFailure::Timeout; emit(e);
++        return;
++    }
++    joinTarget_ = addr; joining_ = true; joinStart_ = now_; lastJoinSend_ = -1e9;
++    peers_.clear(); matchToSession_.clear(); matchSelf_ = -1; view_.reset(); matchRunning_ = false;
++    SessionEvent e; e.type = SessionEvent::Type::JoinProgress; e.connecting = true; emit(e);
++    LOG_INFO("session: joining %s%s (typed '%s')", addr.c_str(), cands.size() > 1 ? (" / " + cands[1]).c_str() : "", target.c_str());
++}
++
++void UdpSession::cancelJoin() {
++    if (!joining_) return;
++    joining_ = false;
++    t_.reset();
++    role_ = Role::Offline;
++}
++
++void UdpSession::leave() {
++    if (!t_) { role_ = Role::Offline; return; }
++    W m(kLeave);
++    if (role_ == Role::Host) sendAllMembers(m.b);
++    else if (peers_.count(0)) sendSeat(0, m.b);
++    for (int k = 0; k < 2; ++k) for (const auto& kv : peers_) t_->sendUnreliable(kv.first, m.b.data(), m.b.size());
++    t_->service();
++    endSession();
++}
++
++void UdpSession::endSession() {
++    if (disc_ && disc_->result.mapped) {
++        const PortMapResult m = disc_->result;
++        const int port = disc_->port;
++        std::thread([m, port] { upnpUnmapUdp(m, port); }).detach();
++    }
++    disc_.reset(); hostPending_ = false;
++    t_.reset(); view_.reset();
++    role_ = Role::Offline; joining_ = false; held_ = false; matchRunning_ = false;
++    peers_.clear(); matchToSession_.clear(); matchSelf_ = -1;
++}
++
++// ---- lobby ----
++std::vector<uint8_t> UdpSession::lobbyMsg(uint8_t type, const SessionLobby& l) const { W w(type); w.lobby(l); return w.b; }
++
++void UdpSession::publishLobby(const SessionLobby& lobby) {
++    if (role_ != Role::Host) return;
++    lobby_ = lobby;
++    sendAllMembers(lobbyMsg(kLobby, lobby_));
++}
++
++void UdpSession::setMemberInfo(const SessionMemberInfo& info) {
++    const std::string fp = self_.id.fingerprint;
++    self_ = info;
++    if (self_.id.fingerprint.empty()) self_.id.fingerprint = fp;
++    if (role_ == Role::Member && peers_.count(0)) { W w(kInfo); w.info(self_); sendSeat(0, w.b); }
++}
++
++void UdpSession::sendSeat(int seat, const std::vector<uint8_t>& msg) { if (t_) t_->sendReliable(seat, msg.data(), msg.size()); }
++void UdpSession::sendAllMembers(const std::vector<uint8_t>& msg) { for (const auto& kv : peers_) sendSeat(kv.first, msg); }
++
++void UdpSession::sendPeerTable() {   // host: every member learns every other member's address (the match is a full mesh)
++    W w(kPeers);
++    w.u8((int)peers_.size() + 1);
++    w.u8(0); w.str(self_.id.fingerprint); w.str("");   // the host: each member already has it as seat 0
++    for (const auto& kv : peers_) { w.u8(kv.first); w.str(kv.second.info.id.fingerprint); w.str(kv.second.address); }
++    sendAllMembers(w.b);
++}
++
++int UdpSession::seatOf(const SessionMemberId& m) const {
++    if (m == self_.id) return t_ ? t_->self() : -1;
++    for (const auto& kv : peers_) if (kv.second.info.id == m) return kv.first;
++    return -1;
++}
++
++void UdpSession::kick(const SessionMemberId& member, SessionKickReason why) {
++    if (role_ != Role::Host) return;
++    const int seat = seatOf(member);
++    if (seat <= 0) return;
++    W w(kKick); w.u8((int)why);
++    sendSeat(seat, w.b);
++    for (int k = 0; k < 2; ++k) t_->sendUnreliable(seat, w.b.data(), w.b.size());
++    t_->service();
++    dropPeer(seat, SessionLeaveReason::Kicked, true);
++}
++
++void UdpSession::setMuted(const SessionMemberId& member, bool muted) {
++    if (muted) muted_[member.fingerprint] = true;
++    else muted_.erase(member.fingerprint);
++}
++
++// A member is gone: in the lobby MemberLeft (host), during the load gate / the match PeerDropped (everyone).
++void UdpSession::dropPeer(int seat, SessionLeaveReason why, bool notify) {
++    auto it = peers_.find(seat);
++    if (it == peers_.end()) return;
++    const SessionMemberId id = it->second.info.id;
++    peers_.erase(it);
++    if (t_) t_->removePeer(seat);
++    const bool inMatch = matchReady();
++    LOG_INFO("session: member %s (seat %d) gone (%d)%s", id.fingerprint.c_str(), seat, (int)why, inMatch ? " in the match" : "");
++    if (role_ == Role::Host && notify) {
++        W w(kDropped); w.str(id.fingerprint); w.u8((int)why); w.u8(inMatch ? 1 : 0);
++        sendAllMembers(w.b);
++        sendPeerTable();
++    }
++    SessionEvent e;
++    e.type = inMatch ? SessionEvent::Type::PeerDropped : SessionEvent::Type::MemberLeft;
++    e.member = id; e.leaveReason = why; e.value = 0;
++    if (role_ == Role::Host || inMatch) emit(e);
++    if (inMatch) checkAllLoaded();
++}
++
++// ---- start ----
++void UdpSession::setLaunch(const std::string& matchUrl, uint32_t seed, const SessionLobby& roster) {
++    launchUrl_ = matchUrl; launchSeed_ = seed; launchRoster_ = roster;
++}
++
++void UdpSession::requestStart() {
++    if (role_ != Role::Host) return;
++    // The match seats: the roster's humans in slot order (the launch record's humans); the host is among them.
++    matchToSession_.clear();
++    const SessionLobby& r = launchRoster_.slots.empty() ? lobby_ : launchRoster_;
++    for (const SessionSlot& s : r.slots) {
++        if (s.kind != SessionSlot::Kind::Human) continue;
++        const int seat = seatOf(s.member);
++        if (seat >= 0) matchToSession_.push_back(seat);
++        else LOG_WARN("session: roster member %s is not in the session - left out of the match", s.member.fingerprint.c_str());
++    }
++    if (std::find(matchToSession_.begin(), matchToSession_.end(), 0) == matchToSession_.end()) matchToSession_.insert(matchToSession_.begin(), 0);
++    matchSelf_ = (int)(std::find(matchToSession_.begin(), matchToSession_.end(), 0) - matchToSession_.begin());
++    view_ = std::make_unique<MatchView>(*this);
++    W w(kLaunch); w.str(launchUrl_); w.u32(launchSeed_); w.lobby(r);
++    w.u8((int)matchToSession_.size()); for (int s : matchToSession_) w.u8(s);
++    sendAllMembers(w.b);
++    for (auto& kv : peers_) kv.second.loaded = false;
++    loadedSelf_ = false; loadStart_ = now_;
++    LOG_INFO("session: start - %zu match seats, url %s, seed %u", matchToSession_.size(), launchUrl_.c_str(), launchSeed_);
++}
++
++void UdpSession::reportLoaded(uint64_t simId, uint64_t loadHash) {
++    held_ = true;
++    if (role_ == Role::Member) { W w(kLoaded); w.u64(simId); w.u64(loadHash); sendSeat(0, w.b); return; }
++    if (role_ != Role::Host) return;
++    loadedSelf_ = true;
++    W w(kPeerLoaded); w.str(self_.id.fingerprint); sendAllMembers(w.b);
++    SessionEvent e; e.type = SessionEvent::Type::PeerLoaded; e.member = self_.id; emit(e);
++    (void)simId;
++    checkAllLoaded();
++}
++
++void UdpSession::checkAllLoaded() {
++    if (role_ != Role::Host || !loadedSelf_ || matchRunning_) return;
++    for (int s : matchToSession_) {
++        if (s == 0) continue;
++        auto it = peers_.find(s);
++        if (it != peers_.end() && !it->second.loaded) return;
++    }
++    matchRunning_ = true; held_ = false;
++    W w(kAllLoaded); w.u32(1); sendAllMembers(w.b);
++    SessionEvent e; e.type = SessionEvent::Type::AllLoaded; e.value = 1; emit(e);
++    LOG_INFO("session: all loaded - the match starts");
++}
++
++void UdpSession::matchEnded() {
++    matchRunning_ = false; held_ = false; view_.reset(); matchToSession_.clear(); matchSelf_ = -1;
++    if (role_ == Role::Host) { W w(kReturn); sendAllMembers(w.b); lobby_.matchRunning = false; sendAllMembers(lobbyMsg(kLobby, lobby_)); }
++}
++
++INetTransport* UdpSession::matchTransport() { return view_.get(); }
++
++void UdpSession::matchFailed(int status, int64_t tick) {
++    SessionEvent e;
++    if (status == 3) { e.type = SessionEvent::Type::Desync; e.value = tick; }
++    else if (status == 5) e.type = SessionEvent::Type::HostLost;
++    else { e.type = SessionEvent::Type::ConnectionLost; e.timedOut = status == 4; }
++    LOG_WARN("session: the match failed (status %d at tick %lld)", status, (long long)tick);
++    emit(e);
++}
++
++const SessionMemberId& UdpSession::matchMember(int matchSeat) const {
++    static const SessionMemberId none;
++    if (matchSeat < 0 || (size_t)matchSeat >= matchToSession_.size()) return none;
++    const int s = matchToSession_[(size_t)matchSeat];
++    if (t_ && s == t_->self()) return self_.id;
++    auto it = peers_.find(s);
++    return it == peers_.end() ? none : it->second.info.id;
++}
++
++// ---- receive ----
++void UdpSession::handleStranger(const std::string& from, const std::vector<uint8_t>& d) {
++    if (d.empty()) return;
++    if (d.size() >= 4 && d[0] == 'W' && d[1] == 'F' && d[2] == 'C' && d[3] == 'L') { handleService(from, d); return; }
++    if (d[0] == kDiscover && role_ == Role::Host && hostSettings_.isPublic) {   // LAN discovery: a public lobby answers
++        W w(kAnnounce); w.u32(kProtocol);
++        w.str(self_.displayName); w.str(lobby_.gameModeTag.empty() ? hostSettings_.gameModeTag : lobby_.gameModeTag); w.str(hostSettings_.playlist);
++        w.i32(lobby_.mapId); w.i32((int)peers_.size() + 1); w.i32(lobby_.slots.empty() ? 10 : (int)lobby_.slots.size());
++        w.str(lanCode(t_->localAddress())); w.u8(matchRunning_ ? 1 : 0);
++        t_->sendTo(from, w.b.data(), w.b.size());
++        return;
++    }
++    if (d[0] == kPing && t_) { std::vector<uint8_t> p = d; p[0] = kPong; t_->sendTo(from, p.data(), p.size()); return; }
++    if (d[0] == kPong) {
++        R pr(d); const uint32_t nonce = pr.u32(); (void)nonce;
++        for (Candidate& c : candidates_)
++            for (const std::string& ep : c.endpoints)
++                if (ep == from && c.pingSentAt > 0.0) {
++                    const int ms = (int)((now_ - c.pingSentAt) * 1000.0 + 0.5);
++                    if (c.bestPing < 0 || ms < c.bestPing) c.bestPing = ms;
++                }
++        return;
++    }
++    if (d[0] == kAnnounce && search_ != Search::None) {
++        R ar(d);
++        if (ar.u32() != kProtocol) return;
++        Candidate c;
++        c.entry.hostName = ar.str(); c.entry.modeTag = ar.str(); c.entry.playlist = ar.str();
++        c.entry.mapId = ar.i32(); c.entry.players = ar.i32(); c.entry.maxPlayers = ar.i32();
++        c.entry.code = ar.str(); c.state = ar.u8() ? "inprogress" : "pregame"; c.entry.lan = true;
++        if (!ar.ok) return;
++        c.endpoints = {from};
++        addCandidate(c);
++        return;
++    }
++    if (isStunPacket(d.data(), d.size())) {   // the reply to our public-address query
++        std::string mapped;
++        if (hostPending_ && from == stunAddr_ && stunParse(d.data(), d.size(), stunTx_, mapped)) {
++            publicEp_ = mapped; discDone_ = true;
++            LOG_INFO("session: STUN %s sees this host as %s", stunAddr_.c_str(), mapped.c_str());
++            finishHostOpened();
++        }
++        return;
++    }
++    R r(d);
++    if (d[0] == kJoin && role_ == Role::Host) {
++        const uint32_t proto = r.u32();
++        SessionMemberInfo info = r.info();
++        if (!r.ok) return;
++        if (proto != kProtocol) { std::vector<uint8_t> f = {kJoinFail, (uint8_t)SessionJoinFailure::Version}; t_->sendTo(from, f.data(), f.size()); return; }
++        int seat = -1;
++        for (const auto& kv : peers_) if (kv.second.address == from || kv.second.info.id == info.id) seat = kv.first;   // a JOIN resend
++        const bool fresh = seat < 0;
++        if (fresh) {
++            if (peers_.size() >= 15) { std::vector<uint8_t> f = {kJoinFail, (uint8_t)SessionJoinFailure::Full}; t_->sendTo(from, f.data(), f.size()); return; }
++            seat = nextSeat_++;
++            t_->addPeer(seat, from);
++            Peer& p = peers_[seat];
++            p.info = info; p.address = from; p.lastHeard = now_;
++        }
++        std::vector<uint8_t> ok = {kJoinOk, (uint8_t)seat};
++        t_->sendTo(from, ok.data(), ok.size());
++        if (fresh) {
++            SessionLobby l = lobby_;
++            l.matchRunning = matchRunning_ || matchReady();
++            sendSeat(seat, lobbyMsg(kLobby, l));
++            sendPeerTable();
++            SessionEvent e; e.type = SessionEvent::Type::MemberJoined; e.member = info.id; e.info = info; emit(e);
++            LOG_INFO("session: %s (%s) joined from %s as seat %d", info.displayName.c_str(), info.id.fingerprint.c_str(), from.c_str(), seat);
++        }
++    } else if (d[0] == kJoinOk && joining_ && std::find(joinCandidates_.begin(), joinCandidates_.end(), from) != joinCandidates_.end()) {
++        joinTarget_ = from;   // the endpoint that answered
++        const int seat = r.u8();
++        if (!r.ok || seat <= 0) return;
++        if (t_->self() != seat) {
++            t_->setSelf(seat);
++            t_->addPeer(0, joinTarget_);
++            Peer& h = peers_[0];
++            h.address = joinTarget_; h.lastHeard = now_;
++            LOG_INFO("session: seated as %d by the host at %s", seat, joinTarget_.c_str());
++        }
++    } else if (d[0] == kJoinFail && joining_ && std::find(joinCandidates_.begin(), joinCandidates_.end(), from) != joinCandidates_.end()) {
++        joining_ = false;
++        SessionEvent e; e.type = SessionEvent::Type::JoinFailed; e.joinFailure = (SessionJoinFailure)r.u8(); emit(e);
++        endSession();
++    }
++}
++
++void UdpSession::handleSeated(int seat, const std::vector<uint8_t>& d) {
++    R r(d);
++    switch (d[0]) {
++    case kLobby:
++        if (role_ == Role::Host) break;
++        lobby_ = r.lobby();
++        if (!r.ok) break;
++        if (joining_) {
++            joining_ = false; role_ = Role::Member;
++            SessionEvent e; e.type = lobby_.matchRunning ? SessionEvent::Type::MatchInProgress : SessionEvent::Type::Joined;
++            e.lobby = lobby_; e.member = self_.id; emit(e);
++            W w(kInfo); w.info(self_); sendSeat(0, w.b);
++        } else {
++            SessionEvent e; e.type = SessionEvent::Type::LobbyState; e.lobby = lobby_; emit(e);
++        }
++        break;
++    case kPeers: {
++        if (role_ == Role::Host || seat != 0) break;
++        std::map<int, Peer> keep;
++        if (peers_.count(0)) keep[0] = peers_[0];
++        for (int k = r.u8(); k > 0 && r.ok; --k) {
++            const int s = r.u8();
++            const std::string fp = r.str(), addr = r.str();
++            if (!r.ok) break;
++            if (s == 0) { keep[0].info.id.fingerprint = fp; continue; }
++            if (t_ && s == t_->self()) continue;
++            Peer p = peers_.count(s) ? peers_[s] : Peer{};
++            p.info.id.fingerprint = fp; p.address = addr;
++            if (p.lastHeard <= 0.0) p.lastHeard = now_;
++            if (t_) t_->addPeer(s, addr);
++            keep[s] = p;
++        }
++        for (const auto& kv : peers_) if (!keep.count(kv.first) && t_) t_->removePeer(kv.first);
++        peers_ = keep;
++        break;
++    }
++    case kInfo: {
++        if (role_ != Role::Host || !peers_.count(seat)) break;
++        SessionMemberInfo info = r.info();
++        if (!r.ok) break;
++        info.id = peers_[seat].info.id;   // the id is the one it joined with
++        peers_[seat].info = info;
++        SessionEvent e; e.type = SessionEvent::Type::MemberJoined; e.member = info.id; e.info = info; emit(e);
++        break;
++    }
++    case kLaunch: {
++        if (role_ != Role::Member || seat != 0) break;
++        launchUrl_ = r.str(); launchSeed_ = r.u32(); launchRoster_ = r.lobby();
++        matchToSession_.clear();
++        for (int k = r.u8(); k > 0 && r.ok; --k) matchToSession_.push_back(r.u8());
++        if (!r.ok) break;
++        auto me = std::find(matchToSession_.begin(), matchToSession_.end(), t_ ? t_->self() : -1);
++        matchSelf_ = me == matchToSession_.end() ? -1 : (int)(me - matchToSession_.begin());
++        if (matchSelf_ < 0) { LOG_WARN("session: the launch roster does not include this member"); break; }
++        view_ = std::make_unique<MatchView>(*this);
++        SessionEvent e; e.type = SessionEvent::Type::CountdownStarted;
++        e.launchUrl = launchUrl_; e.seed = launchSeed_; e.lobby = launchRoster_;
++        emit(e);
++        break;
++    }
++    case kLoaded: {
++        if (role_ != Role::Host || !peers_.count(seat)) break;
++        (void)r.u64(); (void)r.u64();   // simId / loadHash: the lockstep's HELLO launch hash checks the launch itself
++        peers_[seat].loaded = true;
++        W w(kPeerLoaded); w.str(peers_[seat].info.id.fingerprint); sendAllMembers(w.b);
++        SessionEvent e; e.type = SessionEvent::Type::PeerLoaded; e.member = peers_[seat].info.id; emit(e);
++        checkAllLoaded();
++        break;
++    }
++    case kPeerLoaded: {
++        if (role_ != Role::Member) break;
++        SessionEvent e; e.type = SessionEvent::Type::PeerLoaded; e.member.fingerprint = r.str(); emit(e);
++        break;
++    }
++    case kAllLoaded: {
++        if (role_ != Role::Member) break;
++        held_ = false; matchRunning_ = true;
++        SessionEvent e; e.type = SessionEvent::Type::AllLoaded; e.value = (int64_t)r.u32(); emit(e);
++        break;
++    }
++    case kLeave:
++        if (role_ == Role::Host) dropPeer(seat, SessionLeaveReason::Left, true);
++        else if (seat == 0) { SessionEvent e; e.type = SessionEvent::Type::HostLost; emit(e); endSession(); }
++        break;
++    case kKick:
++        if (role_ == Role::Member && seat == 0) {
++            SessionEvent e; e.type = SessionEvent::Type::Kicked; e.kickReason = (SessionKickReason)r.u8(); emit(e);
++            endSession();
++        }
++        break;
++    case kDropped: {
++        if (role_ != Role::Member || seat != 0) break;
++        SessionEvent e;
++        e.member.fingerprint = r.str(); e.leaveReason = (SessionLeaveReason)r.u8();
++        const bool inMatch = r.u8() != 0;
++        if (inMatch) { e.type = SessionEvent::Type::PeerDropped; emit(e); }   // in the lobby the host's next LOBBY shows it
++        break;
++    }
++    case kVersion:
++        if (role_ == Role::Member && seat == 0) {
++            SessionEvent e; e.type = SessionEvent::Type::JoinFailed; e.joinFailure = SessionJoinFailure::Version; emit(e);
++            endSession();
++        }
++        break;
++    case kReturn:
++        if (role_ == Role::Member && seat == 0) { matchRunning_ = false; held_ = false; view_.reset(); matchToSession_.clear(); matchSelf_ = -1; }
++        break;
++    default: break;
++    }
++}
++
++void UdpSession::pump() {
++    if (!t_) return;
++    t_->service();
++    std::string from;
++    std::vector<uint8_t> d;
++    while (t_ && t_->pollStranger(from, d)) handleStranger(from, d);
++    NetPacket p;
++    while (t_ && t_->poll(p)) {
++        if (p.data.empty()) continue;
++        auto pi = peers_.find(p.from);
++        if (pi != peers_.end()) pi->second.lastHeard = now_;
++        const uint8_t type = p.data[0];
++        if (type == kKeepalive) continue;
++        if (isSessionType(type)) { if (p.reliable) handleSeated(p.from, p.data); else if (type == kLeave || type == kKick) handleSeated(p.from, p.data); continue; }
++        if (view_) {   // a lockstep packet: to the match view in match seats
++            auto m = std::find(matchToSession_.begin(), matchToSession_.end(), p.from);
++            if (m == matchToSession_.end()) continue;
++            p.from = (int)(m - matchToSession_.begin());
++            view_->inbox.push_back(std::move(p));
++        }
++    }
++}
++
++std::vector<SessionEvent> UdpSession::poll(double now) {
++    now_ = now;
++    if (joining_ && t_) {
++        if (now_ - lastJoinSend_ >= 1.0 && t_->self() == 255) {   // JOIN until seated (out of band: no seat yet)
++            lastJoinSend_ = now_;
++            W w(kJoin); w.u32(kProtocol); w.info(self_);
++            for (const std::string& c : joinCandidates_) t_->sendTo(c, w.b.data(), w.b.size());   // the LAN endpoint and the public one
++        }
++        if (now_ - joinStart_ >= opt_.joinTimeoutS) {
++            SessionEvent e; e.type = SessionEvent::Type::JoinFailed; e.joinFailure = SessionJoinFailure::Timeout; emit(e);
++            endSession();
++        }
++    }
++    pump();
++    if (hostPending_ && disc_ && t_) {
++        using namespace std::chrono_literals;
++        if (disc_->map.valid() && disc_->map.wait_for(0s) == std::future_status::ready) {
++            disc_->result = disc_->map.get();
++            if (disc_->result.mapped && !disc_->result.externalIp.empty()) { publicEp_ = disc_->result.externalIp + ":" + std::to_string(disc_->port); discDone_ = true; finishHostOpened(); }
++        }
++        if (hostPending_ && !disc_->map.valid() && stunSentAt_ < 0.0 && disc_->stun.valid() && disc_->stun.wait_for(0s) == std::future_status::ready) {
++            stunAddr_ = disc_->stun.get();   // UPnP gave nothing: ask STUN from the session socket
++            if (!stunAddr_.empty()) { const std::vector<uint8_t> q = stunRequest(stunTx_); t_->sendRaw(stunAddr_, q.data(), q.size()); stunSentAt_ = now_; }
++        }
++        if (hostPending_ && (now_ - hostStart_ >= opt_.discoverTimeoutS || (!disc_->map.valid() && !disc_->stun.valid() && stunSentAt_ < 0.0)))
++            { discDone_ = true; finishHostOpened(); }   // no public endpoint in time: the LAN code
++    }
++    if (t_ && now_ - lastKeepalive_ >= 1.0) {
++        lastKeepalive_ = now_;
++        const uint8_t k = kKeepalive;
++        for (const auto& kv : peers_) t_->sendUnreliable(kv.first, &k, 1);
++    }
++    // Timeouts: the host drops silent members; a member ends the session when the host is silent (other members: the host decides).
++    if (role_ == Role::Host) {
++        std::vector<int> gone;
++        for (const auto& kv : peers_) if (now_ - kv.second.lastHeard > opt_.connectionTimeoutS) gone.push_back(kv.first);
++        for (int s : gone) dropPeer(s, SessionLeaveReason::Timeout, true);
++        if (matchReady() && !matchRunning_ && loadedSelf_ && now_ - loadStart_ > opt_.loadTimeoutS)
++            for (int s : matchToSession_) if (s != 0 && peers_.count(s) && !peers_[s].loaded) dropPeer(s, SessionLeaveReason::LoadTimeout, true);
++    } else if (role_ == Role::Member && peers_.count(0) && now_ - peers_[0].lastHeard > opt_.connectionTimeoutS) {
++        SessionEvent e; e.type = SessionEvent::Type::ConnectionLost; e.timedOut = true; emit(e);
++        endSession();
++    }
++    tickService();
++    tickSearch();
++    std::vector<SessionEvent> out;
++    out.swap(out_);
++    return out;
++}
++
++// ---- public matches ----
++struct ServiceResolve { std::future<std::string> addr; };
++
++void UdpSession::setLobbyService(const std::string& address) {
++    if (address == serviceName_) return;
++    serviceName_ = address; serviceAddr_.clear(); serviceReplied_ = false;
++    if (address.empty()) { serviceResolve_.reset(); return; }
++    serviceResolve_ = std::make_shared<ServiceResolve>();
++    serviceResolve_->addr = std::async(std::launch::async, [address] { return resolveIpv4(address.find(':') == std::string::npos ? address + ":14010" : address); });
++    LOG_INFO("session: lobby service %s", address.c_str());
++}
++
++bool UdpSession::ensureSocket() {
++    if (t_) return true;
++    std::string err;
++    t_ = createUdpTransport(255, opt_.bindIp + ":0", {}, err);   // browsing: any port, no seat
++    return t_ != nullptr;
++}
++
++void UdpSession::sendService(const std::string& json) {
++    if (serviceAddr_.empty() || !t_) return;
++    std::vector<uint8_t> b = {'W', 'F', 'C', 'L'};
++    b.insert(b.end(), json.begin(), json.end());
++    t_->sendRaw(serviceAddr_, b.data(), b.size());
++    serviceWanted_ = true; serviceAskedAt_ = now_;
++}
++
++void UdpSession::tickService() {
++    if (serviceResolve_ && serviceResolve_->addr.valid()) {
++        using namespace std::chrono_literals;
++        if (serviceResolve_->addr.wait_for(0s) == std::future_status::ready) {
++            serviceAddr_ = serviceResolve_->addr.get();
++            LOG_INFO("session: lobby service %s -> %s", serviceName_.c_str(), serviceAddr_.empty() ? "(unresolved)" : serviceAddr_.c_str());
++        }
++    }
++    // The host registers its lobby every 5 s (public: listed for Quick Match; private: its 6-letter code works).
++    if (role_ == Role::Host && t_ && !serviceAddr_.empty() && now_ - lastRegister_ >= 5.0) {
++        lastRegister_ = now_;
++        const std::string mode = lobby_.gameModeTag.empty() ? hostSettings_.gameModeTag : lobby_.gameModeTag;
++        char b[1024];
++        std::snprintf(b, sizeof b,
++                      "{\"op\":\"register\",\"name\":\"%s\",\"mode\":\"%s\",\"playlist\":\"%s\",\"map\":%d,\"players\":%d,\"max\":%d,"
++                      "\"version\":\"%s\",\"region\":\"\",\"lan\":\"%s\",\"public\":%s,\"state\":\"%s\"%s%s%s}",
++                      jsonEsc(self_.displayName).c_str(), jsonEsc(mode).c_str(), jsonEsc(hostSettings_.playlist).c_str(), lobby_.mapId,
++                      (int)peers_.size() + 1, lobby_.slots.empty() ? 10 : (int)lobby_.slots.size(), versionTag().c_str(), t_->localAddress().c_str(),
++                      hostSettings_.isPublic ? "true" : "false", matchRunning_ ? "inprogress" : "pregame",
++                      serviceCode_.empty() ? "" : ",\"code\":\"", serviceCode_.c_str(), serviceCode_.empty() ? "" : "\"");
++        sendService(b);
++    }
++    // HostOpened waits a moment for the service code (when a service is set), else the internet / LAN code goes out. With the internet
++    // discovery still running (disc_), its own completion calls finishHostOpened.
++    if (hostPending_ && (!disc_ || discDone_) && (!serviceCode_.empty() || serviceAddr_.empty() || now_ - hostStart_ >= 1.5)) finishHostOpened();
++}
++
++void UdpSession::handleService(const std::string& from, const std::vector<uint8_t>& d) {
++    if (from != serviceAddr_) return;
++    assets::Json m;
++    if (!assets::Json::parse(std::string((const char*)d.data() + 4, d.size() - 4), m)) return;
++    serviceReplied_ = true;
++    const std::string op = m["op"].asString();
++    if (op == "registered") {
++        const bool first = serviceCode_.empty();
++        serviceCode_ = m["code"].asString();
++        if (first) LOG_INFO("session: lobby service code %s (the service sees this host as %s)", serviceCode_.c_str(), m["seen"].asString().c_str());
++        if (publicEp_.empty() && !m["seen"].asString().empty()) publicEp_ = m["seen"].asString();
++    } else if (op == "punch" && t_) {   // a joiner looked us up: send to it so our router lets its packets in
++        W w(kPing); w.u32(0);
++        for (const char* k : {"peer_public", "peer_lan"}) { const std::string a = m[k].asString(); if (!a.empty()) t_->sendTo(a, w.b.data(), w.b.size()); }
++    } else if (op == "endpoints" && joining_) {   // a 6-letter code: the host's endpoints, LAN first
++        if (m.has("error")) { joining_ = false; SessionEvent e; e.type = SessionEvent::Type::JoinFailed; e.joinFailure = SessionJoinFailure::Invalid; emit(e); return; }
++        joinCandidates_.clear();
++        for (const char* k : {"host_lan", "host_public"}) { const std::string a = m[k].asString(); if (!a.empty()) joinCandidates_.push_back(a); }
++        joinTarget_ = joinCandidates_.empty() ? std::string() : joinCandidates_[0];
++    } else if ((op == "games" || op == "quick") && search_ != Search::None) {
++        const assets::Json& list = op == "games" ? m["games"] : m["candidates"];
++        for (size_t i = 0; i < list.size(); ++i) {
++            const assets::Json& g = list[i];
++            Candidate c;
++            c.entry.code = g["code"].asString(); c.entry.hostName = g["name"].asString(); c.entry.modeTag = g["mode"].asString();
++            c.entry.playlist = g["playlist"].asString(); c.entry.mapId = g["map"].asInt(-1); c.entry.players = g["players"].asInt();
++            c.entry.maxPlayers = g["max"].asInt(); c.state = g["state"].asString();
++            for (const char* k : {"host_lan", "host_public"}) { const std::string a = g[k].asString(); if (!a.empty()) c.endpoints.push_back(a); }
++            addCandidate(c);
++        }
++    }
++}
++
++void UdpSession::addCandidate(Candidate c) {
++    for (Candidate& o : candidates_)
++        if ((!c.entry.code.empty() && o.entry.code == c.entry.code) || (!c.endpoints.empty() && !o.endpoints.empty() && o.endpoints[0] == c.endpoints[0])) {
++            for (const std::string& e : c.endpoints) if (std::find(o.endpoints.begin(), o.endpoints.end(), e) == o.endpoints.end()) o.endpoints.push_back(e);
++            return;
++        }
++    if (!searchQuery_.modeTag.empty() && c.entry.modeTag != searchQuery_.modeTag) return;
++    if (!searchQuery_.playlist.empty() && c.entry.playlist != searchQuery_.playlist) return;
++    candidates_.push_back(std::move(c));
++}
++
++void UdpSession::startSearch(Search kind) {
++    if (!ensureSocket()) { SessionEvent e; e.type = SessionEvent::Type::GameList; e.serviceReachable = false; emit(e); return; }
++    search_ = kind; searchStart_ = now_; candidates_.clear(); order_.clear(); pingRounds_ = 0; tried_ = 0; serviceReplied_ = false;
++    const std::string lan = t_->localAddress();
++    if (!serviceAddr_.empty()) {
++        if (kind == Search::Quick)
++            sendService("{\"op\":\"quick\",\"version\":\"" + versionTag() + "\",\"playlist\":\"" + jsonEsc(searchPlaylist_) + "\",\"lan\":\"" + lan + "\"}");
++        else
++            sendService("{\"op\":\"list\",\"version\":\"" + versionTag() + "\",\"playlist\":\"" + jsonEsc(searchQuery_.playlist) + "\",\"mode\":\"" +
++                        jsonEsc(searchQuery_.modeTag) + "\"}");
++    }
++    W w(kDiscover); w.u32(kProtocol);   // LAN discovery always (a LAN lobby needs no service)
++    for (int p = opt_.hostPort; p < opt_.hostPort + 10; ++p) t_->sendTo(opt_.discoverAddr + ":" + std::to_string(p), w.b.data(), w.b.size());
++    LOG_INFO("session: %s (%s)", kind == Search::Quick ? "quick match" : "find games", serviceAddr_.empty() ? "LAN only" : ("LAN + " + serviceAddr_).c_str());
++}
++
++void UdpSession::findGames(const SessionGameQuery& q) { searchQuery_ = q; startSearch(Search::Find); }
++
++void UdpSession::quickMatch(const std::string& playlist) {
++    searchQuery_ = SessionGameQuery{}; searchQuery_.playlist = playlist; searchPlaylist_ = playlist;
++    startSearch(Search::Quick);
++}
++
++void UdpSession::cancelSearch() {
++    if (search_ == Search::None) return;
++    search_ = Search::None;
++    if (joining_) cancelJoin();
++    SessionEvent e; e.type = SessionEvent::Type::SearchCancelled; emit(e);
++}
++
++void UdpSession::tickSearch() {
++    if (search_ == Search::None || !t_) return;
++    if (now_ - searchStart_ < kSearchCollectS) return;   // collect the service's answer and the LAN announcements
++    if (pingRounds_ < kPingRounds && !candidates_.empty()) {
++        if (now_ - lastPingRound_ >= kPingRoundS) {
++            lastPingRound_ = now_; ++pingRounds_;
++            for (Candidate& c : candidates_) {
++                c.pingSentAt = now_;
++                W w(kPing); w.u32(pingNonce_++);
++                for (const std::string& e : c.endpoints) t_->sendTo(e, w.b.data(), w.b.size());
++            }
++            if (search_ == Search::Quick && pingRounds_ == 1) { SessionEvent e; e.type = SessionEvent::Type::SearchProgress; e.searchTried = 0; e.searchOf = (int)candidates_.size(); emit(e); }
++        }
++        return;
++    }
++    if (now_ - lastPingRound_ < kPingRoundS && !candidates_.empty()) return;   // the last round's replies
++    if (search_ == Search::Find) { finishFind(); return; }
++    if (order_.empty() && tried_ == 0) {   // quick: the best ping first (pregame before in progress at equal ping class), then fuller
++        for (size_t i = 0; i < candidates_.size(); ++i)
++            if (candidates_[i].bestPing >= 0 && candidates_[i].bestPing <= kMaxPingMs) order_.push_back(i);
++        std::sort(order_.begin(), order_.end(), [this](size_t a, size_t b) {
++            const Candidate& x = candidates_[a]; const Candidate& y = candidates_[b];
++            if (x.bestPing / 50 != y.bestPing / 50) return x.bestPing < y.bestPing;   // 50 ms classes: then the pregame / fuller one
++            if ((x.state != "inprogress") != (y.state != "inprogress")) return x.state != "inprogress";
++            return x.entry.players > y.entry.players;
++        });
++        tryNextCandidate();
++    }
++}
++
++void UdpSession::tryNextCandidate() {
++    if ((size_t)tried_ >= order_.size()) {   // none fits: host a public lobby for the playlist
++        search_ = Search::None;
++        SessionHostSettings s = hostSettings_;
++        s.isPublic = true; s.playlist = searchPlaylist_;
++        LOG_INFO("session: quick match - no lobby fits (%zu candidates): hosting a public lobby for %s", candidates_.size(), searchPlaylist_.c_str());
++        host(s);
++        return;
++    }
++    const Candidate& c = candidates_[order_[(size_t)tried_++]];
++    SessionEvent e; e.type = SessionEvent::Type::SearchProgress; e.searchTried = tried_; e.searchOf = (int)order_.size();
++    e.time = now_; out_.push_back(e);
++    LOG_INFO("session: quick match - trying %s (%s, %d ms, %s)", c.entry.code.c_str(), c.entry.hostName.c_str(), c.bestPing, c.state.c_str());
++    const Search keep = search_;
++    std::string list;
++    for (const std::string& ep : c.endpoints) list += (list.empty() ? "" : ",") + ep;
++    const std::vector<std::string> eps = c.endpoints;
++    search_ = Search::None;   // join() resets the socket; the search state survives in the members
++    join(eps.empty() ? c.entry.code : eps[0]);
++    joinCandidates_ = eps;    // every endpoint of the candidate
++    search_ = keep;
++}
++
++void UdpSession::finishFind() {
++    SessionEvent e; e.type = SessionEvent::Type::GameList;
++    e.serviceReachable = !serviceAddr_.empty() && serviceReplied_;
++    for (const Candidate& c : candidates_) { frontend::SessionGameEntry g = c.entry; g.pingMs = c.bestPing; e.games.push_back(g); }
++    std::sort(e.games.begin(), e.games.end(), [](const frontend::SessionGameEntry& a, const frontend::SessionGameEntry& b) {
++        return (a.pingMs < 0 ? 99999 : a.pingMs) < (b.pingMs < 0 ? 99999 : b.pingMs);
++    });
++    search_ = Search::None;
++    LOG_INFO("session: find games - %zu found (service %s)", e.games.size(), e.serviceReachable ? "answered" : "none / silent");
++    emit(e);
++}
++
++}  // namespace net
+diff -ruN a/src/net/UdpSession.h b/src/net/UdpSession.h
+--- a/src/net/UdpSession.h	1969-12-31 18:00:00.000000000 -0600
++++ b/src/net/UdpSession.h	2026-10-23 00:52:47.921310000 -0500
+@@ -0,0 +1,184 @@
++#pragma once
++// [Systems] The real online session (ONLINE_PHASE2_SPLIT.md item 1): frontend::ISession (Session.h, as is) over one UDP socket.
++// Phase 2a: LAN / direct IP. The host binds UDP 14000 (14001-14009 if taken) and shows its LAN IPv4:port plus a LAN code (the
++//   address, base32: "XXXXX-XXXXX"); a member joins by that code or by "a.b.c.d[:port]". The lobby service (public lists, short
++// codes, NAT punch, relay: ONLINE_MATCHMAKING_DESIGN.md) comes later behind the same calls.
++// Internet (user decision 2026-10-17: peer-to-peer, no server): with Options::internet the host maps its UDP port on the router
++// (UPnP IGD) and reads the router's WAN address, or asks a STUN server (Options::stunServer) for the address the internet sees;
++// HostOpened then carries the INTERNET code - the public endpoint + the LAN endpoint, "XXXXX-XXXXX-XXXXX-XXXXX" - which works at
++// home and across the internet: the joiner tries the LAN endpoint and the public one. Without a mapping (no UPnP) a STUN address
++// is reachable only through routers that keep the port open to anyone (full-cone); the lobby service's punch / relay covers the rest.
++//
++// Membership: session seat 0 = the host; the host seats each joiner (1, 2, ...) on its JOIN and tells everyone every member's
++// address, so the members also reach each other directly (the lockstep match is a full mesh, as phase 1). Control messages go on
++// the transport's reliable channel; a keepalive every 1 s on the unreliable one; a peer silent ConnectionTimeout (8 s) is gone.
++// At the host's start (setLaunch + requestStart) the roster fixes the MATCH seats (the launch record's humans in slot order);
++// matchTransport() is then the lockstep's view of the same socket in match seats (phase 1's Lockstep runs on it unchanged).
++//
++// Events follow the frontend's flows (GameFlow_Online.cpp): host - HostOpened / HostFailed, MemberJoined (new or updated info),
++// MemberLeft, PeerLoaded, AllLoaded, PeerDropped; member - JoinProgress, Joined (lobby + own id) / JoinFailed, LobbyState,
++// CountdownStarted (launch record), PeerLoaded, AllLoaded, PeerDropped, HostLost, ConnectionLost, Kicked.
++#include "frontend/Session.h"
++#include "net/NatPortMap.h"
++
++#include <map>
++#include <memory>
++#include <string>
++#include <vector>
++
++namespace net {
++
++class INetTransport;
++
++class UdpSession final : public frontend::ISession {
++public:
++    struct Options {
++        int hostPort = 14000;            // the host's UDP port (the next 9 tried if taken)
++        double connectionTimeoutS = 8.0;   // a peer silent this long is gone (the frontend's ConnectionTimeout)
++        double joinTimeoutS = 50.0;      // InitialConnectTimeout
++        double loadTimeoutS = 90.0;      // the load gate: a member not loaded in this time is dropped (LoadTimeout)
++        std::string bindIp = "0.0.0.0";
++        bool internet = true;            // UPnP mapping + STUN when hosting (tests: false - no router / internet contact)
++        std::string stunServer = "stun.l.google.com:19302";   // "" = no STUN query
++        double discoverTimeoutS = 4.0;   // HostOpened waits at most this long for the public endpoint
++        std::string discoverAddr = "255.255.255.255";   // LAN discovery broadcast (tests: 127.0.0.1)
++    };
++    UdpSession();
++    explicit UdpSession(const Options& o);
++    ~UdpSession() override;
++
++    // ---- frontend::ISession ----
++    void host(const frontend::SessionHostSettings& settings) override;
++    void join(const std::string& target) override;
++    void cancelJoin() override;
++    void leave() override;
++    void publishLobby(const frontend::SessionLobby& lobby) override;
++    void setMemberInfo(const frontend::SessionMemberInfo& info) override;
++    void requestStart() override;
++    void setLaunch(const std::string& matchUrl, uint32_t seed, const frontend::SessionLobby& roster) override;
++    void reportLoaded(uint64_t simId, uint64_t loadHash) override;
++    void kick(const frontend::SessionMemberId& member, frontend::SessionKickReason why) override;
++    void setVoiceSettings(const frontend::SessionVoiceSettings& v) override { voice_ = v; }
++    void setPushToTalk(bool held) override { pushToTalk_ = held; }
++    void setMuted(const frontend::SessionMemberId& member, bool muted) override;
++    // Public matches (ONLINE_MATCHMAKING_DESIGN.md): the lobby service when set (setLobbyService "host:port"), else LAN broadcast.
++    void findGames(const frontend::SessionGameQuery& q) override;
++    void quickMatch(const std::string& playlist) override;
++    void cancelSearch() override;
++    void setLobbyService(const std::string& address) override;
++    bool simHeld() const override { return held_; }
++    std::vector<frontend::SessionEvent> poll(double now) override;
++
++    // ---- the match (the NetMatchDriver's side) ----
++    bool matchReady() const { return matchSelf_ >= 0; }   // the roster is fixed (CountdownStarted / requestStart)
++    int matchSeats() const { return (int)matchToSession_.size(); }
++    int matchSelf() const { return matchSelf_; }
++    INetTransport* matchTransport();                       // lockstep packets in match seats (null before the roster)
++    const frontend::SessionMemberId& matchMember(int matchSeat) const;
++    void matchEnded();                                     // back to the lobby (host: LobbyState with matchRunning false)
++    // The driver's lockstep failed (phase 1 codes): 3 desync -> Desync{tick}, 5 host lost -> HostLost, 4 / 6 -> ConnectionLost.
++    void matchFailed(int status, int64_t tick);
++    const std::string& launchUrl() const { return launchUrl_; }
++    uint32_t launchSeed() const { return launchSeed_; }
++    const frontend::SessionVoiceSettings& voiceSettings() const { return voice_; }
++    bool pushToTalk() const { return pushToTalk_; }
++    bool muted(const frontend::SessionMemberId& m) const { return muted_.count(m.fingerprint) != 0; }
++
++    // ---- codes (static: tests, the join prompt) ----
++    static std::string lanCode(const std::string& ipPort);              // "192.168.1.23:14000" -> "XXXXX-XXXXX"
++    static bool decodeTarget(const std::string& typed, std::string& ipPort);   // a LAN code or "a.b.c.d[:port]"
++    static std::string internetCode(const std::string& publicIpPort, const std::string& lanIpPort);   // 4 groups
++    // Every endpoint a typed target names, the LAN one first (an internet code -> LAN + public; a LAN code / address -> one).
++    static bool decodeTargets(const std::string& typed, std::vector<std::string>& ipPorts);
++    const std::string& publicEndpoint() const { return publicEp_; }   // host: "" until known
++    const frontend::SessionMemberId& selfId() const { return self_.id; }
++    int role() const { return (int)role_; }   // 0 offline, 1 host, 2 member (diagnostics)
++    void pump();                              // drains the socket: session messages here, lockstep packets to the match view
++
++private:
++    enum class Role { Offline, Host, Member };
++    struct Peer {
++        frontend::SessionMemberInfo info;
++        std::string address;     // as the host sees it
++        double lastHeard = 0.0;
++        bool loaded = false;
++    };
++    class MatchView;
++    friend class MatchView;
++
++    void emit(frontend::SessionEvent e);
++    void finishHostOpened();
++    // ---- public matches ----
++    struct Candidate {
++        frontend::SessionGameEntry entry;
++        std::vector<std::string> endpoints;   // LAN first
++        std::string state;                    // "pregame" / "inprogress" (service)
++        double pingSentAt = 0.0;
++        int bestPing = -1;
++    };
++    enum class Search { None, Find, Quick };
++    bool ensureSocket();                      // a socket for browsing (bound to any port) when not hosting / joining
++    void sendService(const std::string& json);
++    void handleService(const std::string& from, const std::vector<uint8_t>& d);
++    void addCandidate(Candidate c);
++    void tickSearch();
++    void tickService();
++    void startSearch(Search kind);
++    void tryNextCandidate();
++    void finishFind();
++    void handleStranger(const std::string& from, const std::vector<uint8_t>& d);
++    void handleSeated(int seat, const std::vector<uint8_t>& d);
++    void sendSeat(int seat, const std::vector<uint8_t>& msg);
++    void sendAllMembers(const std::vector<uint8_t>& msg);
++    void sendPeerTable();
++    void dropPeer(int seat, frontend::SessionLeaveReason why, bool notify);
++    void endSession();
++    void checkAllLoaded();
++    std::vector<uint8_t> lobbyMsg(uint8_t type, const frontend::SessionLobby& l) const;
++    int seatOf(const frontend::SessionMemberId& m) const;
++
++    Options opt_;
++    Role role_ = Role::Offline;
++    std::unique_ptr<INetTransport> t_;
++    std::unique_ptr<MatchView> view_;
++    double now_ = 0.0, lastKeepalive_ = 0.0, joinStart_ = 0.0, lastJoinSend_ = 0.0, loadStart_ = 0.0;
++    std::string joinTarget_;
++    std::vector<std::string> joinCandidates_;
++    // Internet endpoint discovery (host): the UPnP / DNS worker, then a STUN query from the session socket.
++    struct Discovery;
++    std::shared_ptr<Discovery> disc_;
++    bool hostPending_ = false, discDone_ = false;
++    double hostStart_ = 0.0, stunSentAt_ = -1.0;
++    uint8_t stunTx_[12] = {0};
++    std::string publicEp_, stunAddr_;
++    // public matches: the lobby service, the host's settings, the search
++    std::string serviceName_, serviceAddr_, serviceCode_;
++    std::shared_ptr<struct ServiceResolve> serviceResolve_;
++    bool serviceReplied_ = false, serviceWanted_ = false;
++    double lastRegister_ = -1e9, serviceAskedAt_ = 0.0, registeredAt_ = -1.0;
++    frontend::SessionHostSettings hostSettings_;
++    Search search_ = Search::None;
++    frontend::SessionGameQuery searchQuery_;
++    std::string searchPlaylist_;
++    double searchStart_ = 0.0, lastPingRound_ = 0.0;
++    int pingRounds_ = 0, tried_ = 0;
++    uint32_t pingNonce_ = 1;
++    std::vector<Candidate> candidates_;
++    std::vector<size_t> order_;               // quick match: the candidates by ping
++    bool joining_ = false, held_ = false, loadedSelf_ = false, matchRunning_ = false;
++    frontend::SessionMemberInfo self_;
++    std::map<int, Peer> peers_;            // session seat -> peer (host: every member; member: every other member incl. the host)
++    int nextSeat_ = 1;
++    frontend::SessionLobby lobby_;         // the host's published lobby / the member's last LobbyState
++    std::string launchUrl_;
++    uint32_t launchSeed_ = 0;
++    frontend::SessionLobby launchRoster_;
++    std::vector<int> matchToSession_;      // match seat -> session seat
++    int matchSelf_ = -1;
++    frontend::SessionVoiceSettings voice_;
++    bool pushToTalk_ = false;
++    std::map<std::string, bool> muted_;
++    std::vector<frontend::SessionEvent> out_;
++};
++
++}  // namespace net
+diff -ruN a/src/net/UdpTransport.cpp b/src/net/UdpTransport.cpp
+--- a/src/net/UdpTransport.cpp	2026-10-23 00:52:47.531491700 -0500
++++ b/src/net/UdpTransport.cpp	2026-10-23 00:52:47.547027500 -0500
+@@ -1,5 +1,7 @@
+ // [Systems] UdpTransport + LoopbackTransport (NetTransport.h). Datagram framing (little endian):
+ //   u8 kind (0 unreliable, 1 reliable data, 2 ack), u8 from (seat), u16 reserved, u32 seq (reliable / ack; 0 for unreliable), payload.
++//   kind 3 (stranger, online phase 2): u8 3, then the payload - out of band, to / from an address with no seat yet (a JOIN before
++//   the host seats the member, LAN discovery); delivered by pollStranger with the sender's address.
+ // Reliable channel: per peer a send sequence, the unacked packets resent every max(2 x RTT, 40 ms) (cap 250 ms) until acked; the
+ // receiver acks every reliable packet (also duplicates: the first ack may have been lost), delivers in sequence order and buffers
+ // out-of-order ones. Unreliable packets are delivered as they come (the lockstep layer tolerates loss, reorder and duplicates).
+@@ -34,7 +36,7 @@
+ }
+ 
+ constexpr size_t kHeader = 8;
+-enum : uint8_t { kUnreliable = 0, kReliable = 1, kAck = 2 };
++enum : uint8_t { kUnreliable = 0, kReliable = 1, kAck = 2, kStranger = 3 };
+ 
+ void putHeader(std::vector<uint8_t>& b, uint8_t kind, int from, uint32_t seq) {
+     b.resize(kHeader);
+@@ -106,6 +108,8 @@
+     }
+     float rttMs() const { return rttMs_; }
+     uint64_t resends() const { return resends_; }
++    void setSelf(int self) { self_ = self; }
++    void reset(int peer) { ch_.erase(peer); }   // a re-seated peer starts its reliable channel afresh
+ 
+ private:
+     int self_;
+@@ -124,6 +128,12 @@
+ void closeSock(Socket s) { close(s); }
+ #endif
+ 
++std::string addrString(const sockaddr_in& a) {
++    char ip[INET_ADDRSTRLEN] = {0};
++    inet_ntop(AF_INET, &a.sin_addr, ip, sizeof ip);
++    return std::string(ip) + ":" + std::to_string(ntohs(a.sin_port));
++}
++
+ bool parseAddr(const std::string& hp, sockaddr_in& out) {
+     const size_t c = hp.rfind(':');
+     if (c == std::string::npos) return false;
+@@ -152,6 +162,68 @@
+         ch_.resendDue([this](int peer, const std::vector<uint8_t>& d) { raw(peer, d); });
+     }
+     NetStats stats() const override { NetStats s = stats_; s.rttMs = ch_.rttMs(); s.resends = ch_.resends(); return s; }
++    bool addPeer(int seat, const std::string& hostPort) override {
++        sockaddr_in a{};
++        if (seat < 0 || seat > 254 || !parseAddr(hostPort, a)) return false;
++        auto it = peers_.find(seat);
++        if (it == peers_.end() || addrString(it->second) != hostPort) ch_.reset(seat);
++        peers_[seat] = a;
++        return true;
++    }
++    void removePeer(int seat) override { peers_.erase(seat); ch_.reset(seat); }
++    void setSelf(int seat) override { self_ = seat; ch_.setSelf(seat); }
++    std::string peerAddress(int seat) const override {
++        auto it = peers_.find(seat);
++        return it == peers_.end() ? std::string() : addrString(it->second);
++    }
++    std::string localAddress() const override {
++        // The LAN IPv4 other PCs reach (the interface a route to the internet would use; no packet is sent) + the bound port.
++        sockaddr_in me{};
++        socklen_t ml = sizeof me;
++        getsockname(sock_, (sockaddr*)&me, &ml);
++        std::string ip = "127.0.0.1";
++        Socket probe = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
++        if (probe != kBad) {
++            sockaddr_in dst{};
++            if (parseAddr("8.8.8.8:53", dst) && connect(probe, (const sockaddr*)&dst, sizeof dst) == 0) {
++                sockaddr_in out{};
++                socklen_t ol = sizeof out;
++                if (getsockname(probe, (sockaddr*)&out, &ol) == 0 && out.sin_addr.s_addr != 0) {
++                    char b[INET_ADDRSTRLEN] = {0};
++                    inet_ntop(AF_INET, &out.sin_addr, b, sizeof b);
++                    ip = b;
++                }
++            }
++            closeSock(probe);
++        }
++        return ip + ":" + std::to_string(ntohs(me.sin_port));
++    }
++    bool sendTo(const std::string& hostPort, const uint8_t* p, size_t n) override {
++        sockaddr_in a{};
++        if (!parseAddr(hostPort, a)) return false;
++        std::vector<uint8_t> d;
++        d.reserve(n + 1);
++        d.push_back(kStranger);
++        d.insert(d.end(), p, p + n);
++        sendto(sock_, (const char*)d.data(), (int)d.size(), 0, (const sockaddr*)&a, sizeof a);
++        stats_.bytesSent += d.size(); ++stats_.packetsSent;
++        return true;
++    }
++    bool sendRaw(const std::string& hostPort, const uint8_t* p, size_t n) override {
++        sockaddr_in a{};
++        if (!parseAddr(hostPort, a)) return false;
++        sendto(sock_, (const char*)p, (int)n, 0, (const sockaddr*)&a, sizeof a);
++        stats_.bytesSent += n; ++stats_.packetsSent;
++        return true;
++    }
++    bool pollStranger(std::string& from, std::vector<uint8_t>& data) override {
++        drainSocket();
++        if (strangers_.empty()) return false;
++        from = std::move(strangers_.front().first);
++        data = std::move(strangers_.front().second);
++        strangers_.pop_front();
++        return true;
++    }
+ 
+ private:
+     void raw(int peer, const std::vector<uint8_t>& d) {
+@@ -172,6 +244,19 @@
+             const int n = (int)recvfrom(sock_, (char*)buf, sizeof buf, 0, (sockaddr*)&from, &fl);
+             if (n <= 0) break;
+             stats_.bytesReceived += (uint64_t)n; ++stats_.packetsReceived;
++            if (buf[0] == kStranger) {   // out of band: keep the sender's address
++                if (strangers_.size() < 256) strangers_.push_back({addrString(from), std::vector<uint8_t>(buf + 1, buf + n)});
++                continue;
++            }
++            // the lobby service's replies (b"WFCL" + JSON) and a STUN reply: handed up whole as stranger datagrams
++            if (n >= 4 && buf[0] == 'W' && buf[1] == 'F' && buf[2] == 'C' && buf[3] == 'L') {
++                if (strangers_.size() < 256) strangers_.push_back({addrString(from), std::vector<uint8_t>(buf, buf + n)});
++                continue;
++            }
++            if (n >= 20 && (buf[0] & 0xC0) == 0 && buf[4] == 0x21 && buf[5] == 0x12 && buf[6] == 0xA4 && buf[7] == 0x42) {
++                if (strangers_.size() < 256) strangers_.push_back({addrString(from), std::vector<uint8_t>(buf, buf + n)});
++                continue;
++            }
+             std::vector<uint8_t> ack; int ackTo = -1;
+             ch_.receive(buf, (size_t)n, inbox_, ack, ackTo);
+             if (!ack.empty()) raw(ackTo, ack);
+@@ -182,6 +267,7 @@
+     std::map<int, sockaddr_in> peers_;
+     ChannelSet ch_;
+     std::deque<NetPacket> inbox_;
++    std::deque<std::pair<std::string, std::vector<uint8_t>>> strangers_;
+     NetStats stats_;
+ };
+ 
+@@ -251,9 +337,13 @@
+     Socket s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+     if (s == kBad) { error = "socket() failed"; return nullptr; }
+     if (::bind(s, (const sockaddr*)&local, sizeof local) != 0) { closeSock(s); error = "bind " + bind + " failed"; return nullptr; }
++    int bc = 1; setsockopt(s, SOL_SOCKET, SO_BROADCAST, (const char*)&bc, sizeof bc);   // LAN discovery (online phase 2)
+ #ifdef _WIN32
+     u_long nb = 1; ioctlsocket(s, FIONBIO, &nb);
+     int rcv = 1 << 20; setsockopt(s, SOL_SOCKET, SO_RCVBUF, (const char*)&rcv, sizeof rcv);
++    // [online phase 2] no WSAECONNRESET from an ICMP port-unreachable (a peer not up yet / gone): it would fail the next recvfrom
++    BOOL noReset = FALSE; DWORD got = 0;
++    WSAIoctl(s, _WSAIOW(IOC_VENDOR, 12) /* SIO_UDP_CONNRESET */, &noReset, sizeof noReset, nullptr, 0, &got, nullptr, nullptr);
+ #else
+     fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | O_NONBLOCK);
+ #endif

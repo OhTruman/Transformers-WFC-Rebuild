@@ -22,16 +22,22 @@
 #include "game/World.h"
 #include "net/Lockstep.h"
 #include "net/NetTransport.h"
+#include "net/UdpSession.h"
+#include "net/NetMatchDriver.h"
+#include "frontend/FrontendRuntime.h"
 #include "net/VoiceCodec.h"
 #include "net/VoiceFrames.h"
 #include "net/VoiceSession.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 namespace {
@@ -338,6 +344,252 @@ void Application::runVoiceFrameTest() {
         LOG_INFO("VOICEFRAMETEST opus: not in this build (voice unavailable)");
     }
     LOG_INFO("VOICEFRAMETEST SUMMARY: %s", fails ? "FAIL" : "PASS");
+    exitCode_ = fails ? 1 : 0;
+}
+
+// Gameplay's World::queueSeatSelection(seat, sel, atTick) (the in-match Choose Character applied at the same tick on every peer) when
+// the tree has it; before that merge, the immediate select (NOT tick-synchronised: a warning, the match may desync on a repick).
+template <class W, class = void> struct HasQueueSeatSelection : std::false_type {};
+template <class W> struct HasQueueSeatSelection<W, std::void_t<decltype(std::declval<W&>().queueSeatSelection(0, std::declval<const game::CharacterSelection&>(), 0u))>> : std::true_type {};
+template <class W> void queueSelection(W& w, int seat, const game::CharacterSelection& sel, uint32_t atTick) {
+    if constexpr (HasQueueSeatSelection<W>::value) w.queueSeatSelection(seat, sel, atTick);
+    else {
+        LOG_WARN("online: World::queueSeatSelection missing in this build - seat %d's pick applied at once (tick %u), not tick-synchronised", seat, atTick);
+        w.match().selectCharacter(seat, sel);
+    }
+}
+
+// [Systems, online phase 2] The online match from the frontend: the lockstep driver over the session's match view (match player i =
+// seat i on every peer), started right after World::launchMatch of an online launch. The launch hash is phase 1's: the host's
+// launch URL + seed + seats + this build, so a peer on another build / URL fails at HELLO (JoinFailed{Version} via the session).
+void Application::startNetDriver(const std::string& launchUrl, uint32_t seed, int seats, int localSeat) {
+    netDriver_.reset();
+    if (!udpSession_ || !udpSession_->matchReady() || !udpSession_->matchTransport()) {
+        LOG_WARN("online: an online launch without a ready session roster - the match runs without the lockstep driver");
+        return;
+    }
+    if (udpSession_->matchSeats() != seats || udpSession_->matchSelf() != localSeat) {
+        LOG_WARN("online: the launch has %d seats / local %d but the session roster %d / %d - no driver", seats, localSeat,
+                 udpSession_->matchSeats(), udpSession_->matchSelf());
+        return;
+    }
+    const std::string url = udpSession_->launchUrl().empty() ? launchUrl : udpSession_->launchUrl();
+    uint64_t lh = 1469598103934665603ULL;
+    lh = fnv(lh, url.data(), url.size()); lh = fnv(lh, &seed, sizeof seed); lh = fnv(lh, &seats, sizeof seats);
+    const char* build = __DATE__ " " __TIME__;
+    lh = fnv(lh, build, std::strlen(build));
+    net::NetMatchDriver::Config c;
+    c.seats = seats; c.self = localSeat; c.launchHash = lh; c.delay = 0; c.hashEvery = 60;
+    if (const char* rp = std::getenv("WFC_NET_RECORD")) c.recordPath = rp;
+    c.voice = udpSession_->voiceSettings().mode != frontend::SessionVoiceMode::Off;
+    c.step = [this](float dt) {
+        world_.tick(dt);
+        gameMode_.tick(world_, dt);
+        if (frontend_) { driveLifecycleTest(dt); routeMatchToFrontend(dt); }
+    };
+    c.onSelection = [this](int seat, const game::CharacterSelection& sel, uint32_t atTick) { queueSelection(world_, seat, sel, atTick); };
+    netDriver_ = std::make_unique<net::NetMatchDriver>(world_, *udpSession_->matchTransport(), audio_, c);
+    LOG_INFO("online: the lockstep driver runs the match (seat %d of %d, launch hash %016llx)", localSeat, seats, (unsigned long long)lh);
+}
+
+void Application::tickNetDriver(double realDt) {
+    net::NetMatchDriver& d = *netDriver_;
+    d.setHeld(frontend_ && frontend_->flow().simHeld());
+    if (udpSession_) {   // push-to-talk / open mic from the session's voice settings
+        const frontend::SessionVoiceSettings& v = udpSession_->voiceSettings();
+        d.setTalking(v.mode == frontend::SessionVoiceMode::OpenMic || (v.mode == frontend::SessionVoiceMode::PushToTalk && udpSession_->pushToTalk()));
+    }
+    d.frame(realDt);
+    const bool over = !world_.matchActive();
+    if (d.finished() || over) {
+        const int st = d.status();
+        if (st != 0 && udpSession_) udpSession_->matchFailed(st, world_.simTick());
+        netDriver_.reset();
+        if (udpSession_) udpSession_->matchEnded();
+        LOG_INFO("online: the lockstep driver ended (status %d%s)", st, over ? ", the match ended" : "");
+    }
+}
+
+// WFC_UDPSESSIONTEST (no device, no window, loopback only - 127.0.0.1 binds, so no firewall prompt): two net::UdpSessions in this
+// process. Host -> HostOpened; join by address -> JoinProgress, Joined (member) + MemberJoined (host), the member's info ->
+// MemberJoined (update); publishLobby -> LobbyState; setLaunch + requestStart -> CountdownStarted (launch record) and the match
+// seats; a lockstep-type packet both ways through matchTransport() in match seats; reportLoaded on both -> PeerLoaded / AllLoaded,
+// simHeld; the member leaves -> PeerDropped{Left} on the host. Then a bad code -> JoinFailed{Invalid}, a dead address ->
+// JoinFailed{Timeout} (3 s). One SUMMARY line.
+void Application::runUdpSessionTest() {
+    using frontend::SessionEvent;
+    using T = SessionEvent::Type;
+    int fails = 0;
+    auto check = [&fails](bool ok, const char* what) { LOG_INFO("UDPSESSIONTEST %s: %s", ok ? "PASS" : "FAIL", what); if (!ok) ++fails; };
+    net::UdpSession::Options o;
+    o.bindIp = "127.0.0.1"; o.hostPort = 14100; o.joinTimeoutS = 3.0;
+    o.internet = false;   // no router (UPnP) / internet (STUN) contact from a test
+    {   // the internet code: public + LAN endpoint, both back out, LAN first; typo / prefix handling
+        const std::string code = net::UdpSession::internetCode("203.0.113.7:14000", "192.168.1.23:14000");
+        std::vector<std::string> eps;
+        check(code.size() == 23 && net::UdpSession::decodeTargets(code, eps) && eps.size() == 2 && eps[0] == "192.168.1.23:14000" &&
+                  eps[1] == "203.0.113.7:14000", "internet code round trip (LAN endpoint first)");
+        std::vector<std::string> e2;
+        std::string lower;
+        for (char ch : code) lower += (char)std::tolower((unsigned char)ch);
+        check(net::UdpSession::decodeTargets("WFC-" + lower, e2) && e2 == eps, "internet code: lower case + WFC- prefix accepted");
+        LOG_INFO("UDPSESSIONTEST internet code %s", code.c_str());
+    }
+    net::UdpSession hostS(o), memS(o);
+    const auto t0 = std::chrono::steady_clock::now();
+    auto now = [&t0] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
+    std::vector<SessionEvent> hostEv, memEv;
+    auto pump = [&](double forS, const std::function<bool()>& until) {
+        const double end = now() + forS;
+        while (now() < end) {
+            for (auto& e : hostS.poll(now())) { LOG_INFO("UDPSESSIONTEST host  <- %s", frontend::sessionEventName(e.type)); hostEv.push_back(e); }
+            for (auto& e : memS.poll(now())) { LOG_INFO("UDPSESSIONTEST member <- %s", frontend::sessionEventName(e.type)); memEv.push_back(e); }
+            if (until && until()) return true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        return false;
+    };
+    auto has = [](const std::vector<SessionEvent>& v, T t) { return std::any_of(v.begin(), v.end(), [t](const SessionEvent& e) { return e.type == t; }); };
+    auto find = [](const std::vector<SessionEvent>& v, T t) -> const SessionEvent* {
+        for (auto it = v.rbegin(); it != v.rend(); ++it) if (it->type == t) return &*it;
+        return nullptr;
+    };
+
+    frontend::SessionMemberInfo hi; hi.displayName = "HostPC"; hostS.setMemberInfo(hi);
+    frontend::SessionMemberInfo mi; mi.displayName = "MemberPC"; memS.setMemberInfo(mi);
+    hostS.host(frontend::SessionHostSettings{});
+    pump(1.0, [&] { return has(hostEv, T::HostOpened); });
+    const SessionEvent* ho = find(hostEv, T::HostOpened);
+    check(ho && !ho->joinCode.empty(), "HostOpened with a LAN code");
+    if (ho) {
+        std::string back;
+        check(net::UdpSession::decodeTarget(ho->joinCode, back) && back == ho->address, "the LAN code decodes to the host address");
+        LOG_INFO("UDPSESSIONTEST host address %s code %s", ho->address.c_str(), ho->joinCode.c_str());
+    }
+    memS.join("127.0.0.1:14100");
+    pump(5.0, [&] { return has(memEv, T::Joined) && has(hostEv, T::MemberJoined); });
+    check(has(memEv, T::JoinProgress), "member: JoinProgress");
+    check(has(memEv, T::Joined), "member: Joined");
+    const SessionEvent* mj = find(hostEv, T::MemberJoined);
+    check(mj && mj->member == memS.selfId() && mj->info.displayName == "MemberPC", "host: MemberJoined with the member's id and name");
+    const SessionEvent* jd = find(memEv, T::Joined);
+    check(jd && jd->member == memS.selfId(), "Joined carries the member's own id");
+    mi.hasCharacter = true; mi.characterSlot = "Soldier"; memS.setMemberInfo(mi);
+    hostEv.clear();
+    pump(3.0, [&] { const SessionEvent* e = find(hostEv, T::MemberJoined); return e && e->info.hasCharacter; });
+    { const SessionEvent* e = find(hostEv, T::MemberJoined); check(e && e->info.characterSlot == "Soldier", "host: the member's updated info (MemberJoined again)"); }
+
+    frontend::SessionLobby lobby;
+    lobby.gameModeTag = "TDM"; lobby.mapId = 3; lobby.settings["PointsToWin"] = "1000";
+    frontend::SessionSlot s0; s0.kind = frontend::SessionSlot::Kind::Human; s0.member = hostS.selfId(); s0.team = 0;
+    frontend::SessionSlot s1; s1.kind = frontend::SessionSlot::Kind::Human; s1.member = memS.selfId(); s1.team = 1;
+    frontend::SessionSlot b; b.kind = frontend::SessionSlot::Kind::Bot; b.team = 0;
+    lobby.slots = {s0, b, s1};
+    hostS.publishLobby(lobby);
+    pump(3.0, [&] { return has(memEv, T::LobbyState); });
+    { const SessionEvent* e = find(memEv, T::LobbyState);
+      check(e && e->lobby.slots.size() == 3 && e->lobby.settings.count("PointsToWin") && e->lobby.mapId == 3, "member: LobbyState with the slots and settings"); }
+
+    hostS.setLaunch("MP_IAC_Streets?GameModeTag=TDM?PointsToWin=1000", 77u, lobby);
+    hostS.requestStart();
+    pump(3.0, [&] { return has(memEv, T::CountdownStarted); });
+    { const SessionEvent* e = find(memEv, T::CountdownStarted);
+      check(e && e->seed == 77u && e->launchUrl.find("MP_IAC_Streets") == 0 && e->lobby.slots.size() == 3, "member: CountdownStarted with the launch record"); }
+    check(hostS.matchSeats() == 2 && hostS.matchSelf() == 0 && memS.matchSeats() == 2 && memS.matchSelf() == 1, "match seats: host 0, member 1 (bots excluded)");
+    check(memS.matchMember(0) == hostS.selfId() && hostS.matchMember(1) == memS.selfId(), "match seat -> member id on both");
+    bool gotM = false, gotH = false;
+    if (net::INetTransport* hv = hostS.matchTransport()) { const uint8_t pkt[3] = {1, 9, 9}; hv->sendUnreliable(1, pkt, 3); }
+    if (net::INetTransport* mv = memS.matchTransport()) { const uint8_t pkt[3] = {3, 7, 7}; mv->sendReliable(0, pkt, 3); }
+    pump(3.0, [&] {
+        net::NetPacket p;
+        if (net::INetTransport* mv = memS.matchTransport()) while (mv->poll(p)) gotM |= p.from == 0 && p.data.size() == 3 && p.data[0] == 1;
+        if (net::INetTransport* hv = hostS.matchTransport()) while (hv->poll(p)) gotH |= p.from == 1 && p.data.size() == 3 && p.data[0] == 3;
+        return gotM && gotH;
+    });
+    check(gotM && gotH, "lockstep packets cross the match view both ways, in match seats");
+
+    memS.reportLoaded(1, 2);
+    check(memS.simHeld(), "member: simHeld after reportLoaded");
+    pump(3.0, [&] { return has(hostEv, T::PeerLoaded); });
+    hostS.reportLoaded(1, 2);
+    pump(3.0, [&] { return has(memEv, T::AllLoaded) && has(hostEv, T::AllLoaded); });
+    check(has(hostEv, T::AllLoaded) && has(memEv, T::AllLoaded), "AllLoaded on both");
+    check(!hostS.simHeld() && !memS.simHeld(), "simHeld released at AllLoaded");
+    check(has(memEv, T::PeerLoaded), "member: PeerLoaded (the host)");
+
+    memS.leave();
+    pump(3.0, [&] { return has(hostEv, T::PeerDropped); });
+    { const SessionEvent* e = find(hostEv, T::PeerDropped);
+      check(e && e->member == memS.selfId() && e->leaveReason == frontend::SessionLeaveReason::Left, "host: PeerDropped{Left} in the match"); }
+    hostS.leave();
+
+    {   // LAN discovery: a public host answers findGames (discovery aimed at 127.0.0.1 here, the broadcast address in the game)
+        net::UdpSession::Options lo = o; lo.discoverAddr = "127.0.0.1"; lo.hostPort = 14100;
+        net::UdpSession pub(lo), browser(lo);
+        std::vector<SessionEvent> pe, be;
+        frontend::SessionMemberInfo pi; pi.displayName = "PublicHost"; pub.setMemberInfo(pi);
+        frontend::SessionHostSettings hs; hs.isPublic = true; hs.playlist = "TeamDeathmatch"; hs.gameModeTag = "TDM";
+        pub.host(hs);
+        const double end0 = now() + 1.0;
+        while (now() < end0) { for (auto& e : pub.poll(now())) pe.push_back(e); std::this_thread::sleep_for(std::chrono::milliseconds(2)); }
+        frontend::SessionGameQuery q; q.playlist = "TeamDeathmatch";
+        browser.findGames(q);
+        const double end1 = now() + 4.0;
+        while (now() < end1 && !has(be, T::GameList)) {
+            for (auto& e : pub.poll(now())) pe.push_back(e);
+            for (auto& e : browser.poll(now())) be.push_back(e);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        const SessionEvent* gl = find(be, T::GameList);
+        check(gl && gl->games.size() == 1 && gl->games[0].lan && gl->games[0].hostName == "PublicHost" && gl->games[0].pingMs >= 0 && !gl->serviceReachable,
+              "LAN discovery: findGames lists the public LAN host with a ping (no service)");
+        pub.leave(); browser.leave();
+    }
+    if (const char* svc = std::getenv("WFC_UDPSESSIONTEST_SERVICE")) {   // the lobby service (tools/net/lobby_service.py) on loopback
+        net::UdpSession::Options so = o; so.discoverAddr = "127.0.0.1"; so.hostPort = 14120;
+        net::UdpSession h(so), j(so), q2(so);
+        for (net::UdpSession* s : {&h, &j, &q2}) s->setLobbyService(svc);
+        std::vector<SessionEvent> he, je, qe;
+        auto run = [&](double forS, const std::function<bool()>& until) {
+            const double end = now() + forS;
+            while (now() < end) {
+                for (auto& e : h.poll(now())) he.push_back(e);
+                for (auto& e : j.poll(now())) je.push_back(e);
+                for (auto& e : q2.poll(now())) qe.push_back(e);
+                if (until && until()) return;
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+        };
+        run(0.5, nullptr);   // the service address resolves
+        frontend::SessionHostSettings hs; hs.isPublic = true; hs.playlist = "TeamDeathmatch"; hs.gameModeTag = "TDM";
+        frontend::SessionMemberInfo hi2; hi2.displayName = "ServiceHost"; h.setMemberInfo(hi2);
+        h.host(hs);
+        run(4.0, [&] { return has(he, T::HostOpened); });
+        const SessionEvent* ho2 = find(he, T::HostOpened);
+        std::string letters;
+        if (ho2) for (char ch : ho2->joinCode) if (std::isalpha((unsigned char)ch)) letters += ch;
+        check(ho2 && ho2->joinCode.size() == 6 && letters.size() == 6, "service: HostOpened carries the service's 6-letter code");
+        if (ho2) LOG_INFO("UDPSESSIONTEST service code %s", ho2->joinCode.c_str());
+        if (ho2) j.join(ho2->joinCode);
+        run(5.0, [&] { return has(je, T::Joined); });
+        check(has(je, T::Joined), "service: join by the 6-letter code -> Joined");
+        q2.quickMatch("TeamDeathmatch");
+        run(8.0, [&] { return has(qe, T::Joined) || has(qe, T::HostOpened); });
+        check(has(qe, T::SearchProgress), "quick match: SearchProgress");
+        check(has(qe, T::Joined) && !has(qe, T::HostOpened), "quick match: joined the public lobby by ping (did not host)");
+        for (net::UdpSession* s : {&q2, &j, &h}) s->leave();
+    }
+
+    memEv.clear();
+    memS.join("ZZZZZ-ZZZZZ");   // the 2 spare high bits set: rejected
+    pump(0.5, [&] { return has(memEv, T::JoinFailed); });
+    { const SessionEvent* e = find(memEv, T::JoinFailed); check(e && e->joinFailure == frontend::SessionJoinFailure::Invalid, "a bad code -> JoinFailed{Invalid}"); }
+    memEv.clear();
+    memS.join("127.0.0.1:14199");   // nobody there
+    pump(5.0, [&] { return has(memEv, T::JoinFailed); });
+    { const SessionEvent* e = find(memEv, T::JoinFailed); check(e && e->joinFailure == frontend::SessionJoinFailure::Timeout, "a dead address -> JoinFailed{Timeout}"); }
+    memS.leave();
+    LOG_INFO("UDPSESSIONTEST SUMMARY: %s (%d failed)", fails ? "FAIL" : "PASS", fails);
     exitCode_ = fails ? 1 : 0;
 }
 
