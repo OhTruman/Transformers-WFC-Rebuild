@@ -3581,3 +3581,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   #16: clearance = guard, slot stability = the evidenced fix; #14 authored refraction restored (PASS); Enhanced water option
   APPROVED after smoke stage 1. #12 bot accuracy ~2x the targets at every difficulty -> sweep approved (data-driven scales).
   RE #6 ActorFactory + #7 FaceFX merged; RE -> #8 small items. Smoke stage 1 first look queued after the Frontend's runs.
+2026-10-23 01:21 Gorge waterfall steam veil (head exe only) = the FX-inactive throttle's catch-up dumping up to 1 s of spawns on a camera cut
+  (respawn / spectate / killer cam too) -> Systems matches the native catch-up (RE); Rendering confirms with WFC_FXINACTIVE=0.
