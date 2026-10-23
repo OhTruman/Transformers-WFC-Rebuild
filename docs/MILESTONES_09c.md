@@ -4074,3 +4074,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Pending: the Frontend's D5 Realistic confirm, Experimental pre, chapters D2 / D3A / D3B / A5 (~14:30), the user's reboot.
 2026-10-23 12:08 Probe-dark CONFIRMED (Frontend D5 Realistic on Rendering's exe: 79 / 80 ENVLOG probes rejected dark, Megatron lit).
   Frontend now reruns the full milestone script on e4549909 (hand-over run). D1 complete (6 / 10 chapters).
+2026-10-23 12:10 MERGED c3c9c157 build_lighting decodes LightMap1D decal receivers (tool only; D1 Crash2 rerun). PACKAGE HEAD c3c9c157
+  (code dffcf31f). Frontend hand-over rerun in flight on it.
