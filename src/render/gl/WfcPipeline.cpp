@@ -5329,6 +5329,32 @@ void Pipeline::applyRenderScale(int& w, int& h) const {
     h = std::max(1, (int)std::lround(h * fsrScale_));
 }
 
+void Pipeline::rtLoadData() {
+    r1CheckGl();
+    if (r1Map_ && rtShadowAoOn() && !r1Built_) r1Build();   // (R1: the V_bake pages / arrays under the loading screen, not in frame 1)
+    if (!giFinished_ && !giTexels_.empty()) giFinishTexels();   // (R4: the gutter list, the coverage maps freed)
+    // (RT: the masked-world atlas and the reflection hit data under the loading screen too - the hit data's texture readbacks
+    // were a 2-3 s hitch on the first Realistic frame; a mid-map switch to Realistic still builds them at that moment)
+    if (rtShadowAoOn() && !rtFailed_ && !rtMaskedBuilt_) rtBuildMasked();
+    if (rtShadowAoOn() && !rtFailed_ && !rtHitBuilt_ && rtReflPass()) rtBuildHit();
+    if (!giSetupDone_ && giFinished_ && rtHitBuilt_) giSetup();   // (R4: the RT lightmap's buffers, pages, load passes)
+}
+
+// (chapter loader, stage 2a) the multi-draw path takes one world mesh (the first unit's); the RT static world takes them all -
+// before this, a chapter's Realistic traced only its first unit (D5_OME: GLB_ART's shell, not the arena: x45, 7 GI pages)
+void Pipeline::endChapterUnits(const std::vector<int>& worldMeshes) {
+    chapterDefer_ = false;
+    if (!active_) return;
+    auto inRt = [&](int id) { for (const auto& ms : rtSets_) if (ms.first == id) return true; return false; };
+    std::vector<int> add;
+    for (int id : worldMeshes) if (id >= 0 && (size_t)id < meshes_.size() && meshes_[(size_t)id].world && !inRt(id)) add.push_back(id);
+    for (const SublevelRT& sl : sublevels_) if (sl.bsp >= 0 && (size_t)sl.bsp < meshes_.size() && !inRt(sl.bsp)) add.push_back(sl.bsp);
+    for (int id : add) rtBuildWorld(id);
+    LOG_INFO("chapter: %zu unit mesh(es) added to the RT static world (%zu sets in all)", add.size(), rtSets_.size());
+    BindFramebuffer(GL_FRAMEBUFFER, 0);
+    rtLoadData();
+}
+
 void Pipeline::warmupWorld(int id, int w, int h) {
     renderSizeOverride(w, h);                          // the warm-up (and its log line) at the 3D target size
     applyRenderScale(w, h);
@@ -5434,14 +5460,7 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     counts_ = counts;
     std::memcpy(frustum_, fr, sizeof fr);
     BindFramebuffer(GL_FRAMEBUFFER, 0);
-    r1CheckGl();
-    if (r1Map_ && rtShadowAoOn() && !r1Built_) r1Build();   // (R1: the V_bake pages / arrays under the loading screen, not in frame 1)
-    if (!giFinished_ && !giTexels_.empty()) giFinishTexels();   // (R4: the gutter list, the coverage maps freed)
-    // (RT: the masked-world atlas and the reflection hit data under the loading screen too - the hit data's texture readbacks
-    // were a 2-3 s hitch on the first Realistic frame; a mid-map switch to Realistic still builds them at that moment)
-    if (rtShadowAoOn() && !rtFailed_ && !rtMaskedBuilt_) rtBuildMasked();
-    if (rtShadowAoOn() && !rtFailed_ && !rtHitBuilt_ && rtReflPass()) rtBuildHit();
-    if (!giSetupDone_ && giFinished_ && rtHitBuilt_) giSetup();   // (R4: the RT lightmap's buffers, pages, load passes)
+    if (!chapterDefer_) rtLoadData();                  // (a chapter: after every unit, endChapterUnits)
     logMemStats("after the load warm-up");
     LOG_INFO("wfc: warm-up draw of the world: %d draws at %dx%d in %.0f ms (first-use touch: %d programs, %d textures so far)",
              draws, w, h, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(),
