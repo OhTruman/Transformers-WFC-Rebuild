@@ -210,7 +210,9 @@ def main():
         if not os.path.isdir(cdir):
             continue
         chapter_lm = os.path.isdir(os.path.join(cdir, 'lightmaps'))
-        mans = ['AssetTools/manifests/next_map/%s_%s.json' % (ch, k) for k in CAMPAIGN_NEXT_MAP] + \
+        # a folder starting with '_' is shared by the chapters (_transforming_actors, _umodel): copied whole, no chapter manifests
+        mans = [] if ch.startswith('_') else \
+               ['AssetTools/manifests/next_map/%s_%s.json' % (ch, k) for k in CAMPAIGN_NEXT_MAP] + \
                ['AssetTools/manifests/campaign/%s_assets.json' % ch.split('_')[0].lower()]
         for src in mans:
             dst = 'Transformers Rebuild/' + src
