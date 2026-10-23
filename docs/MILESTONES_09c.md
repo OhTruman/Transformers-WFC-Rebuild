@@ -3738,3 +3738,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   FROZEN (4 files differ from e). RE E2b1 review: correct except W1 (window arming follows players + invulnerability toggle)
   -> Gameplay with E2b2; G1 corrected (bought item + one free respawn, as implemented). Pending: Frontend's PeerDropped-swap
   removal, pt9 two-window proof, then the internal test package (refresh.sh on f).
+2026-10-23 03:53 MERGED 917205a2 campaign materials (all 38 RE gaps; Omega Supreme MIs compile) + M72 sibling fallback. DECISIONS:
+  chapter render layout = <root>/<chapter>/<SublevelName>/ (URL name, no _m) + chapter.json manifest; Rendering starts the
+  chapter loader (Pipeline::loadSublevel / unloadSublevel, per-sublevel ownership, static all-loaded D5_OME first; game-side
+  load / unload events later). AssetTools reruns D5_OME lighting + materials on this head after A1.
