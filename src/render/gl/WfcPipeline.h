@@ -236,6 +236,8 @@ public:
     int waterMode() const;
     // (playtest 2026-10-23 #1) mark the loaded map as a frontend scene: at release its textures stay uploaded in a pool for revisits
     void setFrontendScene(bool on) { frontendScene_ = on; }
+    // (playtest #1) parse these map-FX documents (render-data map_fx_runtime.json paths) on a worker thread now, for a later load
+    static void prefetchMapFxDocs(const std::vector<std::string>& paths);
     // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
     void flushPendingDraws() { flushWeaponQueue(); }
     void setDisplayGamma(float g) { displayGamma_ = g > 0.5f && g < 5.0f ? g : 2.2f; }

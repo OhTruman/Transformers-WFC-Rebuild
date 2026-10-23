@@ -34,6 +34,7 @@
 #include <cstring>
 #include <fstream>
 #include <filesystem>
+#include <future>
 #include <list>
 #include <memory>
 #include <sstream>
@@ -56,22 +57,36 @@ std::string readFile(const std::string& p) {
 std::shared_ptr<const assets::Json> parsedJson(const std::string& path) {
     struct Entry { std::string path; uintmax_t size; long long time; std::shared_ptr<const assets::Json> doc; };
     static std::list<Entry> cache;
-    static std::mutex mu;
-    std::lock_guard<std::mutex> lock(mu);
+    static std::mutex mu;                              // (held for the lookup / insert only: a worker's parse never blocks a load)
     std::error_code ec;
     const uintmax_t size = std::filesystem::file_size(path, ec);
     if (ec) return nullptr;
     const long long time = (long long)std::filesystem::last_write_time(path, ec).time_since_epoch().count();
-    for (auto it = cache.begin(); it != cache.end(); ++it)
-        if (it->path == path && it->size == size && it->time == time) { cache.splice(cache.begin(), cache, it); return cache.front().doc; }
+    {
+        std::lock_guard<std::mutex> lock(mu);
+        for (auto it = cache.begin(); it != cache.end(); ++it)
+            if (it->path == path && it->size == size && it->time == time) { cache.splice(cache.begin(), cache, it); return cache.front().doc; }
+    }
     const std::string txt = readFile(path);
     auto doc = std::make_shared<assets::Json>();
     if (txt.empty() || !assets::Json::parse(txt, *doc)) return nullptr;
+    std::lock_guard<std::mutex> lock(mu);
     cache.remove_if([&](const Entry& e) { return e.path == path; });
     cache.push_front({path, size, time, doc});
     while (cache.size() > 4) cache.pop_back();
     return doc;
 }
+} // namespace
+
+// (playtest 2026-10-23 #1) the first visit of a menu screen: its map-FX document parses on a worker thread while the current
+// screen is up (the cache above is shared and locked), so the screen's load finds it parsed (party lobby: ~109 ms)
+void Pipeline::prefetchMapFxDocs(const std::vector<std::string>& paths) {
+    static std::future<void> pending;
+    if (pending.valid()) pending.wait();                 // (one prefetch at a time; the previous one is long done)
+    pending = std::async(std::launch::async, [paths] { for (const std::string& p : paths) parsedJson(p); });
+}
+
+namespace {
 
 // A module distribution decoded from the compiled stream; a module whose stream did not carry it evaluates to 0
 // (logged once per module / property) instead of aborting.
