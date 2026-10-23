@@ -4099,3 +4099,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 13:34 GO (Gameplay, small, render-only): SeqAct_ToggleHidden + SeqAct_Destroy on world actors (unimplemented: scripted hides /
   destroys of set dressing never happened) -> setActorHidden (+ collision off for Destroy on movers / destructibles);
   authored bHidden honoured at load. Sentry bodies = world nodes toggled by Gameplay (AssetTools includes them).
+2026-10-23 13:42 MERGED 59cb3162 campaign ToggleHidden / Destroy + authored bHidden at load (A1: 252 hides / 126 unhides / 7 destroys
+  applied). CODE CANDIDATE 59cb3162. Gameplay folds it into FINAL_BASE_ITEMS 08; Experimental rebuilds the gate head;
+  Systems re-points; the Frontend reruns the hand-over set on it.
