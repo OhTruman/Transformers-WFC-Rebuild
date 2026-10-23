@@ -1027,7 +1027,12 @@ void GameFlow::gameLobbyBegin() {
     // GameLobby_GFX selectMap_mc.selectionUpdated sends SetSelectedMapID when its list fills, before any input
     // [CONFIRMED script]: that first write is the lobby's set-up too, not a map change.
     selectorInit_ = true;
-    if (prev == -1 || lobby_.mapSelectionMethod == 0) chooseNextMap(prev);
+    if (isCampaignTag(tag) && LocalProfile::Campaign::index(prev) >= 0) {
+        // OnEnterLobbyFromMap in a campaign: the next available chapter by the host's profile; every character is cleared
+        // (TnGameLobbyGameCampaign.HandleSeamlessTravelPlayer) so everyone re-picks [RE CAMPAIGN_FRONTEND_FLOW_RE 2]
+        clearSelectedCharacter();
+        setMapId(profile_.campaign.nextAvailableChapter(prev));
+    } else if (prev == -1 || lobby_.mapSelectionMethod == 0) chooseNextMap(prev);
     else setMapId(prev);
     // A public lobby the host opened (Quick Match found none): the map vote instead of the rotation (4.1); members get it
     // with the LobbyState. Not the map just played.
@@ -1078,6 +1083,12 @@ void GameFlow::setMapId(int id) {
     const bool changed = id != lobby_.mapId;
     lobby_.mapId = id;
     if (changed) lobby_.checkpoint.clear();   // a checkpoint belongs to its chapter (CampaignSelect sets the new one after)
+    // DeselectInvalidCharacters: a campaign chapter change clears a character outside the new chapter's trio [RE C5]
+    if (changed && mi && isCampaignTag(lobby_.gameModeTag) && selected_.valid && !mi->campaignCharacters.empty() &&
+        !inCampaignTrio(*mi, selected_.name)) {
+        FlowTrace::emit("campaign.characterCleared", {{"name", selected_.name}, {"mapId", std::to_string(id)}});
+        clearSelectedCharacter();
+    }
     // UpdatePrestreaming(): GameEngine.UpdateMapPrestreaming(ConvertMapIdToMapFilename(id)), bHighPriorityLoading.
     lobby_.prestreamMap = mi ? mi->mapFilename : "";
     // Map-aware Extended counts: a map change applies the recommendation, unless the counts were edited since the
@@ -1281,6 +1292,13 @@ std::string GameFlow::buildLaunchUrl() const {
     // keeps the original URL (RE 3.1)
     if (!canGainXp()) url += "?WfcCanGainXp=0";
     return url;
+}
+
+bool GameFlow::inCampaignTrio(const MapInfo& m, const std::string& characterName) {
+    auto lower = [](std::string x) { for (char& ch : x) ch = (char)std::tolower((unsigned char)ch); return x; };
+    const std::string n = lower(characterName);
+    for (const std::string& t : m.campaignCharacters) if (lower(t) == n) return true;
+    return false;
 }
 
 bool GameFlow::canGainXp() const {

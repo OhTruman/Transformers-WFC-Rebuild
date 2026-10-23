@@ -256,6 +256,30 @@ bool LocalProfile::Campaign::isDefault() const {
     return true;
 }
 
+void LocalProfile::Campaign::completeMission(int mapId, int difficulty) {
+    const int i = index(mapId);
+    if (i < 0) return;
+    complete[i] = true;
+    bestDifficulty[i] = std::max(bestDifficulty[i], std::clamp(difficulty, 0, 2));
+    const int faction = i < 5 ? 0 : 1, next = faction * 5 + (i % 5 + 1) % 5;
+    available[next] = true;
+    resumeMap[faction] = kFirstMapId + next;
+}
+
+void LocalProfile::Campaign::reachedCheckpoint(int mapId, int index_) {
+    const int i = index(mapId);
+    if (i < 0) return;
+    checkpoint[i] = std::max(checkpoint[i], index_);
+    resumeMap[i < 5 ? 0 : 1] = -1;
+}
+
+int LocalProfile::Campaign::nextAvailableChapter(int mapId) const {
+    const int i = index(mapId);
+    if (i < 0) return mapId;
+    const int next = (i < 5 ? 0 : 5) + (i % 5 + 1) % 5;
+    return available[next] ? kFirstMapId + next : mapId;
+}
+
 bool LocalProfile::campaignField(const std::string& field, std::string& value) const {
     for (int i = 0; i < Campaign::kChapters; ++i) {
         const std::string k = Campaign::key(i);

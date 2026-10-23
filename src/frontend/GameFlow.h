@@ -224,6 +224,7 @@ public:
     // Campaign presentation paths (docs/handoff/CAMPAIGN_HUD_PLAN.md): on for a campaign match (SOLO / CP / CCP), off in
     // versus, so versus stays byte-identical. Tests set it directly until the campaign boots.
     static bool isCampaignTag(const std::string& tag) { return tag == "SOLO" || tag == "CP" || tag == "CCP"; }
+    static bool inCampaignTrio(const MapInfo& m, const std::string& characterName);   // case-insensitive CharacterName match
     bool campaign() const { return campaignForced_ || isCampaignTag(match_.modeTag); }
     void setCampaignForTest(bool on) { campaignForced_ = on; }
     CampaignObjectives& objectives() { return objectives_; }

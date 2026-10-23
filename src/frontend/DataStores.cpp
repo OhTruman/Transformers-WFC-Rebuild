@@ -142,7 +142,8 @@ std::string DataStores::read(const std::string& markup, bool* known) {
         return b(flow_.level() == LevelKind::GameLobby && L.mapSelectionMethod == 1 && !L.countdownRubicon && L.mapId >= 0 &&
                  flow_.sessionRole() != GameFlow::SessionRole::Member &&     // an online member never starts the game
                  flow_.mapVote().round == 0 &&   // CanHostRequestGameStart = IsPrivateMatch: a public lobby starts by itself [RE]
-                 (flow_.sessionRole() == GameFlow::SessionRole::Offline || L.lobbyStatus == 3));   // online: the original gate (D4)
+                 (flow_.sessionRole() == GameFlow::SessionRole::Offline || L.lobbyStatus == 3 ||
+                  GameFlow::isCampaignTag(L.gameModeTag)));   // online: the original gate (D4); TnGameLobbyGameCampaign: always
     if (markup == "<CurrentGame:LobbyStatus>") {
         if (flow_.level() != LevelKind::GameLobby || L.countingDown) return "";
         if (flow_.matchInProgressForMember()) return cat_.localizeKey("$WfcPC.Online.MatchInProgressStatus");   // D6
