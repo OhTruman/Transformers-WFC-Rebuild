@@ -3673,7 +3673,7 @@ void World::remoteFire(SeatRef& s, Weapon& w, const core::Vec3& aimPt, bool cons
         if (p == localPlayer_) noteVehicleShot(sock, origin);   // the local muzzle-flash presentation
         if (two) w.muzzleSocket = (sock + 1) % 2;
         if (w.projectile()) {   // RealStartLoc = the socket, aimed at the aim point
-            spawnProjectile(origin, core::normalize(aimPt - origin) * w.projSpeed, w, p);
+            spawnProjectile(origin, addSpread(core::normalize(aimPt - origin), pc.shotSpreadFor(w), w) * w.projSpeed, w, p);
             if (w.projHoming && seatLockTarget(p) >= 0) projectiles_.back().target = seatLockTarget(p);   // SetTarget(locked ? target : none)
             participantShots_.push_back({p, w.def ? w.def->id : "", origin, aimPt, false, -1});
             return;
@@ -3682,7 +3682,7 @@ void World::remoteFire(SeatRef& s, Weapon& w, const core::Vec3& aimPt, bool cons
     if (w.beam()) { participantBeam(p, w, eye, d); return; }
     if (w.projectile()) {
         const core::Vec3 muzzle = eye + d * 1.5f;   // the bots' muzzle stand-in (no posed held weapon on participants)
-        spawnProjectile(muzzle, d * w.projSpeed, w, p);
+        spawnProjectile(muzzle, addSpread(d, pc.shotSpreadFor(w), w) * w.projSpeed, w, p);
         if (w.projHoming && seatLockTarget(p) >= 0) projectiles_.back().target = seatLockTarget(p);   // SetTarget(locked ? target : none)
         participantShots_.push_back({p, w.def ? w.def->id : "", muzzle, aimPt, false, -1});
     } else if (w.simulated() && !w.beam()) {
