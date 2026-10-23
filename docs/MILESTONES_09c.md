@@ -3652,3 +3652,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 02:00 CAMPAIGN_FRONTEND_FLOW_RE merged (modes, lobby, select, loading, fail / complete). RE -> ONLINE_PC_DEVIATIONS.md.
 2026-10-23 02:01 Campaign HD / AV coverage (AssetTools): 937 gap textures (~1.8 GB HD output), all audio / FMV / FaceFX present (1 A3 line
   silent) -> GO on the campaign HD pass as the one long GPU job (chunked, resumable). Escalation spawn points exported.
+2026-10-23 02:02 Rendering CARD FREE (smoke match arms + #1 menu run done; sheet / numbers pending). Card -> Frontend 02:02 two-window exit
+  retest on 2528df5e.
