@@ -94,6 +94,7 @@ struct RtHitData {
 bool rtBridgeAddHitData(const RtHitData& d);
 GLuint rtBridgeMaskAtlas(int w, int h);                     // the shared R8 opacity atlas (GL texture), made once
 bool rtBridgeSetStaticMask(unsigned idBase, unsigned mask);   // (chapter streaming) a static set's mask, 0 = untraced
+bool rtBridgeRemoveStaticSet(unsigned idBase);                // (chapter streaming) a static set freed (BLAS + instances)
 bool rtBridgeAddMasked(const RtMaskedWorld& m);             // non-opaque BLAS (instance mask 0x8) + lookup buffers
 // GL buffers written before the signal that D3D12 reads (Systems' skinned positions): signalled and reacquired with
 // the targets on every round trip until changed (n = 0 clears)

@@ -206,6 +206,9 @@ public:
     // and map FX) and leaves the RT scene (instance mask 0); its masked (alpha-tested) RT set is not per unit and stays
     void setUnitWorldMesh(const std::string& unit, int gpuId);
     void setChapterUnitVisible(const std::string& unit, bool visible);
+    void unloadChapterUnit(const std::string& unit);    // its meshes, lightmaps and RT sets freed; its lights / FX off
+    bool hasUnit(const std::string& unit) const { for (const SublevelRT& sl : sublevels_) if (sl.unit == unit) return true; return false; }
+    int unitWorldMesh(const std::string& unit) const { for (const SublevelRT& sl : sublevels_) if (sl.unit == unit) return sl.world; return -1; }
     bool chapterMeshVisible(int gpuId) const {
         for (const SublevelRT& sl : sublevels_) if (sl.world == gpuId) return sl.visible;
         return true;
@@ -705,6 +708,9 @@ private:
     void rtBuildHit();
     std::vector<std::pair<int, int>> rtSets_;          // (mesh, set) of the static sets on D3D12
     std::vector<unsigned> rtSetIdBase_;                // ... their InstanceID base (stage 3: a hidden unit's sets masked out)
+    unsigned rtLateSets_ = 0;                          // static sets added after the hit data (streamed-in units)
+    std::string ppDir_;                                // (campaign post) the chapter whose volumes are loaded
+    void freeMesh(int id);
     GLuint rtAtlasFbo_ = 0;
     void rtBuildMasked();
     float rtSunDir_[3] = {0, 0, 0};                    // towards the traced sun (uRtSunDir; 0 = none)

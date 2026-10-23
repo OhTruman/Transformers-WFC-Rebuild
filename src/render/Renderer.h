@@ -166,6 +166,9 @@ public:
     // Chapter streaming as visibility (Gameplay's SetStreamingState): every unit is loaded at the chapter start
     // (loadChapterUnits); a hidden unit draws nothing and leaves the ray-traced scene. unit = its dir ("A1_IAC_Elevator_Art").
     virtual void setChapterUnitVisible(const std::string& unit, bool visible) { (void)unit; (void)visible; }
+    // Chapter streaming: a unit leaving the streaming state frees its GPU resources (after setChapterUnitVisible(unit, false));
+    // loadChapterUnits(chapterDir, {unit}) brings it back. The persistent unit is never unloaded.
+    virtual void unloadChapterUnit(const std::string& unit) { (void)unit; }
     // A matinee cutscene's per-frame view (Gameplay's SeqAct_Interp playback): the camera itself goes through the normal
     // camera and notifyCameraCut("matinee") on director cuts; this carries the rest. Unset fields keep the defaults.
     struct PostOverride {                 // the CameraActor's CamOverridePostProcess (UE3 FPostProcessSettings fields)

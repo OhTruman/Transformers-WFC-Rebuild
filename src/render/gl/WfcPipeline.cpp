@@ -5370,6 +5370,55 @@ void Pipeline::setChapterUnitVisible(const std::string& unit, bool visible) {
              sl->light1 - sl->light0, sl->fx1 - sl->fx0, masked);
 }
 
+void Pipeline::freeMesh(int id) {
+    if (id < 0 || (size_t)id >= meshes_.size()) return;
+    GpuMesh& g = meshes_[(size_t)id];
+    if (id == mdiMesh_) {                              // (the multi-draw set was this unit's: the rest draw singly)
+        if (mdiRowTex_) { glDeleteTextures(1, &mdiRowTex_); mdiRowTex_ = 0; }
+        for (GLuint* b : {&mdiRowVbo_, &mdiCmdBuf_}) if (*b) { DeleteBuffers(1, b); *b = 0; }
+        mdiBuckets_.clear(); mdiMesh_ = -1;
+    }
+    if (g.vao) DeleteVertexArrays(1, &g.vao);
+    for (GLuint* b : {&g.vbo, &g.ibo}) if (*b) DeleteBuffers(1, b);
+    g = GpuMesh{};
+}
+
+// (chapter streaming) a unit leaves: its RT sets out of the scene (BLAS freed), its world / BSP / decal meshes and lightmap
+// pages freed, its lights and map FX off; the merged materials stay (shared, small). loadChapterUnits brings it back.
+void Pipeline::unloadChapterUnit(const std::string& unit) {
+    size_t si = 0;
+    while (si < sublevels_.size() && sublevels_[si].unit != unit) ++si;
+    if (si == sublevels_.size()) { LOG_WARN("chapter: no merged unit %s to unload", unit.c_str()); return; }
+    const SublevelRT sl = sublevels_[si];
+    int sets = 0;
+    for (size_t k = 0; k < rtSets_.size();) {
+        if (rtSets_[k].first == sl.world || rtSets_[k].first == sl.bsp) {
+            if (k < rtSetIdBase_.size()) { sets += rtBridgeRemoveStaticSet(rtSetIdBase_[k]) ? 1 : 0; rtSetIdBase_.erase(rtSetIdBase_.begin() + (long)k); }
+            rtSets_.erase(rtSets_.begin() + (long)k); --rtWorldSets_;
+        } else ++k;
+    }
+    for (size_t i = sl.light0; i < sl.light1 && i < lights_.size(); ++i) lights_[i].enabled = false;
+    for (size_t i = sl.fx0; i < sl.fx1 && i < fxInstances_.size(); ++i) fxInstances_[i].hidden = true;
+    int pages = 0;
+    const std::string prefix = sl.dir + "|";
+    for (auto it = lmIndex_.begin(); it != lmIndex_.end();) {
+        if (it->first.compare(0, prefix.size(), prefix) == 0) {
+            if (it->second >= 0 && (size_t)it->second < lmTextures_.size() && lmTextures_[(size_t)it->second]) {
+                const GLuint t = lmTextures_[(size_t)it->second];
+                for (auto c = texCache_.begin(); c != texCache_.end();) c = c->second == t ? texCache_.erase(c) : std::next(c);
+                glDeleteTextures(1, &t);
+                lmTextures_[(size_t)it->second] = 0;
+                ++pages;
+            }
+            it = lmIndex_.erase(it);
+        } else ++it;
+    }
+    freeMesh(sl.world); freeMesh(sl.bsp); freeMesh(sl.decal);
+    sublevels_.erase(sublevels_.begin() + (long)si);
+    LOG_INFO("chapter: %s unloaded (%d RT sets, %d lightmap pages, %zu lights / %zu FX instances off)", unit.c_str(), sets, pages,
+             sl.light1 - sl.light0, sl.fx1 - sl.fx0);
+}
+
 void Pipeline::rtLoadData() {
     // (the loading screen presents between the phases: A1 Realistic's were one 16 s step - masked world 2.7 s, GI passes, the
     // probe grid 5.8 s)

@@ -69,6 +69,8 @@ core::Vec3 lerpv(const core::Vec3& a, const core::Vec3& b, float t) { return a +
 }  // namespace
 
 void Pipeline::loadChapterPost(const std::string& chapterDir) {
+    if (ppChapter_ && chapterDir == ppDir_) return;    // (a unit streamed in: the chapter's volumes are already here)
+    ppDir_ = chapterDir;
     for (auto& kv : ppLuts_) if (kv.second) glDeleteTextures(1, &kv.second);
     ppLuts_.clear(); ppVols_.clear(); ppChapter_ = false; ppTarget_ = -2;
     std::string dir = chapterDir;

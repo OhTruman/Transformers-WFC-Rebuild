@@ -59,7 +59,7 @@ bool Pipeline::giOn() const {
 // one static mesh's lightmapped subs into their pages (called from rtBuildWorld with the mesh's read-back buffers:
 // 14 floats per vertex - position, normal, tangent + sign, UV0, UV1)
 void Pipeline::giRasterMesh(int meshId, const std::vector<uint32_t>& idx, const std::vector<float>& v) {
-    if (!giOn() || meshId < 0 || rtMode_ != 2) return;   // (Realistic at load; a live switch to it keeps the bake until a reload)
+    if (!giOn() || meshId < 0 || rtMode_ != 2 || giFinished_) return;   // (a unit streamed in later keeps its bake)   // (Realistic at load; a live switch to it keeps the bake until a reload)
     const GpuMesh& g = meshes_[(size_t)meshId];
     const bool bsp = meshId == bspMesh_;
     if (giPageSize_.size() < lmTextures_.size()) giPageSize_.resize(lmTextures_.size(), {0, 0});

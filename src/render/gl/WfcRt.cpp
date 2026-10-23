@@ -301,7 +301,10 @@ void Pipeline::rtBuildWorld(int meshId) {
              " subs and %zu actor-placed (mover / toggled) subs left out)", subs, set ? "level BSP" : "world", meshId, vlmSubs, nonMdiSubs, skipped, noShadow, actorNodes);
     // (the reflection hits look their BLAS up by InstanceID: blas = keep index x 2 + side - world 0, BSP 1 on an MP map, then a
     // chapter's further units in order; the instance mask stays the set's bit)
-    W.idBase = 0x10000u + (unsigned)(keepHit ? rtHitKeep_.size() : (size_t)set) * 2u;
+    // (a chapter unit streamed in after the hit data: InstanceID from 0x20000, outside the hit table - GI reads it as dim, the
+    // reflections fall back to the previous frame; it keeps its bake)
+    const bool late = rtHitBuilt_;
+    W.idBase = late ? 0x20000u + (unsigned)(rtLateSets_++) * 2u : 0x10000u + (unsigned)(keepHit ? rtHitKeep_.size() : (size_t)set) * 2u;
     if (keepHit) {
         keep.mesh = meshId; keep.set = set; keep.idx[0] = W.oneSided; keep.idx[1] = W.twoSided;
         keep.uv1.resize(v.size() / 14 * 2);
@@ -319,7 +322,7 @@ void Pipeline::rtBuildWorld(int meshId) {
     }
     if (rtBridgeAddStaticWorld(W, 1u << set)) {
         ++rtWorldSets_; rtSets_.push_back({meshId, set}); rtSetIdBase_.push_back(W.idBase);
-        if (keepHit) rtHitKeep_.push_back(std::move(keep));
+        if (keepHit && !late) rtHitKeep_.push_back(std::move(keep));
     }
     else LOG_WARN("RT depth check: no static world on D3D12 (the round trip runs the copy)");
 }
