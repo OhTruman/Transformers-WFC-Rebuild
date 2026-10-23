@@ -3633,3 +3633,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Rendering #1: AnimSet prefetch on worker threads + the last 3 parsed frontend scenes resident (rt2 745f9403 + step A), runtime
   check pending; step B (true GL residency) waits on the Frontend's warm profile split. Card: Systems (numbers) -> Frontend
   pt4 -> Rendering (smoke match arms + #1 run).
+2026-10-23 01:55 Systems CARD FREE: #9 PASS on the head exe (hover_plane_FX max age 7.5 s, guard 0 times; before 40 guard kills at 36 s);
+  throttle catch-up CLEARED as the Gorge card's cause (lockstepped arms bit-identical; catch-ups are 0.1 s steps with 0-1
+  spawns); the 6 m card = Rendering's unlocked runner (particle phase). Pre-age stays (correct per RE). #5 + #9 CLOSED.
+  Card -> Frontend pt4 01:56 -> Rendering.
