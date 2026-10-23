@@ -3573,3 +3573,4 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 01:11 MILESTONE MERGED f1d4a1d2: the menus run on the real UdpSession end to end (two-runtime loopback flow test 13 / 13: host by code,
   join, lobby, start, load gate, match, quit). Design confirmed: Find Match = Quick Match (public), offline bots = Private
   Match. Remaining: a two-window menu match on this PC (windowed), then the user's two-PC test.
+2026-10-23 01:12 RE campaign #5 checkpoint body merged (3 fields, no world state); RE answers Rendering's kill-flag semantics, then #6.
