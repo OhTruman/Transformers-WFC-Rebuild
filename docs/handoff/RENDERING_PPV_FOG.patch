@@ -1,0 +1,256 @@
+diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-23 02:56:26.292619000 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 02:56:26.433601300 -0500
+@@ -1789,6 +1789,7 @@
+                   srgbToLinear(c[2].asFloat(255) / 255.0f) * br * kFogInScale};
+     }
+ 
++    loadPpvFogs(L);                                  // (post-process volume height fogs: the load's layers above are their base)
+     {
+         const assets::Json& P = L["postprocess"]["settings"];
+         auto f = [&](const char* k, float d) { return P[k].asFloat(d); };
+@@ -8984,6 +8985,7 @@
+     deferTrans_ = true;
+     distUsed_ = false;
+     camPos_ = cam.pos;
++    ppvFogFrame();                                   // (post-process volume height fogs: the camera's volume, faded)
+     znear_ = cam.znear; zfar_ = cam.zfar;
+     if (motionVectorsOn()) {
+         detectCameraCut(cam);
+@@ -9593,5 +9595,127 @@
+     ActiveTexture(GL_TEXTURE0);
+ }
+ 
++// Post-process volume height fog (RE CAMPAIGN_PPV_HEIGHTFOG_RE.md; AssetTools: MP_ESC_Remnant's PostProcessVolume_10624 links one,
++// 169 in the campaign). The load's layers are the base; the volume fogs come from lighting.json 'volume_fogs' (build_lighting.py).
++void Pipeline::loadPpvFogs(const assets::Json& L) {
++    ppvVolumes_.clear(); ppvLive_.clear(); ppvApplied_ = false; ppvLastTime_ = -1.0f;
++    fogBase_.on = fogOn_; fogBase_.n = fogN_; fogBase_.maxH = fogMaxH_; fogBase_.scale = fogScale_;
++    fogBase_.start = fogStart_; fogBase_.ext = fogExt_; fogBase_.in = fogIn_;
++    std::memcpy(fogBase_.L, fogL_, sizeof fogL_); std::memcpy(fogBase_.C, fogC_, sizeof fogC_);
++    std::memcpy(fogBase_.minH, fogMinH_, sizeof fogMinH_);
++    const assets::Json& V = L["volume_fogs"];
++    if (!V.isArray()) return;
++    for (size_t i = 0; i < V.size(); ++i) {
++        const assets::Json& v = V[i];
++        PpvVolume pv;
++        pv.priority = v["priority"].asFloat(0.0f);
++        pv.unbound = v["unbound"].asBool(false);
++        pv.interp = std::max(v["interpolation_s"].asFloat(1.0f), 1e-3f);
++        // the brush: one plane per polygon (glTF m), facing out (the brush's vertex centroid on the inner side)
++        const assets::Json& P = v["polygons_m"];
++        core::Vec3 cen{0, 0, 0}; int nv = 0;
++        for (size_t p = 0; p < P.size(); ++p)
++            for (size_t q = 0; q < P[p].size(); ++q) { cen = cen + core::Vec3{P[p][q][0].asFloat(), P[p][q][1].asFloat(), P[p][q][2].asFloat()}; ++nv; }
++        if (nv) cen = cen * (1.0f / (float)nv);
++        for (size_t p = 0; p < P.size(); ++p) {
++            if (P[p].size() < 3) continue;
++            auto vert = [&](size_t q) { return core::Vec3{P[p][q][0].asFloat(), P[p][q][1].asFloat(), P[p][q][2].asFloat()}; };
++            const core::Vec3 a = vert(0), b = vert(1), c = vert(2);
++            core::Vec3 n = core::cross(b - a, c - a);
++            const float len = core::length(n);
++            if (len < 1e-6f) continue;
++            n = n * (1.0f / len);
++            float d = core::dot(n, a);
++            if (core::dot(n, cen) - d > 0.0f) { n = n * -1.0f; d = -d; }
++            pv.planes.push_back({{n.x, n.y, n.z}, d});
++        }
++        const assets::Json& F = v["fogs"];
++        for (size_t f = 0; f < F.size(); ++f) {
++            const assets::Json& Fk = F[f];
++            const assets::Json& ck = Fk["LightColor"];
++            const float bk = Fk["LightBrightness"].asFloat(0.1f);
++            PpvFog pf;
++            pf.height = Fk["Height"].asFloat(0.0f); pf.density = Fk["Density"].asFloat(5e-5f);
++            pf.start = Fk["StartDistance"].asFloat(0.0f); pf.ext = Fk["ExtinctionDistance"].asFloat(1e8f);
++            pf.in = {srgbToLinear(ck[0].asFloat(255) / 255.0f) * bk * kFogInScale, srgbToLinear(ck[1].asFloat(255) / 255.0f) * bk * kFogInScale,
++                     srgbToLinear(ck[2].asFloat(255) / 255.0f) * bk * kFogInScale};
++            pf.priority = Fk["priority"].asBool(false);
++            pf.snap = Fk["transition_from_existing"].asBool(false);
++            pv.fogs.push_back(pf);
++        }
++        if (!pv.fogs.empty() && (pv.unbound || !pv.planes.empty())) ppvVolumes_.push_back(std::move(pv));
++    }
++    if (!ppvVolumes_.empty()) LOG_INFO("wfc: %zu post-process volume(s) with height fog", ppvVolumes_.size());
++}
++
++// per frame: the camera's volume (the highest priority containing it; the pawn's location in UE3, the camera when there is
++// none) supplies its fogs - each fading in (cur += (1 - cur) dt / T), the rest fading out (cur -= cur dt / T) and dropped;
++// bTransitionFromExistingHeightFog takes the value at once. The view's list: priority volume fogs, the level's, the other
++// volume fogs, at most 4, highest first (FScene::AddHeightFog order); only the density is interpolated.
++void Pipeline::ppvFogFrame() {
++    if (ppvVolumes_.empty()) return;
++    const float dt = ppvLastTime_ < 0.0f ? 0.0f : std::max(0.0f, time_ - ppvLastTime_);
++    ppvLastTime_ = time_;
++    int act = -1;
++    for (size_t i = 0; i < ppvVolumes_.size(); ++i) {
++        const PpvVolume& v = ppvVolumes_[i];
++        bool inside = v.unbound;
++        if (!inside) {
++            inside = true;
++            for (const PpvPlane& p : v.planes)
++                if (p.n[0] * camPos_.x + p.n[1] * camPos_.y + p.n[2] * camPos_.z - p.d > 0.0f) { inside = false; break; }
++        }
++        if (inside && (act < 0 || v.priority > ppvVolumes_[(size_t)act].priority)) act = (int)i;
++    }
++    for (PpvLive& l : ppvLive_) l.leaving = l.vol != act;
++    if (act >= 0)
++        for (size_t f = 0; f < ppvVolumes_[(size_t)act].fogs.size(); ++f) {
++            auto it = std::find_if(ppvLive_.begin(), ppvLive_.end(), [&](const PpvLive& l) { return l.vol == act && l.fog == (int)f; });
++            if (it == ppvLive_.end()) ppvLive_.push_back({act, (int)f, ppvVolumes_[(size_t)act].fogs[f].snap ? 1.0f : 0.0f, false});
++        }
++    for (PpvLive& l : ppvLive_) {
++        const float k = std::min(1.0f, dt / ppvVolumes_[(size_t)l.vol].interp);
++        l.cur = l.leaving ? l.cur - l.cur * k : l.cur + (1.0f - l.cur) * k;
++    }
++    ppvLive_.erase(std::remove_if(ppvLive_.begin(), ppvLive_.end(), [](const PpvLive& l) { return l.leaving && l.cur < 1e-3f; }), ppvLive_.end());
++    if (ppvLive_.empty()) {                          // (nothing from a volume: the load's layers, exactly)
++        if (ppvApplied_) {
++            fogOn_ = fogBase_.on; fogN_ = fogBase_.n; fogMaxH_ = fogBase_.maxH; fogScale_ = fogBase_.scale;
++            fogStart_ = fogBase_.start; fogExt_ = fogBase_.ext; fogIn_ = fogBase_.in;
++            std::memcpy(fogL_, fogBase_.L, sizeof fogL_); std::memcpy(fogC_, fogBase_.C, sizeof fogC_);
++            std::memcpy(fogMinH_, fogBase_.minH, sizeof fogMinH_);
++            ppvApplied_ = false;
++        }
++        return;
++    }
++    struct Lay { float h, scale, start, ext; core::Vec3 in; };
++    std::vector<Lay> pri, base, rest;
++    for (const PpvLive& l : ppvLive_) {
++        const PpvFog& F = ppvVolumes_[(size_t)l.vol].fogs[(size_t)l.fog];
++        (F.priority ? pri : rest).push_back({F.height, -(F.density * l.cur) / std::log(2.0f), F.start, F.ext, F.in});
++    }
++    if (fogBase_.on) {
++        base.push_back({fogBase_.maxH, fogBase_.scale, fogBase_.start, fogBase_.ext, fogBase_.in});
++        for (int k = 1; k < fogBase_.n && k < 4; ++k)
++            base.push_back({fogBase_.L[k - 1][0], fogBase_.L[k - 1][1], fogBase_.L[k - 1][2], fogBase_.L[k - 1][3],
++                            {fogBase_.C[k - 1][0], fogBase_.C[k - 1][1], fogBase_.C[k - 1][2]}});
++    }
++    std::vector<Lay> all = pri;
++    all.insert(all.end(), base.begin(), base.end());
++    all.insert(all.end(), rest.begin(), rest.end());
++    if (all.size() > 4) all.resize(4);
++    std::stable_sort(all.begin(), all.end(), [](const Lay& a, const Lay& b) { return a.h > b.h; });
++    fogOn_ = !all.empty() && !std::getenv("WFC_NOFOG");
++    fogN_ = (int)all.size();
++    fogMaxH_ = all[0].h; fogScale_ = all[0].scale; fogStart_ = all[0].start; fogExt_ = all[0].ext; fogIn_ = all[0].in;
++    for (int k = 0; k < 4; ++k) fogMinH_[k] = k + 1 < fogN_ ? all[(size_t)k + 1].h : -262144.0f;
++    for (int k = 1; k < fogN_; ++k) {
++        float* l = fogL_[k - 1]; float* c = fogC_[k - 1];
++        l[0] = all[(size_t)k].h; l[1] = all[(size_t)k].scale; l[2] = all[(size_t)k].start; l[3] = all[(size_t)k].ext;
++        c[0] = all[(size_t)k].in.x; c[1] = all[(size_t)k].in.y; c[2] = all[(size_t)k].in.z;
++    }
++    ppvApplied_ = true;
++}
++
+ } // namespace wfc
+ } // namespace render
+diff -ru a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h	2026-10-23 02:56:26.328742900 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-23 02:56:26.441629100 -0500
+@@ -1030,6 +1030,20 @@
+     int fogN_ = 1;                                   // authored height fog layers in use (the first in the members above)
+     float fogL_[3][4] = {}, fogC_[3][3] = {};        // layers 2-4: (max height, scale, start, extinction), in-scattering
+     float fogMinH_[4] = {-262144.0f, -262144.0f, -262144.0f, -262144.0f};   // each layer's min height (the next layer's)
++    // (post-process volume height fog; RE CAMPAIGN_PPV_HEIGHTFOG_RE.md) lighting.json 'volume_fogs': each volume's linked fogs,
++    // used while the camera is inside the highest-priority one (density faded in / out over its InterpolationDuration); the
++    // load's layers (fogBase_) are what the per-frame list is built on and restored to. Maps without any: never touched.
++    struct PpvFog { float height, density, start, ext; core::Vec3 in; bool priority, snap; };
++    struct PpvPlane { float n[3], d; };
++    struct PpvVolume { float priority; bool unbound; float interp; std::vector<PpvPlane> planes; std::vector<PpvFog> fogs; };
++    struct PpvLive { int vol, fog; float cur; bool leaving; };
++    std::vector<PpvVolume> ppvVolumes_;
++    std::vector<PpvLive> ppvLive_;
++    struct FogBase { bool on; int n; float maxH, scale, start, ext; core::Vec3 in; float L[3][4], C[3][3], minH[4]; } fogBase_{};
++    float ppvLastTime_ = -1.0f;
++    bool ppvApplied_ = false;
++    void loadPpvFogs(const assets::Json& lighting);
++    void ppvFogFrame();
+     bool x3FogOn_ = false; float x3FogMaxH_ = 0.0f, x3FogScale_ = 0.0f;   // X3's medium: the data's first 'fog' component
+     core::Vec3 clearFogIn_{0, 0, 0};                 // the frame clear colour: that first component's in-scattering
+ 
+diff -ru a/tools/render/build_lighting.py b/tools/render/build_lighting.py
+--- a/tools/render/build_lighting.py	2026-10-23 02:56:26.255993500 -0500
++++ b/tools/render/build_lighting.py	2026-10-23 02:56:26.449656400 -0500
+@@ -282,6 +282,51 @@
+     return out[:4]
+ 
+ 
++def volume_fogs(repo, mapname):
++    """PostProcessVolumeHeightFogComponent layers (AssetTools 2026-10-23: fogs() matches the exact class, so these were
++    skipped - 1 on MP_ESC_Remnant, 169 in the campaign) with the post-process volumes that link them (RE
++    CAMPAIGN_PPV_HEIGHTFOG_RE.md: same layer parameters / conversion as a HeightFog; a view uses the volume fogs of the
++    highest-priority volume at the pawn, priority-linked ones before the level fogs, the rest after, cap 4; density fades
++    in / out over InterpolationDuration, 1 s by default). The brush comes from the map's collision.json volumes (glTF m)."""
++    coll = {}
++    cp = os.path.join(VS_MAPS, mapname, 'collision.json')
++    if os.path.exists(cp):
++        for v in json.load(open(cp, encoding='utf-8')).get('volumes', []):
++            coll[v.get('actor')] = v.get('polygons_gltf') or []
++    out = []
++    for p in repo.pkgs:
++        for i, e in enumerate(p.exports):
++            if p.class_name(e) != 'PostProcessVolume' or 'Default__' in p.obj_name(i + 1):
++                continue
++            vpath = p.object_path(i + 1)
++            o = repo.obj(vpath) or {}
++            settings = {s['name']: s.get('value') for s in o.get('Settings') or [] if isinstance(s, dict)}
++            links = settings.get('PostProcessVolumeHeightFog') or []
++            fogs_ = []
++            for link in links:
++                lk = {s['name']: s.get('value') for s in link if isinstance(s, dict)}
++                actor = (lk.get('PostProcessVolumeHeightFogActor') or {}).get('ref')
++                comp = ((repo.obj(actor) or {}).get('Component') or {}).get('ref') if actor else None
++                if not comp:
++                    continue
++                f = dict(FOG_DEFAULTS); f.update(repo.obj(comp) or {})
++                if not f.get('bEnabled', True):
++                    continue
++                f['height_m'] = f['Height'] * 0.01
++                f['LightColor'] = fcolor_rgb(f.get('LightColor'))
++                f['object'] = comp
++                f['priority'] = bool(lk.get('bPriority', False))
++                f['transition_from_existing'] = bool(lk.get('bTransitionFromExistingHeightFog', False))
++                fogs_.append(f)
++            if not fogs_:
++                continue
++            name = vpath.split('.')[-1]
++            out.append({'volume': name, 'priority': float(o.get('Priority', 0.0)), 'unbound': bool(o.get('bUnbound', False)),
++                        'interpolation_s': float(settings.get('InterpolationDuration', 1.0) or 1.0),
++                        'polygons_m': coll.get(name, []), 'fogs': fogs_})
++    return out
++
++
+ PF_INVISIBLE, PF_TWOSIDED, PF_PORTAL = 0x1, 0x100, 0x04000000
+ 
+ 
+@@ -843,6 +888,18 @@
+         json.dump(d, open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
+         print(mapname, len(d['fogs']), 'enabled height fog layers:', [(f['object'].split('.')[-1], f['Height'], f['Density']) for f in d['fogs']])
+         return
++    if len(sys.argv) > 3 and sys.argv[1] == '--volume-fogs-only':
++        # <map> <src lighting.json> <out dir>: the same file + 'volume_fogs' when the map has any (else unchanged)
++        from ue3obj import map_packages
++        mapname, src, out = sys.argv[2], sys.argv[3], sys.argv[4]
++        pkgs, _persistent = map_packages(mapname)
++        d = json.load(open(src, encoding='utf-8'))
++        vf = volume_fogs(Repo(pkgs), mapname)
++        if vf: d['volume_fogs'] = vf
++        os.makedirs(out, exist_ok=True)
++        json.dump(d, open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
++        print(mapname, len(vf), 'post-process volume(s) with height fog:', [(v['volume'], len(v['fogs']), len(v['polygons_m'])) for v in vf])
++        return
+     if len(sys.argv) > 3 and sys.argv[1] == '--standalone-only':
+         # <map> <src lighting.json> <out dir>: the same file + the placed light actors its 'lights' lack (by LightGuid)
+         from ue3obj import map_packages
+@@ -905,7 +962,9 @@
+                'component_flags': component_flags(mapname),
+                'light_visibility_volumes': light_visibility_volumes(repo, out),
+                'lightmaps': {'props': props, 'atlases': atl},
+-               'lights': L, 'fog': F, 'fogs': fogs(repo), 'postprocess': PP},
++               'lights': L, 'fog': F, 'fogs': fogs(repo), 'postprocess': PP,
++               # (only when the map has any: every other lighting.json stays byte-identical)
++               **({'volume_fogs': VF} if (VF := volume_fogs(repo, mapname)) else {})},
+               open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
+     from collections import Counter
+     print('lightmapped components: %d (types %s); atlases %d; copied %d PNGs' % (len(props), kinds, len(atl), copied))
