@@ -1929,7 +1929,11 @@ bool Pipeline::load(const std::string& mapArg) {
         // BSP nodes"), so a missing bsp.glb is expected there and not probed
         const bool hasBspFile = platform::dataFileSize(dataDir_ + "/bsp.glb") >= 0;   // (or its .xpr twin)
         const bool uiScene = dataDir_.find("/UI_") != std::string::npos || dataDir_.find("\\UI_") != std::string::npos;
+        // (a campaign chapter's persistent unit - chapter.json beside it - may have no BSP: A1_IAC_Base's level Model is empty)
+        const size_t ps = dataDir_.find_last_of("/\\");
+        const bool chapterUnit = ps != std::string::npos && platform::dataFileSize(dataDir_.substr(0, ps) + "/chapter.json") >= 0;
         if (!hasBspFile && uiScene) LOG_INFO("wfc: no level BSP in this UI scene (none in its cooked packages)");
+        else if (!hasBspFile && chapterUnit) LOG_INFO("wfc: no level BSP in this chapter's persistent unit (an empty level Model)");
         else if (assets::loadGlb(dataDir_ + "/bsp.glb", bsp)) {
             bspMesh_ = upload(bsp);
             bspTris_.clear();                          // glTF (x, y, z) m -> UE (x, z, y) * 100
