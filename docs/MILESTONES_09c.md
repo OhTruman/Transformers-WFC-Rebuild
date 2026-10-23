@@ -3998,3 +3998,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 10:11 AssetTools chain status: A2 DONE (51 units); A3 running; 287 units left at ~2.3 min / unit (~11 h single). DECISION:
   two chains at once + per-chapter queue items as each finishes (ETA roughly halves); the final gate waits for the chain
   (CPU) and Gameplay's recut runtime 14 + FINAL_BASE_ITEMS.
+2026-10-23 10:18 AssetTools: two lanes running (A3 / A4 / D3A / A5 and D1 / D2 / D3B; ETA ~16:00-16:30); A2_KON SHIPPED complete. Lightmap
+  correctness bug found + fixed in the dedupe: LightMapTexture2D names collide across a chapter's packages and
+  build_lighting copied pages by file name (D5 1 page / A1 27 pages came from the wrong package); conflicting names stay
+  per unit; verified vs umodel per package (0 wrong / 0 missing). Root cause in Rendering's tool (told).
