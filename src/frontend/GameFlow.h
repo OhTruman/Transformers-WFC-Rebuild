@@ -75,8 +75,13 @@ struct MatchValues {
         std::string specialty;         // applied at the last spawn
         bool remote = false;           // Gameplay ParticipantKind::Remote: another peer's human (online)
         std::string member;            // its session member (Gameplay MatchPlayer::sessionMember; "" = the host / unknown)
+        int power = 0;                 // Escalation: PRI._CurrentPower 0..9999 (<CurrentGame:Players> _CurrentPower)
     };
     std::vector<Player> players;
+    // Escalation (MP_ESCALATION_RE 8.1; Gameplay HudGameState sv*): GRI survival values for Hud_GFX
+    int svWave = 0;                // <CurrentGame:_CurrentWave> = DisplayWave + 1 (0: not Escalation)
+    int svNextWaveTime = -1;       // <CurrentGame:_NextWaveTime>: whole seconds between waves / pre-game, -1 otherwise
+    bool svGameOver = false;       // the all-dead loss: OnCampaignGameOver instead of the versus end screen
 };
 
 struct MatchLaunch {

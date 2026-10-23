@@ -62,7 +62,14 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<CurrentGame:ActiveObjectives>") return flow_.campaign() ? flow_.objectives().activeText() : "";   // E1
     // Escalation (mode SV) GRI only: a versus GRI has no wave properties, so the read is empty and Hud_GFX keeps its wave
     // clip hidden (it shows "NEW WAVE IN n" for any value; "0" did so in TDM - Integration M08c).
-    if (markup == "<CurrentGame:_CurrentWave>" || markup == "<CurrentGame:_NextWaveTime>") return tag == "SV" ? "0" : "";
+    // In an Escalation match the values come from Gameplay (HudGameState svWave = DisplayWave + 1, svNextWaveTime; MP_ESCALATION_RE
+    // 8.1); Gameplay launches the mode as "ESC".
+    if (markup == "<CurrentGame:_CurrentWave>" || markup == "<CurrentGame:_NextWaveTime>") {
+        if (tag != "SV" && tag != "ESC") return "";
+        if (flow_.level() != LevelKind::Match) return "0";
+        const MatchValues& sv = flow_.matchValues();
+        return std::to_string(markup == "<CurrentGame:_CurrentWave>" ? sv.svWave : sv.svNextWaveTime);
+    }
     // GRI.GoalScore = PointsToWin (TnMultiplayerGame.InitGame). Hud_GFX reads it once when it loads and falls back to 10
     // when it is not > 0, which fills the TDM (40) / DM (20) team bars at 10 points [Hud_GFX AS, Experimental audit P1-2].
     if (markup == "<CurrentGame:GoalScore>") return std::to_string(inMatch ? flow_.currentMatch().goalScore : (L.settings && L.settings->pointsToWin > 0 ? L.settings->pointsToWin : 0));
@@ -230,11 +237,11 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
                     std::string headset;
                     const std::string nm = onlineRow(*om, headset);
                     c.rows.push_back({nm, std::to_string(p.team), teamNameOf(p.team), std::to_string(p.score), std::to_string(p.kills),
-                                      std::to_string(p.deaths), p.dead ? "1" : "0", headset, "", "0", "0", "0", "", "", "0", "0", "0", "0",
+                                      std::to_string(p.deaths), p.dead ? "1" : "0", headset, "", std::to_string(p.power), "0", "0", "", "", "0", "0", "0", "0",
                                       std::to_string(p.level ? p.level : om->info.level)});
                 } else if (p.local)
                     c.rows.push_back({localName, std::to_string(p.team), teamNameOf(p.team), std::to_string(p.score),
-                                      std::to_string(p.kills), std::to_string(p.deaths), p.dead ? "1" : "0", localHeadset, "", "0", "0", prime, "", "",
+                                      std::to_string(p.kills), std::to_string(p.deaths), p.dead ? "1" : "0", localHeadset, "", std::to_string(p.power), "0", prime, "", "",
             std::to_string(progression::levelForXp(pr.xp[3])), std::to_string(progression::levelForXp(pr.xp[1])),
                           std::to_string(progression::levelForXp(pr.xp[0])), std::to_string(progression::levelForXp(pr.xp[2])),
                           std::to_string(progression::playerLevel(pr))});
@@ -247,7 +254,7 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
                     if (sp >= 0) lv[kCol[sp]] = std::to_string(std::clamp((p.level + 2) / 4, 0, 25));
                     c.rows.push_back({p.name, std::to_string(p.team), teamNameOf(p.team), std::to_string(p.score),
                                       std::to_string(p.kills), std::to_string(p.deaths), p.dead ? "1" : "0",
-                                      "0", "", "0", "0", "0", "", "", lv[0], lv[1], lv[2], lv[3], std::to_string(p.level)});
+                                      "0", "", std::to_string(p.power), "0", "0", "", "", lv[0], lv[1], lv[2], lv[3], std::to_string(p.level)});
                 }
                 c.enabled.push_back(true);
             }
