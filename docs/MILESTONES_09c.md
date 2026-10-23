@@ -4081,3 +4081,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   ESC clean, A1 2 x 300 s, CAMPAIGNTEST 24 / 24, KISMETTEST 10 / 10, VOICETEST, net rows identical. D5 headless now ends at
   40 s by design (Omega grabs the idle PlayerBot player). The timed-gate head dffcf31f is built ahead of the hold. Remaining:
   the Frontend hand-over rerun, chapters D2 / D3A / D3B / A5, the user's reboot -> PERF_HOLD gate (~90 min) -> cut.
+2026-10-23 12:26 HAND-OVER RERUN PASS (Frontend, code dffcf31f): 249 / 249 tests, 6 / 6 runs clean, Megatron lit in D5 Realistic. Shots
+  Rebuild-Frontend/work/bins/handover/. The Frontend + Rendering + Gameplay + Experimental (pre) are DONE. Waiting only
+  on: chapters D2 / D3A / D3B / A5 (~14:30) and the user's reboot for the timed gate.
