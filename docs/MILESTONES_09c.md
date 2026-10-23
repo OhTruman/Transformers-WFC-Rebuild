@@ -3859,3 +3859,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 07:20 MERGED 6f505624 campaign boot glue (loadMatch SOLO / CP / CCP; MISSION FAILED / checkpoint / mission complete events;
   chapters selectable once chapter.json exists: D5_OME + A1_IAC unlock). Post-match check PASS (join-code panel overdraw
   fixed). Card: Systems v3 Streets verify -> Rendering x4647 -> Frontend first frontend-launched chapter.
+2026-10-23 07:24 INTERNAL PACKAGE v3 VERIFIED: playtest_slim_be5b7cdc_v3 (27.84 GB): verify_slim Streets PASS (HD on, Opus in), static
+  PASS, headless smokes 0 errors, Experimental 20 / 20 stable + ESC 4 / 4 (wave 3 reached). Older copies deleted (F: 299 GB
+  free). NOT the user build (campaign / E3 / plumes still in progress). MERGED 80d69bf3 E3b1 Brute backpack (ESCTEST Remnant
+  13 / 13). Findings routed: ESC chassis energon_default exports (AssetTools), D5 collision_weapon.glb (AssetTools), the
+  campaign AI squad hit by the strand-suicide rule (Gameplay), Remnant light-card collision (AssetTools, blocks ESCNAV flip).
