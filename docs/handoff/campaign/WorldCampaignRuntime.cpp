@@ -649,3 +649,47 @@ int World::cpTestFireFactory(int k) {
 }
 
 } // namespace game
+
+namespace game {
+
+// ---- TnSeqAct_TransformWorldProp: the campaign's TnTransformingWorldActors (doors, tube doors, the lift pods) ----
+
+// Untransform (0) / Transform (1) on the Target actors -> DesiredTransformState; the actors play their transform sequence at rate 1 and
+// pose their collision (TransformingActors, loaded from AssetTools' <CH>/transforming_actors_gameplay.json); the nav cells under the
+// closed ones are blocked at once (the rest pose). "Finished" (15 of A1's 41 ops) when every target reached it; an op without
+// targets in the data finishes at once (logged).
+bool World::cpTransformWorldProp(KismetVM& vm, int op, int input) {
+    KismetVM::Op& o = vm.op(op);
+    if (o.cls != "TnSeqAct_TransformWorldProp") return false;
+    std::vector<int> idx;
+    int named = 0;
+    for (int v : vm.varLink(op, "Target")) {
+        const KismetVM::Var* var = vm.var(v);
+        if (var && var->named >= 0) var = vm.var(var->named);
+        if (!var || var->obj.empty()) continue;
+        ++named;
+        const int i = transforming_.find(afterDot(var->obj));
+        if (i >= 0) { transforming_.setDesired((size_t)i, input == 1 ? 1 : 0); idx.push_back(i); }
+    }
+    if (!idx.empty() && botNav_.valid()) transforming_.applyNavBlocks(botNav_);
+    LOG_INFO("campaign: %s %s: %zu of %d actors", afterDot(o.path).c_str(), input == 1 ? "Transform" : "Untransform", idx.size(), named);
+    const bool finished = std::find_if(o.outputs.begin(), o.outputs.end(), [](const auto& x) { return x.first == "Finished"; }) != o.outputs.end();
+    if (finished && !idx.empty()) { o.latent = true; o.timer = -1.0f; cp_.transformOps.push_back({op, idx}); }
+    else if (finished) vm.output(op, "Finished");
+    return true;
+}
+
+void World::cpTickTransformOps() {
+    for (size_t k = 0; k < cp_.transformOps.size();) {
+        bool rest = true;
+        for (int i : cp_.transformOps[k].second) {
+            const TransformingActors::Actor& a = transforming_.actors()[(size_t)i];
+            if (a.t != (a.desired ? a.length : 0.0f)) rest = false;
+        }
+        if (!rest) { ++k; continue; }
+        cp_.vm.finishLatent(cp_.transformOps[k].first, "Finished");
+        cp_.transformOps.erase(cp_.transformOps.begin() + (long)k);
+    }
+}
+
+} // namespace game

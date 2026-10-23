@@ -142,6 +142,7 @@ void World::cpBindMoverNav() {
 }
 
 void World::cpSyncMoverNav() {
+    if (cp_.transformMoved && botNav_.valid()) { cp_.transformMoved = false; transforming_.applyNavBlocks(botNav_); }   // a moved transforming actor's nav blocks at rest
     for (CampaignMover& m : cpMovers_) {
         const core::Vec3 d = m.offset - m.navOffset;
         if (m.navCells.empty() || (!m.navMoving && std::fabs(d.x) < 0.01f && std::fabs(d.y) < 0.01f && std::fabs(d.z) < 0.01f)) continue;
@@ -330,9 +331,11 @@ void World::cpMatineeApply(CampaignState::Interp& in, float from, float to) {
                     bool mover = false;
                     for (const CampaignMover& m : cpMovers_) if (m.name == a) mover = true;
                     core::Vec3 base;
-                    if (!mover && renderer_ && a.rfind("CHARACTER:", 0) != 0 && cpActorPos(a, base)) {   // drawn only (no collision): e.g. A1's pod
+                    if (!mover && a.rfind("CHARACTER:", 0) != 0 && cpActorPos(a, base)) {   // a non-mover actor: e.g. A1's lift pod (TnTransformingWorldActor_6275)
                         const core::Vec3 w = t.relative ? base + ueToGltf(p) : ueToGltf(p);
-                        renderer_->setMapActorTransform(a, core::Vec3{w.x * 100.0f, w.z * 100.0f, w.y * 100.0f}, core::Vec3{r[1], r[2], r[0]});
+                        if (renderer_) renderer_->setMapActorTransform(a, core::Vec3{w.x * 100.0f, w.z * 100.0f, w.y * 100.0f}, core::Vec3{r[1], r[2], r[0]});
+                        const int ti = transforming_.find(a);   // a transforming actor: its collision rides along (re-posed next tick)
+                        if (ti >= 0) { transforming_.setOffset((size_t)ti, w - base); cp_.transformMoved = true; }
                     }
                     for (CampaignMover& m : cpMovers_) {
                         if (m.name != a) continue;
