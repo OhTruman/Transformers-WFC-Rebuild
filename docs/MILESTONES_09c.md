@@ -3766,3 +3766,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 04:20 MERGED 7f218986 Escalation weapon factory visuals (render_index_extra.json regenerated for both ESC maps: 17 + 17),
   c0fb8fff Smoke row dev-only. RE: RelativeToInitial order C (VMX decode; tools/re/vmx128dis.py). pt9 folders persist
   between runs (warm Berth); Systems' late-join load window pending.
+2026-10-23 04:25 MERGED 3f35a6c8 pickup spin (RE defaults; regen), 8d7c0cab late-join load window + keepalives (pt9 cause) + build_slim
+  render_index_extra, c45317a3 smoke stage 1 tuning: x40 confirm PASS by eye -> Enhanced smoke SHIPS in all modes (Frontend
+  un-hides the row); water closed dev-only. RE: FMV speaker routing C (FL FR SL SR LFE C). Card: Frontend pt9 rerun on
+  8d7c0cab -> on PASS the internal package word to Systems. Rendering -> chapter loader stage 1, then froxel plumes.
