@@ -3869,3 +3869,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (fix in progress). Data notes: D5_OME_BASE world.glb no triangles (expected: persistent level), gameplay.json +
   collision_weapon.glb missing (AssetTools). MERGED 3ab79529 campaign squad strand exemption, 47a03c29 chapter RT stage 2a
   (RT GI 22 pages / 1432 subs over the whole chapter). Card: Rendering x48plumetune next.
+2026-10-23 07:31 overlay_20261023h FROZEN = shipping set (light cards out of the pawn collision on 6 maps, 64 placements, incl. Remnant's
+  x = 149 plane). energon_default = a World.cpp lookup bug (ESC_ chassis read from VerticalSlice/Characters) -> Gameplay.
