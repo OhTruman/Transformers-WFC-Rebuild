@@ -637,6 +637,10 @@ void Application::runUdpSessionMatch() {
         }
     }
     if (!s.matchReady()) { LOG_ERROR("UDPMATCH: the session roster is not ready"); exitCode_ = 7; return; }
+    if (const char* ld = std::getenv("WFC_LOADDELAY_MS")) {   // TEST ONLY: a blocking map load this long, no polling (a cold shader cache)
+        LOG_INFO("UDPMATCH: a %s ms blocking load (no session polling)", ld);
+        std::this_thread::sleep_for(std::chrono::milliseconds(std::atol(ld)));
+    }
     const std::string launchUrl = s.launchUrl().empty() ? std::string(url) : s.launchUrl();
     game::MatchLaunch L;
     if (!game::MatchLaunch::fromURL(launchUrl, L)) { LOG_ERROR("UDPMATCH: bad launch URL %s", launchUrl.c_str()); exitCode_ = 7; return; }

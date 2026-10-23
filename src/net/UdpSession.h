@@ -92,6 +92,9 @@ public:
     bool lateJoin() const { return lateJoin_; }
     void noteMatchTick(uint32_t tick) { matchTick_ = tick; }
     void reportCatchUp(uint32_t tick, uint32_t target);
+    // Keepalives from inside a blocking load (the loader's yield hook): the session is not polled while the map loads (30-60 s on a
+    // cold shader cache), so the other side would see silence. At most one a second; safe to call any time.
+    void keepaliveNow();
     // The host: match seats whose member the session lost mid-match since the last call (-> NetMatchDriver::dropSeat).
     std::vector<int> takeDroppedMatchSeats() { std::vector<int> v; v.swap(droppedMatchSeats_); return v; }
     bool isMuted(const frontend::SessionMemberId& member) const { return muted_.count(member.fingerprint) != 0; }
@@ -129,6 +132,7 @@ private:
         std::string address;     // as the host sees it
         double lastHeard = 0.0;
         bool loaded = false;
+        double lateLoadSince = -1.0;   // a late joiner loading the running match (LateLaunch sent, LOADED not yet): the load window
     };
     class MatchView;
     friend class MatchView;

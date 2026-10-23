@@ -1,0 +1,118 @@
+diff -ruN a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+--- a/src/core/Application_Frontend.cpp	2026-10-23 04:20:55.867727300 -0500
++++ b/src/core/Application_Frontend.cpp	2026-10-23 04:20:55.921912800 -0500
+@@ -629,7 +629,7 @@
+                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
+                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
+                           "WFC_VEHTEST", "WFC_FOVTEST", "WFC_SCREENTEST", "WFC_TILETEST", "WFC_MODETEST", "WFC_CHASSISTEST",
+-                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_CAMPAIGNAUDIOTEST", "WFC_UDPHOST", "WFC_UDPJOIN", "WFC_UDPLEAVE_AT", "WFC_ONLINEFLOWTEST", "WFC_SOLOLAUNCHTEST", "WFC_VOICETEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
++                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_CAMPAIGNAUDIOTEST", "WFC_UDPHOST", "WFC_UDPJOIN", "WFC_UDPLEAVE_AT", "WFC_LOADDELAY_MS", "WFC_ONLINEFLOWTEST", "WFC_SOLOLAUNCHTEST", "WFC_VOICETEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
+                           "WFC_SPAWNFILLTEST", "WFC_EXTRABODYTEST", "WFC_DOUBLEJUMPTEST",
+                           "WFC_DETERMINISMTEST", "WFC_WEAPONAUDIT", "WFC_VEHFRAMETEST", "WFC_VEHICLEAUDIT", "WFC_QABOTTEST", "WFC_MARKERSTEST", "WFC_STUCKSPOT_BOT", "WFC_ASYNCSTEPTEST", "WFC_ENGAGETEST", "WFC_EVICTTEST", "WFC_BARRIERWALKTEST"})   // [integration 09c] Gameplay 26d / 26h / 26k harnesses
+         if (std::getenv(v)) return false;
+@@ -1389,6 +1389,7 @@
+     core::setLoadYield([this](double dt) {
+         platform::InputFrame in;
+         window_->pump(in);   // a close request stays pending and ends the frontend loop after the load
++        if (udpSession_) udpSession_->keepaliveNow();   // [Systems] an online peer stays alive through a long blocking load
+         frontend_->updateLoading((float)std::min(dt, 0.1));
+         // Validation: WFC_LOADSHOTS=<prefix> captures loading frames 10 / 60 / 120 from inside the load.
+         static const char* shots = std::getenv("WFC_LOADSHOTS");
+diff -ruN a/src/core/Application_Net.cpp b/src/core/Application_Net.cpp
+--- a/src/core/Application_Net.cpp	2026-10-23 04:20:55.832105000 -0500
++++ b/src/core/Application_Net.cpp	2026-10-23 04:20:55.922916100 -0500
+@@ -637,6 +637,10 @@
+         }
+     }
+     if (!s.matchReady()) { LOG_ERROR("UDPMATCH: the session roster is not ready"); exitCode_ = 7; return; }
++    if (const char* ld = std::getenv("WFC_LOADDELAY_MS")) {   // TEST ONLY: a blocking map load this long, no polling (a cold shader cache)
++        LOG_INFO("UDPMATCH: a %s ms blocking load (no session polling)", ld);
++        std::this_thread::sleep_for(std::chrono::milliseconds(std::atol(ld)));
++    }
+     const std::string launchUrl = s.launchUrl().empty() ? std::string(url) : s.launchUrl();
+     game::MatchLaunch L;
+     if (!game::MatchLaunch::fromURL(launchUrl, L)) { LOG_ERROR("UDPMATCH: bad launch URL %s", launchUrl.c_str()); exitCode_ = 7; return; }
+diff -ruN a/src/net/UdpSession.cpp b/src/net/UdpSession.cpp
+--- a/src/net/UdpSession.cpp	2026-10-23 04:20:55.797486200 -0500
++++ b/src/net/UdpSession.cpp	2026-10-23 04:20:55.920407500 -0500
+@@ -43,6 +43,7 @@
+     kDiscover = 0x53, kAnnounce = 0x54, kPing = 0x55, kPong = 0x56,   // out of band: LAN discovery, candidate pings
+ };
+ constexpr double kSearchCollectS = 1.0, kPingRoundS = 0.3;
++constexpr double kLateLoadS = 120.0;   // a late joiner's map load (a cold first load of a map can take 30-60 s) before it is dropped
+ constexpr int kNoSession = 255;   // a Reserved match seat nobody holds yet (the match seat table's placeholder)
+ constexpr int kPingRounds = 3, kMaxPingMs = 250;
+ std::string versionTag() { char b[64]; std::snprintf(b, sizeof b, "%08x-%s", kProtocol, __DATE__); return b; }
+@@ -550,6 +551,17 @@
+     return it == peers_.end() ? SessionMemberId{} : it->second.info.id;
+ }
+ 
++void UdpSession::keepaliveNow() {
++    if (!t_) return;
++    static auto last = std::chrono::steady_clock::time_point{};
++    const auto t = std::chrono::steady_clock::now();
++    if (t - last < std::chrono::seconds(1)) return;
++    last = t;
++    const uint8_t k = kKeepalive;
++    for (const auto& kv : peers_) t_->sendUnreliable(kv.first, &k, 1);
++    t_->service();   // reliable resends / acks too
++}
++
+ void UdpSession::joinRunningMatch() {
+     if (role_ != Role::Member || !lobby_.matchRunning) return;
+     W w(kLateJoin); sendSeat(0, w.b);
+@@ -752,7 +764,7 @@
+     case kLoaded: {
+         if (role_ != Role::Host || !peers_.count(seat)) break;
+         (void)r.u64(); (void)r.u64();   // simId / loadHash: the lockstep's HELLO launch hash checks the launch itself
+-        peers_[seat].loaded = true;
++        peers_[seat].loaded = true; peers_[seat].lateLoadSince = -1.0;
+         W w(kPeerLoaded); w.str(peers_[seat].info.id.fingerprint); sendAllMembers(w.b);
+         SessionEvent e; e.type = SessionEvent::Type::PeerLoaded; e.member = peers_[seat].info.id; emit(e);
+         if (matchRunning_) {   // a late joiner loaded: only its own gate opens (it replays the history from tick 1)
+@@ -784,7 +796,7 @@
+         for (size_t i = 0; i < matchToSession_.size(); ++i) { w.u8(matchToSession_[i]); w.u8(matchReserved_[i]); }   // live seat + Reserved at launch
+         w.u8(ms);
+         sendSeat(seat, w.b);
+-        peers_[seat].loaded = false;
++        peers_[seat].loaded = false; peers_[seat].lateLoadSince = now_;
+         LOG_INFO("session: late join - seat %d takes match seat %d (match tick %u)", seat, ms, matchTick_);
+         break;
+     }
+@@ -920,7 +932,14 @@
+     // Timeouts: the host drops silent members; a member ends the session when the host is silent (other members: the host decides).
+     if (role_ == Role::Host) {
+         std::vector<int> gone;
+-        for (const auto& kv : peers_) if (now_ - kv.second.lastHeard > opt_.connectionTimeoutS) gone.push_back(kv.first);
++        // a member loading the match (the load gate, or a late joiner's own load) may be silent for its whole load: the load windows
++        const bool gate = matchReady() && !matchRunning_;
++        for (const auto& kv : peers_) {
++            const Peer& pr = kv.second;
++            const double limit = pr.lateLoadSince >= 0.0 ? std::max(opt_.connectionTimeoutS, kLateLoadS)
++                                 : gate && !pr.loaded ? std::max(opt_.connectionTimeoutS, opt_.loadTimeoutS) : opt_.connectionTimeoutS;
++            if (now_ - pr.lastHeard > limit) gone.push_back(kv.first);
++        }
+         for (int s : gone) dropPeer(s, SessionLeaveReason::Timeout, true);
+         if (matchReady() && !matchRunning_ && loadedSelf_ && now_ - loadStart_ > opt_.loadTimeoutS)
+             for (int s : matchToSession_) if (s != 0 && peers_.count(s) && !peers_[s].loaded) dropPeer(s, SessionLeaveReason::LoadTimeout, true);
+diff -ruN a/src/net/UdpSession.h b/src/net/UdpSession.h
+--- a/src/net/UdpSession.h	2026-10-23 04:20:55.761864400 -0500
++++ b/src/net/UdpSession.h	2026-10-23 04:20:55.919404000 -0500
+@@ -92,6 +92,9 @@
+     bool lateJoin() const { return lateJoin_; }
+     void noteMatchTick(uint32_t tick) { matchTick_ = tick; }
+     void reportCatchUp(uint32_t tick, uint32_t target);
++    // Keepalives from inside a blocking load (the loader's yield hook): the session is not polled while the map loads (30-60 s on a
++    // cold shader cache), so the other side would see silence. At most one a second; safe to call any time.
++    void keepaliveNow();
+     // The host: match seats whose member the session lost mid-match since the last call (-> NetMatchDriver::dropSeat).
+     std::vector<int> takeDroppedMatchSeats() { std::vector<int> v; v.swap(droppedMatchSeats_); return v; }
+     bool isMuted(const frontend::SessionMemberId& member) const { return muted_.count(member.fingerprint) != 0; }
+@@ -129,6 +132,7 @@
+         std::string address;     // as the host sees it
+         double lastHeard = 0.0;
+         bool loaded = false;
++        double lateLoadSince = -1.0;   // a late joiner loading the running match (LateLaunch sent, LOADED not yet): the load window
+     };
+     class MatchView;
+     friend class MatchView;

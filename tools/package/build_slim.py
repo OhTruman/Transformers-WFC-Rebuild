@@ -56,7 +56,7 @@ AGILITY_LICENSE_DEST = 'licenses/microsoft_d3d12_agility/LICENSE.txt'
 RENDER_EXTRA = ['materials_pbr.json']
 # ... and shipped when the map has one (newer than slim_files.tsv; the UI dirs have none): verify_slim 2026-10-13 found the
 # game opening every MP map's fog_volumes.json, missing from the package
-RENDER_IF_PRESENT = ['fog_volumes.json']
+RENDER_IF_PRESENT = ['fog_volumes.json', 'render_index_extra.json']   # + the Escalation maps' weapon factory visuals (7f218986)
 
 
 def arg(name, default=None):
