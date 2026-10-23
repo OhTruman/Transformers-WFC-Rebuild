@@ -3629,3 +3629,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 01:50 MERGED 36e5760b the map vote on screen (lobby v2 5b). #1 load times routed to Rendering: AnimSet pre-parse on a worker thread
   from boot (preview bodies 270 / 190 ms, 601 ms cold) + resident frontend scenes (re-read on every travel). Playtest status:
   only #1 (code), #3 visual, #18 (A) data, #10 / #13 check remain open; #7 / #2 runtime checks in the Frontend's next slot.
+2026-10-23 01:54 MERGED c1f0fa06 / a00926f8 Escalation HUD data path + glue (wave / next-wave / power from HudGameState sv* once E1 lands).
+  Rendering #1: AnimSet prefetch on worker threads + the last 3 parsed frontend scenes resident (rt2 745f9403 + step A), runtime
+  check pending; step B (true GL residency) waits on the Frontend's warm profile split. Card: Systems (numbers) -> Frontend
+  pt4 -> Rendering (smoke match arms + #1 run).
