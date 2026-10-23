@@ -13,9 +13,9 @@ function ed(f, pairs) {
     fs.writeFileSync(f, crlf ? s.replace(/\n/g, '\r\n') : s);
 }
 for (const [src, dst] of [['docs/handoff/escalation/Survival.h', 'src/game/Survival.h'], ['docs/handoff/escalation/WorldSurvival.cpp', 'src/game/WorldSurvival.cpp'],
-                          ['src/game/EscalationData.inc', 'src/game/EscalationData.inc'], ['tools/gameplay/gen_escalation.py', 'tools/gameplay/gen_escalation.py'],
-                          ['data/gameplay/escalation_MP_ESC_BrokenHope.json', 'data/gameplay/escalation_MP_ESC_BrokenHope.json'],
-                          ['data/gameplay/escalation_MP_ESC_Remnant.json', 'data/gameplay/escalation_MP_ESC_Remnant.json']])
+                          ['docs/handoff/escalation/gen/EscalationData.inc', 'src/game/EscalationData.inc'], ['tools/gameplay/gen_escalation.py', 'tools/gameplay/gen_escalation.py'],
+                          ['docs/handoff/escalation/gen/escalation_MP_ESC_BrokenHope.json', 'data/gameplay/escalation_MP_ESC_BrokenHope.json'],
+                          ['docs/handoff/escalation/gen/escalation_MP_ESC_Remnant.json', 'data/gameplay/escalation_MP_ESC_Remnant.json']])
     fs.copyFileSync(path.join(G, src), dst);
 ed('src/game/World.h', [
     ['    int svTestSpawn(const std::string& typePrefix);',
