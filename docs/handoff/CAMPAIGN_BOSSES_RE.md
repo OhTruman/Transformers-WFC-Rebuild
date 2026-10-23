@@ -74,3 +74,49 @@ CAMPAIGN_AI_LAYER_RE. Only boss-specific parts are here.
 - Afterburner / boss FX emitters are destroyed on abort.
 - Tactical air nodes (`TnTacticalAirPathNode` ×11+) are toggled by the AirNode debug hook. In normal play they're enabled.
 - **Minions:** none in the fight. Dropships and jets are ambient matinee props.
+
+---
+
+## A2_KON: Soundwave and his cassettes (Soundwave_Design, Main_Sequence)
+
+### Templates (C)
+
+| Character | AICD / pawn | Health | Sensors | Goal set | Actions (blueprint parameters) |
+|---|---|---|---|---|---|
+| **Soundwave** | Soundwave_Boss_AICD (CType_Boss), SoundwaveBoss_ROBODEF | **1000** | Agent set (BiggestThreat, LOS, Range) | **Engineer_Boss**: Revive first, then Heal, UseInteract (high), React, ReactToStimulus, ScriptedMoveTo, MoveTo, DefendSelf, Kill, BuddyLead, … | **AudioBlast** (TnWeaponAudioBlast; anim `Shooting_AudioBlast`; fire from **0.45 s to 4.5 s**, aim 200 UU ahead of the muzzle; every **10–12 s**); **Revive (full revive)** of downed allies; **HealFromCurrentLocation** with TnWeaponBossRepairRay, **only while GOD_On**, needs a clear trace to the heal target, not downed targets; SpawnCharacter (socket SpawnCharacterSocket, 2 s, anim `Deploy_Cassettes`, spawned minions get Downed enabled; only via Kismet `TnSeqAct_AiSpawnCharacter`, **unused here**: the cassettes come from pawn factories); Retreated, TurnToAimAtActor, UseInteract, ScanningIdle (repair ray) |
+| **Laserbeak** | Laserbeak_AICD, TnMinionAiPawn, starts and revives as **jet** | **600** | Sniper set (Damage, Distance, Player, Cloaked, TargetDowned; retreat-node picker) | Agent | ShootFromAirTactical TnWeaponLaserVehicle (valid 6 s / invalid 3 s, cost 3); **BombingRun** (TnWeaponBombingRunLaser, ShootAhead 1000, valid 2000, min range Close, every **10–12 s**); **BarrelRoll every 7–10 s**; EMP reaction; ShootAtTarget robot-form path cost 9999 (effectively never); vehicle navigation prefers enemies in Critical health |
+| **Rumble** | Rumble_AICD, TnMinionAiPawn | **1275** | SoldierMinion set (Damage, Distance, Player, TurretTarget, Cloaked, Attacker) | Agent | Minion HeavyPistol; **AreaOfEffect `GroundSmash_AOE`** within **1800 UU**, every **3–8 s**; **Stampede**: charge at **×3 speed** when ≥ Medium range and reachable, lock the target position at **1500 UU**, melee at **1000 UU** (type 6 if the trace hits a pawn, else 7), every **9–12 s**; Taunt (`Nav_RunCharge_Start`); EMP / stimulus reactions |
+| **Frenzy** | Frenzy_AICD, TnMinionAiPawn | **850** (speed 1000) | SoldierMinion | Agent | Minion EmpShotgun; **AbilityJammer** (triggered ability; target ≥ range band 5) every **5–7 s**; **Hover** + hover attack anim (`Shooting_RocketBarrage_Hover`) every **3–5 s**; stimulus reaction every 8–10 s |
+
+### The fight loop (C, Kismet; thresholds from the linked SeqVar_Floats)
+1. **Intro:**
+   - trigger volume → door world-prop transform → intro → `Soundwave_Intro_Teleport` (the trio teleports to 3 tactical nodes);
+   - `Soundwave_Intro_Complete` → **PawnFactory spawns Soundwave** on his platform marker;
+   - **AttachToEvent → `SetAiGodStatus GOD_On` (fully invulnerable)**.
+2. **Summon rotation** (`Switch` over MinionIndex, links auto-disable, in order **Frenzy → Rumble → Laserbeak**):
+   - `Start_<minion>` waits (0.5 s poll) until **`SoundwaveIsOnPlatform`**;
+   - then a summon conversation + `Spawn_<minion>` → the minion's factory spawns it, and Soundwave **uses the summon interact
+     emote** (TnInteractEmote_2230).
+3. **Vulnerability window:**
+   - a minion goes **Downed** (TnSeqEvent_Downed → `<Minion>Downed`);
+   - 0.5 s later, distance Soundwave → platform marker:
+     - **≥ 200 UU** (he has left the platform, H: to revive the cassette) → **`GOD_PseudoOn`**: damageable, can't die;
+     - **≤ 200 UU** → stays GOD_On.
+   - **`<Minion>Revived`** (Soundwave's full revive) → back to **GOD_On**.
+4. **Stage ends** on his health (`SoudwaveCurrentHealth`, read on every damage event):
+
+   | Stage | Ends at | Effect |
+   |---|---|---|
+   | 1 | ≤ **700** | **Frenzy recalled**: pseudo-god on Frenzy, it moves off; Soundwave GOD_On; next minion |
+   | 2 | ≤ **400** | **Rumble recalled** |
+   | 3 | ≤ **10** | `SoundwaveIsDefeated` → `SoundwaveDefeated` → `Start_Soundwave_Outro` |
+
+5. **Return to platform:** `Send_Soundwave_Back_To_Platform` → `TnAiMoveToActor` to the platform node (retries on abort). If he
+   isn't on it 10 s later, **teleport** there.
+6. **Sentry rounds 1–3** (`Spawn_Sentries_Round_N`):
+   - each corner group (BackRight / FrontRight / …) spawns one of 3 sentry factories at random;
+   - sentries are deactivated **25 s** later (`Deactivate_Soundwave_Sentries`);
+   - a destroyed sentry drops a random **Health / Ammo / ResourceCache** reward (10-way random switch).
+7. **Checkpoints** `Soundwave2 / 3CheckpointActivated`: respawn him, pseudo-god, then **CauseDamage 300 / 600 (AOE)** to restore
+   the stage health (700 / 400).
+8. **Audio-blast barks:** when a player takes TnDamageTypeAudioBlast, a 2-way switch of companion lines plays.
