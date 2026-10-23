@@ -1,47 +1,52 @@
-# Package 7: the two-PC network test (about 15 minutes)
+# Two-PC online test (about 20 minutes)
 
-**What this is.** Package 7 carries online phase 1: the network layer that keeps two PCs' matches identical. This test runs a
-5-minute bot match on Streets **in the background on both PCs at once, over your home network**. Every 1/60 s each PC checks that
-its match is identical to the other's, and your microphone's voice is sent between the PCs. You see no picture: it is a test of the
-network and sync, run with the bots playing both seats.
-
-**What is not in package 7:** hosting or joining from the game's menus, and an online match you see and play yourself. Those need a
-real online session behind the Host / Join menus and the online match drawn on screen with your own controls; they are the next
-online step (phase 2). Playing package 7 normally (Play.bat) is unchanged and offline.
+**What this is.** The "everything" build plays online from the game's own menus: host a match, join it with a code, play it
+together on two PCs, leave, and join again while the match is running (join in progress). This test checks all of that between
+two PCs on your home network. Over the internet it needs the lobby server (the Hetzner VPS), which comes later: for now both PCs
+must be on the **same home network**.
 
 ## 1. Set up the second PC (PC B)
 
-1. Copy the **whole package folder** (the one with Play.bat, about 29 GB) to PC B, to a short path such as `D:\WFC` (deep folders
-   break some file paths).
+1. Copy the **whole package folder** (the one with Play.bat) to PC B, to a short path such as `D:\WFC` (deep folders break some
+   file paths).
 2. Both PCs on the **same home network** (wired or Wi-Fi), with the network set to **Private** in Windows.
-3. PC B needs no graphics card for this test.
+3. Start the game on each PC with **Play.bat** (not the exe directly).
+4. The first time a PC hosts or joins, Windows may ask whether to allow **wfc_rebuild.exe** on the network: choose **Allow**
+   (Private networks).
 
-## 2. Run it
+## 2. A private match by code (PC A hosts)
 
-1. **PC B:** open a Command Prompt, run `ipconfig`, note the **IPv4 Address** (e.g. 192.168.1.23).
-2. **PC A** (this PC): double-click **Play_NetTest_Host.bat** in the package folder. It shows PC A's IPv4 address - note it - and asks
-   for PC B's address: type it and press Enter.
-3. **PC B**, within 3 minutes: double-click **Play_NetTest_Join.bat**, type **PC A's** address, press Enter.
-4. If Windows asks whether to allow **wfc_rebuild.exe** on the network, choose **Allow** (Private networks) on both PCs.
-5. Both windows say "Running ... (about 6 minutes)". The microphone icon appears while it runs: speak, play music near the mic, or
-   stay quiet - all fine. Wait until each window says **Finished: exit code N**.
+1. **Both PCs:** Multiplayer.
+2. **PC A:** **Private Match**. You are in the game lobby at once. The right column shows **Join code: WFC-XXXX-XXXX**; press
+   **C** to copy it, or read it out.
+3. **PC B:** **Join Game**, type the code (or PC A's address, e.g. `192.168.1.20`), press Enter. "Joining game..." then PC B is in
+   PC A's lobby. Both lobbies list both players.
+4. **PC A:** pick a map and start. Both PCs load, then the match starts together (Choose Character on each).
+5. Play a few minutes: move, shoot, transform, die, respawn. Both screens should agree: the same scores, the same kills, each
+   other's robot where it should be. Try the voice key (push to talk) if you have headsets.
 
-## 3. What to look for
+## 3. Join in progress (a public match)
 
-- **Exit code 0 on both PCs** = the two matches stayed identical for all 18,000 ticks and ended together. That is the pass.
-- Other codes: **3** = the matches differed (a sync bug: the files below pin it to the tick), **4** = the other PC was not found
-  (wrong address, the firewall, or started more than 3 minutes apart: run both again), **5** = PC A stopped early, **6** = the two
-  PCs are not running the same package (copy it again), **7** = the network port could not be opened (another program on UDP port
-  14000).
+1. **PC A:** Multiplayer, **Find Match**, **Quick Match**, pick Team Deathmatch. With no lobby server it finds nothing and hosts a
+   public lobby ("Creating lobby..."); note the **Join code**.
+2. **PC B:** **Join Game** with that code. With two players in, the lobby countdown (45 s) starts by itself; let the match begin.
+3. After a minute of play, **PC B:** pause, **Leave Match**. PC A plays on (PC B's robot leaves the match).
+4. **PC B:** **Join Game** with the same code. It goes straight into the running match: the loading screen shows "Joining the
+   match in progress... n%", then Choose Character, and PC B spawns on the team with fewer players. It should take a few seconds.
+5. Play on for a couple of minutes: both screens should agree again.
 
-## 4. Send back from **each** PC
+## 4. What counts as a pass
 
-The folder **NetTest_results** inside the package folder (three files):
+- Section 2: both PCs in the same match, scores and kills agree, the match ends together.
+- Section 3: PC B leaves without ending PC A's match, joins again mid-match, and both agree afterwards.
+- Neither PC shows "the matches went out of sync" (a desync message) or drops back to the menu by itself.
 
-| file | what it tells us |
-|---|---|
-| `wfc.log` | `NET all 2 seats here`, the `NET input delay` lines (how the delay adapted to your network, with the round trip time), `NET done ... status 0` or a `NET DESYNC at tick ...` line, and the voice lines (`voice capture: started`, `voice: sent ... received ... played ...`) |
-| `net.csv` | one row per tick: the state hash, the command hash, any stall and the bytes in / out - compared side by side |
-| `record.bin` | the recording of every tick's commands: replays the match here exactly, to find any difference |
+If something goes wrong: the code is refused ("That is not a join code or an address.") - check it was typed in full; "Join Game
+Failed" - PC A's lobby closed or the firewall blocked it (allow wfc_rebuild.exe, Private network); "match too far along" - joining
+a running public match is limited to its first 5 minutes; wait for the next match.
 
-Label them (e.g. `PC-A`, `PC-B`). Nothing in them is audio: the voice is only counted, never saved.
+## 5. Send back from **each** PC
+
+**wfc.log** from the package folder (beside Play.bat), labelled `PC-A` / `PC-B`. It has the session lines (`session: ...`), the
+match network lines (`NET ...`: the players, the input delay, a leave, the late join and its catch-up) and any error. Nothing
+in it is audio or personal beyond the player names you chose.
