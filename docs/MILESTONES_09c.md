@@ -3514,3 +3514,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 00:29 MERGED f8a02fc8 #11 weapon spread (square -> the original's disc: ~2x narrower; sample-before-increment; robot-only multipliers;
   shotgun patterns). EXPECTED SIM CHANGE (the first since af4d0731's base): the final gate's base needs this as a sim-only diff;
   Classic / Smart bot baselines re-baseline on it.
+2026-10-23 00:32 CORRECTION: f8a02fc8 lacked two World::remoteFire hunks (patch rejects at 3666 / 3674; my chain did not stop on FAILED); applied
+  by hand in cf02694d. The 20-s headless runner cannot see shot-direction changes (no shots land in its window): sim-change claims
+  rest on Gameplay's 300-s check; identity claims stay valid. RE queue done (water PS, X7, Rust tessellation: the original is
+  as coarse and per-vertex -> Rendering re-checks the ExtinctionDistance branch; per-pixel stays meanwhile). RE -> campaign list.
