@@ -8995,15 +8995,33 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
         // across it of K x the sprites' mean opacity; WFC_SMOKEVOL = K, 0 off)
         static const float volK = std::getenv("WFC_SMOKEVOL") ? (float)std::atof(std::getenv("WFC_SMOKEVOL")) : 0.6f;
         if (rtMode_ == 2 && volK > 0.0f && smokeVolAcc_.size() < 256) {
-            float r = 0.0f, a = 0.0f;
+            // (x43: one batch can hold several plumes - every emitter of the material - so its single blob was centred in the
+            // air between them, tens of metres wide and near-empty; the sprites are clustered per plume instead: a sprite joins
+            // the first cluster whose seed is within 4 m, else seeds a new one (8 per batch))
+            struct Cl { core::Vec3 seed, sum; float a = 0.0f; int n = 0; };
+            Cl cl[8]; int ncl = 0;
+            std::vector<int>& of = smokeClusterOf_;
+            of.assign(n, -1);
             for (size_t i = 0; i < n; ++i) {
                 const core::Vec3 m = (sp[i].c[0] + sp[i].c[2]) * 0.5f;
-                r = std::max(r, core::length(m - smokeCenter_) + 0.5f * core::length(sp[i].c[2] - sp[i].c[0]));
-                a += std::min(std::max(sp[i].color[3], 0.0f), 1.0f);
+                int k = 0;
+                while (k < ncl && core::length(m - cl[k].seed) > 4.0f) ++k;
+                if (k == ncl) { if (ncl == 8) continue; cl[ncl++].seed = m; }
+                cl[k].sum = cl[k].sum + m; cl[k].a += std::min(std::max(sp[i].color[3], 0.0f), 1.0f); ++cl[k].n;
+                of[i] = k;
             }
-            a /= (float)n;
-            if (r > 0.1f && a > 0.01f)
-                smokeVolAcc_.push_back({smokeCenter_.x, smokeCenter_.y, smokeCenter_.z, r, volK * a / r});
+            float r[8] = {};
+            for (int k = 0; k < ncl; ++k) cl[k].sum = cl[k].sum * (1.0f / (float)cl[k].n);   // (now the centre)
+            for (size_t i = 0; i < n; ++i) {
+                if (of[i] < 0) continue;
+                const core::Vec3 m = (sp[i].c[0] + sp[i].c[2]) * 0.5f;
+                r[of[i]] = std::max(r[of[i]], core::length(m - cl[of[i]].sum) + 0.5f * core::length(sp[i].c[2] - sp[i].c[0]));
+            }
+            for (int k = 0; k < ncl && smokeVolAcc_.size() < 256; ++k) {
+                const float a = cl[k].a / (float)cl[k].n;
+                if (r[k] > 0.1f && a > 0.01f)
+                    smokeVolAcc_.push_back({cl[k].sum.x, cl[k].sum.y, cl[k].sum.z, r[k], volK * a / r[k]});
+            }
         }
     }
     if (!spriteVao_) {
