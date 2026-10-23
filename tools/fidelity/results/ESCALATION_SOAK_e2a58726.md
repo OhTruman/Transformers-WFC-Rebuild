@@ -47,3 +47,9 @@ plain ?GameModeTag=ESC, idle local player) there is not one 'ESCLOG try' line in
 (row 0: budget 100, alive 50, deficit 30)'; no death, no clear. (Gameplay's ESCTEST Remnant 5 / 5 spawns at 5771: the harness boot
 differs - zone activation / PreGame from level start / the player's position?) BrokenHope spawns and kills as expected. 0 generator
 buys is expected headless (no human buying). Logs work/stabsoak/esc_29c/, esc_29c_log/.
+
+**Correction (Gameplay, confirmed):** the 'never calls svSpawn' read above is WRONG - my greps ('escalation' / 'spawn') missed the
+'ESCLOG try' lines: the log has 5 tries, all successes at zone 5771 (5 HoloBrutes fill the alive cost). The real bug: the local player
+never got a pawn (0 'local player spawned' lines) - Remnant's TnTeamPlayerStarts carry no team and its players are team 1, so no start
+matched; the horde had nobody to hunt. Fix: GAMEPLAY_ESCALATION_E2FIX.patch (agents/gameplay bec7beea). Pass criterion on Remnant:
+'local player spawned at TnTeamPlayerStart_...' then waves begun / cleared.
