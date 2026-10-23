@@ -110,7 +110,7 @@ def mixer_preset_dsp(name):
             if d['Name'] == name: cats[cat['Name']] = d
     return {'mixer_preset': mp, 'dsp_by_category': cats}
 
-def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None):
+def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None, campaign=False):
     """The Kismet audio graph of a level (all `packages`: a UI level, or a map's sublevels).
     touch_geo: {SeqEvent_Touch name: trigger polygons (glTF)} from the AssetTools map manifest."""
     objs = {}
@@ -154,9 +154,22 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None):
     timelines = {}
     for o, (cl, p) in objs.items():
         if cl != 'SeqAct_Interp': continue
-        if not any(ol.get('LinkDesc') not in NOT_EVENTS and any(is_audio_target(l.get('LinkedOp')) for l in ol.get('Links') or [])
-                   for ol in p.get('OutputLinks') or []): continue
         data = [v for vl in p.get('VariableLinks') or [] if vl.get('LinkDesc') == 'Data' for v in vl.get('LinkedVariables') or []]
+        # [campaign] InterpTrackSound keys: {time, cue, volume, pitch, actor} - the group's actor is the SeqAct_Interp variable
+        # link named after the InterpGroup's GroupName (UE3 plays the key's sound on the group actor; none = at the listener)
+        tl_sounds = []
+        if campaign and data:
+            for t, (tc, tp) in objs.items():
+                if tc != 'InterpTrackSound' or not t.startswith(data[0] + '.'): continue
+                grp = t.rsplit('.', 1)[0]
+                gname = objs.get(grp, (None, {}))[1].get('GroupName') or ''
+                act = [a for a in (actor(x) for x in var_objects(p, gname)) if a and a != '<player>'] if gname else []
+                for k in tp.get('Sounds') or []:
+                    if not k.get('Sound'): continue
+                    tl_sounds.append({'time': round(k.get('Time', 0.0), 4), 'cue': k['Sound'], 'volume': k.get('Volume', 1.0),
+                                      'pitch': k.get('Pitch', 1.0), 'actor': act[0] if act else None})
+        if not tl_sounds and not any(ol.get('LinkDesc') not in NOT_EVENTS and any(is_audio_target(l.get('LinkedOp')) for l in ol.get('Links') or [])
+                   for ol in p.get('OutputLinks') or []): continue
         idata = objs.get(data[0], (None, {}))[1] if data else {}
         events = []
         for t, (tc, tp) in objs.items():
@@ -167,6 +180,7 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None):
                         'looping': bool(p.get('bLooping', D_INTERP.get('bLooping', False))),
                         'play_rate': p.get('PlayRate', D_INTERP.get('PlayRate', 1.0)),
                         'events': sorted(events, key=lambda e: e['time'])}
+        if tl_sounds: timelines[o]['sounds'] = sorted(tl_sounds, key=lambda e: e['time'])
 
     def triggers(op, inp, depth=0, seen=None):
         seen = set() if seen is None else seen
@@ -181,7 +195,7 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None):
             elif cl == 'GFxEvent_FsCommand': out.append('FsCommand:' + p.get('FsCommand', ''))
             elif cl == 'SeqAct_MoviePlayer' and desc == 'Stopped': out.append('MovieStopped:' + p.get('MovieName', ''))
             elif cl == 'SeqAct_Interp' and src in timelines: out.append('Timeline:%s:%s' % (sid(src), desc))
-            elif cl in STATEFUL: out.append('Out:%s:%s' % (sid(src), desc))
+            elif cl in STATEFUL or (campaign and cl == 'SeqAct_Conversation'): out.append('Out:%s:%s' % (sid(src), desc))
             elif cl == 'SeqEvent_SequenceActivated':
                 seq = src.rsplit('.', 1)[0]
                 for i, il in enumerate(objs.get(seq, (None, {}))[1].get('InputLinks') or []):
@@ -200,9 +214,29 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None):
     def preset_name(ref):
         return objs.get(ref, (None, {}))[1].get('PresetName') or row(ref or '')[1].get('PresetName')
     for o, (cl, p) in sorted(objs.items()):
-        if cl not in SINK_OPS and cl != 'SeqEvent_Touch': continue
+        if cl not in SINK_OPS and cl != 'SeqEvent_Touch' and not (campaign and cl == 'SeqAct_Conversation'): continue
         op = {'id': sid(o)}
         n_inputs = 2
+        if cl == 'SeqAct_Conversation':   # [campaign] Lines [{SoundCue, PostDelayTime}] in order; Play / Stop; Played / Finished
+            nm = preset_name(p.get('DuckingMixerPreset'))
+            # RE CAMPAIGN_DIALOG_TIMING_RE: outputs 0 Played / 1 Stopped / 2 Finished, then one per line (3 + i); variable links
+            # in pairs per line, [2i] = the speaker. A line without a cue aborts the conversation there (-> Stopped), so keep it.
+            vls, ols = p.get('VariableLinks') or [], p.get('OutputLinks') or []
+            def speaker(i):
+                if 2 * i >= len(vls): return None
+                a = [x for x in (actor(v) for v in var_objects(p, vls[2 * i].get('LinkDesc'))) if x and x != '<player>']
+                return a[0] if a else None
+            op.update(type='conversation', duck=nm,
+                      lines=[{'cue': l.get('SoundCue'), 'post_delay': l.get('PostDelayTime', 0.0), 'speaker': speaker(i),
+                              'output': ols[3 + i].get('LinkDesc') if 3 + i < len(ols) else None}
+                             for i, l in enumerate(p.get('Lines') or [])])
+            for l in op['lines']:
+                if l['cue']: cues.add(l['cue'])
+            if nm: presets[nm] = mixer_preset_dsp(nm)
+            ops.append(op)
+            for inp in range(2):
+                for t in triggers(o, inp): links.append({'from': t, 'to': op['id'], 'input': inp})
+            continue
         if cl == 'SeqAct_PlaySound':
             q = dict(D_PLAYSOUND); q.update(p)
             op.update(type='play_sound', cue=q.get('PlaySound'), fade_in=q.get('FadeInTime', 0.0), fade_out=q.get('FadeOutTime', 0.0),
@@ -267,7 +301,7 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None):
     # Keep only what can make or change sound: sinks some trigger reaches, and stateful ops (touch / zone / delay / gate)
     # whose outputs lead to a kept op. Links into dropped ops and from unresolved sources go too.
     links = [l for l in links if not l['from'].startswith('Unresolved:')]
-    SOUND = {'play_sound', 'positional_pool', 'flyby', 'reverb', 'mixer', 'play_music', 'stop_music', 'timeline'}
+    SOUND = {'play_sound', 'positional_pool', 'flyby', 'reverb', 'mixer', 'play_music', 'stop_music', 'timeline', 'conversation'}
     byid = {op['id']: op for op in ops}
     keep = {op['id'] for op in ops if op['type'] in SOUND and any(l['to'] == op['id'] for l in links)}
     changed = True
@@ -281,7 +315,10 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None):
         if tl['id'] in keep: pass
     ops = [op for op in ops if op['id'] in keep]
     links = [l for l in links if l['to'] in keep and (not l['from'].startswith('Out:') or l['from'].split(':', 2)[1] in keep)]
-    cues = {q for q in cues if q and any(op.get('cue') == q for op in ops)}
+    used = {op.get('cue') for op in ops} | {l['cue'] for op in ops for l in op.get('lines', [])} | {k['cue'] for op in ops for k in op.get('sounds', [])}
+    cues = {q for q in cues if q and q in used}
+    if campaign:   # timeline sound keys never passed through `cues` above
+        cues |= {k['cue'] for op in ops for k in op.get('sounds', [])}
     # A zone's label (diagnostics): the comment of the first touch volume that enters it.
     for op in ops:
         if op['type'] != 'zone': continue
@@ -305,6 +342,22 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None):
     print('%s: %d ops %s, %d links, %d own cues, %d presets, %d actors' % (name, len(ops), dict(kinds), len(links),
                                                                            len(cue_defs), len(doc['reverb_presets']), len(actors)))
     return doc
+
+# Campaign chapters (Integration 2026-10-23): one JSON per chapter, loaded at level start - not compiled into LevelAudio.inc.
+#   gen_level_audio.py --campaign <CHAPTER> <out.json> [<maps dir>]   (default: the AssetTools campaign pilot slice)
+# Adds SeqAct_Conversation (dialog lines + ducking preset) and matinee InterpTrackSound keys; MP output is unchanged.
+if len(sys.argv) > 1 and sys.argv[1] == '--campaign':
+    chap, dst = sys.argv[2], sys.argv[3]
+    cdir = sys.argv[4] if len(sys.argv) > 4 else 'F:/Transformers Rebuild/AssetTools/work/campaign_pilot/VerticalSlice/Maps/'
+    am = json.load(io.open(os.path.join(cdir, chap, 'audio.json'), encoding='utf-8'))
+    subs = am['sublevels']
+    geo = {z['event']: {'polygons': z['trigger_polygons_gltf'], 'trigger': z.get('trigger', {}), 'comment': z.get('comment', '')}
+           for z in am['zones'] if z.get('trigger_polygons_gltf')}
+    audio_pkg = [x for x in subs if 'audio' in x.lower()]
+    doc = level(chap, subs, geo, frozenset(am['cues']), audio_pkg[0] if audio_pkg else None, campaign=True)
+    doc['campaign'] = True
+    io.open(dst, 'w', encoding='utf-8', newline='\n').write(json.dumps(doc, separators=(',', ':')))
+    sys.exit(0)
 
 docs = [level(p, [p]) for p in UI_LEVELS]
 # Multiplayer maps: per-cue-asset limits of the map bank (AssetTools audio.json cues; the cue objects of the audio
@@ -409,6 +462,25 @@ print('match messages: %d game types, %d progress sounds, %d music cues' % (len(
 # all its sublevels (touch volumes from the AssetTools zones, zones, reverb, mixer, pools, flybys, beds, delays, gates,
 # remote events, sub-sequences), the per-cue-asset limits, and the announcer set of its persistent level's TnWorldInfo.
 MAPS_DIR = 'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps/'
+# The MP transforming world actors (doors / bridges): their AnimSets' HmAnimNotify_Sound cues play on every client as the transform
+# anim runs [RE MP_TRANSFORMING_ACTOR_CUES_RE], so each map that places one carries those cues too.
+TA_MANIFEST = 'F:/Transformers Rebuild/AssetTools/manifests/maps/mp_transforming_actors.json'
+ta_sets_by_map = {}
+for a in json.load(io.open(TA_MANIFEST, encoding='utf-8'))['actors']:
+    if a.get('animset'): ta_sets_by_map.setdefault(a['map'], set()).add((a['animset'], a.get('anim_sequence') or ''))
+def actor_notify_cues(sets):   # {(animset, the sequence the actor plays)}
+    out = set()
+    for s, name in sets:
+        for (pr,) in c.execute("select props from objects where class='AnimSequence' and opath like ? escape '\\'",
+                               (s.replace('_', '\\_') + '.%',)):
+            seq = json.loads(pr or '{}')
+            if seq.get('SequenceName') != name: continue
+            for n in seq.get('Notifies') or []:
+                r = c.execute('select class, props from objects where opath=?', (n.get('Notify') or '',)).fetchone()
+                if r and r[0] == 'HmAnimNotify_Sound':
+                    q = json.loads(r[1] or '{}').get('SoundCue')
+                    if q: out.add(q)
+    return out
 announcer_sets = {}
 for level_name in sorted(d for d in os.listdir(MAPS_DIR) if d.startswith('MP_') and os.path.exists(MAPS_DIR + d + '/audio.json')):
     am = json.load(io.open(MAPS_DIR + level_name + '/audio.json', encoding='utf-8'))
@@ -418,6 +490,12 @@ for level_name in sorted(d for d in os.listdir(MAPS_DIR) if d.startswith('MP_') 
            for z in am['zones'] if z.get('trigger_polygons_gltf')}
     audio_pkg = [x for x in subs if 'audio' in x.lower()]
     doc = level(level_name, subs, geo, frozenset(am['cues']), audio_pkg[0] if audio_pkg else None)
+    ta = sorted(q for q in actor_notify_cues(ta_sets_by_map.get(level_name, ())) if q not in am['cues'] and q not in doc['cues'])
+    for q in ta:
+        d = cue_tree(q)
+        if d: doc['cues'][q] = d; doc['cue_limits'][q] = cue_limits(q)
+        else: print('  WARN', level_name, 'transforming-actor cue not found', q)
+    if ta: print('%s: + %d transforming-actor notify cues' % (level_name, len(ta)))
     wi = c.execute("select props from objects where package=? and class='TnWorldInfo'", (base[0],)).fetchone()
     setname = json.loads(wi[0]).get('AnnouncerSoundEventSet') if wi else None
     if setname:

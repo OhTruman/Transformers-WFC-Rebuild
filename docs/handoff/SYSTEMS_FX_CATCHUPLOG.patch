@@ -1,0 +1,19 @@
+diff -ruN a/src/render/gl/WfcMapFx.cpp b/src/render/gl/WfcMapFx.cpp
+--- a/src/render/gl/WfcMapFx.cpp	2026-10-23 02:06:26.809235800 -0500
++++ b/src/render/gl/WfcMapFx.cpp	2026-10-23 02:06:26.826294400 -0500
+@@ -908,6 +908,15 @@
+             const int peak = L.maxBeams > 0 ? std::min(em.maxPeak, L.maxBeams)              // Beam2: MaxBeamCount
+                              : L.trailCap > 0 ? L.trailCap : em.maxPeak;                    // Trail2: trail capacity
+             if (L.typeData == 2) spawn = std::min(spawn, 1);   // Trail2 Spawn clamps to 1 per tick (RE s14)
++            {   // [Systems] WFC_FXCATCHUPLOG: a long step (the throttle's catch-up; > 50 ms) - what it spawns and the biggest live sprite
++                static const bool cul = std::getenv("WFC_FXCATCHUPLOG") != nullptr;
++                if (cul && dt > 0.05f) {
++                    float maxSz = 0.0f;
++                    for (const FxParticle& q : rt.parts) maxSz = std::max(maxSz, std::max(q.size[0], q.size[1]));
++                    LOG_INFO("FXCATCHUP %s em %zu (%s) dt %.3f rate %.2f/s rate-spawns %d other-spawns %d live %zu peak %d maxsize %.0f",
++                             in.system.c_str(), e, em.name.c_str(), dt, rate[0], rateSpawns, spawn - rateSpawns, rt.parts.size(), peak, maxSz);
++                }
++            }
+             {   // AMD stability: a global live-particle budget across every effect (authored peaks are per emitter)
+                 constexpr size_t kMaxLive = 250000;
+                 if (statLiveParticles_ >= kMaxLive) {

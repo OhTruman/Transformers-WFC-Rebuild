@@ -103,7 +103,22 @@ int LevelAudioScript::load(const assets::Json& k) {
             op.tlLooping = j["looping"].asBool(false);
             for (size_t e = 0; e < j["events"].size(); ++e)
                 op.events.push_back({j["events"][e]["time"].asFloat(), "Timeline:" + op.id + ":" + j["events"][e]["name"].asString()});
+            for (size_t e = 0; e < j["sounds"].size(); ++e) {
+                const assets::Json& sk = j["sounds"][e];
+                auto ai = actorIndex.find(sk["actor"].asString());
+                op.soundKeys.push_back({sk["time"].asFloat(), sk["cue"].asString(), ai != actorIndex.end() ? ai->second : -1});
+            }
+            std::stable_sort(op.soundKeys.begin(), op.soundKeys.end(), [](const SoundKey& a, const SoundKey& b) { return a.time < b.time; });
             std::stable_sort(op.events.begin(), op.events.end(), [](const Event& a, const Event& b) { return a.time < b.time; });
+        } else if (t == "conversation") {
+            op.type = Type::Conversation;
+            op.preset = j["duck"].asString();
+            for (size_t l = 0; l < j["lines"].size(); ++l) {
+                const assets::Json& ln = j["lines"][l];
+                auto ai = actorIndex.find(ln["speaker"].asString());
+                op.lines.push_back({ln["cue"].asString(), ln["post_delay"].asFloat(0.0f), ai != actorIndex.end() ? ai->second : -1,
+                                    ln["output"].asString()});
+            }
         } else {
             LOG_WARN("level audio: op %s of unknown type %s skipped", op.id.c_str(), t.c_str());
             continue;
@@ -135,8 +150,9 @@ void LevelAudioScript::unload() {
     currentZoneLabel_.clear();
     havePawn_ = false;
     touches_ = 0;
-    links_ = oneShots_ = fired_ = depth_ = 0;
+    links_ = oneShots_ = fired_ = depth_ = keysFired_ = 0;
     musicStart_.clear();
+    firedSet_.clear();
 }
 
 // GameInfo.ResetLevel -> Kismet Reset [HIGH]: pools / flybys stop (IsPlaying false / Stop), zones forget their scene
@@ -154,6 +170,7 @@ core::Vec3 LevelAudioScript::actorPos(int a, const core::Vec3& listener) const {
 }
 
 int LevelAudioScript::fire(const std::string& trigger, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener) {
+    firedSet_.insert(trigger);
     auto it = byTrigger_.find(trigger);
     if (it == byTrigger_.end()) return 0;
     if (++depth_ > 8) { --depth_; LOG_WARN("level audio: trigger depth exceeded at %s", trigger.c_str()); return 0; }
@@ -237,7 +254,28 @@ void LevelAudioScript::input(Op& op, int idx, SoundCues& cues, MusicPlayer* musi
         break;
     case Type::Touch:
         break;
+    case Type::Conversation:
+        if (idx == 0) {                                              // Play (0x8276EE00)
+            if (op.lineIdx >= 0 && op.lineInst >= 0) cues.stop(op.lineInst, 0.0f);
+            const bool wasActive = op.lineIdx >= 0;
+            op.lineIdx = 0; op.lineInst = -1; op.postTimer = -1.0f; op.lineStarted = false;
+            if (!wasActive && !op.preset.empty()) cues.mixer().enable(op.preset);   // one push per running conversation
+            if (logOn()) LOG_INFO("LEVELAUDIO %s conversation play (%zu lines, duck %s)", op.id.c_str(), op.lines.size(), op.preset.c_str());
+            out(op, "Played", cues, music, listener);
+        } else if (op.lineIdx >= 0) {                                // Stop (0x827A7090)
+            if (op.lineInst >= 0) cues.stop(op.lineInst, 0.0f);
+            endConversation(op, false, cues, music, listener);
+        }
+        break;
     }
+}
+
+// Stop (0x82764048): pops the ducking preset, fires Finished (ran to the end) or Stopped.
+void LevelAudioScript::endConversation(Op& op, bool finished, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener) {
+    op.lineIdx = -1; op.lineInst = -1; op.postTimer = -1.0f; op.lineStarted = false;
+    if (!op.preset.empty()) cues.mixer().disable(op.preset, false);
+    if (logOn()) LOG_INFO("LEVELAUDIO %s conversation %s", op.id.c_str(), finished ? "finished" : "stopped");
+    out(op, finished ? "Finished" : "Stopped", cues, music, listener);
 }
 
 void LevelAudioScript::out(const Op& op, const char* output, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener) {
@@ -270,8 +308,16 @@ bool LevelAudioScript::insideVolume(const Op& op, const core::Vec3& p) const {
     return (hits & 1) != 0;
 }
 
-void LevelAudioScript::fireRange(const Op& tl, float from, float to, bool inclusiveEnd, SoundCues& cues, MusicPlayer* music,
+void LevelAudioScript::fireRange(Op& tl, float from, float to, bool inclusiveEnd, SoundCues& cues, MusicPlayer* music,
                                  const core::Vec3& listener) {
+    for (const SoundKey& k : tl.soundKeys)
+        if (k.time >= from && (k.time < to || (inclusiveEnd && k.time <= to))) {
+            ++keysFired_;
+            const core::Vec3 at = actorPos(k.actor, listener);
+            const int inst = cues.play(k.cue.c_str(), at, core::length(at - listener));
+            if (inst >= 0) { ++oneShots_; if (k.actor >= 0) sounds_.push_back({k.actor, k.cue, inst, false}); }
+            if (logOn()) LOG_INFO("LEVELAUDIO %s sound key %.3f %s on %d -> %d", tl.id.c_str(), k.time, k.cue.c_str(), k.actor, inst);
+        }
     for (const Event& e : tl.events)
         if (e.time >= from && (e.time < to || (inclusiveEnd && e.time <= to))) fire(e.trigger, cues, music, listener);
 }
@@ -319,6 +365,31 @@ void LevelAudioScript::tick(float dt, const core::Vec3& listener, SoundCues& cue
         if (op.type != Type::Delay || !op.playing || op.paused) continue;
         op.remaining -= dt;
         if (op.remaining <= 0.0f) { op.playing = false; out(op, "Finished", cues, music, listener); }
+    }
+    // Conversations (UpdateOp 0x82787588).
+    for (Op& op : ops_) {
+        if (op.type != Type::Conversation || op.lineIdx < 0) continue;
+        if (op.postTimer >= 0.0f) {
+            op.postTimer -= dt;
+            if (op.postTimer >= 0.0f) continue;                  // waiting out the post-delay
+            op.postTimer = -1.0f; op.lineStarted = false; ++op.lineIdx; op.lineInst = -1;
+        }
+        if (op.lineIdx >= (int)op.lines.size()) { endConversation(op, true, cues, music, listener); continue; }
+        const Line& ln = op.lines[(size_t)op.lineIdx];
+        if (!op.lineStarted) {                                   // StartLine: the dialog must really start
+            const core::Vec3 at = actorPos(ln.speaker, listener);
+            op.lineInst = ln.cue.empty() ? -1 : cues.play(ln.cue.c_str(), at, core::length(at - listener));
+            if (op.lineInst < 0) {
+                LOG_WARN("level audio: %s line %d (%s) could not start - conversation aborted", op.id.c_str(), op.lineIdx, ln.cue.c_str());
+                endConversation(op, false, cues, music, listener);
+                continue;
+            }
+            op.lineStarted = true;
+            if (logOn()) LOG_INFO("LEVELAUDIO %s line %d %s on %d", op.id.c_str(), op.lineIdx, ln.cue.c_str(), ln.speaker);
+        } else if (op.postTimer < 0.0f && !cues.playing(op.lineInst)) {   // DialogEventCallback Finished
+            op.postTimer = ln.postDelay;
+            if (!ln.output.empty()) out(op, ln.output.c_str(), cues, music, listener);
+        }
     }
     // Timelines (event keys -> triggers).
     for (size_t i = 0; i < ops_.size(); ++i) {
@@ -399,6 +470,12 @@ int LevelAudioScript::poolCount() const {
 int LevelAudioScript::flybysPlaying() const {
     int n = 0;
     for (const Op& op : ops_) n += op.type == Type::Flyby && op.playing ? 1 : 0;
+    return n;
+}
+
+int LevelAudioScript::conversationsPlaying() const {
+    int n = 0;
+    for (const Op& op : ops_) n += op.type == Type::Conversation && op.lineIdx >= 0 ? 1 : 0;
     return n;
 }
 

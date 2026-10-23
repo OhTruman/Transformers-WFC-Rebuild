@@ -44,6 +44,15 @@
 //                    (Delay, Looping); each one-shot starts RandRange(StartingDistanceMin, Max) from the Target (the
 //                    player) at a random yaw within AngleMax, offset vertically by RandRange(HeadOffsetMin, Max), and
 //                    moves through the target point at RandRange(SpeedMin, SpeedMax) UU/s [PROVISIONAL motion model].
+//   conversation     SeqAct_Conversation (campaign chapters; RE CAMPAIGN_DIALOG_TIMING_RE, C): Play -> the current line stops,
+//                    CurrentLineIndex 0, the DuckingMixerPreset is pushed, "Played". UpdateOp per tick: a running
+//                    PostDelayTimer counts down (the next line on the first tick it goes negative); index past the last
+//                    line -> pop the preset, "Finished"; a line starts once (the speaker's dialog; a line that cannot
+//                    start - no cue / refused - aborts: pop, "Stopped"); the cue's end -> PostDelayTimer = PostDelayTime
+//                    and the line's own output (3 + i). Stop -> the line stops, pop, "Stopped". The speaker is the line's
+//                    first variable link [the dialog plays from that actor; none / unresolved = at the listener].
+//   timeline sounds  InterpTrackSound keys on a campaign matinee: the key's cue plays at the group actor when the position
+//                    passes it, the same forward walk as the event keys [HIGH, stock UE3]; Volume / Pitch not applied.
 // Triggers ("links" from): GameplayStarted (fired by AmbientAudio on the level's first tick), FsCommand:<cmd> and
 // MovieStopped:<movie> (GFx fscommands / Bink movie ends - the frontend owner forwards them, fire()), and
 // Timeline:<op>:<event> and Out:<op>:<output> (internal), Game:<event class>:<output> (gameplay-owned Kismet events,
@@ -52,6 +61,7 @@
 #pragma once
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include "assets/Json.h"
 #include "core/Math.h"
@@ -88,13 +98,19 @@ public:
     int liveSounds() const { return (int)sounds_.size(); }
     int poolsPlaying() const;
     int timelinesPlaying() const;
+    int conversationsPlaying() const;
     float timelinePosition() const;       // the first timeline's position (s), -1 if none
     int oneShots() const { return oneShots_; }
+    int soundKeysFired() const { return keysFired_; }   // timeline sound keys passed (played or not: a culled cue counts)
     int fired() const { return fired_; }
+    // Test hook (WFC_CAMPAIGNAUDIOTEST): every trigger fired since load(), linked or not.
+    bool hasFired(const std::string& t) const { return firedSet_.count(t) != 0; }
 
 private:
-    enum class Type { PlaySound, Pool, Reverb, PlayMusic, StopMusic, Timeline, Touch, Zone, Delay, Gate, Mixer, Flyby };
+    enum class Type { PlaySound, Pool, Reverb, PlayMusic, StopMusic, Timeline, Touch, Zone, Delay, Gate, Mixer, Flyby, Conversation };
     struct Event { float time; std::string trigger; };
+    struct SoundKey { float time; std::string cue; int actor; };          // timeline InterpTrackSound key (campaign)
+    struct Line { std::string cue; float postDelay; int speaker; std::string output; };   // conversation line
     struct Op {
         Type type = Type::PlaySound;
         std::string id, cue, preset;
@@ -114,6 +130,12 @@ private:
         float length = 0.0f, rate = 1.0f, pos = 0.0f;
         bool tlLooping = false;
         std::vector<Event> events;
+        std::vector<SoundKey> soundKeys;
+        // conversation (RE CAMPAIGN_DIALOG_TIMING_RE): CurrentLineIndex, PostDelayTimer, the line-started flag
+        std::vector<Line> lines;
+        int lineIdx = -1, lineInst = -1;
+        float postTimer = -1.0f;
+        bool lineStarted = false;
         // touch
         std::vector<core::Vec3> tris;     // triangle soup (glTF)
         core::Vec3 bmin{0, 0, 0}, bmax{0, 0, 0};
@@ -136,8 +158,9 @@ private:
 
     void input(Op& op, int idx, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener);
     void out(const Op& op, const char* output, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener);
+    void endConversation(Op& op, bool finished, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener);
     bool insideVolume(const Op& op, const core::Vec3& p) const;
-    void fireRange(const Op& tl, float from, float to, bool inclusiveEnd, SoundCues& cues, MusicPlayer* music,
+    void fireRange(Op& tl, float from, float to, bool inclusiveEnd, SoundCues& cues, MusicPlayer* music,
                    const core::Vec3& listener);
     core::Vec3 actorPos(int a, const core::Vec3& listener) const;
 
@@ -151,8 +174,9 @@ private:
     core::Vec3 pawn_{0, 0, 0};
     bool havePawn_ = false;
     int touches_ = 0;
-    int links_ = 0, oneShots_ = 0, fired_ = 0, depth_ = 0;
+    int links_ = 0, oneShots_ = 0, fired_ = 0, depth_ = 0, keysFired_ = 0;
     std::string musicStart_;
+    std::unordered_set<std::string> firedSet_;
 };
 
 } // namespace game
