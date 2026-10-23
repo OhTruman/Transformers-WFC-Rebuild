@@ -219,9 +219,19 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None, campaig
         n_inputs = 2
         if cl == 'SeqAct_Conversation':   # [campaign] Lines [{SoundCue, PostDelayTime}] in order; Play / Stop; Played / Finished
             nm = preset_name(p.get('DuckingMixerPreset'))
-            op.update(type='conversation', lines=[{'cue': l.get('SoundCue'), 'post_delay': l.get('PostDelayTime', 0.0)}
-                                                  for l in p.get('Lines') or [] if l.get('SoundCue')], duck=nm)
-            for l in op['lines']: cues.add(l['cue'])
+            # RE CAMPAIGN_DIALOG_TIMING_RE: outputs 0 Played / 1 Stopped / 2 Finished, then one per line (3 + i); variable links
+            # in pairs per line, [2i] = the speaker. A line without a cue aborts the conversation there (-> Stopped), so keep it.
+            vls, ols = p.get('VariableLinks') or [], p.get('OutputLinks') or []
+            def speaker(i):
+                if 2 * i >= len(vls): return None
+                a = [x for x in (actor(v) for v in var_objects(p, vls[2 * i].get('LinkDesc'))) if x and x != '<player>']
+                return a[0] if a else None
+            op.update(type='conversation', duck=nm,
+                      lines=[{'cue': l.get('SoundCue'), 'post_delay': l.get('PostDelayTime', 0.0), 'speaker': speaker(i),
+                              'output': ols[3 + i].get('LinkDesc') if 3 + i < len(ols) else None}
+                             for i, l in enumerate(p.get('Lines') or [])])
+            for l in op['lines']:
+                if l['cue']: cues.add(l['cue'])
             if nm: presets[nm] = mixer_preset_dsp(nm)
             ops.append(op)
             for inp in range(2):
