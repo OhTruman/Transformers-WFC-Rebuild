@@ -83,6 +83,17 @@ def load_lights(path):
     return S, R
 
 
+
+def extra_lights():
+    """(campaign chapters, Rendering) --lights-from <lighting.json>, repeatable: the chapter's other units' lights (the sun and
+    the lamps of one bake that lit every unit)"""
+    out = []
+    for i, a in enumerate(sys.argv[:-1]):
+        if a == '--lights-from':
+            out += json.load(open(sys.argv[i + 1], encoding='utf-8')).get('lights', [])
+    return out
+
+
 def main():
     tdir, rdir, out = arg('--trace'), arg('--render'), arg('--out')
     sf = json.load(open(arg('--sunfit'), encoding='utf-8'))
@@ -91,7 +102,7 @@ def main():
     audit = next((a for a in json.load(open(arg('--audit'), encoding='utf-8')) if a['map'] == mapname), None)
     excluded = {x['name']: x for x in (audit['lighting_json_not_in_any_lightmap'] if audit else [])}
     props = L['lightmaps']['props']
-    lights = {l['name']: l for l in L['lights']}
+    lights = {l['name']: l for l in L['lights'] + extra_lights()}
     tr = json.load(open(os.path.join(tdir, 'vbake_trace.json'), encoding='utf-8'))
     lidx = json.load(open(os.path.join(tdir, 'lights_index.json'), encoding='utf-8'))
     names = [x['name'] for x in lidx['lights']]

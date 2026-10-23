@@ -63,6 +63,17 @@ def load_page(path):
     return int(w), int(h), cov, V, ndl, lt, comp
 
 
+
+def extra_lights():
+    """(campaign chapters, Rendering) --lights-from <lighting.json>, repeatable: the chapter's other units' lights (the sun and
+    the lamps of one bake that lit every unit)"""
+    out = []
+    for i, a in enumerate(sys.argv[:-1]):
+        if a == '--lights-from':
+            out += json.load(open(sys.argv[i + 1], encoding='utf-8')).get('lights', [])
+    return out
+
+
 def main():
     tdir, rdir = arg('--trace'), arg('--render')
     if not tdir or not rdir:
@@ -71,7 +82,7 @@ def main():
     tr = json.load(open(os.path.join(tdir, 'vbake_trace.json'), encoding='utf-8'))
     L = json.load(open(os.path.join(rdir, 'lighting.json'), encoding='utf-8'))
     props = L['lightmaps']['props']
-    sun = next(l for l in L['lights'] if l['name'] == tr['sun'])
+    sun = next(l for l in L['lights'] + extra_lights() if l['name'] == tr['sun'])
     sun_lin = srgb_to_linear(np.array(sun['color_srgb8']) / 255.0) * float(sun['brightness'])
     sun_lum = float(sun_lin @ LUM)
     comps = tr['components']
@@ -119,7 +130,18 @@ def main():
                 pidx.append(np.full(int(ok.sum()), pi_))
     if not deltas:
         print('no lit / shadowed texel pairs: the trace found no sun boundaries on lightmapped surfaces')
-        return 1
+        if '--sunless-ok' not in sys.argv:
+            return 1
+        # (campaign chapters, Rendering: an enclosed level - D5_OME's arena - has no sun share to fit; fit.json says k 0 so the
+        # runtime keeps its bake's sun and the lights fit still runs. The tangent handedness, normally fitted from the sun
+        # pairs, comes from --tangent-y (the lights fit is run both ways and the flatter one kept))
+        flip = float(arg('--tangent-y', '1'))
+        with open(os.path.join(tdir, 'fit.json'), 'w', encoding='utf-8') as f:
+            json.dump(dict(map_render_dir=rdir, sun=tr['sun'], sun_linear=list(map(float, sun_lin)), k=0.0, p=1.0, tangent_y_sign=flip,
+                           pairs=0, pages=[], sunless=True, basis='HL2 (lighting.json note)', cone_deg=tr['cone_deg'],
+                           supersample=tr['supersample']), f, indent=1)
+        print('fit.json: sunless (k 0, tangent y %+.0f)' % flip)
+        return 0
     D = np.concatenate(deltas, axis=1)
     LT = np.concatenate(lts, axis=0)
     PI = np.concatenate(pidx)

@@ -1652,6 +1652,7 @@ bool Pipeline::load(const std::string& mapName) {
     if (rtInfra_) {   // R1 sun swap data (Systems' tools/systems/vbake): WFC_RT_VBAKE=<dir> (<dir>/<map>/), else <render data>/vbake/
         const char* vb = std::getenv("WFC_RT_VBAKE");
         r1Dir_ = vb ? std::string(vb) + "/" + mapName : dataDir_ + "/vbake";
+        r1Sunless_ = false;
         assets::Json F;
         const std::string ft = readText(r1Dir_ + "/fit.json");
         if (!ft.empty() && assets::Json::parse(ft, F)) {
@@ -1662,6 +1663,7 @@ bool Pipeline::load(const std::string& mapName) {
             for (int c = 0; c < 3; ++c) r1Sun_[c] = s.arr.size() > (size_t)c ? s.arr[(size_t)c].asFloat(0.0f) : 0.0f;
             // (the GL entry points are tested later, in r1CheckGl: a direct / package boot runs this before the GL load)
             r1Map_ = r1Fit_[0] > 0.0f; r1GlChecked_ = false; r1StateLogged_ = false;
+            r1Sunless_ = F["sunless"].asBool(false);     // (an enclosed level, e.g. a campaign chapter: k 0, the lights fit still applies)
             LOG_INFO("RT R1 sun swap data: %s (k %.3f, p %.2f, tangent y %+.0f, sun %.3f %.3f %.3f)%s", r1Dir_.c_str(), r1Fit_[0],
                      r1Fit_[1], r1Fit_[2], r1Sun_[0], r1Sun_[1], r1Sun_[2], r1Map_ ? "" : " - unused (k <= 0)");
         } else {

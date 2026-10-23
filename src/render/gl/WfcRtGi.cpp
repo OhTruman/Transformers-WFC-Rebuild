@@ -281,7 +281,7 @@ void Pipeline::giSetup() {
     if (!giOn() || rtMode_ != 2 || giTexels_.empty()) return;
     assets::Json FL;
     const std::string fl = giReadText(r1Dir_ + "/fit_lights.json");
-    if (r1Fit_[0] <= 0.0f || fl.empty() || !assets::Json::parse(fl, FL)) {
+    if ((r1Fit_[0] <= 0.0f && !r1Sunless_) || fl.empty() || !assets::Json::parse(fl, FL)) {
         LOG_INFO("RT GI: no calibration for this map (%s/fit.json k %.3f, fit_lights.json %s) - Realistic keeps the bake",
                  r1Dir_.c_str(), r1Fit_[0], fl.empty() ? "missing" : "unparsable");
         return;
