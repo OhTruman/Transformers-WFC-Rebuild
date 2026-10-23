@@ -3604,3 +3604,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   vs targets 15 / 30 / 45; EXPECTED SIM CHANGE for bot aim = third sim-only diff for the final base). Playtest status: #2 #4 #5
   #6 #8 #9 #11 #12 #14 #15 #16 #17 #18(B) fixed / closed; #3 fixed (visual pending); #1 profiled (fixes next); #7 unverified
   (needs bots in the shot); #10 / #13 data done (Gameplay check); #18 (A) audit pending.
+2026-10-23 01:35 CAMPAIGN_GAMEPLAY_SYSTEMS_RE merged (per-chapter bosses / mechanics / classes). RE next: the A1 / A2 boss + minion action
+  decode (Escalation §9 style), then the rest chapter by chapter.
