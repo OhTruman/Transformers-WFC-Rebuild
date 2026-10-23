@@ -268,7 +268,12 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
                 sm.lightmapComponent = node["extras"]["lightmap_component"].asString();
                 sm.hiddenGame = node["extras"]["hidden_game"].asBool(false);
                 sm.sourceSection = (int)pi;
-                if (node["extras"]["kind"].asString() == "bsp")      // level BSP (unlit in world.glb)
+                // (campaign TnTransformingWorldActors: AssetTools' bind-pose nodes name their SkeletalMeshComponent, but the game
+                // addresses them by actor - setActorHidden while the World draws them posed, setMapActorTransform - and they
+                // carry no lightmap to join: keyed by the actor like StaticMeshActor nodes)
+                if (node["extras"]["skeletal_bind_pose"].asBool(false) && !node["extras"]["actor"].asString().empty())
+                    sm.component = "actor:" + node["extras"]["actor"].asString();
+                else if (node["extras"]["kind"].asString() == "bsp")      // level BSP (unlit in world.glb)
                     sm.component = "bsp:" + node["extras"]["source"].asString();
                 // StaticMeshActor / (Static)InterpActor nodes name only their actor: the renderer
                 // resolves the actor's single StaticMeshComponent (lightmap join key).
