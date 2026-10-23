@@ -339,7 +339,9 @@ int main(int argc, char** argv) {
             const Json& ex = nd["extras"];
             if (!isBspFile && ex["kind"].asString() == "bsp") continue;            // (bsp.glb carries the BSP with lightmap UVs)
             const std::string comp = ex["component"].asString(), meshName = lower(ex["mesh"].asString());
-            const bool sky = meshName.find("sky") != std::string::npos;
+            // (the runtime TLAS rule, WfcRt.cpp rtBuildWorld: named sky / dome, or over 2 km - D5_OME's 9 km SpaceDome closed the
+            // arena in the trace while the runtime leaves it out: a "sunless" fit for an arena open to the sky)
+            const bool sky = meshName.find("sky") != std::string::npos || meshName.find("dome") != std::string::npos;
             const bool shadow = !noShadow.count(comp) && !(ex.has("actor") && noShadow.count("actor:" + ex["actor"].asString()));
             float M[16]; nodeMatrix(nd, M);
             float sc[2] = {0, 0}, bi[2] = {0, 0};
@@ -362,13 +364,19 @@ int main(int argc, char** argv) {
                     WP[v] = xformP(M, V3{P[v * 3], P[v * 3 + 1], P[v * 3 + 2]});
                     WN[v] = hasN ? xformN(M, V3{N[v * 3], N[v * 3 + 1], N[v * 3 + 2]}) : V3{0, 1, 0};
                 }
+                bool skyPrim = sky;
+                if (!skyPrim && !WP.empty()) {
+                    V3 lo = WP[0], hi = WP[0];
+                    for (const V3& q : WP) { lo = V3{std::min(lo.x, q.x), std::min(lo.y, q.y), std::min(lo.z, q.z)}; hi = V3{std::max(hi.x, q.x), std::max(hi.y, q.y), std::max(hi.z, q.z)}; }
+                    skyPrim = std::max({hi.x - lo.x, hi.y - lo.y, hi.z - lo.z}) > 2000.0f;
+                }
                 for (size_t t = 0; t + 2 < I.size(); t += 3) {
                     const uint32_t i0 = I[t], i1 = I[t + 1], i2 = I[t + 2];
                     if (i0 >= WP.size() || i1 >= WP.size() || i2 >= WP.size()) continue;
                     const V3 a = WP[i0], b = WP[i1], c = WP[i2];
                     if (!opaque) ++skippedBlend;
                     else if (!shadow) ++skippedShadow;
-                    else if (sky) ++skippedSky;
+                    else if (skyPrim) ++skippedSky;
                     else { bvh.tris.push_back(Tri{a, b - a, c - a}); ++occTris; }
                     if (ai < 0 || !opaque) continue;                              // ---- a lightmapped receiver
                     if (!hasU1) { ++skippedNoUv; continue; }

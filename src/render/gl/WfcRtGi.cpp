@@ -296,7 +296,11 @@ void Pipeline::giSetup() {
         size_t perPage = 0;
         if (!ft.empty() && assets::Json::parse(ft, F))
             for (const auto& pg : F["pages"].arr) {
-                auto it = lmIndex_.find(pg["page"].asString());
+                // (a chapter: pages[] entries carry their unit - the merged unit's key is "<unit dir>|<page>")
+                std::string key = pg["page"].asString();
+                if (pg["unit"].isString())
+                    for (const SublevelRT& sl : sublevels_) if (sl.unit == pg["unit"].asString()) { key = sl.dir + "|" + key; break; }
+                auto it = lmIndex_.find(key);
                 const float k = pg["k"].asFloat(-1.0f);
                 if (it == lmIndex_.end() || it->second < 0 || (size_t)it->second >= pageK.size() || k < 0.0f) continue;
                 pageK[(size_t)it->second] = k * (r1Fit_[0] / std::max(F["k"].asFloat(r1Fit_[0]), 1e-6f));   // (x WFC_RT_R1K's scale)

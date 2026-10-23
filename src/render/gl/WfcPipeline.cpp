@@ -9762,7 +9762,13 @@ void Pipeline::r1Build() {
         if (nameOf[k].empty()) continue;
         ImageData im;
         // (vbake bakes only fit.json's pages: a page without its file keeps the bake's sun, counted, not logged per page)
-        const std::string vf = r1Dir_ + "/vbake_" + nameOf[k] + ".png";
+        // (a chapter's merged unit: its page key is "<unit dir>|<page>"; its V_bake pages sit in <vbake dir>/<unit>/)
+        std::string vf = r1Dir_ + "/vbake_" + nameOf[k] + ".png";
+        if (const size_t bar = nameOf[k].find('|'); bar != std::string::npos) {
+            const std::string d = nameOf[k].substr(0, bar);
+            const size_t sl = d.find_last_of("/\\");
+            vf = r1Dir_ + "/" + (sl == std::string::npos ? d : d.substr(sl + 1)) + "/vbake_" + nameOf[k].substr(bar + 1) + ".png";
+        }
         if (!std::ifstream(platform::longPath(vf))) { ++vbMissing; continue; }
         if (!platform::decodeImage(vf, im) || !im.valid()) continue;
         std::vector<uint8_t>& rg = rgOf[k];
