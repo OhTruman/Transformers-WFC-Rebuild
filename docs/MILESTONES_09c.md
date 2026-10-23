@@ -4145,3 +4145,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 17:14 MERGED 8a60a840 build_slim '_' folder rule (Systems; guard dry-run PASS for 10 chapters; base ~17.7 GB + HD pack ~21.7 GB).
   Post-build item: ~2.1 GB duplicate campaign PNGs (shared texture pool). PACKAGE HEAD 8a60a840 pending Gameplay's
   Teleport patch.
+2026-10-23 17:25 HAND-OVER RERUN PASS on 454d7bff (Frontend handover4/): 249 / 249, 6 / 6 clean, held weapons shaded in Realistic. D3B
+  fall: the ledge collision IS exported (AssetTools); runtime cause with Gameplay (spawn before unit collision load /
+  prop_simple hulls / slope). Gameplay's Teleport patch pending.
