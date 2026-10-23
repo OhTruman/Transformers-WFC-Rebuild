@@ -1,0 +1,122 @@
+diff -ruN a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+--- a/src/core/Application_Frontend.cpp	2026-10-23 07:39:12.895349000 -0500
++++ b/src/core/Application_Frontend.cpp	2026-10-23 07:39:12.912407700 -0500
+@@ -1555,6 +1555,19 @@
+     // once the step runs on a worker.
+     const game::World::PresentedFrame& pf = world_.presented();
+     applySlotSwaps(world_, flow);   // online: a human who left -> a bot in the same slot (Gameplay picks the agreed tick)
++    {   // [Systems] the campaign Kismet's full-screen movies (SeqAct_MoviePlayer, MissionComplete's outro): the Game.PlayMovie path
++        // (movie mode, its Bink audio, skippable as the Extras movies); its end / skip / the op's Stop -> World::campaignMovieEnded
++        static int shown = 0;   // the request serial on screen (0 none)
++        if (!pf.campaignMovie.empty() && pf.campaignMovieSerial != shown && flow.scriptMovie().empty()) {
++            shown = pf.campaignMovieSerial;
++            flow.call("Game.PlayMovie", {pf.campaignMovie});
++        } else if (shown != 0 && (flow.scriptMovie().empty() || pf.campaignMovieStop || pf.campaignMovieSerial != shown)) {
++            if (!flow.scriptMovie().empty() && pf.campaignMovieSerial == shown) flow.scriptMovieStopped();
++            const int ended = shown;
++            shown = 0;
++            world_.submit([ended](game::World& w) { w.campaignMovieEnded(ended); });
++        }
++    }
+     forwardAwards(world_, *frontend_, me);
+     applyHudScreenEffect(renderer_, frontend_->hudPostProcessChain());
+     // [integration M06] Customize.SelectCharacter -> TnPlayerController.SelectCharacter -> PRI._SelectedCharacter:
+diff -ruN a/src/game/Campaign.h b/src/game/Campaign.h
+--- a/src/game/Campaign.h	2026-10-23 07:39:12.807548500 -0500
++++ b/src/game/Campaign.h	2026-10-23 07:39:12.825610100 -0500
+@@ -52,6 +52,11 @@
+     std::vector<std::string> audioId;
+     std::map<std::string, int> audioOp;
+     int audioOps = 0;
++    // [Systems] the full-screen movie a Kismet op is playing (SeqAct_MoviePlayer / TnSeqAct_MissionComplete MovieName): the frontend's
++    // movie player shows it (Game.PlayMovie path) and its end fires the op's Stopped. movieSerial changes per request.
++    std::string movie;
++    int movieOp = -1, movieSerial = 0;
++    bool movieStop = false;
+ };
+ 
+ } // namespace game
+diff -ruN a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-23 07:39:12.628936200 -0500
++++ b/src/game/World.cpp	2026-10-23 07:39:12.646997900 -0500
+@@ -2889,6 +2889,7 @@
+     // weapon's here showed e.g. TankCannon 1 / Ion 50 -> the HUD's low-ammo state + reload prompt (playtest 2026-10-13).
+     p.localMag = p.hud.clipMax; p.localReserveMax = p.hud.reserveMax;
+     p.localWeaponId = pc.weapon().def ? pc.weapon().def->id : "";
++    p.campaignMovie = cp_.movie; p.campaignMovieSerial = cp_.movieSerial; p.campaignMovieStop = cp_.movieStop;
+     p.localChassis = localPlayer_ >= 0 && (size_t)localPlayer_ < n ? p.players[(size_t)localPlayer_].chassis : std::string();
+     p.aim = player_.controller().hudAimState();
+     p.matchState = (int)match_.state();
+diff -ruN a/src/game/World.h b/src/game/World.h
+--- a/src/game/World.h	2026-10-23 07:39:12.543643800 -0500
++++ b/src/game/World.h	2026-10-23 07:39:12.561203900 -0500
+@@ -900,6 +900,9 @@
+     bool cpKismetActivate(KismetVM& vm, int op, int input);   // the level Kismet's host ops
+     int cpAudioActivate(KismetVM& vm, int op, int input);      // [Systems] its audio ops: 0 not audio, 1 done (VM default out), 2 async
+     void cpAudioBind();                                        // [Systems] map the VM's audio ops to the level audio (hosted)
++    void cpRequestMovie(int op, const std::string& movieName); // [Systems] a full-screen campaign movie (the frontend plays it)
++    // [Systems] the frontend's movie player finished / skipped the campaign movie of request `serial`: the op's Stopped fires
++    void campaignMovieEnded(int serial);
+     void cpKismetLatent(KismetVM& vm, int op, float dt);
+     // The map's transforming actors (Rendering: draw each actor's glb at matrix with its clip at t, unless hidden).
+     const TransformingActors& transformingActors() const { return transforming_; }
+@@ -1010,6 +1013,9 @@
+         std::vector<float> localSegmentTops;            // health segment tops (HudFrame)
+         int localMag = 0, localReserveMax = 0;          // the local weapon's magSize / reserveMax
+         std::string localWeaponId;                      // the local weapon's def id ("" none)
++        std::string campaignMovie;                      // [Systems] the campaign Kismet's full-screen movie ("" none) + its request serial
++        int campaignMovieSerial = 0;
++        bool campaignMovieStop = false;                 // its op's Stop input fired
+         std::string localChassis;
+         HudAimState aim;                                // player().controller().hudAimState()
+         int matchState = 0;                             // Match::State
+diff -ruN a/src/game/WorldCampaign.cpp b/src/game/WorldCampaign.cpp
+--- a/src/game/WorldCampaign.cpp	2026-10-23 07:39:12.722757600 -0500
++++ b/src/game/WorldCampaign.cpp	2026-10-23 07:39:12.739314300 -0500
+@@ -258,6 +258,7 @@
+             LOG_INFO("campaign: MissionComplete (%s, MapId %d, difficulty %d) at t %.1f", cpChapter_.chapter.c_str(), cpChapter_.mapId, cp_.difficulty, match_.matchTime());
+         }
+         o.latent = true;   // the outro movie
++        cpRequestMovie(op, o.authored["MovieName"].asString());   // [Systems] Stopped at its end (the frontend's movie player)
+         return true;
+     }
+     if (c == "SeqAct_SetStreamingState") {   // Started at once; Finished when the state is current (every unit of the start is loaded: PROV)
+@@ -265,6 +266,11 @@
+         return true;
+     }
+     if (c == "SeqAct_Conversation" && input == 0) { o.latent = true; o.timer = 3.0f; vm.output(op, "Played"); return true; }
++    if (c == "SeqAct_MoviePlayer") {   // [Systems] Play: the full-screen movie, latent until its end (Stopped); Stop: ends it early
++        if (input == 0) { o.latent = true; cpRequestMovie(op, o.authored["MovieName"].asString()); }
++        else if (cp_.movieOp == op) cp_.movieStop = true;
++        return true;
++    }
+     if (c == "SeqAct_Interp" || c == "SeqAct_TnPawnFactory" || c == "SeqAct_MoviePlayer" || c == "SeqAct_TnAiMoveToActor" ||
+         c == "SeqAct_TnForceIntoForm" || c == "SeqAct_ActorFactory" || c == "SeqAct_ActorFactoryEx") { o.latent = true; o.timer = -1.0f; return true; }
+     return false;
+@@ -297,6 +303,26 @@
+     LOG_INFO("campaign: %d Kismet audio ops hosted by the level audio", cp_.audioOps);
+ }
+ 
++// [Systems] Campaign movies: the authored MovieName ("FMV_d5outro.bik", "FMV_d5itext.bik ") -> the frontend's movie name (no extension).
++// One at a time: a new request replaces a playing one (its op stops). No frontend (headless): nothing plays and the op stays latent.
++void World::cpRequestMovie(int op, const std::string& movieName) {
++    std::string m = movieName;
++    while (!m.empty() && (m.back() == ' ' || m.back() == '	')) m.pop_back();
++    if (m.size() > 4 && (m.compare(m.size() - 4, 4, ".bik") == 0 || m.compare(m.size() - 4, 4, ".BIK") == 0)) m.resize(m.size() - 4);
++    if (m.empty()) { cp_.vm.finishLatent(op, "Stopped"); return; }
++    if (cp_.movieOp >= 0 && cp_.movieOp != op) cp_.vm.finishLatent(cp_.movieOp, "Stopped");
++    cp_.movie = m; cp_.movieOp = op; cp_.movieStop = false; ++cp_.movieSerial;
++    LOG_INFO("campaign: movie %s (request %d)", m.c_str(), cp_.movieSerial);
++}
++
++void World::campaignMovieEnded(int serial) {
++    if (serial != cp_.movieSerial || cp_.movieOp < 0) return;   // an older request
++    const int op = cp_.movieOp;
++    LOG_INFO("campaign: movie %s ended", cp_.movie.c_str());
++    cp_.movie.clear(); cp_.movieOp = -1; cp_.movieStop = false;
++    cp_.vm.finishLatent(op, "Stopped");
++}
++
+ int World::cpAudioActivate(KismetVM& vm, int op, int input) {
+     if ((size_t)op >= cp_.audioId.size() || cp_.audioId[(size_t)op].empty()) return 0;
+     KismetVM::Op& o = vm.op(op);
