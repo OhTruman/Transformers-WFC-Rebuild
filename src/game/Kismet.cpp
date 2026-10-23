@@ -26,7 +26,7 @@ bool KismetVM::load(const assets::Json& root) {
                 Var v; v.path = path; v.cls = cls;
                 const assets::Json& a = o["authored"];
                 v.i = a["IntValue"].asInt(0); v.f = a["FloatValue"].asFloat(0.0f); v.b = a["bValue"].asInt(0) != 0 || a["bValue"].asBool(false);
-                v.s = a["StrValue"].asString(); v.obj = a["ObjValue"].asString(); v.findName = a["FindVarName"].asString(); v.varName = a["VarName"].asString();
+                v.s = a["StrValue"].asString(); v.obj = a["ObjValue"].asString(); v.findName = a["FindVarName"].asString(); v.varName = a["VarName"].asString(); v.buddyIndex = a["BuddyIndex"].asInt(1);
                 varByPath_[path] = (int)vars_.size();
                 vars_.push_back(v);
                 continue;

@@ -51,6 +51,8 @@ struct CampaignMover {
     core::Vec3 pivot{0, 0, 0}, offset{0, 0, 0}, lastOffset{0, 0, 0}, lo{0, 0, 0}, hi{0, 0, 0};
     std::vector<core::Vec3> tris;   // pivot-relative
     int pawnSet = -1;
+    std::vector<int> navCells;      // its mover-attached nav cells
+    core::Vec3 navOffset{0, 0, 0};  // the offset those cells were last moved to
 };
 
 struct CampaignFactory {
@@ -89,6 +91,8 @@ struct CampaignState {
     std::vector<Interp> interps;              // one per SeqAct_Interp op
     int cineOp = -1, cineViewOp = -1;         // the op driving the local camera / the CinematicView
     std::string cineCamGroup;
+    struct FormOp { int op = -1; bool vehicle = false; std::vector<int> targets; };
+    std::vector<FormOp> formOps;              // step 7: TnSeqAct_ForceIntoForm in progress
     std::map<std::string, std::vector<int>> bodyPools;   // step 6: AI participants per body (shared by the factories)
     std::string streamingState;
     std::map<std::string, bool> unitVisible;

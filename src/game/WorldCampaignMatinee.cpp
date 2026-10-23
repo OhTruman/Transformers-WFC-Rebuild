@@ -111,6 +111,31 @@ void World::cpRegisterMovers() {
         if (!m.tris.empty()) m.pawnSet = collision_.addDynamicSet(m.tris, core::Mat4::translate(m.pivot));
 }
 
+// Mover-attached nav cells (AssetTools bot_nav flags.mover_attached + mover_base: one per MoverPathNode, e.g. A1's intro lift): bound
+// to their mover once the nav is loaded; moved with it when a matinee leaves it at rest (PROV: not while it moves - the squad rides
+// it physically; Gameplay's nav grid is xz, so a vertical lift keeps its buckets).
+void World::cpBindMoverNav() {
+    if (!botNav_.valid()) return;
+    int n = 0;
+    for (CampaignMover& m : cpMovers_) {
+        m.navCells.clear();
+        for (size_t c = 0; c < botNav_.cells().size(); ++c)
+            if (!botNav_.cells()[c].moverBase.empty() && shortName(botNav_.cells()[c].moverBase) == m.name) m.navCells.push_back((int)c);
+        n += (int)m.navCells.size();
+    }
+    if (n > 0) LOG_INFO("campaign: %d mover-attached nav cells bound", n);
+}
+
+void World::cpSyncMoverNav() {
+    for (CampaignMover& m : cpMovers_) {
+        const core::Vec3 d = m.offset - m.navOffset;
+        if (m.navCells.empty() || (std::fabs(d.x) < 0.01f && std::fabs(d.y) < 0.01f && std::fabs(d.z) < 0.01f)) continue;
+        botNav_.translateCells(m.navCells, d);
+        m.navOffset = m.offset;
+        LOG_INFO("campaign: %zu nav cells of %s moved by (%.1f %.1f %.1f)", m.navCells.size(), m.name.c_str(), d.x, d.y, d.z);
+    }
+}
+
 // ---- the matinee data ----
 
 void World::cpLoadMatinees() {
@@ -204,6 +229,7 @@ void World::cpTickMatinees(float dt) {
         if (done) {
             in.playing = false;
             cpMatineeEnd(in);
+            cpSyncMoverNav();   // the mover-attached nav cells take the mover's resting pose
             cp_.vm.finishLatent(in.op, in.dir > 0.0f ? "Completed" : "Reversed");
         }
     }

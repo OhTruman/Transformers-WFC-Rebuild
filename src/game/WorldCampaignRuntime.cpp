@@ -288,10 +288,11 @@ std::vector<int> World::cpTargets(KismetVM& vm, int op, const std::string& link)
         if (!v) continue;
         if (v->named >= 0) v = vm.var(v->named);
         if (!v) continue;
-        if (v->cls == "TnSeqVar_Buddy") {
-            const int bi = v->i;
-            if (bi > 0 && (size_t)bi <= cp_.squad.size()) out.push_back(cp_.squad[(size_t)bi - 1]);
-            else for (int p : cp_.squad) out.push_back(p);
+        if (v->cls == "TnSeqVar_Buddy") {   // FindBuddy [C]: BuddyIndex 1-based (default 1) over the ACTIVE members in squad order
+            const int bi = std::max(1, v->buddyIndex);
+            std::vector<int> active;
+            for (int p : cp_.squad) if (match_.players()[(size_t)p].alive) active.push_back(p);
+            if ((size_t)bi <= active.size()) out.push_back(active[(size_t)bi - 1]);
         } else if (v->cls == "SeqVar_Player") {
             for (size_t q = 0; q < match_.players().size(); ++q) if (match_.players()[q].kind != ParticipantKind::Bot) out.push_back((int)q);
         } else if (v->obj.rfind("pawn:", 0) == 0) out.push_back(std::atoi(v->obj.c_str() + 5));
@@ -360,14 +361,38 @@ bool World::cpSetStreamingState(KismetVM& vm, int op) {
     return true;
 }
 
-// TnSeqAct_ForceIntoForm: the targets change form (PROV: robot - the authored form property is not exported; RE asked).
+// TnSeqAct_ForceIntoForm [C, RE 2026-10-23]: ForcedForm (TF_Robot default / TF_Vehicle); each target not in it transforms the regular way
+// (PC.ForceToForm / AiController.Transform, with the animation); latent until every target is in the form ("Finished"), a target neither
+// in it nor transforming is dropped (AbortFor). PROV: MoveToSafeTransformationLocation is not modelled.
 bool World::cpForceIntoForm(KismetVM& vm, int op) {
     KismetVM::Op& o = vm.op(op);
-    const std::string f = o.authored["Form"].asString() + o.authored["DesiredForm"].asString();
-    const bool vehicle = f.find("Vehicle") != std::string::npos;
-    for (int p : cpTargets(vm, op, "Target")) if (Character* c = participantPawnMutable(p)) c->setForm(vehicle ? Form::Vehicle : Form::Robot);
-    if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
+    CampaignState::FormOp F;
+    F.op = op; F.vehicle = o.authored["ForcedForm"].asString() == "TF_Vehicle";
+    for (int p : cpTargets(vm, op, "Target")) {
+        Character* c = participantPawnMutable(p);
+        if (!c) continue;
+        const Form want = F.vehicle ? Form::Vehicle : Form::Robot;
+        if (c->moveForm() != want && !c->isTransforming()) c->beginTransform();
+        F.targets.push_back(p);
+    }
+    o.latent = true; o.timer = -1.0f;
+    cp_.formOps.push_back(F);
     return true;
+}
+
+void World::cpTickForms() {
+    for (size_t k = 0; k < cp_.formOps.size();) {
+        CampaignState::FormOp& F = cp_.formOps[k];
+        const Form want = F.vehicle ? Form::Vehicle : Form::Robot;
+        bool all = true;
+        for (size_t t = 0; t < F.targets.size();) {
+            const Character* c = participantPawn(F.targets[t]);
+            if (c && c->moveForm() == want && !c->isTransforming()) { ++t; continue; }
+            if (!c || !c->isTransforming()) { F.targets.erase(F.targets.begin() + (long)t); continue; }   // AbortFor
+            all = false; ++t;
+        }
+        if (all) { cp_.vm.finishLatent(F.op, "Finished"); F = cp_.formOps.back(); cp_.formOps.pop_back(); } else ++k;
+    }
 }
 
 // Restart From Last Checkpoint (CheckpointManager.RestartFromActiveCheckpoint, the same map): the launch again at the active checkpoint -

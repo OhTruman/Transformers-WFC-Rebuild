@@ -239,6 +239,7 @@ void World::setupCampaign(const MatchLaunch& l) {
         cpLoadFactories();
         cpLoadActors();
         cpLoadMatinees();
+        cpBindMoverNav();   // (the nav is loaded by addBots above)
         {   // the start's streaming state: the launch checkpoint's, else WorldInfo.InitialStreamingState
             const CampaignChapter::Checkpoint* lc = cpChapter_.checkpoint(cp_.checkpoint);
             cp_.unitVisible.clear();
@@ -452,6 +453,7 @@ void World::tickCampaign(float dt) {
     cpSyncPicks();
     if (!cp_.gameOver) cpTickFactories(dt);
     cpTickMatinees(dt);
+    cpTickForms();
     // TnCampaignGame.Killed: a human killed by anything but DmgType_Suicided -> CampaignGameOver (solo: never downed).
     const auto& kh = match_.killHistory();
     for (; cp_.killsSeen < kh.size(); ++cp_.killsSeen) {

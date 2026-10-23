@@ -21,7 +21,8 @@ public:
         core::Vec3 centroid, bmin, bmax;
         float clearance = 0.0f, headroom = 0.0f;
         bool vehicle = false;
-        bool versusOnly = false;   // Escalation nav: a versus cell merged where the original has no NavigationCell
+        bool versusOnly = false;
+        std::string moverBase;     // campaign nav: the InterpActor a mover-attached cell (MoverPathNode) rides (full path)   // Escalation nav: a versus cell merged where the original has no NavigationCell
         std::vector<Portal> portals;
         std::vector<int> links;                                          // indices into links_ starting here
     };
@@ -49,6 +50,8 @@ public:
     // After setBlocked: the connected pieces again without the blocked cells (areas sealed off by closed doors leave the main
     // piece: roaming goals stay reachable and a search across a closed door fails at once instead of exhausting the budget).
     void recomputePieces() { computePieces(); }
+    // Campaign movers: move these cells (polygons, centroids, bounds, portals, link ends) by d; an xz move re-buckets them.
+    void translateCells(const std::vector<int>& cells, const core::Vec3& d);
     bool isBlocked(int cell) const { return cell >= 0 && (size_t)cell < blocked_.size() && blocked_[(size_t)cell] != 0; }
     int pieceOf(int c) const { return c >= 0 && (size_t)c < piece_.size() ? piece_[(size_t)c] : -1; }
     int mainPieceId() const { return mainPieceId_; }

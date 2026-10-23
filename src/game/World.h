@@ -1438,10 +1438,13 @@ private:
     void cpApplyStreamingState(const std::string& state);
     bool cpSetStreamingState(KismetVM& vm, int op);
     bool cpForceIntoForm(KismetVM& vm, int op);
+    void cpTickForms();
     MatchLaunch cpLaunch_;                        // the campaign launch (Restart From Last Checkpoint)
     void cpCollectMovers();                       // WorldCampaignMatinee.cpp
     void cpSplitMovers(const render::MeshData& in, render::MeshData& out);
     void cpRegisterMovers();
+    void cpBindMoverNav();
+    void cpSyncMoverNav();
     void cpLoadMatinees();
     bool cpInterpActivate(KismetVM& vm, int op, int input);
     void cpTickMatinees(float dt);

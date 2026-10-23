@@ -35,6 +35,7 @@ bool BotNav::load(const std::string& path) {
         o.headroom = c["headroom_m"].asFloat();
         o.vehicle = c["flags"]["vehicle_capable"].asBool();
         o.versusOnly = c["flags"]["versus_only"].asBool(false);
+        o.moverBase = c["flags"]["mover_base"].asString();
         o.bmin = o.bmax = o.poly.empty() ? o.centroid : o.poly[0];
         for (const core::Vec3& p : o.poly) {
             o.bmin = {std::min(o.bmin.x, p.x), std::min(o.bmin.y, p.y), std::min(o.bmin.z, p.z)};
@@ -75,10 +76,12 @@ bool BotNav::load(const std::string& path) {
         const std::string kind = l["kind"].asString();
         // double_jump_up (AssetTools: JumpHeight + DoubleJumpHeight; the MP robot double jump is CONFIRMED, RE addendum 10). Unknown
         // kinds are skipped (never mistaken for a drop).
-        if (kind != "jump_up" && kind != "drop_down" && kind != "double_jump_up" && kind != "walk") continue;
+        // "special" MoverPathNode links (AssetTools: a mover-attached cell to its static neighbours) are walked (PROV); other specials skipped
+        const bool moverLink = kind == "special" && l["special_actor_class"].asString() == "MoverPathNode";
+        if (kind != "jump_up" && kind != "drop_down" && kind != "double_jump_up" && kind != "walk" && !moverLink) continue;
         L.jump = kind == "jump_up" || kind == "double_jump_up";
         L.doubleJump = kind == "double_jump_up";
-        L.walk = kind == "walk";
+        L.walk = kind == "walk" || moverLink;
         L.robot = L.vehicle = false;
         const assets::Json& fm = l["forms"];
         for (size_t k = 0; k < fm.size(); ++k) { L.robot |= fm[k].asString() == "robot"; L.vehicle |= fm[k].asString() == "vehicle"; }
@@ -184,6 +187,26 @@ int BotNav::findCell(const core::Vec3& p, float maxDist, float maxDrop) const {
 }
 
 // Connected pieces (portals + links, undirected); blocked cells belong to no piece and connect nothing.
+void BotNav::translateCells(const std::vector<int>& ids, const core::Vec3& d) {
+    std::vector<uint8_t> moved(cells_.size(), 0);
+    for (int id : ids) if (id >= 0 && (size_t)id < cells_.size()) moved[(size_t)id] = 1;
+    const bool xz = std::fabs(d.x) > 1e-4f || std::fabs(d.z) > 1e-4f;
+    if (xz) for (auto& b : grid_) b.erase(std::remove_if(b.begin(), b.end(), [&](int c) { return moved[(size_t)c] != 0; }), b.end());
+    for (size_t i = 0; i < cells_.size(); ++i) {
+        if (!moved[i]) continue;
+        Cell& c = cells_[i];
+        for (core::Vec3& p : c.poly) p = p + d;
+        c.centroid = c.centroid + d; c.bmin = c.bmin + d; c.bmax = c.bmax + d;
+        for (Portal& P : c.portals) { P.a = P.a + d; P.b = P.b + d; }
+        if (xz && !grid_.empty()) {
+            const int ax = std::clamp((int)((c.bmin.x - gx0_) / gcell_), 0, gw_ - 1), bx = std::clamp((int)((c.bmax.x - gx0_) / gcell_), 0, gw_ - 1);
+            const int az = std::clamp((int)((c.bmin.z - gz0_) / gcell_), 0, gh_ - 1), bz = std::clamp((int)((c.bmax.z - gz0_) / gcell_), 0, gh_ - 1);
+            for (int z = az; z <= bz; ++z) for (int x = ax; x <= bx; ++x) grid_[(size_t)z * (size_t)gw_ + (size_t)x].push_back((int)i);
+        }
+    }
+    for (Link& L : links_) { if (moved[(size_t)L.from]) L.fromPos = L.fromPos + d; if (moved[(size_t)L.to]) L.toPos = L.toPos + d; }
+}
+
 void BotNav::computePieces() {
     const bool blk = blocked_.size() == cells_.size();
     auto open = [&](size_t c) { return !blk || !blocked_[c]; };
