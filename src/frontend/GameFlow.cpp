@@ -20,6 +20,7 @@ constexpr const char* kPartyLobbyUrl = "UI_PartyLobby_m?game=TransContent.TnPart
 const char* const kIntroMovies[] = {"Logo_Activision", "Logo_Hasbro", "Logo_HighMoon", "FMV_intro"};
 // GameLobby timings [CONFIRMED Xe-TransGame.ini / authored defaults, RE 2.4].
 constexpr int kShortCountdown = 10;          // BeginShortCountdown (private, host started)
+constexpr double kLateJoinLimitS = 300.0;     // join in progress: the catch-up cap (Integration decision; the original had none)
 constexpr int kPublicMinPlayers = 2;          // public lobby autostart (Integration decision 2026-10-23)
 constexpr int kLobbyIntermissionTime = 45;   // BeginIntermissionCountdown (public autostart)
 
@@ -398,6 +399,14 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     // The Solo menu's Resume Autobot / Resume Decepticon rows: a checkpoint save of that faction (index 0 / 1). The saves are
     // Gameplay's (C6); until they exist there is none, so the menu offers Mission Select only.
     if (fn == "Game.GetCheckpointFileStatus") return false;
+    // FrontEnd_GFX Solo Campaign: CheckCheckpointSaves, answered by _global.ProceedToSoloPlay(AutobotCheckpointExists,
+    // DecepticonCheckpointExists) -> the Solo menu (mc_menuSolo). No saves yet (C6): both absent, so the menu offers Mission
+    // Select only [CONFIRMED AS, FrontEnd_GFX].
+    if (fn == "Online.CheckCheckpointSaves") {
+        uiInvokes_.push_back({ui_.openMovie(), "_global.ProceedToSoloPlay"});
+        FlowTrace::emit("campaign.checkpointSaves", {{"autobot", "false"}, {"decepticon", "false"}});
+        return {};
+    }
     // CampaignSelect's checkpoint stage: GRI.SelectedCheckpoint (host only; ModifyURL adds ?Checkpoint= when not empty).
     if (fn == "Online.SetSelectedCheckpoint") {
         if (role_ == SessionRole::Member) return {};
@@ -1154,6 +1163,16 @@ void GameFlow::sendOnlineLaunch() {
     std::random_device rd;
     launchSeed_ = rd() | 1u;
     launchLobby_ = hostLobbySnapshot();
+    if (vote_.round > 0) {   // a public game: seats kept for joiners of the running match (Systems' join in progress)
+        const GameSettings* gs = lobby_.settings;
+        int maxPlayers = gs ? gs->numPublicConnections + gs->numPrivateConnections : 10;
+        if (profile_.bots.extended) maxPlayers = std::max(maxPlayers, 2 * gpPerTeam_);
+        int humans = 0;
+        for (const SessionSlot& sl : launchLobby_.slots) humans += sl.kind == SessionSlot::Kind::Human;
+        for (int i = humans; i < maxPlayers; ++i) { SessionSlot r; r.kind = SessionSlot::Kind::Reserved; r.team = 255; launchLobby_.slots.push_back(r); }
+        session_->setLateJoinLimit(kLateJoinLimitS);
+        FlowTrace::emit("online.reservedSeats", {{"seats", std::to_string(std::max(0, maxPlayers - humans))}, {"limitS", std::to_string((int)kLateJoinLimitS)}});
+    }
     session_->setLaunch(buildLaunchUrl(), launchSeed_, launchLobby_);
     session_->requestStart();
 }
@@ -1331,7 +1350,7 @@ void GameFlow::startLevel() {
     match_.timeLimit = std::max(0, match_.url.intOption("TimeLimit", 0));
     match_.gameTeamStatus = match_.url.intOption("GameTeamStatus", 0);
     match_.teamIndex = lobby_.localTeam;
-    if (session_ && role_ != SessionRole::Offline) { match_.seed = launchSeed_; fillOnlineLaunch(); }
+    if (session_ && role_ != SessionRole::Offline) { match_.seed = launchSeed_; fillOnlineLaunch(); match_.lateSeat = lateSeat_; lateSeat_ = -1; }
     FlowTrace::emit("gamelobby.startLevel", {{"url", url}});
     travel(url, true);
 }

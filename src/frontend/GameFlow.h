@@ -101,6 +101,7 @@ struct MatchLaunch {
     std::vector<SessionSlot> onlineSlots;
     SessionMemberId self;
     std::vector<std::pair<SessionMemberId, std::string>> onlineNames;
+    int lateSeat = -1;          // join in progress: this joiner's match seat (its Reserved slot; Systems' LateLaunch record)
     int gameTeamStatus = 0;
 };
 
@@ -484,6 +485,8 @@ private:
     MapVote vote_;
     int myVote_ = -1;
     SessionLobby hostLobbySnapshot() const;
+    int lateSeat_ = -1;             // the LateLaunch record's seat for this joiner (until startLevel)
+    bool lateJoinAsked_ = false;    // joinRunningMatch sent: a Full / TooFarAlong refusal keeps the lobby wait (D6)
     SessionLobby launchLobby_;      // the launch record's roster: as the host sent it / as the member got it (CountdownStarted);
                                     // every world builds its match from it, never from a later LobbyState
     std::string txt(const char* dollarKey) const;

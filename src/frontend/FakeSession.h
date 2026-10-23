@@ -71,6 +71,7 @@ public:
     bool lateJoin = false;   // tests: the session can join a running match
     bool supportsLateJoin() const override { return lateJoin; }
     void joinRunningMatch() override { calls_.push_back(mk("joinRunningMatch")); }
+    void setLateJoinLimit(double s) override { Call c = mk("setLateJoinLimit"); c.arg = std::to_string((int)s); calls_.push_back(c); }
     void cancelSearch() override { calls_.push_back(mk("cancelSearch")); }
     void setLobbyService(const std::string& a) override { Call c = mk("setLobbyService"); c.arg = a; calls_.push_back(c); }
     float mic = 0.0f;   // scripted Mic Test level

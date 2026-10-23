@@ -528,12 +528,21 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
             memberLobby_.matchRunning = true;   // D6: wait in the lobby for the next match ...
             const bool publicGame = memberLobby_.voteRound > 0 || lobby_.playlistId >= 0;
             if (publicGame && session_->supportsLateJoin()) {   // ... unless the game is public and the session can join it now
+                lateJoinAsked_ = true;
                 session_->joinRunningMatch();
                 FlowTrace::emit("online.lateJoin", {{"state", "requested"}});
             }
         }
         break;
     case T::JoinFailed:
+        if (lateJoinAsked_ && (e.joinFailure == SessionJoinFailure::Full || e.joinFailure == SessionJoinFailure::TooFarAlong)) {
+            // the running match cannot take this joiner: wait in the lobby for the next one (D6), with the reason
+            lateJoinAsked_ = false;
+            showMessage(txt("$WfcPC.Online.LateJoinTitle"),
+                        txt(e.joinFailure == SessionJoinFailure::TooFarAlong ? "$WfcPC.Online.LateJoinTooLate" : "$WfcPC.Online.LateJoinFull"));
+            FlowTrace::emit("online.lateJoin", {{"state", "refused"}, {"why", e.joinFailure == SessionJoinFailure::TooFarAlong ? "TooFarAlong" : "Full"}});
+            break;
+        }
         if (onlinePending_ == OnlinePending::Joining) onlineJoinFailed(e.joinFailure);
         else if (role_ != SessionRole::Offline && e.joinFailure == SessionJoinFailure::Version)   // a sim id / load hash mismatch
             endSession("$UIText.MessagePrompts.JoinGameInviteFailedTitle", "$Engine.Errors.ClientOutdated", "version");
@@ -616,6 +625,8 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
         if (role_ == SessionRole::Member && e.lateJoin && level_ == LevelKind::GameLobby) {   // join in progress: straight in
             memberLaunchUrl_ = e.launchUrl;
             launchSeed_ = e.seed;
+            lateSeat_ = e.lateSeat;
+            lateJoinAsked_ = false;
             if (!e.lobby.slots.empty()) { memberLobby_.slots = e.lobby.slots; memberLobby_.members = e.lobby.members; launchLobby_ = e.lobby; }
             memberLobby_.matchRunning = false;
             const int map = Url::parse(e.launchUrl).intOption("MapId", -1);
