@@ -1,0 +1,162 @@
+diff --git a/src/core/Application_LateSeatTest.cpp b/src/core/Application_LateSeatTest.cpp
+index 44d5658a..0992246d 100644
+--- a/src/core/Application_LateSeatTest.cpp
++++ b/src/core/Application_LateSeatTest.cpp
+@@ -64,6 +64,31 @@ void Application::runLateSeatTest() {
+     world_.queueSeatSelection(1, m.players()[0].selection, (uint32_t)world_.simTick() + 2);
+     run(0.5f);
+     check(!world_.localPlayerDead() && m.players()[(size_t)me].alive && m.players()[(size_t)me].team == self.team, "B: woken and picked: the local pawn spawns on its team");
++    // ---- C: a leaver empties a team (no bots): EndGame "Forfeit" after 1.5 s, the other team wins
++    {
++        game::MatchLaunch L;
++        game::MatchLaunch::fromURL("MP_IAC_Streets?GameModeTag=TDM", L);
++        game::RemoteSeat a; a.name = "Host"; a.team = 0; a.member = "HOST";
++        game::RemoteSeat b; b.name = "Guest"; b.team = 1; b.member = "GUEST";
++        L.humans = {a, b}; L.localSeat = 0;
++        check(world_.launchMatch(L), "C: launch 1 v 1 humans, no bots");
++        run(11.0f);
++        world_.queueLeave(1, (uint32_t)world_.simTick() + 3);
++        run(1.0f);
++        check(m.players()[1].dormant && m.state() == game::Match::State::InProgress, "C: the guest left (seat dormant); no forfeit before 1.5 s");
++        run(1.0f);
++        check(m.state() == game::Match::State::MatchOver && m.endReason() == "Forfeit" && m.winnerTeam() == 0, "C: the empty team forfeits after 1.5 s; Autobots win");
++    }
++    // ---- D: a team empty from the start never forfeits
++    {
++        game::MatchLaunch L;
++        game::MatchLaunch::fromURL("MP_IAC_Streets?GameModeTag=TDM", L);
++        game::RemoteSeat a; a.name = "Host"; a.team = 0; a.member = "HOST";
++        L.humans = {a}; L.localSeat = 0;
++        check(world_.launchMatch(L), "D: launch a lone human, no bots");
++        run(14.0f);
++        check(m.state() == game::Match::State::InProgress, "D: a team empty from the start does not forfeit");
++    }
+     LOG_INFO("LATESEAT SUMMARY: %d/%d checks passed", checks - fails, checks);
+     exitCode_ = fails ? 1 : 0;
+ }
+diff --git a/src/game/Match.cpp b/src/game/Match.cpp
+index dda61057..c041281e 100644
+--- a/src/game/Match.cpp
++++ b/src/game/Match.cpp
+@@ -169,6 +169,8 @@ void Match::tick(float dt) {
+             if (p.timeToRespawn <= 0.0f) restartPlayer((int)i);
+         }
+         if (s_.teamGame) updateClusters(dt);
++        if (s_.teamGame && !s_.survival) tickForfeit(dt);
++        if (state_ != State::InProgress) return;
+         if (s_.rounds > 0) tickRounds(dt);
+     } else if (state_ == State::MatchOver && stateTime_ >= s_.matchOverCountdown) {
+         // MatchOver.OnCountdownComplete -> TnGame.ReturnToGameLobby (ServerTravel to the lobby URL).
+@@ -205,6 +207,7 @@ void Match::startMatch() {
+     // ElapsedTime 0, GRI.SetGameStatus(3), ResetPlayerStats, UI event 3, GTMT_StartGame.
+     state_ = State::InProgress;
+     gameStatus_ = 3;
++    forfeitTimer_[0] = forfeitTimer_[1] = -1.0f; teamSeen_[0] = teamSeen_[1] = false;
+     elapsedTime_ = 0;
+     stateTime_ = 0.0f;
+     if (s_.rounds > 0) {
+@@ -541,10 +544,22 @@ void Match::wakePlayer(int p, const std::string& name, const std::string& member
+     LOG_INFO("MATCH join player=%d name=%s team=%d t=%.2f", p, name.c_str(), team, matchTime_);   // audit line
+ }
+ 
+-void Match::retirePlayer(int p) {
++// A versus team with nobody left: EndGame "Forfeit" after 1.5 s [RE join-in-progress: TnVersusGame].
++void Match::tickForfeit(float dt) {
++    for (int t = 0; t < 2; ++t) {
++        int n = 0;
++        for (const MatchPlayer& p : players_) n += !p.dormant && p.team == t;
++        if (n > 0) { teamSeen_[t] = true; forfeitTimer_[t] = -1.0f; continue; }
++        if (!teamSeen_[t]) continue;
++        forfeitTimer_[t] = std::max(0.0f, forfeitTimer_[t]) + dt;
++        if (forfeitTimer_[t] >= 1.5f) { endGame(-1, "Forfeit"); return; }
++    }
++}
++
++void Match::retirePlayer(int p, const char* why) {
+     if (p < 0 || (size_t)p >= players_.size()) return;
+     MatchPlayer& P = players_[(size_t)p];
+-    LOG_INFO("MATCH leave player=%d name=%s team=%d t=%.2f (a bot makes room for a joiner)", p, P.name.c_str(), P.team, matchTime_);
++    LOG_INFO("MATCH leave player=%d name=%s team=%d t=%.2f (%s)", p, P.name.c_str(), P.team, matchTime_, why);
+     P.alive = false; P.dormant = true; P.team = 255; P.timeToRespawn = -1.0f;
+ }
+ 
+diff --git a/src/game/Match.h b/src/game/Match.h
+index 21dd3163..b1477bfe 100644
+--- a/src/game/Match.h
++++ b/src/game/Match.h
+@@ -227,7 +227,7 @@ public:
+     // Join in progress: a dormant seat wakes (name, member, team; no character: Choose Character, then an immediate spawn while
+     // InProgress) / a bot leaves for a joiner (despawned by the host first; dormant from here on).
+     void wakePlayer(int p, const std::string& name, const std::string& member, int team);
+-    void retirePlayer(int p);
++    void retirePlayer(int p, const char* why = "a bot makes room for a joiner");
+     void requireCharacterSelection(int p) { if (p >= 0 && (size_t)p < players_.size()) players_[(size_t)p].hasSelectedCharacter = false; }
+     void tick(float dt);
+     // Rounds (CTF) and the attacking team (CTF: SingleFlagCTF; EXT: the bomb holder's team, set by the objective layer).
+@@ -350,6 +350,9 @@ private:
+     unsigned tombstoneSerial_ = 0;
+     std::vector<Tombstone> tombstones_;
+     unsigned rng_ = 0x1234ABCDu;
++    float forfeitTimer_[2] = {-1.0f, -1.0f};   // a versus team at 0 participants: time so far (EndGame "Forfeit" at 1.5 s)
++    bool teamSeen_[2] = {false, false};         // the team had a participant this match (an empty-from-start team never forfeits)
++    void tickForfeit(float dt);
+     int forcedStart_ = -1;               // restartPlayerAt: the start restartPlayer takes instead of FindPlayerStart
+     std::vector<int> directorStart_;     // per player: its reusable "SurvivalSpawnPoint" start (team 254: never a FindPlayerStart pick)
+     int randomInt(int n) { rng_ = rng_ * 1664525u + 1013904223u; return n > 0 ? (int)((rng_ >> 8) % (unsigned)n) : 0; }
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 6eec0b82..16eabaac 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -3895,7 +3895,21 @@ void World::queueLateSeat(int seat, const RemoteSeat& r, uint32_t atTick) {
+     pendingLateSeats_.insert(it, p);
+ }
+ 
++void World::queueLeave(int seat, uint32_t atTick) {
++    const std::pair<uint32_t, int> e{atTick, seat};
++    pendingLeaves_.insert(std::upper_bound(pendingLeaves_.begin(), pendingLeaves_.end(), e), e);
++}
++
+ void World::applyPendingLateSeats() {
++    size_t nl = 0;
++    for (; nl < pendingLeaves_.size() && (int64_t)pendingLeaves_[nl].first <= (int64_t)simTick_; ++nl) {
++        const int seat = pendingLeaves_[nl].second;
++        if (!matchActive_ || seatPlayer(seat) < 0 || seat == localPlayer_ || match_.players()[(size_t)seat].dormant) continue;
++        for (MatchOpponent* o : opponents_) if (o->matchPlayer() == seat && o->spawned()) o->despawn();
++        match_.retirePlayer(seat, "left the match");
++        LOG_INFO("session: seat %d left at tick %lld", seat, (long long)simTick_);
++    }
++    if (nl) pendingLeaves_.erase(pendingLeaves_.begin(), pendingLeaves_.begin() + (long)nl);
+     size_t n = 0;
+     for (; n < pendingLateSeats_.size() && (int64_t)pendingLateSeats_[n].tick <= (int64_t)simTick_; ++n) {
+         const PendingLateSeat& q = pendingLateSeats_[n];
+@@ -3998,7 +4012,7 @@ void World::clearAllParticipants() {
+     for (size_t i = 0; i < actors_.size();) { if (!actors_[i]->alive()) { actors_[i] = std::move(actors_.back()); actors_.pop_back(); } else ++i; }
+     match_.truncatePlayers(0);
+     localPlayer_ = -1;
+-    bots_.clear(); smart_.clear(); anySmart_ = false; remoteIdle_.clear(); seatLocks_.clear(); pendingSelections_.clear(); pendingLateSeats_.clear(); launchHumans_ = 0;
++    bots_.clear(); smart_.clear(); anySmart_ = false; remoteIdle_.clear(); seatLocks_.clear(); pendingSelections_.clear(); pendingLateSeats_.clear(); pendingLeaves_.clear(); launchHumans_ = 0;
+ }
+ 
+ uint64_t World::simStateHash() const {
+diff --git a/src/game/World.h b/src/game/World.h
+index bfd3213f..085bd175 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1264,6 +1264,7 @@ private:
+     std::vector<PendingLateSeat> pendingLateSeats_;   // by (tick, seat)
+     int launchHumans_ = 0;                            // the launch's humans (dormant seats included)
+     void applyPendingLateSeats();
++    std::vector<std::pair<uint32_t, int>> pendingLeaves_;   // (tick, seat), sorted
+     std::vector<PendingSelection> pendingSelections_;   // by (tick, seat); applied in the step prefix
+     void applyPendingSelections();
+     bool pbSandbox_ = false;            // online: the player bot's brain is running (input only: its actions become presses)
+@@ -1605,6 +1606,9 @@ public:
+     void queueLateSeat(int seat, const RemoteSeat& r, uint32_t atTick);
+     int seatPlayer(int seat) const { return seat >= 0 && seat < launchHumans_ ? seat : -1; }
+     int smallerTeam() const;
++    // A seat whose member left (not handed to a bot): at the tick on every peer its pawn goes and the seat turns dormant (Systems'
++    // driver, from the session's tick-stamped leave). An empty versus team then forfeits after 1.5 s (Match).
++    void queueLeave(int seat, uint32_t atTick);
+     const SeatMissile* seatMissile(int p) const { return p >= 0 && (size_t)p < seatMissiles_.size() ? &seatMissiles_[(size_t)p] : nullptr; }
+     const RollerMine& rollerMine() const;   // the local player's (HUD / tests)
+     const std::vector<KamikazeMine>& kamikazeMines() const { return mines_; }
