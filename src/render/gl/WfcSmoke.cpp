@@ -127,7 +127,8 @@ void Pipeline::smokeLight(const core::Vec3& p, core::Vec3& amb, int& n, core::Ve
 // per drawn smoke group (drawSubs, after bindCommon): its light environment, E_ref and the flow
 void Pipeline::bindSmoke(const Program& P) {
     if (smokeRef_.x < 0.0f || smokeRefMode_ != rtMode_) {   // E_ref: once per map and RT mode
-        // over the level itself: up to 128 world sub-mesh centres (floors, walls, corridors), 1 m up - the places smoke
+        // the ambient over the level itself (first match sheet: with the direct lights in it, smoke sat at E / E_ref 0.4-0.6, darker
+        // than authored nearly everywhere): up to 128 world sub-mesh centres (floors, walls, corridors), 1 m up - the places smoke
         // drifts through, on every map (Streets' Beast probe file has no volumes); the same light the smoke main sees
         std::vector<core::Vec3> pts;
         for (const GpuMesh& g : meshes_)
@@ -140,7 +141,7 @@ void Pipeline::bindSmoke(const Program& P) {
             core::Vec3 amb, dl[3], dc[3]; int n = 0;
             smokeLight(pts[k], amb, n, dl, dc);
             core::Vec3 e = amb;
-            for (int i = 0; i < n; ++i) e = e + dc[i] * 0.5f;   // (the phase's mean is 1)
+            // (the ambient alone: smoke in ordinary shade keeps its authored look; sun / lamps / flashes add to it)
             sum = sum + e; ++cnt;
         }
         smokeRef_ = cnt > 0 ? sum * (1.0f / (float)cnt) : core::Vec3{0, 0, 0};
@@ -152,9 +153,8 @@ void Pipeline::bindSmoke(const Program& P) {
     smokeLight(smokeCenter_, amb, n, dl, dc);
     core::Vec3 inv{1, 1, 1};
     if (smokeRef_.x > 1e-4f && smokeRef_.y > 1e-4f && smokeRef_.z > 1e-4f) inv = {1.0f / smokeRef_.x, 1.0f / smokeRef_.y, 1.0f / smokeRef_.z};
-    else {                                               // (no probe grid: this group's own light is the reference - authored look)
+    else {                                               // (no level points: this group's own ambient is the reference)
         core::Vec3 e = amb;
-        for (int i = 0; i < n; ++i) e = e + dc[i] * 0.5f;
         inv = {1.0f / std::max(e.x, 1e-4f), 1.0f / std::max(e.y, 1e-4f), 1.0f / std::max(e.z, 1e-4f)};
     }
     float L3[9] = {}, C3[9] = {};

@@ -5105,7 +5105,9 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 if (dynamicObject && skinMode_ != 0) ++gStats.instRejected;
                 int tlMask = 0xFF;
                 bool tlMask2Set = false;
-                if (tlAllN_ > 0 && P.uTLMask2 >= 0 && tlDataTex_ && tlTileTex_) {   // (tiled: the same per-draw cull over every light)
+                // (Smoke row: a sprite group has no sub bounds - the frame stream's one Sub sits at the origin - so the smoke
+                // programs keep every light; the screen tiles still cull per 32-pixel tile)
+                if (!P.smoke && tlAllN_ > 0 && P.uTLMask2 >= 0 && tlDataTex_ && tlTileTex_) {   // (tiled: the same per-draw cull over every light)
                     const core::Vec3 c = core::transformPoint(model, (s.bmin + s.bmax) * 0.5f);
                     const float rr = core::length(s.bmax - s.bmin) * 0.5f * 1.5f + 1.0f;
                     uint32_t m2[2] = {0u, 0u};
@@ -5115,7 +5117,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                     }
                     Uniform2ui(P.uTLMask2, m2[0], m2[1]);
                     tlMask2Set = true;
-                } else if (tlN_ > 0 && P.uTLMask >= 0) {          // (item 4) per-draw light cull, as the original's per-primitive light lists
+                } else if (!P.smoke && tlN_ > 0 && P.uTLMask >= 0) {   // (item 4) per-draw light cull, as the original's per-primitive light lists
                     const core::Vec3 c = core::transformPoint(model, (s.bmin + s.bmax) * 0.5f);
                     const float rr = core::length(s.bmax - s.bmin) * 0.5f * 1.5f + 1.0f;   // (loose: skinned subs move in their bounds)
                     tlMask = 0;
@@ -8921,7 +8923,6 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
         for (size_t i = 0; i < n; ++i) c = c + (sp[i].c[0] + sp[i].c[2]) * 0.5f;
         smokeCenter_ = c * (1.0f / (float)n);
     }
-    auto it = spriteProg_.find(material);
     if (!spriteVao_) {
         GenVertexArrays(1, &spriteVao_);
         GenBuffers(1, &spriteVbo_); GenBuffers(1, &spriteCbo_); GenBuffers(1, &spriteIbo_);
@@ -8973,7 +8974,7 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
     g.vao = spriteVao_;
     if (g.subs.empty()) g.subs.emplace_back();
     Sub& d = g.subs[0];
-    d.first = 0; d.count = (uint32_t)idx.size(); d.prog = spriteProgram(material);   // (the Smoke row's Enhanced variant where it applies; else it->second)
+    d.first = 0; d.count = (uint32_t)idx.size(); d.prog = spriteProgram(material);   // (cached; the Smoke row's Enhanced variant where it applies)
     d.matName = material;                                  // diagnostics (WFC_SKIPMAT)
     frameFx_ = true;
     drawSubs(g, core::Mat4::identity(), true);
