@@ -840,6 +840,19 @@ void Application::attachPresenter() {
         }
     };
     frontend_->script().displayHook = [this](int w, int h, bool full) { window_->setDisplayMode(w, h, full); };
+    // TEST ONLY (harness scripts; Gameplay agreed 2026-10-23): qa:die kills the local pawn as a suicide (-1 under TDM rules,
+    // so that run's score is not authentic) - offline only (a kill outside the lockstep command stream desyncs every peer),
+    // in a match in progress, with the local pawn alive; anything else is skipped and logged.
+    frontend_->script().qaHook = [this](const std::string& cmd) {
+        std::string why;
+        if (cmd != "die") why = "unknown qa command";
+        else if (netDriver_ || frontend_->flow().sessionRole() != frontend::GameFlow::SessionRole::Offline) why = "online match";
+        else if (!world_.matchActive() || world_.presented().matchState != (int)game::Match::State::InProgress) why = "no match in progress";
+        else if (world_.localPlayerDead()) why = "the local pawn is dead";
+        if (!why.empty()) { frontend::FlowTrace::emit("script.qa", {{"cmd", cmd}, {"result", "skipped"}, {"why", why}}); return; }
+        world_.submit([](game::World& w) { w.killLocalPlayer(w.localMatchPlayer(), true); });
+        frontend::FlowTrace::emit("script.qa", {{"cmd", cmd}, {"result", "killed"}, {"provenance", "TEST ONLY"}});
+    };
     frontend_->script().dumpHook = [this](const std::string& m) {
         for (const std::string& o : presenter_->openMovieObjects())
             if (o.find(m) != std::string::npos) LOG_INFO("GFX DUMP %s\n%s", o.c_str(), presenter_->dumpMovie(o).c_str());
