@@ -3906,3 +3906,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   camera cuts / FOV / fade via setCinematicView; D5 40 matinees bound; A1 boots headless: the intro lift as a moving set,
   495 matinees, 8,989 ops, 40 s clean). Gaps: A1 AI bodies (AssetTools), factory pool cap 64, moving nav cells, AnimControl /
   Toggle / material params / slomo. Rendering: setMapActorTransform next; A1 calibration done.
+2026-10-23 08:09 MERGED 9114e981 (3 Frontend commits): co-op claims greyed in CharacterSelect + Escalation quit via LeaveSurvivalConfirm,
+  the public re-draft at the vote close (PARTIAL: scores not carried), Friends List + invites (recent players as Friends
+  rows, Online via queryOnline, Send Invite = code + sendInvite, InviteReceived popup -> join by code). 249 frontend tests.
+  AssetTools: 57 campaign character templates building (D5 done, A1's 16 next); A1 vbake + pp volumes + battery
+  destructibles + actors.json in.
