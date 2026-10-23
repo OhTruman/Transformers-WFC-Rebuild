@@ -3856,3 +3856,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   campaign_anims; static PASS; headless smokes 0 errors on BrokenHope / Remnant ESC, Rust, Streets); older packages deleted
   after the v3 Streets verify + Experimental rerun. MERGED 19a3bc29 chapter units read in place from the campaign root.
   Rendering: chapter loader stage 2a built (every unit in the RT static world) -> x46 after the Systems verify.
+2026-10-23 07:20 MERGED 6f505624 campaign boot glue (loadMatch SOLO / CP / CCP; MISSION FAILED / checkpoint / mission complete events;
+  chapters selectable once chapter.json exists: D5_OME + A1_IAC unlock). Post-match check PASS (join-code panel overdraw
+  fixed). Card: Systems v3 Streets verify -> Rendering x4647 -> Frontend first frontend-launched chapter.
