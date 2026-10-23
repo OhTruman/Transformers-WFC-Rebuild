@@ -528,6 +528,28 @@ void UdpSession::reportVoice(const SessionMemberId& member, int headsetState, in
     emit(e);
 }
 
+void UdpSession::sendLobbyVoice(const uint8_t* p, size_t n) {
+    if (!t_ || role_ == Role::Offline) return;
+    if (role_ == Role::Host) { for (const auto& kv : peers_) t_->sendUnreliable(kv.first, p, n); }   // the host's own voice: to everyone
+    else t_->sendUnreliable(0, p, n);                                                                 // a member: to the host, who relays
+}
+
+int UdpSession::sessionSeat() const { return t_ ? t_->self() : -1; }
+
+std::vector<int> UdpSession::lobbySeats() const {
+    std::vector<int> v;
+    if (role_ == Role::Offline) return v;
+    v.push_back(sessionSeat());
+    for (const auto& kv : peers_) if (kv.first != sessionSeat()) v.push_back(kv.first);
+    return v;
+}
+
+SessionMemberId UdpSession::memberOfSeat(int seat) const {
+    if (seat == sessionSeat()) return self_.id;
+    auto it = peers_.find(seat);
+    return it == peers_.end() ? SessionMemberId{} : it->second.info.id;
+}
+
 void UdpSession::joinRunningMatch() {
     if (role_ != Role::Member || !lobby_.matchRunning) return;
     W w(kLateJoin); sendSeat(0, w.b);
@@ -846,6 +868,14 @@ void UdpSession::pump() {
         const uint8_t type = p.data[0];
         if (type == kKeepalive) continue;
         if (isSessionType(type)) { if (p.reliable) handleSeated(p.from, p.data); else if (type == kLeave || type == kKick) handleSeated(p.from, p.data); continue; }
+        if (type == 7 && !view_) {   // the lobby voice lane (no match here): the host relays, everyone plays the talker in byte 1
+            if (p.data.size() < 6) continue;
+            const int talker = p.data[1];
+            if (role_ == Role::Host)
+                for (const auto& kv : peers_) if (kv.first != p.from && t_) t_->sendUnreliable(kv.first, p.data.data(), p.data.size());
+            if (lobbyVoiceSink_) lobbyVoiceSink_(talker, p.data.data(), p.data.size());
+            continue;
+        }
         if (view_) {   // a lockstep packet: to the match view in match seats
             auto m = std::find(matchToSession_.begin(), matchToSession_.end(), p.from);
             if (m == matchToSession_.end()) continue;

@@ -4,6 +4,7 @@
 #include "core/Application.h"
 #include "net/NetMatchDriver.h"
 #include "net/UdpSession.h"
+#include "net/VoiceSession.h"
 #include "core/FrameProfile.h"
 #include "core/FrontendSceneGL.h"
 #include "core/LoadYield.h"
@@ -1246,6 +1247,7 @@ void Application::shutdownFrontend() {
     // [Systems] the net driver first: its Lockstep says bye through the session's match view, and the session is the frontend
     // flow's (frontend_.reset() destroys it; the driver was destroyed after it in ~Application -> exit crash 0xc0000005, Frontend 01:42)
     netDriver_.reset();
+    lobbyVoice_.reset();   // [Systems] its link points at the session too
     udpSession_ = nullptr;
     if (frontend_) { frontend_->setAudio(nullptr); frontend_->setSceneRenderer(nullptr); }
     g_scene.reset();
@@ -1302,6 +1304,7 @@ void Application::runFrontend() {
                 core::prof::Scope prof("+frontend.update");
                 frontend_->update(input, (float)dt);
             }
+            tickLobbyVoice();   // [Systems] lobby voice (in a session, no match)
             if (flow.quitRequested()) { quit = true; break; }
             drawFrontendFrame();
             titleTimer += dt;

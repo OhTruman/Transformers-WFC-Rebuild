@@ -41,7 +41,15 @@ public:
         float gateDb = -45.0f;
         double hangMs = 300.0;
     };
-    VoiceSession(Lockstep& ls, audio::IAudio* audio, const Config& c);
+    // Where the packets go: the match lane is the Lockstep (star relay by audience); the lobby lane is the UdpSession (the host relays
+    // to every lobby member). self = this seat; send = one VOICE packet out; setSink = install / remove (nullptr) the receive hook.
+    struct Link {
+        std::function<int()> self;
+        std::function<void(const uint8_t*, size_t)> send;
+        std::function<void(std::function<void(int, const uint8_t*, size_t)>)> setSink;
+    };
+    VoiceSession(Lockstep& ls, audio::IAudio* audio, const Config& c);   // the match lane
+    VoiceSession(const Link& link, audio::IAudio* audio, const Config& c);
     ~VoiceSession();
     void setSource(std::unique_ptr<IVoiceCapture> mic);   // the microphone (started on demand)
     void setConfig(const Config& c);                      // live: volume, audience, open mic / push to talk (the Audio rows)
@@ -83,7 +91,7 @@ private:
     };
     void playTalker(int seat, Talker& t, const SeatPos& seatPos, const SameTeam& sameTeam, const Occluded& occluded, const Room& room,
                     const core::Vec3& listener, const core::Vec3& right);
-    Lockstep& ls_;
+    Link link_;
     audio::IAudio* audio_;
     Config cfg_;
     std::unique_ptr<IVoiceCapture> mic_;

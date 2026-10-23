@@ -12,7 +12,7 @@
 namespace platform { class IWindow; }
 namespace render { class IRenderer; }
 namespace frontend { class FrontendRuntime; struct MatchLaunch; }
-namespace net { class UdpSession; class NetMatchDriver; }
+namespace net { class UdpSession; class NetMatchDriver; class VoiceSession; }
 namespace ui { class GfxPresenter; }
 
 namespace core {
@@ -58,6 +58,8 @@ private:
     // online match driver (from the online launch until the match ends; it steps the World instead of the fixed-step loop).
     net::UdpSession* udpSession_ = nullptr;   // owned by the frontend flow (setSession)
     std::unique_ptr<net::NetMatchDriver> netDriver_;
+    std::unique_ptr<net::VoiceSession> lobbyVoice_;   // [Systems] the lobby voice lane (the match lane is the driver's)
+    void tickLobbyVoice();
     void startNetDriver(const std::string& launchUrl, uint32_t seed, int seats, int localSeat);
     void tickNetDriver(double realDt);
     bool escWasDown_ = false;

@@ -21,6 +21,7 @@
 #include "frontend/Session.h"
 #include "net/NatPortMap.h"
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -96,6 +97,15 @@ public:
     bool isMuted(const frontend::SessionMemberId& member) const { return muted_.count(member.fingerprint) != 0; }
     // A member's talking indicator from the voice lane (0 / 1 / 2, via) -> SessionEvent::MemberVoice on each change.
     void reportVoice(const frontend::SessionMemberId& member, int headsetState, int via);
+    // The lobby voice lane (before / between matches; the match lane is the lockstep's): VOICE packets as unreliable session datagrams,
+    // a member sends to the host, the host relays to every other member (everyone in the lobby hears everyone, 2D radio as the
+    // original's lobby chat). sessionSeat = this machine's session seat; seats() = every seat in the lobby (this one first).
+    void setLobbyVoiceSink(std::function<void(int, const uint8_t*, size_t)> f) { lobbyVoiceSink_ = std::move(f); }
+    void sendLobbyVoice(const uint8_t* p, size_t n);
+    int sessionSeat() const;
+    std::vector<int> lobbySeats() const;
+    frontend::SessionMemberId memberOfSeat(int seat) const;
+    bool inLobby() const { return role_ != Role::Offline && !view_; }   // in a session, no match running here
     uint32_t launchSeed() const { return launchSeed_; }
     const frontend::SessionVoiceSettings& voiceSettings() const { return voice_; }
     bool pushToTalk() const { return pushToTalk_; }
@@ -194,6 +204,7 @@ private:
     int matchSelf_ = -1;
     std::vector<char> matchReserved_;      // per match seat: a Reserved slot of the launch roster
     std::vector<int> droppedMatchSeats_;
+    std::function<void(int, const uint8_t*, size_t)> lobbyVoiceSink_;
     std::map<std::string, std::pair<int, int>> voiceShown_;   // member -> (headset state, via) last emitted
     bool lateJoin_ = false;
     double lateJoinLimitS_ = 0.0;

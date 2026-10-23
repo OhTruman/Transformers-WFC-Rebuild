@@ -1,0 +1,284 @@
+diff -ruN a/src/core/Application.h b/src/core/Application.h
+--- a/src/core/Application.h	2026-10-23 04:06:33.446336700 -0500
++++ b/src/core/Application.h	2026-10-23 04:06:33.461388100 -0500
+@@ -12,7 +12,7 @@
+ namespace platform { class IWindow; }
+ namespace render { class IRenderer; }
+ namespace frontend { class FrontendRuntime; struct MatchLaunch; }
+-namespace net { class UdpSession; class NetMatchDriver; }
++namespace net { class UdpSession; class NetMatchDriver; class VoiceSession; }
+ namespace ui { class GfxPresenter; }
+ 
+ namespace core {
+@@ -58,6 +58,8 @@
+     // online match driver (from the online launch until the match ends; it steps the World instead of the fixed-step loop).
+     net::UdpSession* udpSession_ = nullptr;   // owned by the frontend flow (setSession)
+     std::unique_ptr<net::NetMatchDriver> netDriver_;
++    std::unique_ptr<net::VoiceSession> lobbyVoice_;   // [Systems] the lobby voice lane (the match lane is the driver's)
++    void tickLobbyVoice();
+     void startNetDriver(const std::string& launchUrl, uint32_t seed, int seats, int localSeat);
+     void tickNetDriver(double realDt);
+     bool escWasDown_ = false;
+diff -ruN a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+--- a/src/core/Application_Frontend.cpp	2026-10-23 04:06:33.476439800 -0500
++++ b/src/core/Application_Frontend.cpp	2026-10-23 04:06:33.493999600 -0500
+@@ -4,6 +4,7 @@
+ #include "core/Application.h"
+ #include "net/NetMatchDriver.h"
+ #include "net/UdpSession.h"
++#include "net/VoiceSession.h"
+ #include "core/FrameProfile.h"
+ #include "core/FrontendSceneGL.h"
+ #include "core/LoadYield.h"
+@@ -1228,6 +1229,7 @@
+     // [Systems] the net driver first: its Lockstep says bye through the session's match view, and the session is the frontend
+     // flow's (frontend_.reset() destroys it; the driver was destroyed after it in ~Application -> exit crash 0xc0000005, Frontend 01:42)
+     netDriver_.reset();
++    lobbyVoice_.reset();   // [Systems] its link points at the session too
+     udpSession_ = nullptr;
+     if (frontend_) { frontend_->setAudio(nullptr); frontend_->setSceneRenderer(nullptr); }
+     g_scene.reset();
+@@ -1284,6 +1286,7 @@
+                 core::prof::Scope prof("+frontend.update");
+                 frontend_->update(input, (float)dt);
+             }
++            tickLobbyVoice();   // [Systems] lobby voice (in a session, no match)
+             if (flow.quitRequested()) { quit = true; break; }
+             drawFrontendFrame();
+             titleTimer += dt;
+diff -ruN a/src/core/Application_Net.cpp b/src/core/Application_Net.cpp
+--- a/src/core/Application_Net.cpp	2026-10-23 04:06:33.414227000 -0500
++++ b/src/core/Application_Net.cpp	2026-10-23 04:06:33.429779800 -0500
+@@ -494,6 +494,34 @@
+     return c;
+ }
+ 
++// [Systems] The lobby voice lane: in a session with no match driver (the game lobby, between matches), everyone hears everyone
++// (2D radio at the voice volume), push to talk / open mic as in the match, local mute, the talking indicators for the lobby list.
++// Created on entering a session, dropped when the match driver takes over or the session ends.
++void Application::tickLobbyVoice() {
++    const bool want = udpSession_ && !netDriver_ && udpSession_->inLobby() && net::voiceCodecAvailable();
++    if (!want) {
++        if (lobbyVoice_) { lobbyVoice_.reset(); LOG_INFO("voice: the lobby lane closed"); }
++        return;
++    }
++    net::UdpSession* s = udpSession_;
++    const frontend::SessionVoiceSettings& v = s->voiceSettings();
++    net::VoiceSession::Config c = voiceConfigFrom(v);
++    c.radio = true; c.proximity = false;   // the lobby: everyone, 2D
++    if (!lobbyVoice_) {
++        net::VoiceSession::Link link{[s] { return s->sessionSeat(); }, [s](const uint8_t* p, size_t n) { s->sendLobbyVoice(p, n); },
++                                     [s](std::function<void(int, const uint8_t*, size_t)> f) { s->setLobbyVoiceSink(std::move(f)); }};
++        lobbyVoice_ = std::make_unique<net::VoiceSession>(link, audio_, c);
++        static const bool noInteract = [] { const char* e = std::getenv("WFC_NOINTERACT"); return e && *e && e[0] != '0'; }();
++        if (v.mode != frontend::SessionVoiceMode::Off && !noInteract) lobbyVoice_->setSource(net::createVoiceCapture());
++        lobbyVoice_->setMuted([s](int seat) { return s->isMuted(s->memberOfSeat(seat)); });
++        LOG_INFO("voice: the lobby lane opened (seat %d)", s->sessionSeat());
++    }
++    lobbyVoice_->setConfig(c);
++    const bool talking = v.mode == frontend::SessionVoiceMode::OpenMic || (v.mode == frontend::SessionVoiceMode::PushToTalk && s->pushToTalk());
++    lobbyVoice_->update(talking, nullptr, [](int) { return true; }, nullptr, nullptr, core::Vec3{0, 0, 0}, core::Vec3{1, 0, 0});
++    for (int seat : s->lobbySeats()) s->reportVoice(s->memberOfSeat(seat), lobbyVoice_->headsetState(seat), lobbyVoice_->lastVia(seat));
++}
++
+ void Application::tickNetDriver(double realDt) {
+     net::NetMatchDriver& d = *netDriver_;
+     d.setHeld(frontend_ && frontend_->flow().simHeld());
+@@ -999,6 +1027,45 @@
+     check(lossy.dropped > 0 && lossy.concealed > 3 && lossy.snrDb >= 25.0, "5 % loss: the losses concealed, the decoded frames' median SNR >= 25 dB");
+     check(clean.state == 2, "the talking indicator: speaking (2) while the tone plays");
+     check(muted.frames == 0 && muted.muted > 0 && muted.state == 2, "muted talker: nothing played, its indicator still shows");
++
++    {   // The lobby lane: real UdpSessions on loopback (a host + 2 members); member 1 talks; the host hears it directly, member 2 through
++        // the host's relay (everyone in the lobby hears everyone).
++        using T = frontend::SessionEvent::Type;
++        net::UdpSession::Options o; o.bindIp = "127.0.0.1"; o.hostPort = 24170; o.internet = false;
++        net::UdpSession h(o), m1(o), m2(o);
++        const auto t0 = std::chrono::steady_clock::now();
++        auto secs = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
++        std::vector<frontend::SessionEvent> he, e1, e2;
++        auto pumpAll = [&] { for (auto& e : h.poll(secs())) he.push_back(e); for (auto& e : m1.poll(secs())) e1.push_back(e); for (auto& e : m2.poll(secs())) e2.push_back(e); };
++        auto has = [](const std::vector<frontend::SessionEvent>& v, T t) { for (const auto& e : v) if (e.type == t) return true; return false; };
++        h.host(frontend::SessionHostSettings{});
++        while (secs() < 3.0 && !has(he, T::HostOpened)) { pumpAll(); std::this_thread::sleep_for(std::chrono::milliseconds(2)); }
++        m1.join("127.0.0.1:24170"); m2.join("127.0.0.1:24170");
++        while (secs() < 8.0 && !(has(e1, T::Joined) && has(e2, T::Joined))) { pumpAll(); std::this_thread::sleep_for(std::chrono::milliseconds(2)); }
++        auto linkOf = [](net::UdpSession* s) {
++            return net::VoiceSession::Link{[s] { return s->sessionSeat(); }, [s](const uint8_t* p, size_t n) { s->sendLobbyVoice(p, n); },
++                                           [s](std::function<void(int, const uint8_t*, size_t)> f) { s->setLobbyVoiceSink(std::move(f)); }};
++        };
++        net::VoiceSession::Config vc; vc.radio = true; vc.proximity = false;
++        net::VoiceSession vh(linkOf(&h), nullptr, vc), v1(linkOf(&m1), nullptr, vc), v2(linkOf(&m2), nullptr, vc);
++        v1.setSyntheticTone(440.0f);
++        long hFrames = 0, m2Frames = 0;
++        const int talker = m1.sessionSeat();
++        vh.setPlayTap([&](int seat, const net::VoiceFrame&, bool c) { if (seat == talker && !c) ++hFrames; });
++        v2.setPlayTap([&](int seat, const net::VoiceFrame&, bool c) { if (seat == talker && !c) ++m2Frames; });
++        auto team = [](int) { return true; };
++        const double start = secs();
++        while (secs() - start < 2.4) {
++            pumpAll();
++            v1.update(secs() - start < 2.0, nullptr, team, nullptr, nullptr, core::Vec3{0, 0, 0}, core::Vec3{1, 0, 0});
++            vh.update(false, nullptr, team, nullptr, nullptr, core::Vec3{0, 0, 0}, core::Vec3{1, 0, 0});
++            v2.update(false, nullptr, team, nullptr, nullptr, core::Vec3{0, 0, 0}, core::Vec3{1, 0, 0});
++            std::this_thread::sleep_for(std::chrono::milliseconds(2));
++        }
++        LOG_INFO("VOICETEST lobby: member seat %d talked 2 s - the host decoded %ld frames, the other member %ld (relayed)", talker, hFrames, m2Frames);
++        check(has(e1, T::Joined) && has(e2, T::Joined) && hFrames >= 80 && m2Frames >= 80, "the lobby lane: the host hears a member, the other member through the host's relay");
++        for (net::UdpSession* x : {&m1, &m2, &h}) x->leave();
++    }
+     LOG_INFO("VOICETEST SUMMARY: %s (%d failed)", fails ? "FAIL" : "PASS", fails);
+     exitCode_ = fails ? 1 : 0;
+ }
+diff -ruN a/src/net/UdpSession.cpp b/src/net/UdpSession.cpp
+--- a/src/net/UdpSession.cpp	2026-10-23 04:06:33.384123500 -0500
++++ b/src/net/UdpSession.cpp	2026-10-23 04:06:33.398673000 -0500
+@@ -528,6 +528,28 @@
+     emit(e);
+ }
+ 
++void UdpSession::sendLobbyVoice(const uint8_t* p, size_t n) {
++    if (!t_ || role_ == Role::Offline) return;
++    if (role_ == Role::Host) { for (const auto& kv : peers_) t_->sendUnreliable(kv.first, p, n); }   // the host's own voice: to everyone
++    else t_->sendUnreliable(0, p, n);                                                                 // a member: to the host, who relays
++}
++
++int UdpSession::sessionSeat() const { return t_ ? t_->self() : -1; }
++
++std::vector<int> UdpSession::lobbySeats() const {
++    std::vector<int> v;
++    if (role_ == Role::Offline) return v;
++    v.push_back(sessionSeat());
++    for (const auto& kv : peers_) if (kv.first != sessionSeat()) v.push_back(kv.first);
++    return v;
++}
++
++SessionMemberId UdpSession::memberOfSeat(int seat) const {
++    if (seat == sessionSeat()) return self_.id;
++    auto it = peers_.find(seat);
++    return it == peers_.end() ? SessionMemberId{} : it->second.info.id;
++}
++
+ void UdpSession::joinRunningMatch() {
+     if (role_ != Role::Member || !lobby_.matchRunning) return;
+     W w(kLateJoin); sendSeat(0, w.b);
+@@ -846,6 +868,14 @@
+         const uint8_t type = p.data[0];
+         if (type == kKeepalive) continue;
+         if (isSessionType(type)) { if (p.reliable) handleSeated(p.from, p.data); else if (type == kLeave || type == kKick) handleSeated(p.from, p.data); continue; }
++        if (type == 7 && !view_) {   // the lobby voice lane (no match here): the host relays, everyone plays the talker in byte 1
++            if (p.data.size() < 6) continue;
++            const int talker = p.data[1];
++            if (role_ == Role::Host)
++                for (const auto& kv : peers_) if (kv.first != p.from && t_) t_->sendUnreliable(kv.first, p.data.data(), p.data.size());
++            if (lobbyVoiceSink_) lobbyVoiceSink_(talker, p.data.data(), p.data.size());
++            continue;
++        }
+         if (view_) {   // a lockstep packet: to the match view in match seats
+             auto m = std::find(matchToSession_.begin(), matchToSession_.end(), p.from);
+             if (m == matchToSession_.end()) continue;
+diff -ruN a/src/net/UdpSession.h b/src/net/UdpSession.h
+--- a/src/net/UdpSession.h	2026-10-23 04:06:33.354020000 -0500
++++ b/src/net/UdpSession.h	2026-10-23 04:06:33.368570000 -0500
+@@ -21,6 +21,7 @@
+ #include "frontend/Session.h"
+ #include "net/NatPortMap.h"
+ 
++#include <functional>
+ #include <map>
+ #include <memory>
+ #include <string>
+@@ -96,6 +97,15 @@
+     bool isMuted(const frontend::SessionMemberId& member) const { return muted_.count(member.fingerprint) != 0; }
+     // A member's talking indicator from the voice lane (0 / 1 / 2, via) -> SessionEvent::MemberVoice on each change.
+     void reportVoice(const frontend::SessionMemberId& member, int headsetState, int via);
++    // The lobby voice lane (before / between matches; the match lane is the lockstep's): VOICE packets as unreliable session datagrams,
++    // a member sends to the host, the host relays to every other member (everyone in the lobby hears everyone, 2D radio as the
++    // original's lobby chat). sessionSeat = this machine's session seat; seats() = every seat in the lobby (this one first).
++    void setLobbyVoiceSink(std::function<void(int, const uint8_t*, size_t)> f) { lobbyVoiceSink_ = std::move(f); }
++    void sendLobbyVoice(const uint8_t* p, size_t n);
++    int sessionSeat() const;
++    std::vector<int> lobbySeats() const;
++    frontend::SessionMemberId memberOfSeat(int seat) const;
++    bool inLobby() const { return role_ != Role::Offline && !view_; }   // in a session, no match running here
+     uint32_t launchSeed() const { return launchSeed_; }
+     const frontend::SessionVoiceSettings& voiceSettings() const { return voice_; }
+     bool pushToTalk() const { return pushToTalk_; }
+@@ -194,6 +204,7 @@
+     int matchSelf_ = -1;
+     std::vector<char> matchReserved_;      // per match seat: a Reserved slot of the launch roster
+     std::vector<int> droppedMatchSeats_;
++    std::function<void(int, const uint8_t*, size_t)> lobbyVoiceSink_;
+     std::map<std::string, std::pair<int, int>> voiceShown_;   // member -> (headset state, via) last emitted
+     bool lateJoin_ = false;
+     double lateJoinLimitS_ = 0.0;
+diff -ruN a/src/net/VoiceSession.cpp b/src/net/VoiceSession.cpp
+--- a/src/net/VoiceSession.cpp	2026-10-23 04:06:33.322913700 -0500
++++ b/src/net/VoiceSession.cpp	2026-10-23 04:06:33.338467000 -0500
+@@ -25,13 +25,18 @@
+ 
+ }  // namespace
+ 
+-VoiceSession::VoiceSession(Lockstep& ls, audio::IAudio* audio, const Config& c) : ls_(ls), audio_(audio), cfg_(c) {
+-    ls_.setVoiceSink([this](int seat, const uint8_t* p, size_t n) { receive(seat, p, n); });
++VoiceSession::VoiceSession(Lockstep& ls, audio::IAudio* audio, const Config& c)
++    : VoiceSession(Link{[&ls] { return ls.self(); }, [&ls](const uint8_t* p, size_t n) { ls.sendVoice(p, n); },
++                        [&ls](std::function<void(int, const uint8_t*, size_t)> f) { ls.setVoiceSink(std::move(f)); }},
++                   audio, c) {}
++
++VoiceSession::VoiceSession(const Link& link, audio::IAudio* audio, const Config& c) : link_(link), audio_(audio), cfg_(c) {
++    link_.setSink([this](int seat, const uint8_t* p, size_t n) { receive(seat, p, n); });
+     if (!voiceCodecAvailable()) LOG_WARN("voice: Opus not in this build - voice unavailable");
+ }
+ 
+ VoiceSession::~VoiceSession() {
+-    ls_.setVoiceSink(nullptr);
++    link_.setSink(nullptr);
+     if (mic_) mic_->stop();
+     for (auto& kv : talkers_) {
+         if (audio_ && kv.second.stream >= 0) audio_->closeStream(kv.second.stream);
+@@ -96,12 +101,12 @@
+         for (const VoiceFrame& f : frames) {
+             std::vector<uint8_t> opus;
+             if (!enc_.encode(f, opus)) continue;
+-            std::vector<uint8_t> pkt = {kVoicePacket, (uint8_t)ls_.self(), (uint8_t)seq_, (uint8_t)(seq_ >> 8),
++            std::vector<uint8_t> pkt = {kVoicePacket, (uint8_t)link_.self(), (uint8_t)seq_, (uint8_t)(seq_ >> 8),
+                                         (uint8_t)((cfg_.radio ? kFlagRadio : 0) | (cfg_.proximity ? kFlagProximity : 0))};
+             pkt.insert(pkt.end(), opus.begin(), opus.end());
+-            ls_.sendVoice(pkt.data(), pkt.size());   // to the host (a client) or fanned out (the host)
++            link_.send(pkt.data(), pkt.size());   // to the host (a client) or fanned out (the host)
+             ++seq_; ++stats_.sent;
+-            Heard& me = heard_[ls_.self()]; me.lastMs = now; me.via = pkt[4];
++            Heard& me = heard_[link_.self()]; me.lastMs = now; me.via = pkt[4];
+         }
+     }
+     // ---- play: every remote talker, one frame per 20 ms of wall time ----
+diff -ruN a/src/net/VoiceSession.h b/src/net/VoiceSession.h
+--- a/src/net/VoiceSession.h	2026-10-23 04:06:33.292809700 -0500
++++ b/src/net/VoiceSession.h	2026-10-23 04:06:33.307861300 -0500
+@@ -41,7 +41,15 @@
+         float gateDb = -45.0f;
+         double hangMs = 300.0;
+     };
+-    VoiceSession(Lockstep& ls, audio::IAudio* audio, const Config& c);
++    // Where the packets go: the match lane is the Lockstep (star relay by audience); the lobby lane is the UdpSession (the host relays
++    // to every lobby member). self = this seat; send = one VOICE packet out; setSink = install / remove (nullptr) the receive hook.
++    struct Link {
++        std::function<int()> self;
++        std::function<void(const uint8_t*, size_t)> send;
++        std::function<void(std::function<void(int, const uint8_t*, size_t)>)> setSink;
++    };
++    VoiceSession(Lockstep& ls, audio::IAudio* audio, const Config& c);   // the match lane
++    VoiceSession(const Link& link, audio::IAudio* audio, const Config& c);
+     ~VoiceSession();
+     void setSource(std::unique_ptr<IVoiceCapture> mic);   // the microphone (started on demand)
+     void setConfig(const Config& c);                      // live: volume, audience, open mic / push to talk (the Audio rows)
+@@ -83,7 +91,7 @@
+     };
+     void playTalker(int seat, Talker& t, const SeatPos& seatPos, const SameTeam& sameTeam, const Occluded& occluded, const Room& room,
+                     const core::Vec3& listener, const core::Vec3& right);
+-    Lockstep& ls_;
++    Link link_;
+     audio::IAudio* audio_;
+     Config cfg_;
+     std::unique_ptr<IVoiceCapture> mic_;

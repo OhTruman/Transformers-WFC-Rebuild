@@ -25,13 +25,18 @@ int16_t seqDiff(uint16_t a, uint16_t b) { return (int16_t)(uint16_t)(a - b); }
 
 }  // namespace
 
-VoiceSession::VoiceSession(Lockstep& ls, audio::IAudio* audio, const Config& c) : ls_(ls), audio_(audio), cfg_(c) {
-    ls_.setVoiceSink([this](int seat, const uint8_t* p, size_t n) { receive(seat, p, n); });
+VoiceSession::VoiceSession(Lockstep& ls, audio::IAudio* audio, const Config& c)
+    : VoiceSession(Link{[&ls] { return ls.self(); }, [&ls](const uint8_t* p, size_t n) { ls.sendVoice(p, n); },
+                        [&ls](std::function<void(int, const uint8_t*, size_t)> f) { ls.setVoiceSink(std::move(f)); }},
+                   audio, c) {}
+
+VoiceSession::VoiceSession(const Link& link, audio::IAudio* audio, const Config& c) : link_(link), audio_(audio), cfg_(c) {
+    link_.setSink([this](int seat, const uint8_t* p, size_t n) { receive(seat, p, n); });
     if (!voiceCodecAvailable()) LOG_WARN("voice: Opus not in this build - voice unavailable");
 }
 
 VoiceSession::~VoiceSession() {
-    ls_.setVoiceSink(nullptr);
+    link_.setSink(nullptr);
     if (mic_) mic_->stop();
     for (auto& kv : talkers_) {
         if (audio_ && kv.second.stream >= 0) audio_->closeStream(kv.second.stream);
@@ -96,12 +101,12 @@ void VoiceSession::update(bool talking, const SeatPos& seatPos, const SameTeam& 
         for (const VoiceFrame& f : frames) {
             std::vector<uint8_t> opus;
             if (!enc_.encode(f, opus)) continue;
-            std::vector<uint8_t> pkt = {kVoicePacket, (uint8_t)ls_.self(), (uint8_t)seq_, (uint8_t)(seq_ >> 8),
+            std::vector<uint8_t> pkt = {kVoicePacket, (uint8_t)link_.self(), (uint8_t)seq_, (uint8_t)(seq_ >> 8),
                                         (uint8_t)((cfg_.radio ? kFlagRadio : 0) | (cfg_.proximity ? kFlagProximity : 0))};
             pkt.insert(pkt.end(), opus.begin(), opus.end());
-            ls_.sendVoice(pkt.data(), pkt.size());   // to the host (a client) or fanned out (the host)
+            link_.send(pkt.data(), pkt.size());   // to the host (a client) or fanned out (the host)
             ++seq_; ++stats_.sent;
-            Heard& me = heard_[ls_.self()]; me.lastMs = now; me.via = pkt[4];
+            Heard& me = heard_[link_.self()]; me.lastMs = now; me.via = pkt[4];
         }
     }
     // ---- play: every remote talker, one frame per 20 ms of wall time ----

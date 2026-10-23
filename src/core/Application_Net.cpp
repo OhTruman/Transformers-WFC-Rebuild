@@ -494,6 +494,34 @@ net::VoiceSession::Config voiceConfigFrom(const frontend::SessionVoiceSettings& 
     return c;
 }
 
+// [Systems] The lobby voice lane: in a session with no match driver (the game lobby, between matches), everyone hears everyone
+// (2D radio at the voice volume), push to talk / open mic as in the match, local mute, the talking indicators for the lobby list.
+// Created on entering a session, dropped when the match driver takes over or the session ends.
+void Application::tickLobbyVoice() {
+    const bool want = udpSession_ && !netDriver_ && udpSession_->inLobby() && net::voiceCodecAvailable();
+    if (!want) {
+        if (lobbyVoice_) { lobbyVoice_.reset(); LOG_INFO("voice: the lobby lane closed"); }
+        return;
+    }
+    net::UdpSession* s = udpSession_;
+    const frontend::SessionVoiceSettings& v = s->voiceSettings();
+    net::VoiceSession::Config c = voiceConfigFrom(v);
+    c.radio = true; c.proximity = false;   // the lobby: everyone, 2D
+    if (!lobbyVoice_) {
+        net::VoiceSession::Link link{[s] { return s->sessionSeat(); }, [s](const uint8_t* p, size_t n) { s->sendLobbyVoice(p, n); },
+                                     [s](std::function<void(int, const uint8_t*, size_t)> f) { s->setLobbyVoiceSink(std::move(f)); }};
+        lobbyVoice_ = std::make_unique<net::VoiceSession>(link, audio_, c);
+        static const bool noInteract = [] { const char* e = std::getenv("WFC_NOINTERACT"); return e && *e && e[0] != '0'; }();
+        if (v.mode != frontend::SessionVoiceMode::Off && !noInteract) lobbyVoice_->setSource(net::createVoiceCapture());
+        lobbyVoice_->setMuted([s](int seat) { return s->isMuted(s->memberOfSeat(seat)); });
+        LOG_INFO("voice: the lobby lane opened (seat %d)", s->sessionSeat());
+    }
+    lobbyVoice_->setConfig(c);
+    const bool talking = v.mode == frontend::SessionVoiceMode::OpenMic || (v.mode == frontend::SessionVoiceMode::PushToTalk && s->pushToTalk());
+    lobbyVoice_->update(talking, nullptr, [](int) { return true; }, nullptr, nullptr, core::Vec3{0, 0, 0}, core::Vec3{1, 0, 0});
+    for (int seat : s->lobbySeats()) s->reportVoice(s->memberOfSeat(seat), lobbyVoice_->headsetState(seat), lobbyVoice_->lastVia(seat));
+}
+
 void Application::tickNetDriver(double realDt) {
     net::NetMatchDriver& d = *netDriver_;
     d.setHeld(frontend_ && frontend_->flow().simHeld());
@@ -999,6 +1027,45 @@ void Application::runVoiceTest() {
     check(lossy.dropped > 0 && lossy.concealed > 3 && lossy.snrDb >= 25.0, "5 % loss: the losses concealed, the decoded frames' median SNR >= 25 dB");
     check(clean.state == 2, "the talking indicator: speaking (2) while the tone plays");
     check(muted.frames == 0 && muted.muted > 0 && muted.state == 2, "muted talker: nothing played, its indicator still shows");
+
+    {   // The lobby lane: real UdpSessions on loopback (a host + 2 members); member 1 talks; the host hears it directly, member 2 through
+        // the host's relay (everyone in the lobby hears everyone).
+        using T = frontend::SessionEvent::Type;
+        net::UdpSession::Options o; o.bindIp = "127.0.0.1"; o.hostPort = 24170; o.internet = false;
+        net::UdpSession h(o), m1(o), m2(o);
+        const auto t0 = std::chrono::steady_clock::now();
+        auto secs = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
+        std::vector<frontend::SessionEvent> he, e1, e2;
+        auto pumpAll = [&] { for (auto& e : h.poll(secs())) he.push_back(e); for (auto& e : m1.poll(secs())) e1.push_back(e); for (auto& e : m2.poll(secs())) e2.push_back(e); };
+        auto has = [](const std::vector<frontend::SessionEvent>& v, T t) { for (const auto& e : v) if (e.type == t) return true; return false; };
+        h.host(frontend::SessionHostSettings{});
+        while (secs() < 3.0 && !has(he, T::HostOpened)) { pumpAll(); std::this_thread::sleep_for(std::chrono::milliseconds(2)); }
+        m1.join("127.0.0.1:24170"); m2.join("127.0.0.1:24170");
+        while (secs() < 8.0 && !(has(e1, T::Joined) && has(e2, T::Joined))) { pumpAll(); std::this_thread::sleep_for(std::chrono::milliseconds(2)); }
+        auto linkOf = [](net::UdpSession* s) {
+            return net::VoiceSession::Link{[s] { return s->sessionSeat(); }, [s](const uint8_t* p, size_t n) { s->sendLobbyVoice(p, n); },
+                                           [s](std::function<void(int, const uint8_t*, size_t)> f) { s->setLobbyVoiceSink(std::move(f)); }};
+        };
+        net::VoiceSession::Config vc; vc.radio = true; vc.proximity = false;
+        net::VoiceSession vh(linkOf(&h), nullptr, vc), v1(linkOf(&m1), nullptr, vc), v2(linkOf(&m2), nullptr, vc);
+        v1.setSyntheticTone(440.0f);
+        long hFrames = 0, m2Frames = 0;
+        const int talker = m1.sessionSeat();
+        vh.setPlayTap([&](int seat, const net::VoiceFrame&, bool c) { if (seat == talker && !c) ++hFrames; });
+        v2.setPlayTap([&](int seat, const net::VoiceFrame&, bool c) { if (seat == talker && !c) ++m2Frames; });
+        auto team = [](int) { return true; };
+        const double start = secs();
+        while (secs() - start < 2.4) {
+            pumpAll();
+            v1.update(secs() - start < 2.0, nullptr, team, nullptr, nullptr, core::Vec3{0, 0, 0}, core::Vec3{1, 0, 0});
+            vh.update(false, nullptr, team, nullptr, nullptr, core::Vec3{0, 0, 0}, core::Vec3{1, 0, 0});
+            v2.update(false, nullptr, team, nullptr, nullptr, core::Vec3{0, 0, 0}, core::Vec3{1, 0, 0});
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        LOG_INFO("VOICETEST lobby: member seat %d talked 2 s - the host decoded %ld frames, the other member %ld (relayed)", talker, hFrames, m2Frames);
+        check(has(e1, T::Joined) && has(e2, T::Joined) && hFrames >= 80 && m2Frames >= 80, "the lobby lane: the host hears a member, the other member through the host's relay");
+        for (net::UdpSession* x : {&m1, &m2, &h}) x->leave();
+    }
     LOG_INFO("VOICETEST SUMMARY: %s (%d failed)", fails ? "FAIL" : "PASS", fails);
     exitCode_ = fails ? 1 : 0;
 }
