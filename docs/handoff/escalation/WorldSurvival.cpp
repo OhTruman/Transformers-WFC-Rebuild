@@ -214,6 +214,19 @@ void World::setupSurvival() {
             if (a.op == "unhide")
                 for (PickupFactory* f : pickupFactories_) if (f->name() == a.target) { f->setHidden(true); ++hidden; }
     LOG_INFO("escalation: %zu generators, %d pickup factories hidden until bought", svData_.generators.size(), hidden);
+    {   // DEV (WFC_ESCLOG): the authored spawn points our bot nav does not reach (AssetTools ESC nav coverage), log only
+        static const bool nlog = std::getenv("WFC_ESCLOG") != nullptr;
+        if (nlog && botNav_.valid()) {
+            int off = 0, all = 0;
+            for (const SurvivalData::Zone& z : svData_.zones)
+                for (size_t k = 0; k < z.spawnPoints.size(); ++k) {
+                    const core::Vec3 at{z.spawnPoints[k][0], z.spawnPoints[k][1], z.spawnPoints[k][2]};
+                    ++all;
+                    if (botNav_.findCell(at, 2.0f) < 0) { ++off; LOG_INFO("ESCLOG spawn point zone %s #%zu (%.1f %.1f %.1f) off the bot nav%s", z.id.c_str(), k, at.x, at.y, at.z, z.active ? " (active at start)" : ""); }
+                }
+            LOG_INFO("ESCLOG spawn points off the bot nav: %d of %d", off, all);
+        }
+    }
     sv_.phase = SurvivalState::Phase::PreGame;
     LOG_INFO("escalation: %s: %zu waves, %zu enemy entries, %zu zones, %zu horde slots (team %d vs players' team %d)", mapName_.c_str(),
              svData_.waves.size(), svData_.enemies.size(), nz, sv_.slots.size(), horde, svData_.coopTeam);
