@@ -3848,3 +3848,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   GB), Kismet sequence I/O for 10 chapters (RE 13 / 13). Rendering: plume path fixed but the look isn't there (in-scatter
   next); x45: RT GI covered one unit only -> chapter loader stage 2 (every unit in the RT static world) = the item that makes
   Realistic real on campaign maps. W: incident = Systems removed Experimental's mapping by hand; rule recorded.
+2026-10-23 07:14 Package v3: Rebuild-Systems\work\playtest_slim_be5b7cdc_v3 (27.84 GB; + transforming_actors skeletal doors / bridge,
+  campaign_anims; static PASS; headless smokes 0 errors on BrokenHope / Remnant ESC, Rust, Streets); older packages deleted
+  after v3's Streets verify + Experimental's rerun. MERGED 19a3bc29 chapter units read in place from the campaign root.
+  Rendering: chapter loader stage 2a built (every unit in the RT static world) -> x46 after Systems' verify.
+2026-10-23 07:14 Package v3: Rebuild-Systems\work\playtest_slim_be5b7cdc_v3 (27.84 GB; + transforming_actors skeletal doors / bridge,
+  campaign_anims; static PASS; headless smokes 0 errors on BrokenHope / Remnant ESC, Rust, Streets); older packages deleted
+  after the v3 Streets verify + Experimental rerun. MERGED 19a3bc29 chapter units read in place from the campaign root.
+  Rendering: chapter loader stage 2a built (every unit in the RT static world) -> x46 after the Systems verify.
