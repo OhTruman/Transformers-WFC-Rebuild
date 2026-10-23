@@ -3598,3 +3598,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   spawns all WORK; desync at tick 660: the two worlds disagree on the host's team (the host's launch record went out with team 0
   before its random FinalCountdown pick). Frontend fixes (fix the team before setLaunch; build the host's launch from the record
   it sent; the flow test compares both MatchLaunch teams). Retest = another two-window slot after the fix.
+2026-10-23 01:33 CAMPAIGN_LIGHTING_RE merged (campaign-only: toggleable / movable lights, light functions, Matinee light tracks, per-actor MIC
+  clones, dynamic PP volumes) -> Rendering's campaign lighting runtime list. RE -> campaign-only gameplay systems inventory.
