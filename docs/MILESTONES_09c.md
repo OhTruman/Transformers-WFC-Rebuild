@@ -3873,3 +3873,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   x = 149 plane). energon_default = a World.cpp lookup bug (ESC_ chassis read from VerticalSlice/Characters) -> Gameplay.
 2026-10-23 07:32 Smoke stage 2 (froxel plumes) PARKED: doesn't read by eye after the in-scatter round (veil, non-monotonic); stays in code
   default off (WFC_SMOKEVOL to study); stage 1 Enhanced smoke ships. Rendering -> the campaign eye pass (D5 Realistic vs Off).
+2026-10-23 07:33 AssetTools: D5 collision_weapon per unit (empty glb where none) + gameplay.json in the persistent unit; A1_IAC inputs
+  (48 units collision + physics, navigation 7,849 nodes, navmesh 3,098 cells, bot_nav floor-level 18 pieces / main 3,043).
+  GAP: A1's level start is at y ~ 1,094 m with no nav (a vista / flight opening?) -> DECISION fill from collision as flagged
+  campaign cells; RE checks the scripted opening. A1 air nav at 4 m voxels (opt-in).
