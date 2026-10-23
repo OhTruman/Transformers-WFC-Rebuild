@@ -130,6 +130,7 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     }
     if (markup == "<CurrentGame:GameTeamStatus>") return gtsName(inMatch ? flow_.currentMatch().gameTeamStatus : L.gameTeamStatus);
     if (markup == "<CurrentGame:MapSelectionMethod>") return std::to_string(L.mapSelectionMethod);
+    if (markup == "<CurrentGame:SelectedCheckpoint>") return L.checkpoint;
     if (markup == "<CurrentGame:SelectedMapID>") return std::to_string(inMatch ? flow_.currentMatch().mapId : L.mapId);
     // a voting lobby (ONLINE_LOBBY_FLOW_V2 4.1) replaces the original rotate-and-veto: no Veto button hint
     if (markup == "<CurrentGame:AllowMapVeto>") return b(L.allowMapVeto && flow_.mapVote().round == 0);
@@ -192,6 +193,14 @@ std::string DataStores::read(const std::string& markup, bool* known) {
 
 bool DataStores::collection(const std::string& markup, Collection& c) {
     core::prof::Scope prof("ds.collection");
+    if (markup == "<TnMenuItems:Checkpoints>") {   // CampaignSelect's thumbs: TnDataProvider_Checkpoint in data order
+        c.columns = {"MapId", "FriendlyName", "ImagePath", "CheckpointPath"};
+        for (const CheckpointInfo& cp : cat_.checkpoints()) {
+            c.rows.push_back({std::to_string(cp.mapId), cp.friendlyName, cp.imagePath, cp.checkpointPath});
+            c.enabled.push_back(true);
+        }
+        return true;
+    }
     if (markup == "<TnMenuItems:Maps>") {
         // TnDataProvider_MapInfo providers in section order; disabled = !HasRequiredAssets [RE 3.2].
         c.columns = {"MapId", "MapFilename", "FriendlyName", "ImagePath", "CompatibleGameTypes", "Faction", "PresenceId"};

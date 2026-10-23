@@ -33,7 +33,18 @@ struct MapInfo {
     // reconstructed runtime data exists" (ExtractedAssets/VerticalSlice/Maps/<runtimeDir>/world.glb).
     std::string runtimeDir;
     bool hasRequiredAssets = false;
+    std::vector<std::string> campaignCharacters;   // the chapter's iconic trio (TransLevels.ini CampaignCharacters)
     bool compatibleWith(const std::string& tag) const;
+};
+
+// TnDataProvider_Checkpoint (TransLevels.ini, data order): a chapter's checkpoint thumb. Thumb 0 of each chapter has no
+// CheckpointPath (the chapter start: its ini lines are commented out) [RE CAMPAIGN_FRONTEND_FLOW_RE 3].
+struct CheckpointInfo {
+    std::string name;                       // "D1_CP02"
+    int mapId = -1;
+    std::string imagePath;                  // UI_CheckpointThumbnails_p.D1_CP02 (an external texture)
+    std::string checkpointPath;             // "D1_ORB_Base_m.TheWorld|PersistentLevel.Checkpoint_5199" ("" = chapter start)
+    std::string friendlyName;               // TransGame.int [<name> TnDataProvider_Checkpoint] FriendlyName
 };
 
 // One host-configurable setting of a TnOnlineGameSettings class: a LocalizedSettingsMapping (context with value
@@ -96,6 +107,7 @@ public:
     static std::string defaultExtractedRoot();
 
     const std::vector<MapInfo>& maps() const { return maps_; }           // ini section order
+    const std::vector<CheckpointInfo>& checkpoints() const { return checkpoints_; }   // ini order
     const std::vector<Playlist>& playlists() const { return playlists_; } // TnOnlinePlaylistManager.Playlists order
     // TnDataProvider_<Kind> objects authored in the shipped config (TransCustomization.ini / TransWeapons.ini, file
     // order) with their localized fields (TransGame.int, same section names): Weapon, Ability, Skill, Chassis,
@@ -145,6 +157,9 @@ private:
     std::vector<KeyDescription> keyDescriptions_;
     void loadSettingsDefaults(const std::string& manifestRoot);
     std::vector<MapInfo> maps_;
+    std::vector<CheckpointInfo> checkpoints_;
+    // checkpoints, the maps' CampaignCharacters, and the campaign chapters the frontend_maps manifest does not list
+    void loadTransLevels(const std::string& extractedRoot, const std::string& manifestRoot, const std::string& runtimeMapRoot);
     std::vector<Playlist> playlists_;
     std::vector<GameModeInfo> modes_;
     std::map<std::string, GameSettings> settings_;

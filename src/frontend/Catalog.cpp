@@ -179,6 +179,7 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
         maps_.push_back(mi);
     }
     std::stable_sort(maps_.begin(), maps_.end(), [](const MapInfo& a, const MapInfo& b) { return a.iniOrder < b.iniOrder; });
+    loadTransLevels(extractedRoot, manifestRoot, runtimeMapRoot);
 
     // ---- modes / playlists / settings ----
     assets::Json md;
@@ -256,6 +257,9 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
         if (gs.isPrivate && gs.numPrivateConnections == 0) gs.numPrivateConnections = conns;
         if (gs.isPublic && gs.numPublicConnections == 0) gs.numPublicConnections = conns;
         gs.mapSelectionMethod = gs.isPrivate ? 1 : 0;
+        // campaign lobbies: the host picks the chapter (Select Mission / CampaignSelect: HostRequestMapID / HostRequestCheckpoint
+        // apply only with MapSelectionMethod 1) [RE CAMPAIGN_FRONTEND_FLOW_RE 2]
+        if (gs.tag == "SOLO" || gs.tag == "CP" || gs.tag == "CCP") gs.mapSelectionMethod = 1;
         if (gs.tag == "SV" || gs.tag == "CP" || gs.tag == "CCP") gs.lobbyMapName = "UI_CampaignLobby_m";
         settings_[cls] = gs;
     }
@@ -464,6 +468,79 @@ void Catalog::loadKeyDescriptions(const std::string& extractedRoot) {
 const Catalog::KeyDescription* Catalog::keyDescription(const std::string& key) const {
     for (const KeyDescription& k : keyDescriptions_) if (k.key == key) return &k;
     return nullptr;
+}
+
+// The shipped TransLevels.ini (Xenon cooked config): [<name> TnDataProvider_Checkpoint] MapId / ImagePath / CheckpointPath and
+// the maps' CampaignCharacters (the frontend_maps manifest carries neither). ';' lines are commented out.
+void Catalog::loadTransLevels(const std::string& extractedRoot, const std::string& manifestRoot, const std::string& runtimeMapRoot) {
+    std::ifstream f(openPath(extractedRoot + "/config/Coalesced_ini/TransGame/Config/Xenon/Cooked/TransLevels.ini"));
+    if (!f) { LOG_WARN("FRONTEND catalog: no TransLevels.ini under %s (campaign checkpoints)", extractedRoot.c_str()); return; }
+    std::string line, section;
+    CheckpointInfo* cp = nullptr;
+    int mapSectionId = -1;
+    std::vector<std::string> trio;
+    MapInfo pending;              // the section's map, added when the manifest lacks it (the campaign chapters)
+    std::string mapSection;
+    int added = 0;
+    auto flushMap = [&] {
+        if (mapSectionId < 0) { mapSectionId = -1; trio.clear(); return; }
+        bool known = false;
+        for (MapInfo& m : maps_) if (m.mapId == mapSectionId) { m.campaignCharacters = trio; known = true; }
+        const bool campaignMap = std::any_of(pending.compatibleGameTypes.begin(), pending.compatibleGameTypes.end(),
+                                             [](const std::string& t) { return t == "SOLO" || t == "CP" || t == "CCP"; });
+        if (!known && campaignMap && pending.faction >= 0) {   // a chapter (CoopCombat / TEST maps have no faction: hidden)
+            pending.mapId = mapSectionId;
+            pending.campaignCharacters = trio;
+            pending.iniOrder = 1000 + added++;
+            pending.friendlyName = localize("TransGame", mapSection, "FriendlyName");
+            std::string dir = pending.mapFilename;
+            if (iendsWith(dir, "_Base_m")) dir = dir.substr(0, dir.size() - 7);
+            pending.runtimeDir = dir;
+            if (pending.imagePath.empty()) pending.imagePath = "UI_LevelThumbnails_p.LevelMultiGeneric";   // the class default
+            pending.cooked = true;   // the chapters ship cooked; selectable once their rebuild runtime + render data exist
+            pending.hasRequiredAssets = runtimeFileExists(runtimeMapRoot + "/" + dir + "/world.glb") &&
+                                        (runtimeFileExists(runtimeMapRoot + "/" + dir + "/render_index.json") ||
+                                         runtimeFileExists(manifestRoot + "/maps/" + dir + "/render_index_generic.json"));
+            maps_.push_back(pending);
+        }
+        mapSectionId = -1; trio.clear();
+    };
+    while (std::getline(f, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty() || line[0] == ';') continue;
+        if (line[0] == '[') {
+            flushMap();
+            section = line.substr(1, line.find(']') - 1);
+            cp = nullptr;
+            const size_t sp = section.find(' ');
+            const std::string kind = sp == std::string::npos ? std::string() : section.substr(sp + 1);
+            if (kind == "TnDataProvider_Checkpoint") {
+                checkpoints_.push_back(CheckpointInfo{});
+                cp = &checkpoints_.back();
+                cp->name = section.substr(0, sp);
+                cp->friendlyName = localize("TransGame", section, "FriendlyName");
+            } else if (kind == "TnDataProvider_MapInfo") { mapSectionId = -2; pending = MapInfo{}; mapSection = section; }   // MapId names it
+            continue;
+        }
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        const std::string k = line.substr(0, eq), v = line.substr(eq + 1);
+        if (cp) {
+            if (k == "MapId") cp->mapId = std::atoi(v.c_str());
+            else if (k == "ImagePath") cp->imagePath = v;
+            else if (k == "CheckpointPath") cp->checkpointPath = v;
+        } else if (mapSectionId != -1) {
+            if (k == "MapId") mapSectionId = std::atoi(v.c_str());
+            else if (k == "CampaignCharacters") trio.push_back(v);
+            else if (k == "MapFilename") pending.mapFilename = v;
+            else if (k == "PresenceId") pending.presenceId = std::atoi(v.c_str());
+            else if (k == "Faction") pending.faction = std::atoi(v.c_str());
+            else if (k == "CompatibleGameTypes") pending.compatibleGameTypes.push_back(v);
+            else if (k == "ImagePath") pending.imagePath = v;
+        }
+    }
+    flushMap();
+    LOG_INFO("FRONTEND catalog: %zu campaign checkpoints, %d campaign chapters (TransLevels.ini)", checkpoints_.size(), added);
 }
 
 std::string Catalog::localize(const std::string& file, const std::string& section, const std::string& key) const {

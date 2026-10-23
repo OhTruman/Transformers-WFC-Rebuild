@@ -478,7 +478,9 @@ static void testHudObservers(const Catalog& c) {
 }
 
 static void testCatalog(const Catalog& c) {
-    check(c.maps().size() == 13, "catalog.map_providers", std::to_string(c.maps().size()));
+    // 13 versus maps (frontend_maps manifest) + the 10 campaign chapters (TransLevels.ini, CAMPAIGN_FRONTEND_PLAN C3)
+    check(c.maps().size() == 23 && c.mapById(96) && c.mapById(105) && c.mapById(96)->faction == 0 && c.mapById(101)->faction == 1,
+          "catalog.map_providers", std::to_string(c.maps().size()));
     bool ordered = true;
     for (size_t i = 1; i < c.maps().size(); ++i) ordered &= c.maps()[i - 1].iniOrder <= c.maps()[i].iniOrder;
     check(ordered, "catalog.map_order_ini");
@@ -1785,6 +1787,45 @@ static void testCampaignC1C4() {
     std::remove("wfc_profile.ini");
 }
 
+static void testCampaignC3() {
+    // CAMPAIGN_FRONTEND_PLAN C3: TransLevels.ini checkpoints (84 thumbs: 8 chapters x 10 + A5 / D5 x 2; thumb 0 = the chapter
+    // start, no path), their TransGame.int names, the chapters' iconic trios; SetSelectedCheckpoint -> the launch URL's
+    // ?Checkpoint= in a campaign lobby; a chapter change clears it.
+    std::remove("wfc_profile.ini");
+    FrontendRuntime rt;
+    if (!rt.init()) { check(false, "campaign.C3_checkpoints", "init"); return; }
+    const Catalog& cat = rt.catalog();
+    int d1 = 0; bool d1Start = false, named = false;
+    for (const CheckpointInfo& cp : cat.checkpoints()) {
+        if (cp.mapId == 101) { if (d1 == 0) d1Start = cp.checkpointPath.empty(); ++d1; }
+        if (cp.name == "D1_CP02") named = cp.friendlyName == "Entering Orbital Station" && cp.checkpointPath.find("Checkpoint_5199") != std::string::npos;
+    }
+    const MapInfo* d1map = cat.mapById(101);
+    const bool trio = d1map && d1map->campaignCharacters == std::vector<std::string>({"Brawl", "Barricade", "Megatron"});
+    GameFlow& f = rt.flow();
+    runUntil(rt, [&] { return f.frontEndStarted(); });
+    f.call("Online.OpenCampaignGameLobby", {});
+    runUntil(rt, [&] { return f.level() == LevelKind::GameLobby && !f.loading().active; });
+    f.call("Online.SetSelectedMapID", {"101"});
+    f.call("Online.SetSelectedCheckpoint", {"D1_ORB_Base_m.TheWorld|PersistentLevel.Checkpoint_5199"});
+    DataStores& ds = rt.dataStores();
+    const bool selected = ds.call("ReadValue", {"<CurrentGame:SelectedCheckpoint>"}).s.find("Checkpoint_5199") != std::string::npos;
+    f.call("Online.SetSelectedMapID", {"102"});
+    const bool cleared = ds.call("ReadValue", {"<CurrentGame:SelectedCheckpoint>"}).s.empty();
+    f.call("Online.SetSelectedMapID", {"101"});
+    f.call("Online.SetSelectedCheckpoint", {"D1_ORB_Base_m.TheWorld|PersistentLevel.Checkpoint_5199"});
+    // the launch URL carries the checkpoint; the start itself is refused while the chapter has no rebuild runtime data
+    const Url lu = Url::parse(f.buildLaunchUrl());
+    f.call("Online.BeginLobbyExitCountdown", {});
+    rt.update(platform::InputFrame{}, 1.0f / 60.0f);
+    const bool launched = lu.map() == "D1_ORB_Base_m" && lu.option("Checkpoint").find("Checkpoint_5199") != std::string::npos &&
+                          lu.intOption("MapId", -1) == 101 && (cat.mapById(101)->hasRequiredAssets || !f.lobby().countingDown);
+    check(cat.checkpoints().size() == 84 && d1 == 10 && d1Start && named && trio && selected && cleared && launched, "campaign.C3_checkpoints",
+          std::to_string(cat.checkpoints().size()) + " d1=" + std::to_string(d1) + " " + std::to_string(d1Start) + std::to_string(named) +
+          std::to_string(trio) + std::to_string(selected) + std::to_string(cleared) + std::to_string(launched) + " " + f.currentMatch().url.toString());
+    std::remove("wfc_profile.ini");
+}
+
 static void testLobbyFlowV2() {
     // LV1: Private Match hosts at once (offline: the same lobby with bots), with the profile's last mode (new profile: TDM)
     {
@@ -2090,6 +2131,7 @@ int main() {
     testLobbyFlowV2();
     testRespawnUiLifetime();
     testCampaignC1C4();
+    testCampaignC3();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);

@@ -90,7 +90,7 @@ public:
     struct Campaign {
         static constexpr int kChapters = 10, kFirstMapId = 96;
         int difficulty = 1;                     // setting 12: 0 Easy / 1 Medium (default) / 2 Hard
-        bool available[kChapters] = {true, false, false, false, false, true, false, false, false, false};   // H: each faction's first
+        bool available[kChapters] = {true, false, false, false, false, true, false, false, false, false};   // A1 / D1 [RE: DefaultSettings]
         bool complete[kChapters] = {};          // setting MapId
         int bestDifficulty[kChapters] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1};   // MapId + 32, -1 = never completed
         int checkpoint[kChapters] = {};         // MapId + 16: the highest checkpoint reached (thumb n enabled iff >= n)
