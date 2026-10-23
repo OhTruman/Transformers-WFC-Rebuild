@@ -3901,3 +3901,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   online_service.json), c2030cbf campaign runtime 4 (co-op humans, AI move / objective ops, CMP_ bodies) + lobby default +
   invite mailbox. Pending recut (WorldCampaign anchors): Systems' FMV + dialog sim-time. AssetTools chain: A2 running, then
   pp export, actors.json, campaign characters, destructible dump.
+2026-10-23 08:08 MERGED a7aff33a campaign FMV + dialog sim-time (recut), e968850d campaign runtime 5: MATINEE (Interp play / reverse /
+  stop / pause, event keys, Move tracks on InterpActors with moving collision sets and carried pawns, the director's
+  camera cuts / FOV / fade via setCinematicView; D5 40 matinees bound; A1 boots headless: the intro lift as a moving set,
+  495 matinees, 8,989 ops, 40 s clean). Gaps: A1 AI bodies (AssetTools), factory pool cap 64, moving nav cells, AnimControl /
+  Toggle / material params / slomo. Rendering: setMapActorTransform next; A1 calibration done.
