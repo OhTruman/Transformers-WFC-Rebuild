@@ -3657,3 +3657,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 02:03 ONLINE_PC_DEVIATIONS merged; decisions: promote stays; no public list (doc §4 stale); public versus hosts can't start early
   (auto-start as the original); join in progress = instant spawn on the smaller team (phase 1b). Load-times patch not yet on
   rt2 (Rendering commits it); an empty staged copy was removed.
+2026-10-23 02:09 MILESTONE: two-window menu match PASSES end to end incl. clean exits (host + member exit 0, no crash, no desync, teams 0 / 1)
+  on 762526b6 + the Frontend's vote fixes. MERGED effecacc Escalation E1 (survival director; ESCTEST 19 / 19; versus SIMHASH
+  identical) -> RE review. MERGED 33d73f78 #1 load times (warm revisits ~0.3 s). Vote rows: one layout bug left (Frontend).
+  RE end-of-match check merged (4 small diffs routed). Campaign HD: covered by pack D (10-texture confirm run). Card -> Rendering 02:11.
