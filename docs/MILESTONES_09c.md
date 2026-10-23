@@ -3965,3 +3965,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 09:07 MERGED dba6a747 campaign runtime 12 + 13 (destructible collision per state: A1's 1,040 breakables now block; pawn-group
   AnimControl: the A1 lift ride plays the trio's clips via Character::setCineClip). Gameplay left: Omega AI actions, hit
   reactions, horde rules, then a PROV list for the final-build decision.
+2026-10-23 09:08 GAMEPLAY_PROV_LIST merged; DECISION: fix H3 / H5 / M1 / M5 / M10 / M11 for the final build; GOAP (H1 / H2) + H4 stay
+  PROV (the GOAP port is post-build). Gameplay: Omega AI + hit reactions + melee rule, then the six fixes, then done.
