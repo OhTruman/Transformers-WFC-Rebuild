@@ -1895,6 +1895,32 @@ static void testSmokeWaterRows() {
     std::remove("wfc_profile.ini");
 }
 
+static void testCampaignCoopLobby() {
+    // CO1: Cooperative (FrontEnd_GFX -> Online.OpenPartyLobby GTS_CampaignGame) -> CP -> the hosted campaign lobby; a second human
+    // joins; the host picks D5 and starts: the launch record carries GameModeTag=CP, the chapter, the difficulty
+    using T = SessionEvent::Type;
+    SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD-4H"; o.address = "192.168.1.20:7777";
+    OnlineRig r({after("host", o)});
+    r.f().call("Online.OpenPartyLobby", {"GTS_CampaignGame"});
+    const bool party = runUntil(*r.rt, [&] { return r.f().level() == LevelKind::PartyLobby && !r.f().loading().active; });
+    r.f().call("Online.EditGameMode", {"CP"});
+    r.f().call("Online.PlayPrivateGame", {"CP"});
+    const bool lobby = runUntil(*r.rt, [&] { return r.f().level() == LevelKind::GameLobby && !r.f().loading().active; });
+    r.frames(2);
+    const bool hosted = r.f().sessionRole() == GameFlow::SessionRole::Host && r.f().lobby().settings && r.f().lobby().settings->tag == "CP";
+    r.fake->inject(memberEv("WFC-AAAA-AAAA-1", "Alpha", false));
+    r.frames(2);
+    r.f().call("Online.SetSelectedMapID", {"105"});
+    r.f().call("Game.SetGameDifficulty", {"2"});
+    r.f().call("Online.BeginLobbyExitCountdown");
+    const FakeSession::Call* lc = r.fake->last("setLaunch");
+    const std::string url = lc ? lc->arg : std::string();
+    const bool launch = url.find("?GameModeTag=CP") != std::string::npos && url.find("?MapId=105") != std::string::npos &&
+                        url.find("?WfcDifficulty=2") != std::string::npos;
+    check(party && lobby && hosted && launch, "campaign.CO1_coop_lobby_launch",
+          std::to_string(party) + std::to_string(lobby) + std::to_string(hosted) + std::to_string(launch) + " " + url);
+}
+
 static void testEscalationNoXp() {
     // RE ESCALATION_WAVES_RE 5: TnGameReplicationInfoSurvival.CanGainXp is false - Escalation earns no XP (the end screen's bars
     // show no gain); an offline versus match keeps the PC progression rule
@@ -2294,6 +2320,7 @@ int main() {
     testSmokeWaterRows();
     testCampaignC6();
     testEscalationNoXp();
+    testCampaignCoopLobby();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);
