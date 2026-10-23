@@ -4052,3 +4052,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 11:18 MERGED 7f4f72fe campaign transforming actors (doors / tube doors / pods open via TnSeqAct_TransformWorldProp; the pod
   rides the A1 lift; 140 nav cells blocked by closed doors) + 18861041 Gltf keys bind-pose nodes by actor (setActorHidden
   reaches them). Gate item 1 DONE; Gameplay on sentries -> roller mines -> FINAL_BASE_ITEMS 07. Cyan draw dump pending.
+2026-10-23 11:25 Cyan sheet RESOLVED as a camera placement item: the draw is BlueEnergonSigns_MATINST on StaticInterpActor_75 (an authored
+  10 m additive spinning disc at Remnant's spawn, camera-transparent in the original); the material is faithful; the
+  camera sat 0.33 m from the disc, 7.9 m from the player start. Gameplay checks the spawn pick / camera vs the original.
