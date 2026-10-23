@@ -382,6 +382,14 @@ public:
         glx::gpuMark(glx::kPassCaller);
         glx::gpuStamp("map presentation");
         watchdog::phase("endFrame: map presentation");
+        // (chapter) the merged units, when no world mesh of the game's carried them this frame - a campaign persistent level
+        // has no geometry of its own (D5_OME_BASE: an empty world.glb), so its units are the whole level
+        if (wfc_.active() && !chapterMeshes_.empty() && chapterFrame_ != wfc_.frameNumber()) {
+            chapterFrame_ = wfc_.frameNumber();
+            for (MeshHandle c : chapterMeshes_)
+                if (c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0) wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
+            glLoadMatrixf(view_.m);
+        }
         if (wfc_.active()) wfc_.drawMapPresentation();
         watchdog::phase("endFrame: post / composite");
         if (wfc_.active()) wfc_.endFrame();

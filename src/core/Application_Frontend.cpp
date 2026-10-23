@@ -421,7 +421,7 @@ bool Application::wantsFrontendBoot() {
     if (const char* b = std::getenv("WFC_BOOT")) return std::strcmp(b, "match") != 0;
     if (std::getenv("WFC_FRONTEND_SCRIPT") || std::getenv("WFC_FRONTEND_AUTOPLAY")) return true;
     // Existing automation and playtest variables keep the direct-to-match boot they were written for.
-    for (const char* v : {"WFC_SMOKE_FRAMES", "WFC_SHOTLIST", "WFC_GAMEMODE", "WFC_MAP", "WFC_PICKUPTEST", "WFC_TRAVERSE",
+    for (const char* v : {"WFC_SMOKE_FRAMES", "WFC_SHOTLIST", "WFC_CHAPTER_VIEW", "WFC_GAMEMODE", "WFC_MAP", "WFC_PICKUPTEST", "WFC_TRAVERSE",
                           "WFC_MAPTRAVERSE", "WFC_LOCKSTEP", "WFC_DEBUGCAM", "WFC_STARTVEHICLE",
                           // [integration M05] Gameplay / Rendering harnesses written against the direct boot
                           "WFC_XFORMTEST", "WFC_MATCHTEST", "WFC_CAMTEST", "WFC_CHAOS", "WFC_TDMTEST", "WFC_MATCH",
