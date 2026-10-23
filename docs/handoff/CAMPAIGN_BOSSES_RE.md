@@ -120,3 +120,49 @@ CAMPAIGN_AI_LAYER_RE. Only boss-specific parts are here.
 7. **Checkpoints** `Soundwave2 / 3CheckpointActivated`: respawn him, pseudo-god, then **CauseDamage 300 / 600 (AOE)** to restore
    the stage health (700 / 400).
 8. **Audio-blast barks:** when a player takes TnDamageTypeAudioBlast, a 2-way switch of companion lines plays.
+
+---
+
+## A3_COR: Protect Ratchet (Omega Gate) and the "Gigantor" tank (OmegaGate_Design)
+
+A3 has no boss AI of its own. It has a **VIP escort / defend** and a **heavy tank**.
+
+### Ratchet VIP (C)
+- **AICD:** `Ratchet_VIP_AICD` (CType_Boss), chassis Ratchet_VIP_ROBODEF, friendly-agent sensors (BiggestThreat, LOS, Range,
+  Retreated node picker).
+- **Goal set:** NPC_Healer. **Actions:**
+  - **Heal with the RepairRay**;
+  - turret use (Enter / Leave / ShootFromTurret with MountedHeavyIonBlaster or MountedRocketTurret, TurretScanForEnemies);
+  - ShootAtTarget with an AssaultRifle (robot) or RocketVehicle (car), both with the **AwayFromBuddy** cost (+10 when the target
+    is away from the buddy);
+  - stimulus reaction; transform both ways.
+
+**Kismet (C):**
+1. Ratchet's intro movie (`PlayRatchetIntroMovie`).
+2. He's spawned (factory) and **sent to work the gate**: `TnAiUseInteract` on `TnInteractEmote_607` ("HealPosition1",
+   Ratchet beam audio).
+3. **Defend waves 1–3:** sub-sequences of pawn factories with `TnSeqAct_AttackFromActor` targets; each wave's All Pawns Killed
+   advances. Each has a checkpoint `ProtectRatchet{,2,3}CheckpointActivated`.
+4. **Ratchet health monitor** (any damage ≥ 10 → read `Health`):
+   - **≤ 25 → `RatchetHeavilyWounded`**, > 25 → `Ratchet_Nominal`;
+   - `RatchetDowned` / `RatchetRevived` from his downed events;
+   - these gate companion barks and a damage-ticker loop.
+5. **Ratchet killed** (factory Single Pawn Killed) → Gate → failure conversation + hide (H: mission fail / restart from the last
+   checkpoint).
+6. `LetRatchetRoamFree` / `FinalRatchetConversation` / the Omega Gate cine stop the interact and free him. Navigation fall-back
+   positions: `Ratchet_MoveTo_Position_2`.
+
+### "Gigantor": Soldier_Tank_Decepticon (C)
+- **Template:** `TnTankAiPawnContent`, **6000 HP**, starts as a vehicle; action set `Tank_AiActionSet`, identical to the
+  Escalation boss tank in MP_ESCALATION §9.2:
+  - **vehicle phase:** TankCannonHeavy, SuppressTargetFromActor, pooled AOE slam `Melee_AOE_VEH` (10 s cooldown);
+  - **robot (wounded) phase:** robot cannon, **gatling ShootingSweep** (2 s, side offset 2000, every 10–15 s), TauntWithWeapon,
+    **SmashAttack ≤ 1600 UU**;
+  - `TransformToRoboWoundedReaction` on Wounded.
+- **Kismet:**
+  - `Spawn Tank` → factory → AttackFromActor, AssignTacticalVolume, AttachToEvent, **TogglePseudoGodMode(Gigantor)**: can't die
+    until toggled (H: its fuel-cell / armour destructibles handle that; SETPIECES §3);
+  - **`TnSeqEvent_HealthStatus` Wounded** → `MUSIC_TANK_ROBOT_FORM`, `Tank Wounded`;
+  - tank health monitor: **≤ 50** → a remote event (H: the defeat sequence).
+- Checkpoints: `OmegaTankCheckpointActivated` / `DefeatGigantorCheckpointActivated`.
+- Another tank in Caves_Split / Routing3C uses the same template, plus move-to and untargetable-at-spawn hooks.
