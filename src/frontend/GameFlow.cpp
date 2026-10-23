@@ -883,6 +883,10 @@ std::string GameFlow::buildMatchUrl(const GameSettings& gs) const {
 }
 
 void GameFlow::returnToGameLobby() {
+    // the humans' scores travel to the lobby: PublicSnakeDraft orders by them when anyone scored
+    lastMatchScores_.clear();
+    for (const MatchValues::Player& p : matchValues_.players)
+        if (!p.bot && !p.directorSpawned) lastMatchScores_[p.local ? selfId_.fingerprint : p.member] = p.score;
     // TnGame.ReturnToGameLobby [RE M05 blockers F4 / F6, CONFIRMED]: after MatchOver's 15 s the host ServerTravels to
     // the game lobby with the match's MapId. The rebuilt lobby movie re-sends map index 0 (C7, HIGH).
     const GameSettings* gs = currentSettings_ ? currentSettings_ : (match_.settings ? match_.settings : nullptr);

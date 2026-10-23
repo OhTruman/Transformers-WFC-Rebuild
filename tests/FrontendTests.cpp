@@ -2137,7 +2137,12 @@ static void testLobbyFlowV2() {
                             h.fake->last("setLateJoinLimit") && h.fake->last("setLateJoinLimit")->arg == "300";
         // the re-draft at the final countdown (PublicSnakeDraft by level): A -> 0, B -> 1, C -> 1, the host -> 0
         auto teamOf = [&](const char* fp) { for (const auto& m : h.f().onlineMembers()) if (m.info.id.fingerprint == fp) return m.team; return -1; };
-        const bool drafted = teamOf("WFC-AAAA-AAAA-1") == 0 && teamOf("WFC-BBBB-BBBB-2") == 1 && teamOf("WFC-CCCC-CCCC-3") == 1 && h.f().selfTeam() == 0;
+        bool drafted = teamOf("WFC-AAAA-AAAA-1") == 0 && teamOf("WFC-BBBB-BBBB-2") == 1 && teamOf("WFC-CCCC-CCCC-3") == 1 && h.f().selfTeam() == 0;
+        // after a match the scores lead: C 900, host 500, B 100, A 0 -> C 0, host 1, B 1, A 0
+        h.f().setLastMatchScoreForTest("WFC-CCCC-CCCC-3", 900); h.f().setLastMatchScoreForTest("WFC-BBBB-BBBB-2", 100);
+        h.f().setLastMatchScoreForTest(h.f().selfFingerprintForTest(), 500);
+        h.f().snakeDraftForTest();
+        drafted = drafted && teamOf("WFC-CCCC-CCCC-3") == 0 && h.f().selfTeam() == 1 && teamOf("WFC-BBBB-BBBB-2") == 1 && teamOf("WFC-AAAA-AAAA-1") == 0;
         // member: the vote arrives with the LobbyState; a cast goes to the host in the member info
         SessionLobby l; l.gameModeTag = "TDM"; l.mapId = 508; l.voteMaps = {508, 501, 503}; l.voteCounts = {1, 0, 0, 0}; l.voteRound = 1; l.voteOpen = true;
         SessionEvent j = ev(T::Joined); j.lobby = l; j.member.fingerprint = "WFC-SELF-SELF-9";

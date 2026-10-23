@@ -276,6 +276,9 @@ public:
     std::vector<std::string> claimedIconicCharacters() const;
     std::string lobbyUrlForTest() const { return lobby_.settings ? buildLobbyUrl(*lobby_.settings) : std::string(); }
     std::string launchUrlForTest() const { return buildLaunchUrl(); }
+    void setLastMatchScoreForTest(const std::string& fingerprint, int score) { lastMatchScores_[fingerprint] = score; }
+    void snakeDraftForTest() { publicSnakeDraft(); }
+    std::string selfFingerprintForTest() const { return selfId_.fingerprint; }
     int humanFaction() const { return lobby_.localTeam == 1 ? 1 : 0; }   // 0 Autobots, 1 Decepticons
     // Gameplay's MatchSettings maxPerTeam / maxPlayers (players incl. the human): the extended limits never exceed them.
     void setBotCapacity(int perTeam, int maxPlayers, int botsPerTeam = 0) {
@@ -534,6 +537,7 @@ private:
     int resumeFaction_ = -1;
     CheckpointSave resumePending_;
     std::vector<GameInvite> invites_;
+    std::map<std::string, int> lastMatchScores_;   // the humans' scores of the match just played (the next public draft)
     std::set<std::string> friendsOnline_, invitedHere_;
     std::string invitedForCode_, clipboardRequest_, lastJoinTarget_;
     double onlineQueryAt_ = -1e9;

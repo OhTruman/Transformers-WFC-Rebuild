@@ -134,11 +134,15 @@ void GameFlow::setPushToTalkHeld(bool held) {
 
 void GameFlow::publicSnakeDraft() {
     // RE ONLINE_POSTMATCH_PARTY_VOICE_RE: at a public lobby's final countdown the teams are re-drafted (PublicSnakeDraft) by
-    // score if anyone scored, else by level. PARTIAL: by level (the previous match's scores are not carried to the lobby yet).
+    // score if anyone scored (the match just played), else by level.
     if (role_ != SessionRole::Host || lobby_.gameTeamStatus != 3) return;
     struct Pick { int level; std::string fp; OnlineMember* m; };
     std::vector<Pick> picks{{progression::playerLevel(profile_.progression), selfId_.fingerprint, nullptr}};
     for (OnlineMember& m : onlineMembers_) if (!m.connecting) picks.push_back({m.info.level, m.info.id.fingerprint, &m});
+    bool scored = false;
+    for (const auto& [fp, sc] : lastMatchScores_) scored = scored || sc > 0;
+    if (scored)   // by score: a player who was not in that match drafts as 0
+        for (Pick& p : picks) { auto it = lastMatchScores_.find(p.fp); p.level = it == lastMatchScores_.end() ? 0 : it->second; }
     std::stable_sort(picks.begin(), picks.end(), [](const Pick& a, const Pick& b) { return a.level != b.level ? a.level > b.level : a.fp < b.fp; });
     std::string order;
     for (size_t i = 0; i < picks.size(); ++i) {
@@ -146,7 +150,7 @@ void GameFlow::publicSnakeDraft() {
         if (picks[i].m) picks[i].m->team = team; else lobby_.localTeam = team;
         order += (order.empty() ? "" : ",") + std::to_string(picks[i].level) + ":" + std::to_string(team);
     }
-    FlowTrace::emit("lobby.snakeDraft", {{"by", "level"}, {"order", order}});
+    FlowTrace::emit("lobby.snakeDraft", {{"by", scored ? "score" : "level"}, {"order", order}});
 }
 
 void GameFlow::noteRecentPlayer(const SessionMemberId& id, const std::string& name) {
