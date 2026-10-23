@@ -99,3 +99,11 @@ Verified:
 - the 01–11 chain applies to a fresh af4d0731 and matches the tested tree over every patched path;
 - headless against the 35ace85b + TELEPORT build, the SIMHASH stream is identical at every step: Streets TDM 4,201, Remnant ESC 1,675,
   A1 campaign 60 s 3,749.
+
+## 12: campaign movies play once (11 tree -> 6d30fff2 + GAMEPLAY_CAMPAIGN_MOVIE_ONCE)
+
+`12_campaign_movie_once.patch`: the same paths, from the 11 tree to 6d30fff2 + MOVIE_ONCE. It contains:
+- Application_Frontend.cpp: the Game.PlayMovie bridge never re-shows a serial it has ended. That ended request used to replay A1's
+  FMV_a1intro after a skip, because the end reaches the World asynchronously;
+- the Frontend's FrontendRuntime changes that came in with 6d30fff2.
+Apply it after 11. Verified: the 01–12 chain applies to a fresh af4d0731 and matches the tested tree over every patched path.

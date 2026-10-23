@@ -1,0 +1,70 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 37cc981e..ee3e1a8e 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -1568,13 +1568,15 @@ void Application::routeMatchToFrontend(float dt) {
+     {   // [Systems] the campaign Kismet's full-screen movies (SeqAct_MoviePlayer, MissionComplete's outro): the Game.PlayMovie path
+         // (movie mode, its Bink audio, skippable as the Extras movies); its end / skip / the op's Stop -> World::campaignMovieEnded
+         static int shown = 0;   // the request serial on screen (0 none)
+-        if (!pf.campaignMovie.empty() && pf.campaignMovieSerial != shown && flow.scriptMovie().empty()) {
++        static int endedSerial = 0;   // the last serial handed back as ended (the snapshot can still name it for a frame or two)
++        if (!pf.campaignMovie.empty() && pf.campaignMovieSerial != shown && pf.campaignMovieSerial != endedSerial && flow.scriptMovie().empty()) {
+             shown = pf.campaignMovieSerial;
+             flow.call("Game.PlayMovie", {pf.campaignMovie});
+         } else if (shown != 0 && (flow.scriptMovie().empty() || pf.campaignMovieStop || pf.campaignMovieSerial != shown)) {
+             if (!flow.scriptMovie().empty() && pf.campaignMovieSerial == shown) flow.scriptMovieStopped();
+             const int ended = shown;
+             shown = 0;
++            endedSerial = ended;
+             world_.submit([ended](game::World& w) { w.campaignMovieEnded(ended); });
+         }
+     }
+diff --git a/src/frontend/FrontendRuntime.cpp b/src/frontend/FrontendRuntime.cpp
+index 7233b7ab..f7c3fc6c 100644
+--- a/src/frontend/FrontendRuntime.cpp
++++ b/src/frontend/FrontendRuntime.cpp
+@@ -122,6 +122,31 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
+             ++pos_;
+             continue;
+         }
++        // pressuntil:<UI action>,<UI state>: press the action every 2 s until the UI state is reached (at most 20 presses) - a
++        // menu that is still building its contents (CharacterSelect's wheel on a slow load) ignores an early press
++        if (st.rfind("pressuntil:", 0) == 0) {
++            const std::vector<std::string> p = split(st.substr(11), ',');
++            const std::string action = p.empty() ? std::string() : p[0], until = p.size() > 1 ? p[1] : std::string();
++            if (uiStateName(flow.ui().state()) == until || pressCount_ >= 20) {
++                FlowTrace::emit("script.pressUntil", {{"action", action}, {"until", until}, {"presses", std::to_string(pressCount_)},
++                                                      {"reached", FlowTrace::boolean(uiStateName(flow.ui().state()) == until)}});
++                pressCount_ = 0; pressTimer_ = 0.0f;
++                ++pos_;
++                continue;
++            }
++            if ((pressTimer_ -= dt) > 0.0f) return;
++            for (int k = 0; k < (int)platform::UiKey::Count; ++k)
++                if (action == platform::UiBindings::actionName((platform::UiKey)k)) {
++                    pressTimer_ = 2.0f;
++                    ++pressCount_;
++                    queuePress(1u << k);
++                    synth_ = synthQueue_.front(); synthQueue_.erase(synthQueue_.begin());
++                    return;
++                }
++            LOG_WARN("FRONTEND script: unknown UI action in '%s'", st.c_str());
++            ++pos_;
++            continue;
++        }
+         ++pos_;
+         if (st.rfind("call:", 0) == 0) {
+             std::vector<std::string> p = split(st.substr(5), ',');
+diff --git a/src/frontend/FrontendRuntime.h b/src/frontend/FrontendRuntime.h
+index 7ecec4d6..34a60d89 100644
+--- a/src/frontend/FrontendRuntime.h
++++ b/src/frontend/FrontendRuntime.h
+@@ -128,6 +128,8 @@ private:
+     std::vector<std::string> steps_;
+     size_t pos_ = 0;
+     float waitTimer_ = 0.0f;
++    float pressTimer_ = 0.0f;   // pressuntil: seconds to the next press
++    int pressCount_ = 0;        // pressuntil: presses so far (at most 20)
+     int keyUp_ = -1;
+     std::string padUp_;
+ };
