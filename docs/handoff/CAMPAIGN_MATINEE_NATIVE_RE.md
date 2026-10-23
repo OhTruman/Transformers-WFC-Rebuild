@@ -88,7 +88,9 @@ At matinee end, each sound track's audio component:
 - **WFC's level format has no cross-level actor reference table:** no CrossLevelActors / fixup names in the package; the Level
   export has no such list.
 - Nothing in the exported levels writes these variables (RUNTIME / SCHEMA docs).
-- So these groups **have no actor in the shipped game.** Their tracks run against an empty group instance and **do nothing**.
+- So these groups **have no actor in the shipped game.** Their **actor-targeted tracks** (Move / AnimControl / Toggle / material /
+  property) do nothing. Actor-free tracks in the same group (Sound at the listener, Event, Fade, and so on) still run, as in
+  CAMPAIGN_PROVISIONALS_CLOSED_RE §5 (23 of 148 groups).
 - Example: the 18 A1 DecoInt robot-arm groups (DataCube2 / BasePiece / MiddlePiece / EndPiece, RelativeToInitial moves). The likely
   cause is a cross-level actor reference cleared at save (H).
 - **Rebuild:** treat them as no-ops. Don't try to bind them by name.
