@@ -1060,6 +1060,20 @@ private:
     int fogN_ = 1;                                   // authored height fog layers in use (the first in the members above)
     float fogL_[3][4] = {}, fogC_[3][3] = {};        // layers 2-4: (max height, scale, start, extinction), in-scattering
     float fogMinH_[4] = {-262144.0f, -262144.0f, -262144.0f, -262144.0f};   // each layer's min height (the next layer's)
+    // (post-process volume height fog; RE CAMPAIGN_PPV_HEIGHTFOG_RE.md) lighting.json 'volume_fogs': each volume's linked fogs,
+    // used while the camera is inside the highest-priority one (density faded in / out over its InterpolationDuration); the
+    // load's layers (fogBase_) are what the per-frame list is built on and restored to. Maps without any: never touched.
+    struct PpvFog { float height, density, start, ext; core::Vec3 in; bool priority, snap; };
+    struct PpvPlane { float n[3], d; };
+    struct PpvVolume { float priority; bool unbound; float interp; std::vector<PpvPlane> planes; std::vector<PpvFog> fogs; };
+    struct PpvLive { int vol, fog; float cur; bool leaving; };
+    std::vector<PpvVolume> ppvVolumes_;
+    std::vector<PpvLive> ppvLive_;
+    struct FogBase { bool on; int n; float maxH, scale, start, ext; core::Vec3 in; float L[3][4], C[3][3], minH[4]; } fogBase_{};
+    float ppvLastTime_ = -1.0f;
+    bool ppvApplied_ = false;
+    void loadPpvFogs(const assets::Json& lighting);
+    void ppvFogFrame();
     bool x3FogOn_ = false; float x3FogMaxH_ = 0.0f, x3FogScale_ = 0.0f;   // X3's medium: the data's first 'fog' component
     core::Vec3 clearFogIn_{0, 0, 0};                 // the frame clear colour: that first component's in-scattering
 
