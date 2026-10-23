@@ -3589,3 +3589,4 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 01:23 CAMPAIGN RE END-STATE merged: the campaign's RE is complete except 7 listed H / UNKNOWN rows with build assumptions. Throttle
   catch-up: native passes the full time but pre-ages spawned particles (the burst = our missing pre-age; Systems fixes that way).
 2026-10-23 01:23 #18 (B) after-soak PASS: 1 -> 0 floating cases in 20 runs on 0d8e3c06. Experimental builds 221e7b83 for the UdpSession identity rows.
+2026-10-23 01:25 MERGED fa37a75f FX spawn pre-age (the catch-up burst's real cause; native semantics per RE); Rendering proves it on Gorge in x28.
