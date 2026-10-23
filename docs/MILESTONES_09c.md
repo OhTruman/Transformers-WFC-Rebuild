@@ -3637,3 +3637,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   throttle catch-up CLEARED as the Gorge card's cause (lockstepped arms bit-identical; catch-ups are 0.1 s steps with 0-1
   spawns); the 6 m card = Rendering's unlocked runner (particle phase). Pre-age stays (correct per RE). #5 + #9 CLOSED.
   Card -> Frontend pt4 01:56 -> Rendering.
+2026-10-23 01:56 #18 (A) DONE (AssetTools): 266 raised simple-hull placements on all 10 versus maps switched to per-poly collision (volumes
+  listed, kept authored; >= 5 m overhang cases list-only); nav + air nav rebuilt; frozen overlay superset overlay_20261023c
+  (135 files, 199.8 MB: 85 gltf_wfcmat + per-map collision_pawn / physics / bot_nav / bot_nav_air). Systems: refresh.sh -> 20261023c;
+  Gameplay: BOTTEST + the floating detector on the adapted collision.
