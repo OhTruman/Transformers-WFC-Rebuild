@@ -3574,3 +3574,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   join, lobby, start, load gate, match, quit). Design confirmed: Find Match = Quick Match (public), offline bots = Private
   Match. Remaining: a two-window menu match on this PC (windowed), then the user's two-PC test.
 2026-10-23 01:12 RE campaign #5 checkpoint body merged (3 fields, no world state); RE answers Rendering's kill-flag semantics, then #6.
+2026-10-23 01:14 MERGED 8d6f0c4b FX kill flags (#9; kill-on-deactivate live, kill-on-completed gated). map_fx regen for 10 maps running through
+  the kill-flags gate (only the two new keys allowed). Rule set tonight: no test exe binds 0.0.0.0 on this PC while the user is
+  away (firewall prompt); loopback mode for the two-window menu test + Experimental's UdpSession rows.
