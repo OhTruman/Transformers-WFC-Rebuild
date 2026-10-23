@@ -68,6 +68,9 @@ public:
     void setPushToTalk(bool held) override { Call c = mk("setPushToTalk"); c.arg = held ? "1" : "0"; calls_.push_back(c); }
     void findGames(const SessionGameQuery& q) override { Call c = mk("findGames"); c.arg = q.playlist + "|" + q.modeTag; calls_.push_back(c); }
     void quickMatch(const std::string& playlist) override { Call c = mk("quickMatch"); c.arg = playlist; calls_.push_back(c); }
+    bool lateJoin = false;   // tests: the session can join a running match
+    bool supportsLateJoin() const override { return lateJoin; }
+    void joinRunningMatch() override { calls_.push_back(mk("joinRunningMatch")); }
     void cancelSearch() override { calls_.push_back(mk("cancelSearch")); }
     void setLobbyService(const std::string& a) override { Call c = mk("setLobbyService"); c.arg = a; calls_.push_back(c); }
     float mic = 0.0f;   // scripted Mic Test level

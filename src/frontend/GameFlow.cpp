@@ -1241,7 +1241,19 @@ std::string GameFlow::buildLaunchUrl() const {
         }
     }
     if (idleKickOn()) url += "?WfcIdleKick=1";   // online, the host row On (D5 revised); never offline
+    // Gameplay MatchSettings::canGainXp (MVP, achievement 37) defaults to true: only a no-XP match says so, so an XP match
+    // keeps the original URL (RE 3.1)
+    if (!canGainXp()) url += "?WfcCanGainXp=0";
     return url;
+}
+
+bool GameFlow::canGainXp() const {
+    // ORIGINAL: CanGainXp = !IsPrivateGame() [RE VERSUS_END_OF_MATCH_CHECK]. Online: public games (Quick Match playlists, the
+    // voting lobby) earn XP, private ones do not (D8). PC ADAPTATION offline: private matches with bots earn progression;
+    // WFC_ORIGINAL_XP_RULE=1 keeps the original rule.
+    const bool publicGame = lobby_.playlistId >= 0 || vote_.round > 0;
+    if (role_ != SessionRole::Offline) return publicGame;
+    return !std::getenv("WFC_ORIGINAL_XP_RULE") || publicGame;
 }
 
 void GameFlow::startLevel() {

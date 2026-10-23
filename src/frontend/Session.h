@@ -145,6 +145,7 @@ struct SessionEvent {
         SearchCancelled,   // cancelSearch done
         MemberVoice,       // member, headsetState (0 no voice / 1 voice on / 2 speaking): PlayerList_GFX HeadsetState;
                            // voiceVia: 1 radio / 2 proximity while speaking (both: radio), for the talker cue
+        CatchUpProgress,   // late join: catchUpTick / catchUpTarget while the joiner replays the host's input log
     } type = Type::LobbyState;
     double time = 0.0;
     std::string joinCode, address;
@@ -166,12 +167,16 @@ struct SessionEvent {
     std::vector<SessionGameEntry> games;    // GameList
     bool serviceReachable = true;           // GameList: false = no lobby service (LAN games only)
     int searchTried = 0, searchOf = 0;      // SearchProgress
+    // Join in progress (Systems' plan 2026-10-23): CountdownStarted with lateJoin = the host's LateLaunch record (url, seed,
+    // the roster with this joiner's seat and team): travel straight into the running match, no lobby countdown.
+    bool lateJoin = false;
+    int catchUpTick = 0, catchUpTarget = 0;   // CatchUpProgress
 };
 inline const char* sessionEventName(SessionEvent::Type t) {
     static const char* const k[] = {"HostOpened", "HostFailed", "JoinProgress", "Joined", "JoinFailed", "MatchInProgress",
                                     "LobbyState", "MemberJoined", "MemberLeft", "CountdownStarted", "PeerLoaded", "AllLoaded",
                                     "PeerDropped", "HostLost", "ConnectionLost", "Desync", "Kicked", "GameList", "SearchProgress",
-                                    "SearchCancelled", "MemberVoice"};
+                                    "SearchCancelled", "MemberVoice", "CatchUpProgress"};
     const int i = (int)t;
     return i >= 0 && i < (int)(sizeof k / sizeof k[0]) ? k[i] : "?";
 }
@@ -209,6 +214,11 @@ public:
     virtual void cancelSearch() {}
     // The lobby service ("host:port", "" = none = LAN discovery only): from the profile at session start and on each change.
     virtual void setLobbyService(const std::string& address) { (void)address; }
+    // Join in progress (public games; the original bAllowJoinInProgress): a session that can replay the host's input log
+    // and activate a seat mid-match says so; the flow then answers MatchInProgress with joinRunningMatch() instead of
+    // waiting in the lobby (D6). The host answers with CountdownStarted{lateJoin} and CatchUpProgress during the load.
+    virtual bool supportsLateJoin() const { return false; }
+    virtual void joinRunningMatch() {}
 };
 
 // Match-side plumbing for WFC_SESSIONTEST (Gameplay's harness, ONLINE_MP_FRONTEND_TESTS.md section 4); declared here so
