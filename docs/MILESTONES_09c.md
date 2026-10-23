@@ -4163,3 +4163,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 18:08 MERGED d5bb6863 campaign movies play once (a Game.PlayMovie bridge race replayed the ended movie for one frame) +
   FINAL_BASE_ITEMS 12. FINAL CODE d5bb6863. Frontend confirms with one A1 Off run; Experimental rebuilds arms final7 /
   d5bb6863; Systems re-pointed. Then the reboot -> gate -> cut.
+2026-10-23 18:13 A1 intro CONFIRMED once (Frontend handover6/ on d5bb6863): a1text + a1intro each play once, one skip -> gameplay; in-game
+  shots at +60 / +90 (the lift ride matinee at +30). BLOCKER CLOSED. Waiting only on the user's reboot.
