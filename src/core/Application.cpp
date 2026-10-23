@@ -1101,7 +1101,9 @@ Application::MatchExit Application::runMatch() {
             }
         }
         renderer_->beginFrame(camera_, window_->width(), window_->height());
-        world_.draw(*renderer_);
+        // (diagnostics) WFC_CHAPTER_VIEW=1: the level alone - no World draw (a campaign chapter's merged units judged lit with
+        // WFC_SHOTLIST cameras before the World's campaign boot exists; the renderer draws the units itself)
+        if (!WFC_ENV("WFC_CHAPTER_VIEW")) world_.draw(*renderer_);
         if (WFC_ENV("WFC_PICK")) {                 // diagnostics: authored source of the surface under the crosshair
             static render::IRenderer::PickHit last;
             static bool lastOk = false;

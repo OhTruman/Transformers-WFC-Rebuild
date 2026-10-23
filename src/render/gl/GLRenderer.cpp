@@ -398,6 +398,14 @@ public:
         glx::gpuMark(glx::kPassCaller);
         glx::gpuStamp("map presentation");
         watchdog::phase("endFrame: map presentation");
+        // (chapter) the merged units, when no world mesh of the game's carried them this frame - a campaign persistent level
+        // has no geometry of its own (D5_OME_BASE: an empty world.glb), so its units are the whole level
+        if (wfc_.active() && !chapterMeshes_.empty() && chapterFrame_ != wfc_.frameNumber()) {
+            chapterFrame_ = wfc_.frameNumber();
+            for (MeshHandle c : chapterMeshes_)
+                if (c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0) wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
+            glLoadMatrixf(view_.m);
+        }
         if (wfc_.active()) wfc_.drawMapPresentation();
         watchdog::phase("endFrame: post / composite");
         if (wfc_.active()) wfc_.endFrame();
@@ -971,6 +979,7 @@ public:
     void setLoadYield(std::function<void()> y) override { wfc_.setLoadYield(std::move(y)); }
 
     void unloadMapRenderData() override {
+        chapterMeshes_.clear(); chapterFrame_ = -1;    // (chapter units: their meshes go with the rest)
         matchMap_ = false;
         renderDataRequested_ = false;
         sceneSampled_ = false;
@@ -1236,6 +1245,14 @@ public:
             for (const MeshData& r : prewarmRequests_) wfc_.prewarmDynamic(r);   // M59: replayed per map load
             static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;
             if (lockstep) wfc_.lockstepRestartFrames();   // lockstep: render time / cadences relative to the match load
+            // (campaign chapters, stage 1 test hook) WFC_CHAPTER_UNITS=<unit>,<unit>,...: merge those units after this load,
+            // until Gameplay sends them (comma-separated: the harness runners split env values on ';')
+            if (const char* cu = std::getenv("WFC_CHAPTER_UNITS")) {
+                std::vector<std::string> units;
+                std::stringstream ss(cu);
+                for (std::string u; std::getline(ss, u, ',');) if (!u.empty() && u != mapName) units.push_back(u);
+                loadChapterUnits(units);
+            }
         }
         return ok;
     }
@@ -1643,8 +1660,37 @@ public:
     void drawMesh(MeshHandle h, const core::Mat4& model, const core::Vec3& color) override {
         watchdog::phase("drawMesh");
         if (h < 0 || (size_t)h >= meshes_.size()) return;
-        if (wfc_.active() && gpu_[(size_t)h] >= 0) { wfc_.draw(gpu_[(size_t)h], model); glLoadMatrixf(view_.m); return; }
+        if (wfc_.active() && gpu_[(size_t)h] >= 0) {
+            wfc_.draw(gpu_[(size_t)h], model);
+            // (chapter, stage 1) the merged units' world meshes, once per frame, with the game's world mesh
+            if (!chapterMeshes_.empty() && chapterFrame_ != wfc_.frameNumber() && wfc_.isWorldMesh(gpu_[(size_t)h])) {
+                chapterFrame_ = wfc_.frameNumber();
+                for (MeshHandle c : chapterMeshes_)
+                    if (c != h && c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0) wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
+            }
+            glLoadMatrixf(view_.m);
+            return;
+        }
         drawMeshArrays(meshes_[(size_t)h], model, color);
+    }
+    // (campaign chapters, stage 1) the chapter's other units merged into the loaded Pipeline; their world.glb uploaded here
+    std::vector<MeshHandle> chapterMeshes_;
+    int chapterFrame_ = -1;
+    int loadChapterUnits(const std::vector<std::string>& units) override {
+        if (!wfc_.active()) return 0;
+        int n = 0;
+        for (const std::string& u : units) {
+            if (!wfc_.loadSublevel(u)) continue;
+            ++n;
+            MeshData w;
+            if (assets::loadGlb(wfc::Pipeline::renderDataRoot() + "/" + u + "/world.glb", w)) {
+                const MeshHandle h = uploadMesh(w);
+                if (h != kInvalidMesh) chapterMeshes_.push_back(h);
+            } else LOG_WARN("chapter: %s has no world.glb in its render data", u.c_str());
+            wfc_.yieldLoad();
+        }
+        LOG_INFO("chapter: %d of %zu unit(s) merged, %zu world mesh(es)", n, units.size(), chapterMeshes_.size());
+        return n;
     }
 
     // M59: requests are remembered and replayed after every map's render data loads. Callers prewarm once per

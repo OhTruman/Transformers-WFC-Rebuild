@@ -160,6 +160,12 @@ extern unsigned long gShaderCompiles, gTexCreates;
 class Pipeline {
 public:
     bool load(const std::string& mapName);
+    // (chapter loader, docs/handoff/RENDERING_CHAPTER_LOADER.md) merge one more render-data unit (a campaign sublevel,
+    // <render root>/<unit>/) into the loaded Pipeline: its materials, lights, lightmaps, BSP / decals, FX, movers, fog volumes,
+    // height and volume fogs; after load() of the persistent unit. Stage 1: static (nothing unloads)
+    bool loadSublevel(const std::string& unit);
+    size_t sublevelCount() const { return sublevels_.size(); }
+    bool isWorldMesh(int id) const { return id >= 0 && (size_t)id < meshes_.size() && meshes_[(size_t)id].world; }
     // Shared read-only asset roots: WFC_ASSETS (default core::config::kAssetRootDefault, the VerticalSlice export)
     // and the content directory beside it (WFC_CONTENT overrides). Map render data stays in WFC_RENDER_DATA.
     static std::string assetRoot();
@@ -971,7 +977,8 @@ private:
                     float clip = 0.3333f; bool fogVolume = false; };
     std::map<std::string, MatSrc> mats_;
     std::map<std::string, std::string> slotMaterials_;   // "mesh|section" -> original material
-    struct LMRec { std::string coeff[3]; float scale[3][3]; float cs[2], cb[2]; };
+    // (dir: a merged sublevel's render-data directory - its lightmaps/ - empty for the persistent unit: dataDir_; chapter loader)
+    struct LMRec { std::string coeff[3]; float scale[3][3]; float cs[2], cb[2]; std::string dir; };
     // transforming world actors' two light-map captures (RE INTERPOLATED_LIGHTMAP_RE.md): per coefficient, capture A's and B's
     // atlas rects side by side in one composite texture (no extra samplers: the lightmap units 13-15), each capture's UV
     // transform into it, its scale vectors; the base pass lerps the decoded coefficients by the transform's position
@@ -1071,7 +1078,12 @@ private:
     struct FogBase { bool on; int n; float maxH, scale, start, ext; core::Vec3 in; float L[3][4], C[3][3], minH[4]; } fogBase_{};
     float ppvLastTime_ = -1.0f;
     bool ppvApplied_ = false;
-    void loadPpvFogs(const assets::Json& lighting);
+    void loadPpvFogs(const assets::Json& lighting, bool append = false);   // (append: a merged sublevel's volumes)
+    void addMaterials(const assets::Json& M, const std::string& dir);
+    void addLightingRecords(const assets::Json& L, const std::string& dir, bool primary);
+    struct SublevelRT { std::string unit, dir; int bsp = -1, decal = -1; };
+    std::vector<SublevelRT> sublevels_;           // (chapter loader) the merged units, in load order
+    bool bspHosted_ = false;                         // (chapter loader) a world mesh already draws the BSP / decals
     void ppvFogFrame();
     bool x3FogOn_ = false; float x3FogMaxH_ = 0.0f, x3FogScale_ = 0.0f;   // X3's medium: the data's first 'fog' component
     core::Vec3 clearFogIn_{0, 0, 0};                 // the frame clear colour: that first component's in-scattering
@@ -1512,7 +1524,7 @@ private:
     GLuint fogFbo_ = 0, fogTex_ = 0;
     int fogW_ = 0, fogH_ = 0;
     int fogVolumeFor(const std::string& comp) const;
-    void loadFogVolumes(const std::string& file);
+    void loadFogVolumes(const std::string& file, bool append = false);
     void drawFogVolume(const Sub& s, const core::Mat4& model, int prog, int vol);
     std::set<std::string> fogShapeLogged_;               // components not drawn as fog-volume shapes (logged once each)
     std::set<GLuint> srgbBlockTex_;                       // HD sRGB maps uploaded as sRGB S3TC blocks (buildProgram corrects)

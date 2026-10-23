@@ -230,6 +230,10 @@ public:
     // directional lightmaps, static lights and height fog produced by tools/render/*.py.
     // Returns false when unavailable; the renderer then keeps its legacy fixed-function path.
     virtual bool loadMapRenderData(const std::string& mapName) { (void)mapName; return false; }
+    // (campaign chapters, stage 1: docs/handoff/RENDERING_CHAPTER_LOADER.md) after loadMapRenderData(persistent level): merge
+    // the chapter's other units (<render root>/<unit>/, the sublevel URL names) and draw their world.glb with the game's world
+    // mesh. Static: everything stays loaded until unloadMapRenderData. Returns the number of units merged.
+    virtual int loadChapterUnits(const std::vector<std::string>& units) { (void)units; return 0; }
     // Level travel: release every GPU resource of the loaded map render data (meshes, textures, programs, targets).
     // The renderer stays usable; a later loadMapRenderData() rebuilds everything for the next map.
     virtual void unloadMapRenderData() {}

@@ -1158,6 +1158,19 @@ std::string Pipeline::relocateDataPath(const std::string& path) const {
     k = low.rfind(kRender);
     const size_t sl = dataDir_.find_last_of("/\\");
     if (k != std::string::npos && sl != std::string::npos) return dataDir_.substr(0, sl + 1) + path.substr(k + kRender.size());
+    // (campaign units: AssetTools' .../campaign_render/<chapter>/<unit>[_m]/<file> -> <render root>/<unit>/<file> - the
+    // sublevel's own textures, e.g. its cubemap faces, written before the per-unit layout dropped the _m)
+    static const std::string kCampaign = "/campaign_render/";
+    k = low.rfind(kCampaign);
+    if (k != std::string::npos && sl != std::string::npos) {
+        const size_t u0 = low.find('/', k + kCampaign.size());            // after <chapter>/
+        const size_t u1 = u0 == std::string::npos ? u0 : low.find('/', u0 + 1);
+        if (u1 != std::string::npos) {
+            std::string unit = path.substr(u0 + 1, u1 - u0 - 1);
+            if (unit.size() > 2 && unit.compare(unit.size() - 2, 2, "_m") == 0) unit.resize(unit.size() - 2);
+            return dataDir_.substr(0, sl + 1) + unit + path.substr(u1);
+        }
+    }
     return path;
 }
 
@@ -1412,73 +1425,15 @@ void Pipeline::runSettingsSelfTest() {
 }
 
 // ------------------------------------------------------------------------- loading
-bool Pipeline::load(const std::string& mapName) {
-    if (std::getenv("WFC_LEGACYRENDER")) { LOG_INFO("wfc: WFC_LEGACYRENDER set; shader path disabled"); return false; }
-    std::string root = renderDataRoot();
-    cutPending_ = true; cutPendingWhy_ = "map load";   // (temporal history never spans maps)
-    rtInitMode();
-    rtInfra_ = rtMode_ > 0 || std::getenv("WFC_RT_SHADOWAO") != nullptr || std::getenv("WFC_RT_TOGGLE") != nullptr;
-    loadFrame_ = frameNo_;
-    dataDir_ = root + "/" + mapName;
-    std::string mj = readText(dataDir_ + "/materials_glsl.json");
-    yieldLoad();
-    // (WFC_LIGHTING_DIR=<dir>: <dir>/<map>/lighting.json, a regenerated copy for A/Bs)
-    std::string lj = readText([&] { const char* e = std::getenv("WFC_LIGHTING_DIR"); if (!e || !*e) return dataDir_ + "/lighting.json";
-        const size_t s = dataDir_.find_last_of("/\\"); return std::string(e) + "/" + (s == std::string::npos ? dataDir_ : dataDir_.substr(s + 1)) + "/lighting.json"; }());
-    yieldLoad();
-    if (rtInfra_) {   // R1 sun swap data (Systems' tools/systems/vbake): WFC_RT_VBAKE=<dir> (<dir>/<map>/), else <render data>/vbake/
-        const char* vb = std::getenv("WFC_RT_VBAKE");
-        r1Dir_ = vb ? std::string(vb) + "/" + mapName : dataDir_ + "/vbake";
-        assets::Json F;
-        const std::string ft = readText(r1Dir_ + "/fit.json");
-        if (!ft.empty() && assets::Json::parse(ft, F)) {
-            r1Fit_[0] = F["k"].asFloat(0.0f); r1Fit_[1] = F["p"].asFloat(1.0f); r1Fit_[2] = F["tangent_y_sign"].asFloat(1.0f);
-            static const float kScale = [] { const char* e = std::getenv("WFC_RT_R1K"); return e ? (float)std::atof(e) : 1.0f; }();
-            r1Fit_[0] *= kScale;                       // (WFC_RT_R1K: a scale on the fitted k, for tuning)
-            const assets::Json& s = F["sun_linear"];
-            for (int c = 0; c < 3; ++c) r1Sun_[c] = s.arr.size() > (size_t)c ? s.arr[(size_t)c].asFloat(0.0f) : 0.0f;
-            // (the GL entry points are tested later, in r1CheckGl: a direct / package boot runs this before the GL load)
-            r1Map_ = r1Fit_[0] > 0.0f; r1GlChecked_ = false; r1StateLogged_ = false;
-            LOG_INFO("RT R1 sun swap data: %s (k %.3f, p %.2f, tangent y %+.0f, sun %.3f %.3f %.3f)%s", r1Dir_.c_str(), r1Fit_[0],
-                     r1Fit_[1], r1Fit_[2], r1Sun_[0], r1Sun_[1], r1Sun_[2], r1Map_ ? "" : " - unused (k <= 0)");
-        } else {
-            LOG_INFO("RT R1 sun swap data: none (%s/fit.json %s) - Realistic without the sun swap on %s", r1Dir_.c_str(),
-                     ft.empty() ? "missing" : "unparsable", mapName.c_str());
-        }
-    }
-    loadMovers(dataDir_ + "/movers.json");
-    yieldLoad();
-    loadMapFx(mapFxPath());
-    loadFogVolumes(dataDir_ + "/fog_volumes.json");
-    {   // MaterialInstanceActor -> MIC (build_materials.py): Matinee material-parameter routing
-        assets::Json MJ;
-        std::string mt = readText(dataDir_ + "/material_instance_actors.json");
-        if (!mt.empty() && assets::Json::parse(mt, MJ))
-            for (const auto& kv : MJ["actors"].obj) {
-                std::string a = kv.first, m = kv.second.asString();
-                std::transform(a.begin(), a.end(), a.begin(), ::tolower);
-                std::transform(m.begin(), m.end(), m.begin(), ::tolower);
-                miaMaterial_[a] = m;
-            }
-    }
-    yieldLoad();
-    if (mj.empty() || lj.empty()) {
-        lastLoadError() = "render data not found in " + dataDir_;
-        LOG_ERROR("wfc: render data not found in %s (run tools/render/build_render_data.ps1): LEGACY RENDERER, "
-                  "not the original presentation", dataDir_.c_str());
-        return false;
-    }
-    if (!glx::load()) {
-        lastLoadError() = "GL 3.3 entry points unavailable";
-        LOG_ERROR("wfc: GL 3.3 entry points unavailable: LEGACY RENDERER");
-        return false;
-    }
-    glx::installDebugOutput();
-    lastLoadError().clear();
-
-    assets::Json M, L;
-    if (!assets::Json::parse(mj, M) || !assets::Json::parse(lj, L)) { LOG_ERROR("wfc: render data JSON parse failed"); return false; }
-
+// (chapter loader, docs/handoff/RENDERING_CHAPTER_LOADER.md) a unit's materials_glsl.json entries: load() for the persistent
+// unit, loadSublevel() for merged ones (by name: a material already defined keeps its first definition)
+void Pipeline::addMaterials(const assets::Json& M, const std::string& dir) {
+    // (texture paths: drive-absolute ones are relocated; unit-relative ones - the campaign layout, "tex/<file>" - are under
+    // the unit's own directory)
+    auto texPath = [&](const std::string& p) {
+        const bool rel = !p.empty() && p[0] != '/' && p[0] != '\\' && (p.size() < 2 || p[1] != ':');
+        return rel ? dir + "/" + p : relocateDataPath(p);
+    };
     for (const auto& kv : M.obj) {
         const assets::Json& e = kv.second;
         if (!e["glsl"].isString()) {      // compile error in build_materials: remembered for the draw-time warning
@@ -1500,11 +1455,11 @@ bool Pipeline::load(const std::string& mapName) {
         const assets::Json& tx = info["textures"];
         for (size_t i = 0; i < tx.size(); ++i) {
             const assets::Json& t = tx[i];
-            s.files.push_back(relocateDataPath(t["file"].asString()));
+            s.files.push_back(texPath(t["file"].asString()));
             s.srgb.push_back(t["srgb"].asBool(true));
             s.cube.push_back(t["kind"].asString() == "cube");
             std::vector<std::string> fc;
-            for (size_t k = 0; k < t["faces"].size(); ++k) fc.push_back(relocateDataPath(t["faces"][k].asString()));
+            for (size_t k = 0; k < t["faces"].size(); ++k) fc.push_back(texPath(t["faces"][k].asString()));
             s.faces.push_back(fc);
             s.clampU.push_back(t["address_x"].asString() == "TA_Clamp");
             s.clampV.push_back(t["address_y"].asString() == "TA_Clamp");
@@ -1512,66 +1467,17 @@ bool Pipeline::load(const std::string& mapName) {
             if (t["unpack_min"].isArray()) for (int k = 0; k < 4; ++k) mn[k] = t["unpack_min"][(size_t)k].asFloat(0.0f);
             s.umin.push_back(mn); s.umax.push_back(mx);
         }
-        mats_[kv.first] = std::move(s);
+        mats_.emplace(kv.first, std::move(s));
     }
-    // M6 Modern materials: the matc "pbr" bodies (tools/render/matc_pbr.py) - <map>/materials_pbr.json, else
-    // WFC_PBR_DIR/<map>/; only with HD textures on and the Modern setting (or WFC_MODERN=1)
-    pbr_.clear(); modernActive_ = false;
-    if ((modern_ || std::getenv("WFC_MODERN") != nullptr) && hdTextures_) {
-        std::string pt = readText(dataDir_ + "/materials_pbr.json");
-        if (pt.empty()) if (const char* pd = std::getenv("WFC_PBR_DIR")) pt = readText(std::string(pd) + "/" + mapName + "/materials_pbr.json");
-        assets::Json PJ;
-        const bool parsed = !pt.empty() && assets::Json::parse(pt, PJ);
-        if (parsed)
-            for (const auto& kv : PJ.obj) {
-                PbrSrc ps;
-                ps.glsl = kv.second["glsl"].asString();
-                ps.roughParent = kv.second["roughness_parent"].asString();
-                ps.roughSlot = kv.second["rough_slot"].isNumber() ? (int)kv.second["rough_slot"].asFloat(-1.0f) : -1;
-                if (!ps.glsl.empty()) pbr_[kv.first] = std::move(ps);
-            }
-        modernActive_ = !pbr_.empty();
-        // (the package check greps this: a map without usable pbr bodies falls back to the original materials; the HD
-        // textures and every material stay as Faithful)
-        if (modernActive_) LOG_INFO("wfc: Modern materials on for %s (%zu pbr bodies)", mapName.c_str(), pbr_.size());
-        else LOG_WARN("wfc: Modern materials unavailable for %s: materials_pbr.json %s - the original materials (HD textures unchanged)",
-                      mapName.c_str(), pt.empty() ? "missing" : !parsed ? "unparsable" : "has no bodies");
-    }
+}
 
-    {   // M09 Beast light-probe grids (beast_probes.py; RE MILESTONE03 lightvis add. 2)
-        assets::Json B;
-        std::string bj = readText(dataDir_ + "/beast_probes.json");
-        if (!bj.empty() && assets::Json::parse(bj, B))
-            for (const assets::Json& v : B["volumes"].arr) {
-                BeastVolume bv;
-                for (int i = 0; i < 3; ++i) {
-                    bv.loc[i] = v["location"][(size_t)i].asFloat(); bv.scale[i] = v["scale"][(size_t)i].asFloat(1.0f);
-                    bv.n[i] = v["points"][(size_t)i].asInt(1);
-                }
-                bv.priority = v["priority"].asInt(0);
-                bv.sh.reserve(v["sh"].size());
-                for (const assets::Json& f : v["sh"].arr) bv.sh.push_back((float)f.asDouble());
-                if (bv.sh.size() == (size_t)bv.n[0] * bv.n[1] * bv.n[2] * 27) beast_.push_back(std::move(bv));
-            }
-        if (!beast_.empty()) LOG_INFO("wfc: %zu Beast light-probe volume(s)", beast_.size());
-    }
-    {   // M74 energy-death instances by form-mesh package (build_materials energy_death.json)
-        assets::Json E;
-        std::string ej = readText(dataDir_ + "/energy_death.json");
-        if (!ej.empty() && assets::Json::parse(ej, E))
-            for (const auto& kv : E["by_package"].obj) energyDeath_[kv.first] = kv.second.asString();
-    }
-    {
-        assets::Json S;
-        std::string sj = readText(dataDir_ + "/slot_materials.json");
-        if (!sj.empty() && assets::Json::parse(sj, S))
-            for (const auto& kv : S.obj) slotMaterials_[kv.first] = kv.second.asString();
-    }
-    loadLensFlares();                                // (<data>/lens_flares.json; none: no flares)
-    interpLM_.clear(); drawInterp_ = nullptr;
+// a unit's lighting.json records: interpolated lightmaps, per-component lightmaps (with the unit's directory: empty for the
+// persistent unit), vertex lightmaps, the LightsVisibilitiesVolume (the persistent unit's), component flags, lights (appended)
+void Pipeline::addLightingRecords(const assets::Json& L, const std::string& dir, bool primary) {
     for (const auto& kv : L["interpolated_lightmaps"].obj) {   // transforming world actors: {actor: [capture 0, capture 1]}
         if (kv.second.size() < 2) continue;
         InterpLM& r = interpLM_[kv.first];
+        r.cap[0].dir = r.cap[1].dir = dir;
         for (int k = 0; k < 2; ++k) {
             const assets::Json& c = kv.second[(size_t)k];
             for (int i = 0; i < 3; ++i) {
@@ -1585,6 +1491,7 @@ bool Pipeline::load(const std::string& mapName) {
     const assets::Json& lp = L["lightmaps"]["props"];
     for (const auto& kv : lp.obj) {
         LMRec r;
+        r.dir = dir;
         for (int i = 0; i < 3; ++i) {
             r.coeff[i] = kv.second["coeffs"][(size_t)i].asString();
             for (int c = 0; c < 3; ++c) r.scale[i][c] = kv.second["scales"][(size_t)i][(size_t)c].asFloat(1.0f);
@@ -1630,7 +1537,7 @@ bool Pipeline::load(const std::string& mapName) {
         vertexLMs_[key] = std::move(v);
     }
 
-    {   // LightsVisibilitiesVolume: load + structural self-check; used once decode() lands (ReVa layout)
+    if (primary) {   // LightsVisibilitiesVolume: load + structural self-check (the persistent unit's; merged units: stage 2)
         const assets::Json& jv2 = L["light_visibility_volumes"];
         if (jv2.size() > 0) {
             const assets::Json& v = jv2[0];
@@ -1726,6 +1633,132 @@ bool Pipeline::load(const std::string& mapName) {
         l.enabled = e["enabled"].asBool(true);
         lights_.push_back(l);
     }
+}
+
+bool Pipeline::load(const std::string& mapName) {
+    if (std::getenv("WFC_LEGACYRENDER")) { LOG_INFO("wfc: WFC_LEGACYRENDER set; shader path disabled"); return false; }
+    std::string root = renderDataRoot();
+    cutPending_ = true; cutPendingWhy_ = "map load";   // (temporal history never spans maps)
+    rtInitMode();
+    rtInfra_ = rtMode_ > 0 || std::getenv("WFC_RT_SHADOWAO") != nullptr || std::getenv("WFC_RT_TOGGLE") != nullptr;
+    loadFrame_ = frameNo_;
+    dataDir_ = root + "/" + mapName;
+    std::string mj = readText(dataDir_ + "/materials_glsl.json");
+    yieldLoad();
+    // (WFC_LIGHTING_DIR=<dir>: <dir>/<map>/lighting.json, a regenerated copy for A/Bs)
+    std::string lj = readText([&] { const char* e = std::getenv("WFC_LIGHTING_DIR"); if (!e || !*e) return dataDir_ + "/lighting.json";
+        const size_t s = dataDir_.find_last_of("/\\"); return std::string(e) + "/" + (s == std::string::npos ? dataDir_ : dataDir_.substr(s + 1)) + "/lighting.json"; }());
+    yieldLoad();
+    if (rtInfra_) {   // R1 sun swap data (Systems' tools/systems/vbake): WFC_RT_VBAKE=<dir> (<dir>/<map>/), else <render data>/vbake/
+        const char* vb = std::getenv("WFC_RT_VBAKE");
+        r1Dir_ = vb ? std::string(vb) + "/" + mapName : dataDir_ + "/vbake";
+        assets::Json F;
+        const std::string ft = readText(r1Dir_ + "/fit.json");
+        if (!ft.empty() && assets::Json::parse(ft, F)) {
+            r1Fit_[0] = F["k"].asFloat(0.0f); r1Fit_[1] = F["p"].asFloat(1.0f); r1Fit_[2] = F["tangent_y_sign"].asFloat(1.0f);
+            static const float kScale = [] { const char* e = std::getenv("WFC_RT_R1K"); return e ? (float)std::atof(e) : 1.0f; }();
+            r1Fit_[0] *= kScale;                       // (WFC_RT_R1K: a scale on the fitted k, for tuning)
+            const assets::Json& s = F["sun_linear"];
+            for (int c = 0; c < 3; ++c) r1Sun_[c] = s.arr.size() > (size_t)c ? s.arr[(size_t)c].asFloat(0.0f) : 0.0f;
+            // (the GL entry points are tested later, in r1CheckGl: a direct / package boot runs this before the GL load)
+            r1Map_ = r1Fit_[0] > 0.0f; r1GlChecked_ = false; r1StateLogged_ = false;
+            LOG_INFO("RT R1 sun swap data: %s (k %.3f, p %.2f, tangent y %+.0f, sun %.3f %.3f %.3f)%s", r1Dir_.c_str(), r1Fit_[0],
+                     r1Fit_[1], r1Fit_[2], r1Sun_[0], r1Sun_[1], r1Sun_[2], r1Map_ ? "" : " - unused (k <= 0)");
+        } else {
+            LOG_INFO("RT R1 sun swap data: none (%s/fit.json %s) - Realistic without the sun swap on %s", r1Dir_.c_str(),
+                     ft.empty() ? "missing" : "unparsable", mapName.c_str());
+        }
+    }
+    loadMovers(dataDir_ + "/movers.json");
+    yieldLoad();
+    loadMapFx(mapFxPath());
+    loadFogVolumes(dataDir_ + "/fog_volumes.json");
+    {   // MaterialInstanceActor -> MIC (build_materials.py): Matinee material-parameter routing
+        assets::Json MJ;
+        std::string mt = readText(dataDir_ + "/material_instance_actors.json");
+        if (!mt.empty() && assets::Json::parse(mt, MJ))
+            for (const auto& kv : MJ["actors"].obj) {
+                std::string a = kv.first, m = kv.second.asString();
+                std::transform(a.begin(), a.end(), a.begin(), ::tolower);
+                std::transform(m.begin(), m.end(), m.begin(), ::tolower);
+                miaMaterial_[a] = m;
+            }
+    }
+    yieldLoad();
+    if (mj.empty() || lj.empty()) {
+        lastLoadError() = "render data not found in " + dataDir_;
+        LOG_ERROR("wfc: render data not found in %s (run tools/render/build_render_data.ps1): LEGACY RENDERER, "
+                  "not the original presentation", dataDir_.c_str());
+        return false;
+    }
+    if (!glx::load()) {
+        lastLoadError() = "GL 3.3 entry points unavailable";
+        LOG_ERROR("wfc: GL 3.3 entry points unavailable: LEGACY RENDERER");
+        return false;
+    }
+    glx::installDebugOutput();
+    lastLoadError().clear();
+
+    assets::Json M, L;
+    if (!assets::Json::parse(mj, M) || !assets::Json::parse(lj, L)) { LOG_ERROR("wfc: render data JSON parse failed"); return false; }
+
+    addMaterials(M, dataDir_);
+    // M6 Modern materials: the matc "pbr" bodies (tools/render/matc_pbr.py) - <map>/materials_pbr.json, else
+    // WFC_PBR_DIR/<map>/; only with HD textures on and the Modern setting (or WFC_MODERN=1)
+    pbr_.clear(); modernActive_ = false;
+    if ((modern_ || std::getenv("WFC_MODERN") != nullptr) && hdTextures_) {
+        std::string pt = readText(dataDir_ + "/materials_pbr.json");
+        if (pt.empty()) if (const char* pd = std::getenv("WFC_PBR_DIR")) pt = readText(std::string(pd) + "/" + mapName + "/materials_pbr.json");
+        assets::Json PJ;
+        const bool parsed = !pt.empty() && assets::Json::parse(pt, PJ);
+        if (parsed)
+            for (const auto& kv : PJ.obj) {
+                PbrSrc ps;
+                ps.glsl = kv.second["glsl"].asString();
+                ps.roughParent = kv.second["roughness_parent"].asString();
+                ps.roughSlot = kv.second["rough_slot"].isNumber() ? (int)kv.second["rough_slot"].asFloat(-1.0f) : -1;
+                if (!ps.glsl.empty()) pbr_[kv.first] = std::move(ps);
+            }
+        modernActive_ = !pbr_.empty();
+        // (the package check greps this: a map without usable pbr bodies falls back to the original materials; the HD
+        // textures and every material stay as Faithful)
+        if (modernActive_) LOG_INFO("wfc: Modern materials on for %s (%zu pbr bodies)", mapName.c_str(), pbr_.size());
+        else LOG_WARN("wfc: Modern materials unavailable for %s: materials_pbr.json %s - the original materials (HD textures unchanged)",
+                      mapName.c_str(), pt.empty() ? "missing" : !parsed ? "unparsable" : "has no bodies");
+    }
+
+    {   // M09 Beast light-probe grids (beast_probes.py; RE MILESTONE03 lightvis add. 2)
+        assets::Json B;
+        std::string bj = readText(dataDir_ + "/beast_probes.json");
+        if (!bj.empty() && assets::Json::parse(bj, B))
+            for (const assets::Json& v : B["volumes"].arr) {
+                BeastVolume bv;
+                for (int i = 0; i < 3; ++i) {
+                    bv.loc[i] = v["location"][(size_t)i].asFloat(); bv.scale[i] = v["scale"][(size_t)i].asFloat(1.0f);
+                    bv.n[i] = v["points"][(size_t)i].asInt(1);
+                }
+                bv.priority = v["priority"].asInt(0);
+                bv.sh.reserve(v["sh"].size());
+                for (const assets::Json& f : v["sh"].arr) bv.sh.push_back((float)f.asDouble());
+                if (bv.sh.size() == (size_t)bv.n[0] * bv.n[1] * bv.n[2] * 27) beast_.push_back(std::move(bv));
+            }
+        if (!beast_.empty()) LOG_INFO("wfc: %zu Beast light-probe volume(s)", beast_.size());
+    }
+    {   // M74 energy-death instances by form-mesh package (build_materials energy_death.json)
+        assets::Json E;
+        std::string ej = readText(dataDir_ + "/energy_death.json");
+        if (!ej.empty() && assets::Json::parse(ej, E))
+            for (const auto& kv : E["by_package"].obj) energyDeath_[kv.first] = kv.second.asString();
+    }
+    {
+        assets::Json S;
+        std::string sj = readText(dataDir_ + "/slot_materials.json");
+        if (!sj.empty() && assets::Json::parse(sj, S))
+            for (const auto& kv : S.obj) slotMaterials_[kv.first] = kv.second.asString();
+    }
+    loadLensFlares();                                // (<data>/lens_flares.json; none: no flares)
+    interpLM_.clear(); drawInterp_ = nullptr;
+    addLightingRecords(L, std::string(), true);
 
     // the authored height fog: 'fogs' (every enabled layer, up to 4 - build_lighting.py fogs()) when present, the first
     // in the members below and the rest in fogL_ / fogC_; else the single 'fog' (first component) of older data
@@ -2488,7 +2521,7 @@ void Pipeline::buildInterpLM(InterpLM& r) {
         auto it = atl.find(name);
         if (it == atl.end()) {
             ImageData img;
-            if (!platform::decodeImage(dataDir_ + "/lightmaps/" + name + ".png", img) || !img.valid()) return nullptr;
+            if (!platform::decodeImage((r.cap[0].dir.empty() ? dataDir_ : r.cap[0].dir) + "/lightmaps/" + name + ".png", img) || !img.valid()) return nullptr;
             it = atl.emplace(name, std::move(img)).first;
         }
         return &it->second;
@@ -3961,7 +3994,9 @@ int Pipeline::upload(const MeshData& m) {
         d.first = s.indexOffset; d.count = s.indexCount;
         const Material* mat = (s.material >= 0 && (size_t)s.material < m.mats.size()) ? &m.mats[(size_t)s.material] : nullptr;
         if (!s.component.empty()) g.world = true;
-        if (bspMesh_ >= 0 && s.component.rfind("bsp:", 0) == 0) { g.drawsBsp = true; continue; }
+        // (chapter loader: a merged sublevel's BSP counts too - the persistent level of a chapter may have none)
+        const bool anyBsp = bspMesh_ >= 0 || std::any_of(sublevels_.begin(), sublevels_.end(), [](const SublevelRT& sl) { return sl.bsp >= 0; });
+        if (anyBsp && s.component.rfind("bsp:", 0) == 0) { g.drawsBsp = true; continue; }
         std::string key = s.component;
         std::transform(key.begin(), key.end(), key.begin(), ::tolower);
         if (key.rfind("actor:", 0) == 0) d.actor = key.substr(6);
@@ -4062,11 +4097,13 @@ int Pipeline::upload(const MeshData& m) {
         if (lm && !d.vlmTex) {
             const LMRec& r = lit->second;
             for (int i = 0; i < 3; ++i) {
-                auto li = lmIndex_.find(r.coeff[i]);
+                // (a merged sublevel's pages: from its own lightmaps/, keyed apart from same-named pages of other units)
+                const std::string lk = r.dir.empty() ? r.coeff[i] : r.dir + "|" + r.coeff[i];
+                auto li = lmIndex_.find(lk);
                 if (li == lmIndex_.end()) {
-                    GLuint t = texture(dataDir_ + "/lightmaps/" + r.coeff[i] + ".png", true, true, true);
+                    GLuint t = texture((r.dir.empty() ? dataDir_ : r.dir) + "/lightmaps/" + r.coeff[i] + ".png", true, true, true);
                     lmTextures_.push_back(t);
-                    li = lmIndex_.emplace(r.coeff[i], (int)lmTextures_.size() - 1).first;
+                    li = lmIndex_.emplace(lk, (int)lmTextures_.size() - 1).first;
                 }
                 d.lmTex[i] = li->second;
                 for (int c = 0; c < 3; ++c) d.lmScale[i][c] = r.scale[i][c];
@@ -4117,6 +4154,9 @@ int Pipeline::upload(const MeshData& m) {
     }
     const bool worldUpload = g.world;
     if (hiddenGameSkipped_) { LOG_INFO("wfc: %d HiddenGame component section(s) not drawn", hiddenGameSkipped_); hiddenGameSkipped_ = 0; }
+    // (chapter loader) one world mesh hosts the BSP / decal draws: every unit's world.glb carries bsp: sections, and each
+    // host would draw them all again (MP: no sublevels, unchanged)
+    if (g.drawsBsp && !sublevels_.empty()) { if (bspHosted_) g.drawsBsp = false; else bspHosted_ = true; }
     meshes_.push_back(std::move(g));
     LOG_INFO("wfc: uploaded mesh %zu: %zu verts, %zu submeshes (%d lightmapped, %d programs, %zu total)",
              meshes_.size() - 1, m.vertexCount(), subs.size(), nLM, nProg, progs_.size());
@@ -5124,12 +5164,15 @@ void Pipeline::draw(int id, const core::Mat4& model) {
     struct R1End { Pipeline* p; bool on; ~R1End() { if (on) p->r1WorldEnd(); } } r1End{this, r1};
     drawSubs(g, model, !g.world);
     if (g.drawsBsp && bspMesh_ >= 0 && bspMesh_ != id) drawSubs(meshes_[(size_t)bspMesh_], model, false);
+    if (g.drawsBsp)                                  // (chapter loader) the merged sublevels' BSP (stage 1: per-sub draws, no MDI set)
+        for (const SublevelRT& sl : sublevels_) if (sl.bsp >= 0 && sl.bsp != id) drawSubs(meshes_[(size_t)sl.bsp], model, false);
     if (g.drawsBsp && testMesh_ >= 0) drawSubs(meshes_[(size_t)testMesh_], testModel_, true);
-    if (g.drawsBsp && decalMesh_ >= 0 && decalMesh_ != id && !WFC_ENV("WFC_NODECALS")) {
+    if (g.drawsBsp && ((decalMesh_ >= 0 && decalMesh_ != id) || !sublevels_.empty()) && !WFC_ENV("WFC_NODECALS")) {
         // DecalComponent DepthBias (-0.0002): pull decals toward the camera over their receivers.
         glEnable(GL_POLYGON_OFFSET_FILL);
         glPolygonOffset(-1.0f, -4.0f);
-        drawSubs(meshes_[(size_t)decalMesh_], model, false);
+        if (decalMesh_ >= 0 && decalMesh_ != id) drawSubs(meshes_[(size_t)decalMesh_], model, false);
+        for (const SublevelRT& sl : sublevels_) if (sl.decal >= 0 && sl.decal != id) drawSubs(meshes_[(size_t)sl.decal], model, false);
         glDisable(GL_POLYGON_OFFSET_FILL);
     }
     if (g.drawsBsp && !rtDecals_.empty()) {
@@ -8218,8 +8261,8 @@ void Pipeline::ensureSceneColor() {
     sceneColorCopied_ = true;
 }
 
-void Pipeline::loadFogVolumes(const std::string& file) {
-    fogVolumes_.clear(); fogVolumeByComp_.clear();
+void Pipeline::loadFogVolumes(const std::string& file, bool append) {
+    if (!append) { fogVolumes_.clear(); fogVolumeByComp_.clear(); }   // (append: a merged sublevel's)
     static const bool off = std::getenv("WFC_NOFOGVOLUMES") != nullptr;   // linked shapes stay undrawn (302d212)
     std::string text = readText(file);
     if (off || text.empty()) return;
@@ -9667,8 +9710,8 @@ void Pipeline::r1BindDraw(int prog, int lm0, int arr) {
 
 // Post-process volume height fog (RE CAMPAIGN_PPV_HEIGHTFOG_RE.md; AssetTools: MP_ESC_Remnant's PostProcessVolume_10624 links one,
 // 169 in the campaign). The load's layers are the base; the volume fogs come from lighting.json 'volume_fogs' (build_lighting.py).
-void Pipeline::loadPpvFogs(const assets::Json& L) {
-    ppvVolumes_.clear(); ppvLive_.clear(); ppvApplied_ = false; ppvLastTime_ = -1.0f;
+void Pipeline::loadPpvFogs(const assets::Json& L, bool append) {
+    if (!append) { ppvVolumes_.clear(); ppvLive_.clear(); ppvApplied_ = false; ppvLastTime_ = -1.0f; }   // (append: the base is re-taken from the merged layers)
     fogBase_.on = fogOn_; fogBase_.n = fogN_; fogBase_.maxH = fogMaxH_; fogBase_.scale = fogScale_;
     fogBase_.start = fogStart_; fogBase_.ext = fogExt_; fogBase_.in = fogIn_;
     std::memcpy(fogBase_.L, fogL_, sizeof fogL_); std::memcpy(fogBase_.C, fogC_, sizeof fogC_);
@@ -9785,6 +9828,92 @@ void Pipeline::ppvFogFrame() {
         c[0] = all[(size_t)k].in.x; c[1] = all[(size_t)k].in.y; c[2] = all[(size_t)k].in.z;
     }
     ppvApplied_ = true;
+}
+
+// Chapter loader, stage 1 (docs/handoff/RENDERING_CHAPTER_LOADER.md): one more unit merged into the loaded Pipeline - after
+// load() of the persistent unit, which keeps its post-process, R1 data and LightsVisibilitiesVolume.
+bool Pipeline::loadSublevel(const std::string& unit) {
+    if (!active_) { LOG_WARN("wfc: sublevel %s: no loaded Pipeline to merge into", unit.c_str()); return false; }
+    const std::string dir = renderDataRoot() + "/" + unit;
+    const std::string mj = readText(dir + "/materials_glsl.json"), lj = readText(dir + "/lighting.json");
+    assets::Json M, L;
+    if (mj.empty() || lj.empty() || !assets::Json::parse(mj, M) || !assets::Json::parse(lj, L)) {
+        LOG_WARN("wfc: sublevel %s: render data missing or unparsable in %s", unit.c_str(), dir.c_str());
+        return false;
+    }
+    const size_t mats0 = mats_.size(), lights0 = lights_.size(), lm0 = lightmaps_.size(), fx0 = fxInstances_.size();
+    addMaterials(M, dir);
+    addLightingRecords(L, dir, false);
+    yieldLoad();
+    loadMovers(dir + "/movers.json");
+    loadMapFx(dir + "/map_fx_runtime.json");
+    loadFogVolumes(dir + "/fog_volumes.json", true);
+    {   // MaterialInstanceActor -> MIC; energy-death instances; slot materials: added by key
+        assets::Json J;
+        if (assets::Json::parse(readText(dir + "/material_instance_actors.json"), J))
+            for (const auto& kv : J["actors"].obj) {
+                std::string a = kv.first, m = kv.second.asString();
+                std::transform(a.begin(), a.end(), a.begin(), ::tolower);
+                std::transform(m.begin(), m.end(), m.begin(), ::tolower);
+                miaMaterial_.emplace(a, m);
+            }
+        assets::Json E;
+        if (assets::Json::parse(readText(dir + "/energy_death.json"), E))
+            for (const auto& kv : E["by_package"].obj) energyDeath_.emplace(kv.first, kv.second.asString());
+        assets::Json S;
+        if (assets::Json::parse(readText(dir + "/slot_materials.json"), S))
+            for (const auto& kv : S.obj) slotMaterials_.emplace(kv.first, kv.second.asString());
+    }
+    {   // height fogs: the union of the units' layers, highest first, at most 4 (FScene::AddHeightFog)
+        struct Lay { float h, scale, start, ext; core::Vec3 in; };
+        std::vector<Lay> all;
+        if (fogOn_) {
+            all.push_back({fogMaxH_, fogScale_, fogStart_, fogExt_, fogIn_});
+            for (int k = 1; k < fogN_ && k < 4; ++k)
+                all.push_back({fogL_[k - 1][0], fogL_[k - 1][1], fogL_[k - 1][2], fogL_[k - 1][3], {fogC_[k - 1][0], fogC_[k - 1][1], fogC_[k - 1][2]}});
+        }
+        const assets::Json& FL = L["fogs"];
+        for (size_t i = 0; i < FL.size(); ++i) {
+            const assets::Json& F = FL[i];
+            if (!F["bEnabled"].asBool(true)) continue;
+            const assets::Json& c = F["LightColor"];
+            const float b = F["LightBrightness"].asFloat(0.1f);
+            all.push_back({F["Height"].asFloat(0.0f), -F["Density"].asFloat(5e-5f) / std::log(2.0f), F["StartDistance"].asFloat(0.0f),
+                           F["ExtinctionDistance"].asFloat(1e8f),
+                           {srgbToLinear(c[0].asFloat(255) / 255.0f) * b * kFogInScale, srgbToLinear(c[1].asFloat(255) / 255.0f) * b * kFogInScale,
+                            srgbToLinear(c[2].asFloat(255) / 255.0f) * b * kFogInScale}});
+        }
+        if (!all.empty()) {
+            std::stable_sort(all.begin(), all.end(), [](const Lay& a, const Lay& b) { return a.h > b.h; });
+            if (all.size() > 4) all.resize(4);
+            fogOn_ = !std::getenv("WFC_NOFOG");
+            fogN_ = (int)all.size();
+            fogMaxH_ = all[0].h; fogScale_ = all[0].scale; fogStart_ = all[0].start; fogExt_ = all[0].ext; fogIn_ = all[0].in;
+            for (int k = 0; k < 4; ++k) fogMinH_[k] = k + 1 < fogN_ ? all[(size_t)k + 1].h : -262144.0f;
+            for (int k = 1; k < fogN_; ++k) {
+                float* l = fogL_[k - 1]; float* c = fogC_[k - 1];
+                l[0] = all[(size_t)k].h; l[1] = all[(size_t)k].scale; l[2] = all[(size_t)k].start; l[3] = all[(size_t)k].ext;
+                c[0] = all[(size_t)k].in.x; c[1] = all[(size_t)k].in.y; c[2] = all[(size_t)k].in.z;
+            }
+        }
+    }
+    loadPpvFogs(L, true);                            // (its volume fogs; the base re-taken from the merged layers)
+    SublevelRT sl;
+    sl.unit = unit; sl.dir = dir;
+    {   // its BSP and static decals: extra world meshes, lit through the unit's per-component lightmap records
+        MeshData bsp;
+        if (platform::dataFileSize(dir + "/bsp.glb") >= 0 && assets::loadGlb(dir + "/bsp.glb", bsp)) sl.bsp = upload(bsp);   // (most units have no BSP: probed, not an error)
+        MeshData dec;
+        if (assets::loadGlb(dir + "/decals.glb", dec)) {
+            sl.decal = upload(dec);
+            if (sl.decal >= 0) meshes_[(size_t)sl.decal].decal = true;
+        }
+    }
+    sublevels_.push_back(sl);
+    LOG_INFO("wfc: sublevel %s merged: +%zu materials, +%zu lights, +%zu lightmapped components, +%zu FX instances, BSP %s, decals %s",
+             unit.c_str(), mats_.size() - mats0, lights_.size() - lights0, lightmaps_.size() - lm0, fxInstances_.size() - fx0,
+             sl.bsp >= 0 ? "yes" : "none", sl.decal >= 0 ? "yes" : "none");
+    return true;
 }
 
 } // namespace wfc
