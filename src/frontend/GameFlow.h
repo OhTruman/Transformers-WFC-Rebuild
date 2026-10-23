@@ -233,6 +233,9 @@ public:
     void campaignGameOver();                                 // UI event 14 -> MISSION FAILED
     void campaignMissionComplete(int mapId, int difficulty); // profile CompleteMission + save; CCP stats 10 s / the lobby
     bool takeCampaignRestartRequest() { bool r = campaignRestart_; campaignRestart_ = false; return r; }   // RestartFromActiveCheckpoint
+    // Until Gameplay's in-place RestartFromActiveCheckpoint exists: relaunch the chapter at the active checkpoint (the HUD's
+    // cpCheckpoint actor path; empty = the chapter start) with the ResumeAutobot / ResumeDecepticon loading title.
+    void campaignRelaunchAt(const std::string& checkpoint);
     void setCampaignForTest(bool on) { campaignForced_ = on; }
     CampaignObjectives& objectives() { return objectives_; }
     const CampaignObjectives& objectives() const { return objectives_; }

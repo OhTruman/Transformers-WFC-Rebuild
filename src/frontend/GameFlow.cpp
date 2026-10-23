@@ -414,14 +414,7 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     }
     if (fn == "Game.RestartChapter") {
         if (role_ == SessionRole::Member || level_ != LevelKind::Match) return {};
-        std::string url = match_.url.toString();
-        const size_t c = url.find("?Checkpoint=");
-        if (c != std::string::npos) { const size_t e = url.find('?', c + 1); url.erase(c, e == std::string::npos ? std::string::npos : e - c); }
-        const MapInfo* mi = cat_->mapById(match_.mapId);
-        resumeFaction_ = mi ? mi->faction : 0;
-        match_.url = Url::parse(url);
-        FlowTrace::emit("campaign.restart", {{"kind", "chapter"}, {"url", url}});
-        travel(url, true);
+        campaignRelaunchAt("");
         return {};
     }
     // FrontEnd_GFX Solo Campaign: CheckCheckpointSaves, answered by _global.ProceedToSoloPlay(AutobotCheckpointExists,
@@ -1342,6 +1335,8 @@ std::string GameFlow::buildLaunchUrl() const {
     std::string url = mi->mapFilename + buildMatchUrl(*gs) + "?MapId=" + std::to_string(mi->mapId);
     // TnGameLobbyGameCampaign.ModifyURL: ?Checkpoint=<path> when one is selected [RE CAMPAIGN_FRONTEND_FLOW_RE 2]
     if (isCampaignTag(gs->tag) && !lobby_.checkpoint.empty()) url += "?Checkpoint=" + lobby_.checkpoint;
+    // GameInfo.GameDifficulty travels in the URL for Gameplay's chapter rules (Gameplay contract: ?WfcDifficulty=0|1|2)
+    if (isCampaignTag(gs->tag)) url += "?WfcDifficulty=" + std::to_string(profile_.campaign.difficulty);
     {   // Private Match bots (PC ADAPTATION; Gameplay's MatchLaunch::fromURL reads them): only when any are configured.
         // Team modes send the faction counts (?BotsAutobot ?BotsDecepticon) and, for parsers that predate them, the
         // human-relative ?BotsFriendly ?BotsEnemy; ?ExtendedPlayers is the Custom Game player limit.
@@ -1374,6 +1369,19 @@ void GameFlow::campaignCheckpointReached(int mapId, int index) {
     profile_.campaign.reachedCheckpoint(mapId, index);
     profile_.save();
     FlowTrace::emit("campaign.checkpointReached", {{"mapId", std::to_string(mapId)}, {"index", std::to_string(index)}});
+}
+
+void GameFlow::campaignRelaunchAt(const std::string& checkpoint) {
+    if (level_ != LevelKind::Match) return;
+    std::string url = match_.url.toString();
+    const size_t c = url.find("?Checkpoint=");
+    if (c != std::string::npos) { const size_t e = url.find('?', c + 1); url.erase(c, e == std::string::npos ? std::string::npos : e - c); }
+    if (!checkpoint.empty()) url += "?Checkpoint=" + checkpoint;
+    const MapInfo* mi = cat_->mapById(match_.mapId);
+    resumeFaction_ = mi ? mi->faction : 0;
+    match_.url = Url::parse(url);
+    FlowTrace::emit("campaign.restart", {{"kind", checkpoint.empty() ? "chapter" : "checkpoint relaunch"}, {"url", url}});
+    travel(url, true);
 }
 
 void GameFlow::campaignGameOver() {

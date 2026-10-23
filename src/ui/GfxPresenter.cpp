@@ -1896,6 +1896,12 @@ void GfxPresenter::syncJoinPanel(gfx::Player& p, frontend::GameFlow& flow, const
             vm.set(t.o, "selectable", V(false));
         }
     }
+    {   // the lobby's own overlays (Y Game Stats: EndGameStats with hideContainer lobby_mc) hide lobby_mc; the panel follows it
+        const V lobby = vm.get(root->script, "lobby_mc");
+        const bool lobbyShown = !lobby.isObject() || vm.toBool(vm.get(lobby.o, "_visible"));
+        vm.set(panel.o, "_visible", V(lobbyShown));
+        if (!lobbyShown) return;
+    }
     auto setLine = [&](const char* name, const std::string& text, const char* colour, int size) {
         const V t = vm.get(panel.o, name);
         if (t.isObject())
