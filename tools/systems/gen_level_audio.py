@@ -94,6 +94,10 @@ def reverb_preset(name):
 SINK_OPS = {'SeqAct_PlaySound', 'SeqAct_PlayPlayerPositionalSound', 'SeqAct_PlayFlybySound', 'SeqAct_Reverb',
             'SeqAct_Mixer', 'SeqAct_PlayMusic', 'SeqAct_StopMusic', 'SeqAct_AmbientAudioZone', 'SeqAct_Delay', 'SeqAct_Gate'}
 STATEFUL = {'SeqAct_AmbientAudioZone', 'SeqAct_Delay', 'SeqAct_Gate', 'SeqEvent_Touch'}   # their outputs are runtime events
+# Dialog ops (any level: the Escalation maps' Round Begin / End chains, the campaign): SeqAct_Conversation (lines), SeqAct_PlayDialog
+# (one dialog cue: Play / Stop, Stopped / Finished, a ducking preset - exported as a one-line conversation), SeqAct_RandomSwitch
+# (UE3: a random enabled 'Link N' per input; bAutoDisableLinks disables the used one, bLooping re-enables all once none is left).
+DIALOG_OPS = {'SeqAct_Conversation', 'SeqAct_PlayDialog', 'SeqAct_RandomSwitch'}
 PASS_THROUGH = {'SeqAct_ActivateRemoteEvent', 'SeqAct_Toggle', 'SeqAct_Log', 'SeqAct_DialogGroup', 'SeqAct_Mixer'}
 D_FLYBY = cls_default('HM_Engine.Default__SeqAct_PlayFlybySound')
 D_DELAY = cls_default('Engine.Default__SeqAct_Delay')
@@ -195,7 +199,7 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None, campaig
             elif cl == 'GFxEvent_FsCommand': out.append('FsCommand:' + p.get('FsCommand', ''))
             elif cl == 'SeqAct_MoviePlayer' and desc == 'Stopped': out.append('MovieStopped:' + p.get('MovieName', ''))
             elif cl == 'SeqAct_Interp' and src in timelines: out.append('Timeline:%s:%s' % (sid(src), desc))
-            elif cl in STATEFUL or (campaign and cl == 'SeqAct_Conversation'): out.append('Out:%s:%s' % (sid(src), desc))
+            elif cl in STATEFUL or cl in DIALOG_OPS: out.append('Out:%s:%s' % (sid(src), desc))
             elif cl == 'SeqEvent_SequenceActivated':
                 seq = src.rsplit('.', 1)[0]
                 for i, il in enumerate(objs.get(seq, (None, {}))[1].get('InputLinks') or []):
@@ -214,9 +218,24 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None, campaig
     def preset_name(ref):
         return objs.get(ref, (None, {}))[1].get('PresetName') or row(ref or '')[1].get('PresetName')
     for o, (cl, p) in sorted(objs.items()):
-        if cl not in SINK_OPS and cl != 'SeqEvent_Touch' and not (campaign and cl == 'SeqAct_Conversation'): continue
+        if cl not in SINK_OPS and cl != 'SeqEvent_Touch' and cl not in DIALOG_OPS: continue
         op = {'id': sid(o)}
         n_inputs = 2
+        if cl == 'SeqAct_RandomSwitch':
+            op.update(type='random_switch', links=int(p.get('LinkCount', 1)), looping=bool(p.get('bLooping', False)),
+                      auto_disable=bool(p.get('bAutoDisableLinks', False)))
+            ops.append(op)
+            for t in triggers(o, 0): links.append({'from': t, 'to': op['id'], 'input': 0})
+            continue
+        if cl == 'SeqAct_PlayDialog':   # one dialog cue = a one-line conversation (Play / Stop in; Stopped / Finished out)
+            nm = preset_name(p.get('DuckingMixerPreset'))
+            op.update(type='conversation', duck=nm, lines=[{'cue': p.get('SoundCue'), 'post_delay': 0.0, 'speaker': None, 'output': None}])
+            if p.get('SoundCue'): cues.add(p['SoundCue'])
+            if nm: presets[nm] = mixer_preset_dsp(nm)
+            ops.append(op)
+            for inp in range(2):
+                for t in triggers(o, inp): links.append({'from': t, 'to': op['id'], 'input': inp})
+            continue
         if cl == 'SeqAct_Conversation':   # [campaign] Lines [{SoundCue, PostDelayTime}] in order; Play / Stop; Played / Finished
             nm = preset_name(p.get('DuckingMixerPreset'))
             # RE CAMPAIGN_DIALOG_TIMING_RE: outputs 0 Played / 1 Stopped / 2 Finished, then one per line (3 + i); variable links
