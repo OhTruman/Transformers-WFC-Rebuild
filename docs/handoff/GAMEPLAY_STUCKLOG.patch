@@ -1,0 +1,13 @@
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index ebfe297f..0c3037a9 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -839,6 +839,8 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
+                         b.avoidUntil = match_.matchTime() + 30.0f;
+                     }
+                     ++b.stuckLevel; ++b.stucks;
++                    { static const bool sl = std::getenv("WFC_STUCKLOG") != nullptr;
++                      if (sl) LOG_INFO("STUCK p%d t %.1f at (%.2f %.2f %.2f) cell %d level %d %s", b.player, match_.matchTime(), pos.x, pos.y, pos.z, botNav_.findCell(pos, 2.0f), b.stuckLevel, vehicle ? "vehicle" : "robot"); }
+                     if (b.stuckLevel == 1) jump = true;
+                     else if (b.stuckLevel == 2) { b.wantRepath = true; jump = true; }
+                     else { b.hasGoal = false; b.wantRepath = true; b.stuckLevel = 0; b.ignoreSightingsUntil = match_.matchTime() + 8.0f;
