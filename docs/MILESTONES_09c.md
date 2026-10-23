@@ -4015,3 +4015,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 10:38 CUT CANDIDATE a5d088db (code 3476b84c + FINAL_BASE_ITEMS a5d088db). Gameplay, Frontend, Rendering DONE for the build.
   Running: Experimental final-gate PRE stage; the Frontend's final milestone run (4 campaign + TDM + ESC from the menus);
   AssetTools' two chapter lanes (~16:30). Then: PERF_HOLD timed gate (~90 min) -> Systems refresh.sh -> verify -> hand-over.
+2026-10-23 10:41 PACKAGE HEAD e967efd4 (a5d088db + build_slim ships the campaign manifests; code unchanged 3476b84c). Systems ready, cut
+  command fixed (SPLIT_HD=1 NOPROMOTE=1 JOBS=4 refresh.sh e967efd4 ...; base ~15 GB + HD pack ~21.7 GB). Waiting: Frontend
+  milestone run, Experimental pre, AssetTools chapters (~16:30), then the timed gate.
