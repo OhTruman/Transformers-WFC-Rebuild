@@ -3559,3 +3559,4 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 01:02 MERGED 0d956825 #6 settings pages scroll past 10 rows; f14cad06 #17 the PC pause menu keeps Choose Transformer / Switch Teams
   in iconic versus (escalationArray was used whenever IconicMode was set); f0a280ed select-result log. Frontend tests pass,
   SIMHASH identical. Frontend's 6-min verify slot (#6, #17, #2 + #7 with 4v4 bots) queued after Systems + Rendering.
+2026-10-23 01:02 RE campaign #3 dialog timing + Matinee §11 merged; RE -> #4 streaming notifies.
