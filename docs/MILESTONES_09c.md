@@ -3941,3 +3941,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   D5 batteries + A1 1,040) + ESCNAV default OFF. Rendering: A1 not a render fault; the 16 s gap = RT load phases + a decal
   grid rebuilt 47x (fixed, patch pending); DECISION: stream units at Started (load / unload render data at runtime) to cut
   A1's 142 s / 17.6 GB. x51 done; eye-pass verdict pending.
+2026-10-23 08:51 CAMPAIGN EYE PASS (Rendering): D5 PASS in Off (the original's grade) + Realistic (lamp highlights, contact shadows, no
+  blotches); A1 render path works (47 units, calibration + post chain active); one Realistic-only cyan horizon line (fix
+  pending); the A1 geometry pass rides the next milestone run after streaming-at-Started.
