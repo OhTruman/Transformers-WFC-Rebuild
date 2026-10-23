@@ -1,0 +1,121 @@
+diff --git a/src/game/Campaign.h b/src/game/Campaign.h
+index 615519f9..9c18a8b8 100644
+--- a/src/game/Campaign.h
++++ b/src/game/Campaign.h
+@@ -61,11 +61,14 @@ struct CampaignMover {
+ 
+ // A campaign destructible (an HmDestructible blueprint instance): its pieces' current states, health and timers, its hit box.
+ struct CampaignDestructible {
+-    struct State { int handle = 0; std::string name, mesh; float health = 0.0f, autoTime = 0.0f; std::vector<std::pair<int, std::string>> links; };
++    struct State { int handle = 0; std::string name, mesh; float health = 0.0f, autoTime = 0.0f; std::vector<std::pair<int, std::string>> links;
++                   bool blocks = false; int colSet = -1; };   // a static-mesh state blocks; its collision set (built once)
+     struct Piece { std::string name; std::vector<State> states; int cur = 0; float health = 0.0f, timer = 0.0f; State* state(); };
+     std::string name;
+     core::Vec3 pos{0, 0, 0}, lo{0, 0, 0}, hi{0, 0, 0};
+     float yawDeg = 0.0f;
++    core::Vec3 posUE{0, 0, 0}, rotDeg{0, 0, 0};   // the UE placement (location UU, pitch / yaw / roll degrees)
++    bool block = true;                            // the actor blocks (collision_flags.bBlockActors)
+     std::vector<Piece> pieces;
+     int lastHitter = -1;
+     std::vector<int> events;   // its Kismet notification events (op indices)
+diff --git a/src/game/World.h b/src/game/World.h
+index a331e663..88200ca3 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1446,6 +1446,7 @@ private:
+     void cpLoadTouches();
+     int cpSpawnDestructible(const std::string& blueprint, const std::string& name, const core::Vec3& at, float yawDeg);   // WorldCampaignDestructibles.cpp
+     void cpDesBounds(int i);
++    void cpDesCollide(int i);
+     void cpDesTransition(int i, size_t piece, int to);
+     void cpDamageDes(int i, float amount, int instigator, const std::string& type);
+     int cpDesRayHit(const core::Vec3& o, const core::Vec3& dir, float range, float& t) const;
+diff --git a/src/game/WorldCampaignDestructibles.cpp b/src/game/WorldCampaignDestructibles.cpp
+index 8618ee93..f541c703 100644
+--- a/src/game/WorldCampaignDestructibles.cpp
++++ b/src/game/WorldCampaignDestructibles.cpp
+@@ -54,7 +54,12 @@ static bool buildDes(const assets::Json& bp, const std::string& contentRoot, Cam
+             for (size_t e = 0; e < ss[k]["effects"].size(); ++e) {
+                 const assets::Json& eff = ss[k]["effects"][e]["effective"];
+                 const std::string m = eff["Mesh"].asString().empty() ? eff["MeshTemplate"].asString() : eff["Mesh"].asString();
+-                if (!m.empty() && S.mesh.empty()) { auto it = meshGltf.find(m); S.mesh = it != meshGltf.end() ? it->second : std::string(); }
++                if (!m.empty() && S.mesh.empty()) {
++                    auto it = meshGltf.find(m); S.mesh = it != meshGltf.end() ? it->second : std::string();
++                    // a static-mesh state blocks (the factory's default mesh-component template: Collide / BlockActors); physical
++                    // debris (HmPhysicalMeshDestructionEffectFactory) does not (PROV)
++                    S.blocks = ss[k]["effects"][e]["class"].asString() == "HmStaticMeshDestructionEffectFactory";
++                }
+             }
+             for (size_t l = 0; l < ss[k]["links"].size(); ++l) {
+                 const assets::Json& L = ss[k]["links"][l];
+@@ -80,6 +85,7 @@ int World::cpSpawnDestructible(const std::string& blueprint, const std::string&
+     if (!readJ2(root + tail(blueprint) + ".json", bp)) { LOG_WARN("campaign: no destructible blueprint %s", blueprint.c_str()); return -1; }
+     CampaignDestructible d;
+     d.name = name; d.pos = at; d.yawDeg = yawDeg;
++    d.posUE = core::Vec3{at.x * 100.0f, at.z * 100.0f, at.y * 100.0f}; d.rotDeg = core::Vec3{0.0f, yawDeg, 0.0f};
+     if (!buildDes(bp, "", d)) return -1;
+     for (CampaignDestructible::Piece& p : d.pieces) { p.cur = p.states.front().handle; if (auto* s = p.state()) { p.health = s->health; p.timer = s->autoTime; } }
+     cp_.destructibles.push_back(d);
+@@ -106,7 +112,7 @@ void World::cpDesBounds(int i) {
+         }
+         if (!it->second.ok) continue;
+         const render::MeshData& m = it->second.mesh;
+-        const core::Mat4 M = core::Mat4::translate(d.pos) * core::Mat4::rotateY(-d.yawDeg * 3.14159265f / 180.0f);
++        const core::Mat4 M = render::ueActorMatrix(d.posUE, d.rotDeg);
+         for (int c = 0; c < 8; ++c) {
+             const core::Vec3 q{(c & 1) ? m.boundsMax.x : m.boundsMin.x, (c & 2) ? m.boundsMax.y : m.boundsMin.y, (c & 4) ? m.boundsMax.z : m.boundsMin.z};
+             const core::Vec3 w = core::transformPoint(M, q);
+@@ -117,6 +123,30 @@ void World::cpDesBounds(int i) {
+     }
+     if (!any) { lo = d.pos - core::Vec3{1, 0, 1}; hi = d.pos + core::Vec3{1, 2, 1}; }
+     d.lo = lo; d.hi = hi;
++    cpDesCollide(i);
++}
++
++// The current states' blocking meshes as moving-collision sets (one per piece state, built once; the others disabled).
++void World::cpDesCollide(int i) {
++    CampaignDestructible& d = cp_.destructibles[(size_t)i];
++    if (!d.block || !collision_.valid()) return;
++    const core::Mat4 M = render::ueActorMatrix(d.posUE, d.rotDeg);
++    for (size_t k = 0; k < d.pieces.size(); ++k) {
++        CampaignDestructible::Piece& p = d.pieces[k];
++        for (CampaignDestructible::State& s : p.states) {
++            const bool want = s.handle == p.cur && s.blocks && !s.mesh.empty();
++            if (want && s.colSet < 0) {
++                auto it = cpDesMeshes_.find(s.mesh);
++                if (it == cpDesMeshes_.end() || !it->second.ok) continue;
++                const render::MeshData& m = it->second.mesh;
++                std::vector<core::Vec3> tris;
++                tris.reserve(m.indices.size());
++                for (uint32_t v : m.indices) tris.push_back(core::Vec3{m.positions[v * 3], m.positions[v * 3 + 1], m.positions[v * 3 + 2]});
++                if (!tris.empty()) s.colSet = collision_.addDynamicSet(tris, M);
++            }
++            if (s.colSet >= 0) collision_.setDynamicEnabled(s.colSet, want);
++        }
++    }
+ }
+ 
+ // A piece leaves its state through `link`: the new state's health / timer, the other pieces' notification links (DamageDependents,
+@@ -195,7 +225,7 @@ void World::cpDrawDestructibles(render::IRenderer& r) const {
+             if (!s || s->mesh.empty()) continue;
+             auto it = cpDesMeshes_.find(s->mesh);
+             if (it == cpDesMeshes_.end() || !it->second.ok || it->second.handle < 0) continue;
+-            r.drawMesh(it->second.handle, core::Mat4::translate(d.pos) * core::Mat4::rotateY(-d.yawDeg * 3.14159265f / 180.0f), core::Vec3{1, 1, 1});
++            r.drawMesh(it->second.handle, render::ueActorMatrix(d.posUE, d.rotDeg), core::Vec3{1, 1, 1});
+         }
+ }
+ 
+@@ -231,6 +261,13 @@ void World::cpLoadPlacedDestructibles() {
+         const assets::Json& L = row["location_gltf"];
+         if (L.size() >= 3) d.pos = core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
+         d.yawDeg = row["rotation_deg"]["yaw"].asFloat(0.0f);
++        d.rotDeg = core::Vec3{row["rotation_deg"]["pitch"].asFloat(0.0f), d.yawDeg, row["rotation_deg"]["roll"].asFloat(0.0f)};
++        {
++            const assets::Json& U = row["location_ue"];
++            d.posUE = U.isObject() ? core::Vec3{U["X"].asFloat(), U["Y"].asFloat(), U["Z"].asFloat()}
++                                   : U.size() >= 3 ? core::Vec3{U[0].asFloat(), U[1].asFloat(), U[2].asFloat()} : core::Vec3{d.pos.x * 100.0f, d.pos.z * 100.0f, d.pos.y * 100.0f};
++        }
++        d.block = row["collision_flags"]["bBlockActors"].asBool(true);
+         if (!buildDes(*bp, "", d)) continue;
+         for (CampaignDestructible::Piece& p : d.pieces) { p.cur = p.states.front().handle; if (auto* s = p.state()) { p.health = s->health; p.timer = s->autoTime; } }
+         cp_.destructibles.push_back(d);
