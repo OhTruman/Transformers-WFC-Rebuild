@@ -3780,3 +3780,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 06:02 Campaign render data in the chapter layout (AssetTools): D5_OME 6 sublevels 113.5 MB, 0 compile errors, 0 missing
   textures; A1_IAC 48 sublevels 1.92 GB, 1,952 materials, 5 errors (DarkEnergon_Spreading x3, Hologram_Post -> Rendering),
   rerun on the head after the queue. chapter.json = persistent level + derived streaming order. Probes: not holes.
+2026-10-23 06:06 AssetTools: D5_OME collision / nav inputs (per-sublevel collision_pawn + physics; navigation.json 522 nodes; navmesh.json)
+  and the Escalation nav from the original NavigationCell mesh (every on-mesh spawn point covered: BrokenHope 50 / 50, Remnant
+  60 / 60; blockers + per-generator unlocks). Gameplay: strand / spawn patch -> E2b part 3 -> TnCampaignGameSolo.
