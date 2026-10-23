@@ -1182,10 +1182,16 @@ void GameFlow::sendOnlineLaunch() {
 // maps with a veto; the user chose the Halo Reach vote. The original autostart is kept: BeginIntermissionCountdown (45 s)
 // once NumRequiredPlayers humans are in [RE fc12ceb]; it stops again if they drop below before the launch.
 
+int GameFlow::publicMinPlayers() {
+    // TEST ONLY: WFC_PUBLIC_MIN_PLAYERS=1 lets a public lobby start with its host alone (the two-window join-in-progress check)
+    if (const char* e = std::getenv("WFC_PUBLIC_MIN_PLAYERS")) return std::max(1, std::atoi(e));
+    return kPublicMinPlayers;
+}
+
 void GameFlow::voteBegin(int round, const std::vector<int>& exclude) {
     // Integration decision 2026-10-23 (RE ONLINE_PC_DEVIATIONS row 13): a public lobby starts by itself at 2 humans, after
     // the original 45 s intermission; the host cannot start it early (CanHostRequestGameStart = IsPrivateMatch).
-    lobby_.numRequiredPlayers = kPublicMinPlayers;
+    lobby_.numRequiredPlayers = publicMinPlayers();
     std::vector<const MapInfo*> pool = cat_->compatibleMaps(lobby_.gameModeTag, true);
     pool.erase(std::remove_if(pool.begin(), pool.end(), [&](const MapInfo* m) {
         return std::find(exclude.begin(), exclude.end(), m->mapId) != exclude.end(); }), pool.end());
