@@ -131,3 +131,18 @@ AnimNodeSlot vtable +0x1D8 / +0x1DC.
   The script path is C (RUNTIME §4.1).
 - IMF_RelativeToInitial matrix order: VMX, not decompiled (H stock).
 - Slerp shortest-path behaviour (0x82B82FA8): H stock.
+
+## 11. AnimControl track-side position (H: the native GetAnimForTime was not located)
+I decompiled the whole Matinee code range (0x82C00000–0x82CC0000, about 3,200 functions) and searched for the key-array walk
+(0x1C-byte keys: StartTime, AnimSeqName, AnimStartOffset, AnimEndOffset, AnimPlayRate, bLooping / bReverse bits at +0x18). That
+found only the editor key add / set functions (0x82C24160 / 0x82C070A8), which confirm the key layout and the **bit order:
+bLooping = bit 31, bReverse = bit 30**. The evaluator itself is likely inlined into UpdateTrack and wasn't isolated.
+
+**Stock UE3 formula (H):** with key k = the last key whose StartTime ≤ t (key 0 if t is before it):
+- L = sequence length; span = L − StartOffset − EndOffset;
+- p = (t − k.StartTime) · AnimPlayRate;
+- looping: p = fmod(p, span); otherwise **clamp p to span**, so it holds the last frame past the end;
+- reverse: pos = (L − EndOffset) − p; otherwise pos = StartOffset + p;
+- then `SetAnimPosition(slot, channel, k.AnimSeqName, pos, bFireNotifies = !jump, k.bLooping)` → §9.
+
+Data: 1,177 of 6,609 keys loop and 202 are reversed.
