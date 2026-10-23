@@ -92,7 +92,8 @@ def reverb_preset(name):
     return {'mixer_preset': mp, 'dsp_by_category': {'MASTER_WET': dsp} if dsp else {}}
 
 SINK_OPS = {'SeqAct_PlaySound', 'SeqAct_PlayPlayerPositionalSound', 'SeqAct_PlayFlybySound', 'SeqAct_Reverb',
-            'SeqAct_Mixer', 'SeqAct_PlayMusic', 'SeqAct_StopMusic', 'SeqAct_AmbientAudioZone', 'SeqAct_Delay', 'SeqAct_Gate'}
+            'SeqAct_Mixer', 'SeqAct_PlayMusic', 'SeqAct_StopMusic', 'SeqAct_AmbientAudioZone', 'SeqAct_Delay', 'SeqAct_Gate',
+            'SeqAct_PlayStinger'}   # HmWorldInfo._MusicPlayer.PlayStinger(Stinger), output 0 at once [C, CAMPAIGN_KISMET_WFC_CLASSES_RE 6]
 STATEFUL = {'SeqAct_AmbientAudioZone', 'SeqAct_Delay', 'SeqAct_Gate', 'SeqEvent_Touch'}   # their outputs are runtime events
 # Dialog ops (any level: the Escalation maps' Round Begin / End chains, the campaign): SeqAct_Conversation (lines), SeqAct_PlayDialog
 # (one dialog cue: Play / Stop, Stopped / Finished, a ducking preset - exported as a one-line conversation), SeqAct_RandomSwitch
@@ -292,6 +293,8 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None, campaig
                       boredom=t['BoredomTime'], priority=t['Priority'],
                       ignore_spaz_timer=bool(p.get('IgnoreSpazTimer', False)),
                       fade_out_override=p.get('CurrentTrackFadeOutTimeOverride', -1.0) if p.get('UseCurrentTrackFadeOutTimeOverride') else -1.0)
+        elif cl == 'SeqAct_PlayStinger':
+            op.update(type='play_stinger', cue=p.get('Stinger'))
         elif cl == 'SeqAct_StopMusic':
             op.update(type='stop_music', fade_out_override=p.get('FadeTimeOverride', -1.0) if p.get('UseFadeTimeOverride') else -1.0)
         elif cl == 'SeqAct_AmbientAudioZone':
@@ -320,7 +323,7 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None, campaig
     # Keep only what can make or change sound: sinks some trigger reaches, and stateful ops (touch / zone / delay / gate)
     # whose outputs lead to a kept op. Links into dropped ops and from unresolved sources go too.
     links = [l for l in links if not l['from'].startswith('Unresolved:')]
-    SOUND = {'play_sound', 'positional_pool', 'flyby', 'reverb', 'mixer', 'play_music', 'stop_music', 'timeline', 'conversation'}
+    SOUND = {'play_sound', 'positional_pool', 'flyby', 'reverb', 'mixer', 'play_music', 'stop_music', 'timeline', 'conversation', 'play_stinger'}
     byid = {op['id']: op for op in ops}
     keep = {op['id'] for op in ops if op['type'] in SOUND and any(l['to'] == op['id'] for l in links)}
     changed = True
@@ -332,6 +335,10 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None, campaig
                 if src in byid and src not in keep: keep.add(src); changed = True
     for o2, tl in timelines.items():
         if tl['id'] in keep: pass
+    # [campaign] the chapter's Kismet VM (Gameplay) drives the ops and routes their links (LevelAudioScript hosted mode): every audio op
+    # ships, reachable from a known trigger or not (D5_OME_Music_m's music is started by gameplay events the generator cannot see)
+    # (the VM runs the stock flow ops itself - Delay, Gate, RandomSwitch - so their copies are left out)
+    if campaign: keep = {op['id'] for op in ops if op['type'] not in ('delay', 'gate', 'random_switch')}
     ops = [op for op in ops if op['id'] in keep]
     links = [l for l in links if l['to'] in keep and (not l['from'].startswith('Out:') or l['from'].split(':', 2)[1] in keep)]
     used = {op.get('cue') for op in ops} | {l['cue'] for op in ops for l in op.get('lines', [])} | {k['cue'] for op in ops for k in op.get('sounds', [])}
