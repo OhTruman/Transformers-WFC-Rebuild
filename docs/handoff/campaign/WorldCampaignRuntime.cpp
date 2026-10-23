@@ -127,6 +127,7 @@ bool World::cpPawnFactoryActivate(KismetVM& vm, int op, int input) {
             return true;
         }
         if (F.cls == "TnActorFactorySentryAI") return cpSentryFactoryActivate(vm, op, input, F);
+        if (F.cls == "TnActorFactoryRollerMine") return cpMineFactoryActivate(vm, op, input, F);
         if (input != 0) return true;   // Stop / other inputs: nothing to do yet
         if (desFactory && !F.points.empty()) {   // a destructible factory: the blueprint at its spawn point
             // named after its sequence + op (the four D5 battery sequences share the op name), the Spawned variable = "des:<i>"
@@ -906,6 +907,126 @@ bool World::cpSentryOpActivate(KismetVM& vm, int op, int input) {
     } else for (int i : ss) if (i >= 0 && (size_t)i < cp_.sentries.size()) cp_.sentries[(size_t)i].dormant = input == 0;
     if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
     return true;
+}
+
+} // namespace game
+
+namespace game {
+
+// ---- roller mines (TnActorFactoryRollerMine -> TransGame.TnRollerMine: AssetTools spawnables.json roller_mine) ----
+// The factory's authored DamageRadius / DamageAmount / Health / Fuse / LocalLinearVelocity [C data]: the mine rolls out at the
+// launch speed, explodes when its Fuse runs out, when an enemy pawn touches it, or when shot to 0 Health (a destructible hit box);
+// the explosion is HurtRadius(DamageAmount, DamageRadius); each one gone -> the factory's Single / All Pawns Killed.
+// PROV: no rigid-body physics - it rolls on the ground toward the nearest enemy (the launch direction is not exported: the spawn
+// points are Emitters without a rotation in the data), steering at 10 m/s^2.
+void World::cpLoadMineDefs() {
+    cp_.mineFactories.clear(); cp_.mines.clear();
+    assets::Json j;
+    if (!readJsonFile("F:/Transformers Rebuild/AssetTools/out/campaign_characters/spawnables.json", j)) return;
+    const assets::Json& r = j["roller_mine"];
+    const assets::Json& cd = r["class_defaults"];
+    const assets::Json& fs = r["factories"];
+    for (size_t f = 0; f < fs.size(); ++f) {
+        if (fs[f]["chapter"].asString() != cpChapter_.chapter) continue;
+        const assets::Json& v = fs[f]["factory_values"];
+        CampaignState::MineFactory M;
+        M.damage = v["DamageAmount"].asFloat(cd["_DamageAmount"].asFloat(25.0f));
+        M.radius = v["DamageRadius"].asFloat(cd["_DamageRadius"].asFloat(1000.0f)) * 0.01f;
+        M.health = v["Health"].asFloat(cd["_Health"].asFloat(30.0f));
+        M.fuse = v["Fuse"].asFloat(cd["_Fuse"].asFloat(10.0f));
+        const assets::Json& lv = v["LocalLinearVelocity"];
+        M.speed = std::max(5.0f, std::sqrt(lv["X"].asFloat(0) * lv["X"].asFloat(0) + lv["Y"].asFloat(0) * lv["Y"].asFloat(0)) * 0.01f);
+        for (size_t k = 0; k < fs[f]["spawn_points"].size(); ++k) {
+            const assets::Json& L = fs[f]["spawn_points"][k]["location_ue"];
+            if (L.size() >= 3) M.points.push_back(core::Vec3{L[0].asFloat() * 0.01f, L[2].asFloat() * 0.01f, L[1].asFloat() * 0.01f});
+        }
+        cp_.mineFactories[fs[f]["action"].asString()] = M;
+    }
+    LOG_INFO("campaign: %zu roller mine factories", cp_.mineFactories.size());
+}
+
+bool World::cpMineFactoryActivate(KismetVM& vm, int op, int input, CampaignFactory& F) {
+    const int fi = (int)(&F - &cp_.factories[0]);
+    auto it = cp_.mineFactories.find(F.action);
+    if (input == 4) { for (CampaignMine& m : cp_.mines) if (m.factory == fi && !m.done) { m.fuse = 0.0f; } return true; }   // Kill All: they go off
+    if (input != 0) return true;
+    if (it == cp_.mineFactories.end() || it->second.points.empty()) {
+        LOG_INFO("campaign: roller mine factory %s: no data", afterDot(F.action).c_str());
+        if (std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Spawned") != F.outputs.end()) vm.output(op, "All Pawns Spawned");
+        return true;
+    }
+    const CampaignState::MineFactory M = it->second;
+    for (int c = 0; c < std::max(1, F.count); ++c) {
+        CampaignMine m;
+        m.factory = fi; m.pos = M.points[(size_t)c % M.points.size()]; m.fuse = M.fuse;
+        CampaignDestructible d;
+        d.name = "rollermine_" + std::to_string(cp_.mines.size()); d.pos = m.pos; d.block = false;
+        d.posUE = core::Vec3{m.pos.x * 100.0f, m.pos.z * 100.0f, m.pos.y * 100.0f};
+        CampaignDestructible::Piece P; P.name = "Mine";
+        CampaignDestructible::State alive; alive.handle = 0; alive.name = "Rolling"; alive.health = M.health;
+        alive.mesh = "content/FX_RollerMine_p/Mesh/RollerMine_STAT.gltf";
+        alive.links.push_back({1, std::string("HmGenericDamageDestructionTrigger")});
+        CampaignDestructible::State dead; dead.handle = 1; dead.name = "Exploded";
+        P.states.push_back(alive); P.states.push_back(dead); P.cur = 0; P.health = M.health;
+        d.pieces.push_back(P);
+        d.fixedBounds = true; d.lo = m.pos - core::Vec3{0.7f, 0.7f, 0.7f}; d.hi = m.pos + core::Vec3{0.7f, 0.7f, 0.7f};
+        cp_.destructibles.push_back(d);
+        m.des = (int)cp_.destructibles.size() - 1;
+        m.damage = M.damage; m.radius = M.radius; m.speed = M.speed;
+        cp_.mines.push_back(m);
+        F.liveSentries.push_back(-1 - (int)(cp_.mines.size() - 1));   // (mines share the live list: -1 - index)
+        if (std::find(F.outputs.begin(), F.outputs.end(), "Spawned") != F.outputs.end()) vm.output(op, "Spawned");
+    }
+    LOG_INFO("campaign: roller mine factory %s launched %d", afterDot(F.action).c_str(), std::max(1, F.count));
+    if (std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Spawned") != F.outputs.end()) vm.output(op, "All Pawns Spawned");
+    return true;
+}
+
+void World::cpTickMines(float dt) {
+    for (size_t mi = 0; mi < cp_.mines.size(); ++mi) {
+        CampaignMine& m = cp_.mines[mi];
+        if (m.done) continue;
+        CampaignDestructible& d = cp_.destructibles[(size_t)m.des];
+        const int team = cp_.factories[(size_t)m.factory].team;
+        // roll toward the nearest living enemy
+        int tgt = -1; float best = 1e30f;
+        for (size_t q = 0; q < match_.players().size(); ++q) {
+            const MatchPlayer& mp = match_.players()[q];
+            if (!mp.alive || mp.team == team) continue;
+            const Character* c = participantPawn((int)q);
+            if (!c) continue;
+            const float L = core::length(c->position() - m.pos);
+            if (L < best) { best = L; tgt = (int)q; }
+        }
+        if (tgt >= 0) {
+            core::Vec3 to = participantPawn(tgt)->position() - m.pos; to.y = 0.0f;
+            const float L = core::length(to);
+            if (L > 1e-3f) {
+                const core::Vec3 want = to * (m.speed / L);
+                const core::Vec3 dv = want - core::Vec3{m.vel.x, 0.0f, m.vel.z};
+                const float dl = core::length(dv), a = 10.0f * dt;
+                m.vel = m.vel + (dl > a ? dv * (a / dl) : dv);
+            }
+        }
+        m.pos = m.pos + m.vel * dt;
+        float gy; core::Vec3 n;
+        if (collision_.valid() && collision_.groundHeight(m.pos.x, m.pos.z, m.pos.y + 1.0f, 2.0f, gy, n)) m.pos.y = gy + 0.6f;
+        d.pos = m.pos; d.posUE = core::Vec3{m.pos.x * 100.0f, m.pos.z * 100.0f, m.pos.y * 100.0f};
+        d.lo = m.pos - core::Vec3{0.7f, 0.7f, 0.7f}; d.hi = m.pos + core::Vec3{0.7f, 0.7f, 0.7f};
+        const bool shot = d.gone || d.pieces.empty() || d.pieces[0].cur != 0;
+        const bool touched = tgt >= 0 && best < 1.5f;
+        if (!shot && !touched && (m.fuse -= dt) > 0.0f) continue;
+        m.done = true;
+        cpRemoveDestructible(m.des);
+        radiusDamage(m.pos, m.damage, m.radius, -1, "TnDamageTypeRollerMine");
+        LOG_INFO("campaign: roller mine %zu explodes (%s)", mi, shot ? "shot" : touched ? "touched" : "fuse");
+        CampaignFactory& F = cp_.factories[(size_t)m.factory];
+        F.liveSentries.erase(std::remove(F.liveSentries.begin(), F.liveSentries.end(), -1 - (int)mi), F.liveSentries.end());
+        if (F.op >= 0) {
+            if (std::find(F.outputs.begin(), F.outputs.end(), "Single Pawn Killed") != F.outputs.end()) cp_.vm.output(F.op, "Single Pawn Killed");
+            if (F.liveSentries.empty() && std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Killed") != F.outputs.end()) cp_.vm.output(F.op, "All Pawns Killed");
+        }
+    }
 }
 
 } // namespace game
