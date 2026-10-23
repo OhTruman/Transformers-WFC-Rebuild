@@ -151,7 +151,7 @@ def linear_from_srgb_byte(c):
     return (c / 255.0) ** 2.2
 
 
-VS_MAPS = 'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps'
+VS_MAPS = os.environ.get('WFC_VS_ROOT', r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice') + '/Maps'  # WFC_VS_ROOT: campaign VerticalSlice root (AssetTools/work/campaign_pilot/VerticalSlice); unset = ExtractedAssets (MP unchanged)
 
 
 def map_packages(mapname):

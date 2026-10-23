@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ue3obj import Repo  # noqa: E402
 
 MANI = r'F:/Transformers Rebuild/AssetTools/manifests'
-VS_MAPS = r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps'
+VS_MAPS = os.environ.get('WFC_VS_ROOT', r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice') + '/Maps'  # WFC_VS_ROOT: campaign VerticalSlice root (AssetTools/work/campaign_pilot/VerticalSlice); unset = ExtractedAssets (MP unchanged)
 CONTENT = r'F:/Transformers Rebuild/ExtractedAssets/content'
 WFC = r'F:/Transformers Rebuild/AssetTools/scripts/wfc'
 

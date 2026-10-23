@@ -23,7 +23,7 @@ LIGHT_DEFAULTS = {'Brightness': 1.0, 'LightColor': [255, 255, 255, 0], 'bEnabled
 POINT_DEFAULTS = {'Radius': 1024.0, 'FalloffExponent': 2.0, 'ShadowFalloffExponent': 2.0}
 SPOT_DEFAULTS = {'OuterConeAngle': 44.0, 'InnerConeAngle': 0.0}
 CHANNEL_DEFAULTS = {'BSP': True, 'Static': True, 'Dynamic': True, 'CompositeDynamic': True}
-VS_MAPS = r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps'
+VS_MAPS = os.environ.get('WFC_VS_ROOT', r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice') + '/Maps'  # WFC_VS_ROOT: campaign VerticalSlice root (AssetTools/work/campaign_pilot/VerticalSlice); unset = ExtractedAssets (MP unchanged)
 FOG_DEFAULTS = {'bEnabled': True, 'Density': 5e-05, 'LightBrightness': 0.1, 'LightColor': [255, 255, 255, 0],
                 'ExtinctionDistance': 100000000.0, 'StartDistance': 0.0, 'Height': 0.0}
 
@@ -99,7 +99,7 @@ def component_flags(mapname):
     archetype chain): hidden actors (bHidden, not drawn in game) and components that receive no light
     (bAcceptsLights False or an empty LightingChannels set: UE3 lights only affect overlapping channels), and the
     shadow-casting exceptions (no_shadow: CastShadow False; dynamic_shadow: bCastDynamicShadow True). Keyed by component path and by 'actor:<Actor>' (world.glb tags actor-placed nodes that way)."""
-    p = os.path.join('F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps', mapname, 'props_authored.json')
+    p = os.path.join(VS_MAPS, mapname, 'props_authored.json')
     if not os.path.exists(p):
         return {}
     out = {}

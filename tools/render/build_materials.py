@@ -17,7 +17,7 @@ import impact_decals  # noqa: E402
 import xbox_texture  # noqa: E402
 
 UMODEL = r'F:/Transformers Rebuild/AssetTools/bin/umodel/umodel_64.exe'
-VS = r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice'
+VS = os.environ.get('WFC_VS_ROOT', r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice')  # WFC_VS_ROOT: campaign VerticalSlice root (AssetTools/work/campaign_pilot/VerticalSlice); unset = ExtractedAssets (MP unchanged)
 
 
 def glb_json(path):

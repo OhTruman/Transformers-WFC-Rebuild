@@ -14,7 +14,7 @@ Usage: python build_movers.py <Map> <out_dir>
 import json, math, os, struct, sys
 
 MANI = r'F:/Transformers Rebuild/AssetTools/manifests'
-VS_MAPS = r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps'
+VS_MAPS = os.environ.get('WFC_VS_ROOT', r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice') + '/Maps'  # WFC_VS_ROOT: campaign VerticalSlice root (AssetTools/work/campaign_pilot/VerticalSlice); unset = ExtractedAssets (MP unchanged)
 U2D = 360.0 / 65536.0
 
 

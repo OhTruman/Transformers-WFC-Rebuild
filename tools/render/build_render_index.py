@@ -21,7 +21,7 @@ usage: build_render_index.py <MAP> <out_dir>      (no-op when the map ships a ru
 """
 import json, os, re, sys
 
-VS_MAPS = r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps'
+VS_MAPS = os.environ.get('WFC_VS_ROOT', r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice') + '/Maps'  # WFC_VS_ROOT: campaign VerticalSlice root (AssetTools/work/campaign_pilot/VerticalSlice); unset = ExtractedAssets (MP unchanged)
 CONTENT = r'F:/Transformers Rebuild/ExtractedAssets/content'
 MANI = os.environ.get('WFC_ASSETTOOLS_MANIFESTS', r'F:/Transformers Rebuild/AssetTools/manifests')
 
