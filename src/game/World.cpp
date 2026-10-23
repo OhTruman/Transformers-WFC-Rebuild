@@ -3232,6 +3232,8 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
     if (!match_.players()[(size_t)victim].alive) return false;
     // TnPlayerPawn.TakeDamage: teammates' damage is discarded except TnDamageTypeAOE (NotifyHitByFriendlyFire).
     if (instigator != victim && match_.sameTeam(instigator, victim) && !aoe) return false;
+    // Escalation E3b: a hit on a Brute's backpack (an attached destructible) never reaches the pawn
+    if (sv_.phase != SurvivalState::Phase::Off && !svKillingBrute_ && svBackpackHit(victim, instigator, amount, damageType)) return false;
     if (hitDirOk) lastHitDir_[victim] = hitDir; else lastHitDir_.erase(victim);
     Health* h = nullptr;
     MatchOpponent* opp = nullptr;
@@ -5543,6 +5545,8 @@ bool World::radiusVisible(const core::Vec3& origin, const core::Vec3& victimLoca
 }
 
 void World::radiusDamage(const core::Vec3& at, float damage, float radius, int instigator, const std::string& type) {
+    struct RadiusFlag { bool& f; bool was; ~RadiusFlag() { f = was; } } radiusFlag{svRadiusHit_, svRadiusHit_};
+    svRadiusHit_ = true;
     if (anySmart_) { std::lock_guard<std::mutex> lk(smartBlastMutex_); smartBlasts_.push_back({at, instigator, 2, match_.matchTime()}); }
     // Actor.HurtRadius -> TakeRadiusDamage: Dist = max(|Location - origin| - collision radius, 0), scale = 1 - Dist / DamageRadius
     // (bFullDamage false) [HIGH stock UE3 Actor.TakeRadiusDamage]; teammates are filtered by applyMatchDamage (projectile

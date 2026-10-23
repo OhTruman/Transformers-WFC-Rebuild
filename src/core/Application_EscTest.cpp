@@ -56,6 +56,47 @@ void Application::runEscalationTest() {
         run(7.0f);   // Remnant FillWaveReCheckTime 3.0 s: spawns at 0, 3, 6 s
         check(S.failedSpawns == 0 && S.spawns >= 3, "Remnant: wave 1 keeps spawning every 3 s recheck (no failed spawn)");
         LOG_INFO("ESCTEST Remnant: %d spawns, %d failed", S.spawns, S.failedSpawns);
+        {   // E3b: the Brute backpack (RE ESCALATION_HORDE_AI sections 2 / 6)
+            const int b = world_.svTestSpawn("Brute_");
+            run(0.5f);
+            game::Character* bc = world_.participantPawnMutable(b);
+            const game::SurvivalState::Slot* sl = nullptr;
+            for (const auto& x : S.slots) if (x.player == b) sl = &x;
+            check(b >= 0 && bc && sl && sl->bpStage == 0 && sl->bpHealth == 25.0f && bc->health().max == 100000.0f,
+                  "Brute: spawned with the backpack (25) and the chassis' 100,000 health");
+            const int me = world_.localMatchPlayer();
+            game::Match& m = world_.match();
+            auto hitFrom = [&](float side, float amount, const char* type) {   // side +1: in front of the Brute, -1: behind it
+                if (!bc) return;
+                bc->setYaw(0.0f);
+                const core::Vec3 at = bc->position() + core::forwardFromYawPitch(0.0f, 0.0f) * (6.0f * side);
+                m.setPlayerLocation(me, at, 1.0f);
+                world_.applyMatchDamage(b, me, amount, false, type);
+            };
+            const float h0 = bc ? bc->health().current : 0.0f;
+            hitFrom(1.0f, 100.0f, "TransGame.TnDamageTypeAssaultRifle");
+            check(sl && sl->bpStage == 0 && sl->bpHealth == 25.0f && bc && bc->health().current < h0,
+                  "Brute: a hit from the front lands on the body (DamageAngle 100: the backpack is not hit)");
+            const float h1 = bc ? bc->health().current : 0.0f;
+            hitFrom(-1.0f, 30.0f, "TransGame.TnDamageTypeAssaultRifle");
+            check(sl && sl->bpStage == 5 && sl->bpHealth == 50.0f && bc && bc->health().current == h1,
+                  "Brute: from behind the backpack takes it (25 -> stage 5 at 50, no overflow) and the pawn nothing");
+            hitFrom(-1.0f, 40.0f, "TransGame.TnDamageTypeMeleeDefault");
+            check(sl && sl->bpStage == 5 && sl->bpHealth == 30.0f, "Brute: melee x0.5 on the backpack (40 -> 20)");
+            hitFrom(-1.0f, 30.0f, "TransGame.TnDamageTypeAssaultRifle");
+            hitFrom(-1.0f, 80.0f, "TransGame.TnDamageTypeAssaultRifle");
+            check(sl && sl->bpStage == 1 && m.players()[(size_t)b].alive, "Brute: 50 then 75 broken -> critical, still alive");
+            const size_t kills = m.killHistory().size();
+            run(2.5f);
+            check(m.players()[(size_t)b].alive, "Brute: alive 2.5 s into critical");
+            run(0.7f);
+            bool byPack = false;
+            for (size_t k = kills; k < m.killHistory().size(); ++k)
+                if (m.killHistory()[k].victim == b && m.killHistory()[k].killer == me && m.killHistory()[k].damageType.find("BruteBackpack") != std::string::npos) byPack = true;
+            check(!m.players()[(size_t)b].alive && byPack && S.bpExplosions == 1,
+                  "Brute: the backpack explodes 3 s after critical and kills it (TnDamageTypeBruteBackpack, credited to the last hitter)");
+            LOG_INFO("ESCTEST backpack: %d hits, %d refused (front), %d explosions", S.bpHits, S.bpRefused, S.bpExplosions);
+        }
         LOG_INFO("ESCTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
         exitCode_ = fails ? 1 : 0;
         return;

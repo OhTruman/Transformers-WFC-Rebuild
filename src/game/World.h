@@ -892,6 +892,7 @@ public:
     // Escalation: the director state and the map's data (tests, HUD).
     const SurvivalState& survival() const { return sv_; }
     const SurvivalData& survivalData() const { return svData_; }
+    int svTestSpawn(const std::string& typePrefix);   // WFC_ESCTEST: spawn one horde entry of that type now (its match player, or -1)
     // Campaign chapters (WorldCampaign.cpp)
     bool campaignMap() const { return campaignMap_; }
     const CampaignChapter& campaignChapter() const { return cpChapter_; }
@@ -1423,6 +1424,10 @@ private:
     void svSort(int type);
     void svTouch(int zone, int sign);
     bool svSpawn(int slot);
+    bool svBackpackHit(int victim, int instigator, float amount, const std::string& damageType);   // E3b: the Brute backpack took it
+    void svBackpackExplode(SurvivalState::Slot& s);
+    bool svRadiusHit_ = false;     // inside radiusDamage (the backpack's radius x0.25)
+    bool svKillingBrute_ = false;  // TnKillAttachedPawn in progress (bypasses the backpack test)
     void svSetZoneActive(int zone, bool on);
     bool svInteractHeld(int player) const;
     void svFireGenerator(int generator, bool levelDrop = false);
