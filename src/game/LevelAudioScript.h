@@ -99,6 +99,12 @@ public:
     enum class Hosted { Unknown, Immediate, Async };
     Hosted hostedInput(const std::string& opId, int input, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener);
     bool hasOp(const std::string& opId) const { return opById_.count(opId) != 0; }
+    // SIM-TIMED conversations (campaign; Gameplay: every peer ends a line on the same tick): the sim decides when each line starts and
+    // the conversation ends (the line durations in the chapter data); the audio only plays them. simLine(0) pushes the ducking preset
+    // and plays line 0 (a playing line stops first); simLine(i) plays line i; simEnd stops the line and pops the preset. The op's own
+    // playback-timed progression is off from the first simLine on. No outputs are made (the sim fires them).
+    void simLine(const std::string& opId, int line, SoundCues& cues, const core::Vec3& listener);
+    void simEnd(const std::string& opId, SoundCues& cues);
     // `pawn` = the local player's pawn origin (touch volumes, "player" sources); `pawnAlive` false = no / dead pawn.
     void tick(float dt, const core::Vec3& listener, SoundCues& cues, MusicPlayer* music,
               const core::Vec3* pawn = nullptr, bool pawnAlive = true);
@@ -160,6 +166,7 @@ private:
         float postTimer = -1.0f;
         bool lineStarted = false;
         bool playDialog = false;   // SeqAct_PlayDialog (one cue): no cue -> Stopped at once, no ducking (RE PLAYDIALOG_NO_CUE_RE)
+        bool simTimed = false;     // the sim drives this conversation (simLine / simEnd): tick() leaves it alone
         // random switch: LinkCount outputs "Link 1".."Link N"; bAutoDisableLinks / bLooping; the used links
         int linkCount = 1;
         bool rsLooping = false, rsAutoDisable = false;

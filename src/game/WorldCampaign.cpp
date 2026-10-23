@@ -1,6 +1,7 @@
 // Campaign chapters (TnCampaignGameSolo / TnCoopGame): the chapter World (the units' geometry merged), the chapter start, the AI squad,
 // the game over and the level Kismet. See Campaign.h.
 #include "game/World.h"
+#include "frontend/DataPaths.h"
 #include "assets/Gltf.h"
 #include "assets/Json.h"
 #include "core/Log.h"
@@ -242,6 +243,7 @@ void World::setupCampaign(const MatchLaunch& l) {
 bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
     KismetVM::Op& o = vm.op(op);
     const std::string& c = o.cls;
+    if (cpDialogActivate(vm, op, input)) return true;                  // [Systems] conversations, timed by the chapter data
     if (const int a = cpAudioActivate(vm, op, input)) return a == 2;   // [Systems] the chapter's audio ops (level audio, hosted)
     if (c == "SeqAct_SetActiveCheckpoint") {
         std::string cpPath = vm.objectOf(op, "Checkpoint");
@@ -262,6 +264,7 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
             LOG_INFO("campaign: MissionComplete (%s, MapId %d, difficulty %d) at t %.1f", cpChapter_.chapter.c_str(), cpChapter_.mapId, cp_.difficulty, match_.matchTime());
         }
         o.latent = true;   // the outro movie
+        cpRequestMovie(op, o.authored["MovieName"].asString());   // [Systems] Stopped at its end (the frontend's movie player)
         return true;
     }
     if (c == "SeqAct_SetStreamingState") {   // Started at once; Finished when the state is current (every unit of the start is loaded: PROV)
@@ -271,6 +274,11 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
     if (c == "SeqAct_TnPawnFactory") return cpPawnFactoryActivate(vm, op, input);
     if (cpAiOpActivate(vm, op, input)) return true;   // MoveToActor / SetMoveToObjective / UseInteract
     if (c == "SeqAct_Conversation" && input == 0) { o.latent = true; o.timer = 3.0f; vm.output(op, "Played"); return true; }
+    if (c == "SeqAct_MoviePlayer") {   // [Systems] Play: the full-screen movie, latent until its end (Stopped); Stop: ends it early
+        if (input == 0) { o.latent = true; cpRequestMovie(op, o.authored["MovieName"].asString()); }
+        else if (cp_.movieOp == op) cp_.movieStop = true;
+        return true;
+    }
     if (c == "SeqAct_Interp" || c == "SeqAct_MoviePlayer" ||
         c == "SeqAct_TnForceIntoForm" || c == "SeqAct_ActorFactory" || c == "SeqAct_ActorFactoryEx") { o.latent = true; o.timer = -1.0f; return true; }
     return false;
@@ -281,12 +289,35 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
 // chapter audio lacks, the stand-ins below stay (a conversation takes 3 s).
 void World::cpAudioBind() {
     cp_.audioId.assign(cp_.vm.opCount(), std::string());
+    cp_.opKey.assign(cp_.vm.opCount(), std::string());
     cp_.audioOp.clear(); cp_.audioOps = 0;
+    cp_.dialog.clear(); cp_.dialogRuns.clear();
+    {   // the conversations' line timing, from the chapter audio data itself (no audio device needed)
+        const char* d = std::getenv("WFC_CAMPAIGN_AUDIO");
+        const std::string path = (d ? std::string(d) : frontend::frontendDataDir() + "/../campaign") + "/" + cpChapter_.chapter + "_audio.json";
+        assets::Json doc;
+        if (readJson(path, doc)) {
+            const assets::Json& ops = doc["kismet"]["ops"];
+            for (size_t i = 0; i < ops.size(); ++i) {
+                if (ops[i]["type"].asString() != "conversation") continue;
+                std::vector<CampaignState::DialogLine> lines;
+                for (size_t l = 0; l < ops[i]["lines"].size(); ++l) {
+                    const assets::Json& ln = ops[i]["lines"][l];
+                    CampaignState::DialogLine dl;
+                    dl.duration = ln["duration"].asFloat(-1.0f); dl.postDelay = ln["post_delay"].asFloat(0.0f); dl.output = ln["output"].asString();
+                    lines.push_back(dl);
+                }
+                cp_.dialog[ops[i]["id"].asString()] = lines;
+            }
+        }
+        LOG_INFO("campaign: %zu conversations timed from %s", cp_.dialog.size(), path.c_str());
+    }
     for (size_t i = 0; i < cp_.vm.opCount(); ++i) {
         const std::string& p = cp_.vm.op((int)i).path;
         const size_t k = p.find(".Main_Sequence.");
         if (k == std::string::npos) continue;
         const std::string id = p.substr(0, p.find('.')) + "|" + p.substr(k + 15);
+        cp_.opKey[i] = id;
         if (!levelAudio_.hasHostedOp(id)) continue;
         cp_.audioId[i] = id; cp_.audioOp[id] = (int)i; ++cp_.audioOps;
     }
@@ -303,6 +334,74 @@ void World::cpAudioBind() {
     LOG_INFO("campaign: %d Kismet audio ops hosted by the level audio", cp_.audioOps);
 }
 
+// [Systems] SeqAct_Conversation, timed by the sim [RE CAMPAIGN_DIALOG_TIMING_RE: Play -> CurrentLineIndex 0, the ducking preset,
+// Played; a line's end -> its output and PostDelayTimer = PostDelayTime; the next line once the timer goes negative; past the last
+// -> pop, Finished; Stop -> Stopped]. A line ends after its authored wave duration (the chapter data) instead of the playback callback,
+// so every peer - with or without audio - ends it on the same tick; the level audio plays the lines on the sim's word (simLine / simEnd).
+// A line of unknown duration takes 3 s (the former stand-in).
+bool World::cpDialogActivate(KismetVM& vm, int op, int input) {
+    KismetVM::Op& o = vm.op(op);
+    if (o.cls != "SeqAct_Conversation" || (size_t)op >= cp_.opKey.size()) return false;
+    auto it = cp_.dialog.find(cp_.opKey[(size_t)op]);
+    if (it == cp_.dialog.end()) return false;
+    const std::string& key = it->first;
+    if (input == 0) {   // Play (a running conversation restarts at line 0)
+        o.latent = true;
+        cp_.dialogRuns[op] = CampaignState::DialogRun{};
+        vm.output(op, "Played");
+        if (it->second.empty()) { cp_.dialogRuns.erase(op); vm.finishLatent(op, "Finished"); return true; }
+        levelAudio_.simLine(key, 0, listenerPos_);
+    } else if (cp_.dialogRuns.count(op)) {   // Stop
+        cp_.dialogRuns.erase(op);
+        levelAudio_.simEnd(key);
+        vm.finishLatent(op, "Stopped");
+    }
+    return true;
+}
+
+void World::cpDialogTick(KismetVM& vm, int op, float dt) {
+    CampaignState::DialogRun& r = cp_.dialogRuns[op];
+    const std::string key = cp_.opKey[(size_t)op];
+    const std::vector<CampaignState::DialogLine>& lines = cp_.dialog[key];
+    r.t += dt;
+    if (!r.inPost) {
+        const CampaignState::DialogLine& ln = lines[(size_t)r.line];
+        if (r.t < (ln.duration > 0.0f ? ln.duration : 3.0f)) return;
+        r.inPost = true; r.t = 0.0f;
+        if (!ln.output.empty()) vm.output(op, ln.output);
+        return;
+    }
+    if (r.t <= lines[(size_t)r.line].postDelay) return;   // the PostDelayTimer goes negative on the first tick past it
+    if (++r.line >= (int)lines.size()) {
+        cp_.dialogRuns.erase(op);
+        levelAudio_.simEnd(key);
+        vm.finishLatent(op, "Finished");
+        return;
+    }
+    r.inPost = false; r.t = 0.0f;
+    levelAudio_.simLine(key, r.line, listenerPos_);
+}
+
+// [Systems] Campaign movies: the authored MovieName ("FMV_d5outro.bik", "FMV_d5itext.bik ") -> the frontend's movie name (no extension).
+// One at a time: a new request replaces a playing one (its op stops). No frontend (headless): nothing plays and the op stays latent.
+void World::cpRequestMovie(int op, const std::string& movieName) {
+    std::string m = movieName;
+    while (!m.empty() && (m.back() == ' ' || m.back() == '	')) m.pop_back();
+    if (m.size() > 4 && (m.compare(m.size() - 4, 4, ".bik") == 0 || m.compare(m.size() - 4, 4, ".BIK") == 0)) m.resize(m.size() - 4);
+    if (m.empty()) { cp_.vm.finishLatent(op, "Stopped"); return; }
+    if (cp_.movieOp >= 0 && cp_.movieOp != op) cp_.vm.finishLatent(cp_.movieOp, "Stopped");
+    cp_.movie = m; cp_.movieOp = op; cp_.movieStop = false; ++cp_.movieSerial;
+    LOG_INFO("campaign: movie %s (request %d)", m.c_str(), cp_.movieSerial);
+}
+
+void World::campaignMovieEnded(int serial) {
+    if (serial != cp_.movieSerial || cp_.movieOp < 0) return;   // an older request
+    const int op = cp_.movieOp;
+    LOG_INFO("campaign: movie %s ended", cp_.movie.c_str());
+    cp_.movie.clear(); cp_.movieOp = -1; cp_.movieStop = false;
+    cp_.vm.finishLatent(op, "Stopped");
+}
+
 int World::cpAudioActivate(KismetVM& vm, int op, int input) {
     if ((size_t)op >= cp_.audioId.size() || cp_.audioId[(size_t)op].empty()) return 0;
     KismetVM::Op& o = vm.op(op);
@@ -315,6 +414,7 @@ int World::cpAudioActivate(KismetVM& vm, int op, int input) {
 }
 
 void World::cpKismetLatent(KismetVM& vm, int op, float dt) {
+    if (cp_.dialogRuns.count(op)) { cpDialogTick(vm, op, dt); return; }   // [Systems]
     KismetVM::Op& o = vm.op(op);
     if (o.cls == "SeqAct_Conversation" && o.timer > 0.0f && (o.timer -= dt) <= 0.0f) vm.finishLatent(op, "Finished");
 }

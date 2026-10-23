@@ -72,6 +72,18 @@ struct CampaignState {
     std::vector<std::string> audioId;
     std::map<std::string, int> audioOp;
     int audioOps = 0;
+    // [Systems] SIM-TIMED conversations (the chapter data's line durations; every peer, with or without audio, on the same tick):
+    // op key ("<level>|<path under Main_Sequence>") per VM op, the lines per conversation key, the running ones by VM op.
+    struct DialogLine { float duration = -1.0f, postDelay = 0.0f; std::string output; };
+    struct DialogRun { int line = 0; float t = 0.0f; bool inPost = false; };
+    std::vector<std::string> opKey;
+    std::map<std::string, std::vector<DialogLine>> dialog;
+    std::map<int, DialogRun> dialogRuns;
+    // [Systems] the full-screen movie a Kismet op is playing (SeqAct_MoviePlayer / TnSeqAct_MissionComplete MovieName): the frontend's
+    // movie player shows it (Game.PlayMovie path) and its end fires the op's Stopped. movieSerial changes per request.
+    std::string movie;
+    int movieOp = -1, movieSerial = 0;
+    bool movieStop = false;
 };
 
 } // namespace game

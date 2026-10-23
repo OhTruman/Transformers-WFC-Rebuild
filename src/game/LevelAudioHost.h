@@ -50,6 +50,8 @@ public:
     LevelAudioScript::Hosted hostedInput(const std::string& opId, int input, const core::Vec3& listener) {
         return audio_ ? ambient_.hostedScript().hostedInput(opId, input, cues_, &music_, listener) : LevelAudioScript::Hosted::Unknown;
     }
+    void simLine(const std::string& opId, int line, const core::Vec3& listener) { if (audio_) ambient_.hostedScript().simLine(opId, line, cues_, listener); }
+    void simEnd(const std::string& opId) { if (audio_) ambient_.hostedScript().simEnd(opId, cues_); }
     int event(const std::string& trigger, const core::Vec3& listener) {
         return audio_ ? ambient_.fireEvent(trigger, cues_, listener) : 0;
     }

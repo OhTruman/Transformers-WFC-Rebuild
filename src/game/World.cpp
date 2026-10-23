@@ -2889,6 +2889,7 @@ void World::fillPresented(PresentedFrame& p) {
     // weapon's here showed e.g. TankCannon 1 / Ion 50 -> the HUD's low-ammo state + reload prompt (playtest 2026-10-13).
     p.localMag = p.hud.clipMax; p.localReserveMax = p.hud.reserveMax;
     p.localWeaponId = pc.weapon().def ? pc.weapon().def->id : "";
+    p.campaignMovie = cp_.movie; p.campaignMovieSerial = cp_.movieSerial; p.campaignMovieStop = cp_.movieStop;
     p.localChassis = localPlayer_ >= 0 && (size_t)localPlayer_ < n ? p.players[(size_t)localPlayer_].chassis : std::string();
     p.aim = player_.controller().hudAimState();
     p.matchState = (int)match_.state();

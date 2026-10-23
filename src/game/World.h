@@ -901,6 +901,11 @@ public:
     bool cpKismetActivate(KismetVM& vm, int op, int input);   // the level Kismet's host ops
     int cpAudioActivate(KismetVM& vm, int op, int input);      // [Systems] its audio ops: 0 not audio, 1 done (VM default out), 2 async
     void cpAudioBind();                                        // [Systems] map the VM's audio ops to the level audio (hosted)
+    bool cpDialogActivate(KismetVM& vm, int op, int input);    // [Systems] a sim-timed conversation's Play / Stop (true: handled)
+    void cpDialogTick(KismetVM& vm, int op, float dt);
+    void cpRequestMovie(int op, const std::string& movieName); // [Systems] a full-screen campaign movie (the frontend plays it)
+    // [Systems] the frontend's movie player finished / skipped the campaign movie of request `serial`: the op's Stopped fires
+    void campaignMovieEnded(int serial);
     void cpKismetLatent(KismetVM& vm, int op, float dt);
     // The map's transforming actors (Rendering: draw each actor's glb at matrix with its clip at t, unless hidden).
     const TransformingActors& transformingActors() const { return transforming_; }
@@ -1011,6 +1016,9 @@ public:
         std::vector<float> localSegmentTops;            // health segment tops (HudFrame)
         int localMag = 0, localReserveMax = 0;          // the local weapon's magSize / reserveMax
         std::string localWeaponId;                      // the local weapon's def id ("" none)
+        std::string campaignMovie;                      // [Systems] the campaign Kismet's full-screen movie ("" none) + its request serial
+        int campaignMovieSerial = 0;
+        bool campaignMovieStop = false;                 // its op's Stop input fired
         std::string localChassis;
         HudAimState aim;                                // player().controller().hudAimState()
         int matchState = 0;                             // Match::State

@@ -1565,6 +1565,19 @@ void Application::routeMatchToFrontend(float dt) {
     // once the step runs on a worker.
     const game::World::PresentedFrame& pf = world_.presented();
     applySlotSwaps(world_, flow);   // online: a human who left -> a bot in the same slot (Gameplay picks the agreed tick)
+    {   // [Systems] the campaign Kismet's full-screen movies (SeqAct_MoviePlayer, MissionComplete's outro): the Game.PlayMovie path
+        // (movie mode, its Bink audio, skippable as the Extras movies); its end / skip / the op's Stop -> World::campaignMovieEnded
+        static int shown = 0;   // the request serial on screen (0 none)
+        if (!pf.campaignMovie.empty() && pf.campaignMovieSerial != shown && flow.scriptMovie().empty()) {
+            shown = pf.campaignMovieSerial;
+            flow.call("Game.PlayMovie", {pf.campaignMovie});
+        } else if (shown != 0 && (flow.scriptMovie().empty() || pf.campaignMovieStop || pf.campaignMovieSerial != shown)) {
+            if (!flow.scriptMovie().empty() && pf.campaignMovieSerial == shown) flow.scriptMovieStopped();
+            const int ended = shown;
+            shown = 0;
+            world_.submit([ended](game::World& w) { w.campaignMovieEnded(ended); });
+        }
+    }
     forwardAwards(world_, *frontend_, me);
     applyHudScreenEffect(renderer_, frontend_->hudPostProcessChain());
     // [integration M06] Customize.SelectCharacter -> TnPlayerController.SelectCharacter -> PRI._SelectedCharacter:

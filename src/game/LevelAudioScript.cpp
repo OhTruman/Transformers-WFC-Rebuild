@@ -330,6 +330,33 @@ void LevelAudioScript::input(Op& op, int idx, SoundCues& cues, MusicPlayer* musi
 }
 
 // Stop (0x82764048): pops the ducking preset, fires Finished (ran to the end) or Stopped.
+void LevelAudioScript::simLine(const std::string& opId, int line, SoundCues& cues, const core::Vec3& listener) {
+    auto it = opById_.find(opId);
+    if (it == opById_.end()) return;
+    Op& op = ops_[(size_t)it->second];
+    if (op.type != Type::Conversation || line < 0 || line >= (int)op.lines.size()) return;
+    op.simTimed = true;
+    if (op.lineInst >= 0) cues.stop(op.lineInst, 0.0f);
+    if (line == 0 && op.lineIdx < 0 && !op.preset.empty()) cues.mixer().enable(op.preset);   // one push per running conversation
+    const Line& ln = op.lines[(size_t)line];
+    const core::Vec3 at = actorPos(ln.speaker, listener);
+    op.lineIdx = line;
+    op.lineInst = ln.cue.empty() ? -1 : cues.play(ln.cue.c_str(), at, core::length(at - listener));
+    if (op.lineInst >= 0 && dialogListener_) dialogListener_(ln.cue, op.lineInst);
+    if (logOn()) LOG_INFO("LEVELAUDIO %s sim line %d %s (instance %d)", op.id.c_str(), line, ln.cue.c_str(), op.lineInst);
+}
+
+void LevelAudioScript::simEnd(const std::string& opId, SoundCues& cues) {
+    auto it = opById_.find(opId);
+    if (it == opById_.end()) return;
+    Op& op = ops_[(size_t)it->second];
+    if (op.type != Type::Conversation || op.lineIdx < 0) return;
+    if (op.lineInst >= 0) cues.stop(op.lineInst, 0.0f);
+    op.lineIdx = -1; op.lineInst = -1; op.postTimer = -1.0f; op.lineStarted = false;
+    if (!op.preset.empty()) cues.mixer().disable(op.preset, false);
+    if (logOn()) LOG_INFO("LEVELAUDIO %s sim conversation end", op.id.c_str());
+}
+
 void LevelAudioScript::endConversation(Op& op, bool finished, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener) {
     op.lineIdx = -1; op.lineInst = -1; op.postTimer = -1.0f; op.lineStarted = false;
     if (!op.preset.empty()) cues.mixer().disable(op.preset, false);
@@ -427,7 +454,7 @@ void LevelAudioScript::tick(float dt, const core::Vec3& listener, SoundCues& cue
     }
     // Conversations (UpdateOp 0x82787588).
     for (Op& op : ops_) {
-        if (op.type != Type::Conversation || op.lineIdx < 0) continue;
+        if (op.type != Type::Conversation || op.lineIdx < 0 || op.simTimed) continue;
         if (op.postTimer >= 0.0f) {
             op.postTimer -= dt;
             if (op.postTimer >= 0.0f) continue;                  // waiting out the post-delay
