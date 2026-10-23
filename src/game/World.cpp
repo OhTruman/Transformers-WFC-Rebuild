@@ -317,12 +317,12 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
             LOG_INFO("campaign: chapter %s (MapId %d), %zu units at the start (state %s)", ch.c_str(), cpChapter_.mapId, cpChapter_.units.size(), cpChapter_.initialState.c_str());
         } else if (!ch.empty()) LOG_ERROR("campaign: chapter %s has no data under %s", ch.c_str(), CampaignChapter::root().c_str());
     }
-    renderer.loadMapRenderData(campaignMap_ ? cpChapter_.persistentDir : mapName_);   // original-data shader path (if generated)
+    renderer.loadMapRenderData(campaignMap_ ? cpChapter_.dir + cpChapter_.persistentDir : mapName_);   // (a chapter: its persistent unit's directory, read in place)   // original-data shader path (if generated)
     int chapterUnitsDrawn = 0;
     if (campaignMap_) {
         std::vector<std::string> others;
         for (const std::string& u : cpChapter_.units) if (u != cpChapter_.persistentDir) others.push_back(u);
-        chapterUnitsDrawn = renderer.loadChapterUnits(others);
+        chapterUnitsDrawn = renderer.loadChapterUnits(cpChapter_.dir, others);
     }
     core::loadYield("World: map render data");   // [frontend] the loading screen presents between load steps
     // The match's authored rule classes gate rule-dependent presentation (objective bases, Conquest totems,

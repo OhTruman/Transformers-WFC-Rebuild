@@ -1635,14 +1635,20 @@ void Pipeline::addLightingRecords(const assets::Json& L, const std::string& dir,
     }
 }
 
-bool Pipeline::load(const std::string& mapName) {
+bool Pipeline::load(const std::string& mapArg) {
+    // (campaign chapters) a directory - <campaign root>/<chapter>/<persistent unit> - is read in place; the map name is its
+    // last component (MP maps and frontend scenes: a name under the render data root, as before)
+    std::string mapDirIn = mapArg;
+    while (mapDirIn.size() > 1 && (mapDirIn.back() == '/' || mapDirIn.back() == '\\')) mapDirIn.pop_back();
+    const size_t mapSep = mapDirIn.find_last_of("/\\");
+    const std::string mapName = mapSep == std::string::npos ? mapDirIn : mapDirIn.substr(mapSep + 1);
     if (std::getenv("WFC_LEGACYRENDER")) { LOG_INFO("wfc: WFC_LEGACYRENDER set; shader path disabled"); return false; }
     std::string root = renderDataRoot();
     cutPending_ = true; cutPendingWhy_ = "map load";   // (temporal history never spans maps)
     rtInitMode();
     rtInfra_ = rtMode_ > 0 || std::getenv("WFC_RT_SHADOWAO") != nullptr || std::getenv("WFC_RT_TOGGLE") != nullptr;
     loadFrame_ = frameNo_;
-    dataDir_ = root + "/" + mapName;
+    dataDir_ = mapSep == std::string::npos ? root + "/" + mapName : mapDirIn;
     std::string mj = readText(dataDir_ + "/materials_glsl.json");
     yieldLoad();
     // (WFC_LIGHTING_DIR=<dir>: <dir>/<map>/lighting.json, a regenerated copy for A/Bs)
@@ -9832,9 +9838,12 @@ void Pipeline::ppvFogFrame() {
 
 // Chapter loader, stage 1 (docs/handoff/RENDERING_CHAPTER_LOADER.md): one more unit merged into the loaded Pipeline - after
 // load() of the persistent unit, which keeps its post-process, R1 data and LightsVisibilitiesVolume.
-bool Pipeline::loadSublevel(const std::string& unit) {
-    if (!active_) { LOG_WARN("wfc: sublevel %s: no loaded Pipeline to merge into", unit.c_str()); return false; }
-    const std::string dir = renderDataRoot() + "/" + unit;
+bool Pipeline::loadSublevel(const std::string& unitDir) {
+    if (!active_) { LOG_WARN("wfc: sublevel %s: no loaded Pipeline to merge into", unitDir.c_str()); return false; }
+    std::string dir = unitDir;
+    while (dir.size() > 1 && (dir.back() == '/' || dir.back() == '\\')) dir.pop_back();
+    const size_t us = dir.find_last_of("/\\");
+    const std::string unit = us == std::string::npos ? dir : dir.substr(us + 1);
     const std::string mj = readText(dir + "/materials_glsl.json"), lj = readText(dir + "/lighting.json");
     assets::Json M, L;
     if (mj.empty() || lj.empty() || !assets::Json::parse(mj, M) || !assets::Json::parse(lj, L)) {

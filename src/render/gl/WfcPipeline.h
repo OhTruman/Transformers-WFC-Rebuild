@@ -163,7 +163,7 @@ public:
     // (chapter loader, docs/handoff/RENDERING_CHAPTER_LOADER.md) merge one more render-data unit (a campaign sublevel,
     // <render root>/<unit>/) into the loaded Pipeline: its materials, lights, lightmaps, BSP / decals, FX, movers, fog volumes,
     // height and volume fogs; after load() of the persistent unit. Stage 1: static (nothing unloads)
-    bool loadSublevel(const std::string& unit);
+    bool loadSublevel(const std::string& dir);   // (a chapter unit's directory: <chapter dir>/<unit>)
     size_t sublevelCount() const { return sublevels_.size(); }
     bool isWorldMesh(int id) const { return id >= 0 && (size_t)id < meshes_.size() && meshes_[(size_t)id].world; }
     // Shared read-only asset roots: WFC_ASSETS (default core::config::kAssetRootDefault, the VerticalSlice export)
