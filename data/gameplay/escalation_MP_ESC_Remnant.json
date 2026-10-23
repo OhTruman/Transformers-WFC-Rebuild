@@ -15205,5 +15205,194 @@
  ],
  "kismet": {
   "volumes": {}
- }
+ },
+ "weaponPickups": [
+  {
+   "actor": "TnWeaponPickupFactory_586",
+   "weapon": "HeavyMG",
+   "respawn": 2.0,
+   "pos": [
+    -74.244,
+    48.68,
+    100.729
+   ],
+   "yaw": -2.35619
+  },
+  {
+   "actor": "TnWeaponPickupFactory_741",
+   "weapon": "PlasmaCannon",
+   "respawn": 2.0,
+   "pos": [
+    17.38,
+    41.0,
+    130.4
+   ],
+   "yaw": -2.35619
+  },
+  {
+   "actor": "TnWeaponPickupFactory_944",
+   "weapon": "Shotgun",
+   "respawn": 2.0,
+   "pos": [
+    93.229,
+    33.32,
+    58.376
+   ],
+   "yaw": 2.35619
+  },
+  {
+   "actor": "TnWeaponPickupFactory_3875",
+   "weapon": "FlakGrenades",
+   "respawn": 2.0,
+   "pos": [
+    178.864,
+    25.64,
+    0.683
+   ],
+   "yaw": 0.7854
+  },
+  {
+   "actor": "TnWeaponPickupFactory_3949",
+   "weapon": "EmpShotgun",
+   "respawn": 2.0,
+   "pos": [
+    78.07,
+    17.96,
+    29.74
+   ],
+   "yaw": 2.35619
+  },
+  {
+   "actor": "TnWeaponPickupFactory_5209",
+   "weapon": "FlashBangs",
+   "respawn": 2.0,
+   "pos": [
+    -78.98,
+    48.68,
+    74.18
+   ],
+   "yaw": -1.5708
+  },
+  {
+   "actor": "TnWeaponPickupFactory_6207",
+   "weapon": "HeavyPistol",
+   "respawn": 2.0,
+   "pos": [
+    77.71,
+    17.96,
+    -31.44
+   ],
+   "yaw": -0.0
+  },
+  {
+   "actor": "TnWeaponPickupFactory_7259",
+   "weapon": "HeavyMG",
+   "respawn": 2.0,
+   "pos": [
+    -41.58,
+    48.68,
+    -98.874
+   ],
+   "yaw": 0.7854
+  },
+  {
+   "actor": "TnWeaponPickupFactory_7361",
+   "weapon": "KamikazeMines",
+   "respawn": 2.0,
+   "pos": [
+    79.41,
+    33.32,
+    71.711
+   ],
+   "yaw": 0.7854
+  },
+  {
+   "actor": "TnWeaponPickupFactory_7514",
+   "weapon": "RepairRay",
+   "respawn": 2.0,
+   "pos": [
+    48.16,
+    41.0,
+    -74.24
+   ],
+   "yaw": 0.0
+  },
+  {
+   "actor": "TnWeaponPickupFactory_8380",
+   "weapon": "GatlingGun",
+   "respawn": 2.0,
+   "pos": [
+    -117.28,
+    56.36,
+    32.73
+   ],
+   "yaw": -1.5708
+  },
+  {
+   "actor": "TnWeaponPickupFactory_9505",
+   "weapon": "HeavyRocketTurret",
+   "respawn": 2.0,
+   "pos": [
+    -45.959,
+    56.36,
+    -20.337
+   ],
+   "yaw": 2.35619
+  },
+  {
+   "actor": "TnWeaponPickupFactory_10970",
+   "weapon": "GrenadeLauncher",
+   "respawn": 2.0,
+   "pos": [
+    43.17,
+    41.0,
+    -57.95
+   ],
+   "yaw": -0.7854
+  },
+  {
+   "actor": "TnWeaponPickupFactory_11095",
+   "weapon": "FlashBangs",
+   "respawn": 2.0,
+   "pos": [
+    81.02,
+    33.35,
+    -69.18
+   ],
+   "yaw": -1.5708
+  },
+  {
+   "actor": "TnWeaponPickupFactory_11645",
+   "weapon": "KamikazeMines",
+   "respawn": 2.0,
+   "pos": [
+    -78.03,
+    48.68,
+    -70.369
+   ],
+   "yaw": 0.7854
+  },
+  {
+   "actor": "TnWeaponPickupFactory_12114",
+   "weapon": "BurstRifle",
+   "respawn": 2.0,
+   "pos": [
+    116.0,
+    33.35,
+    -87.2
+   ],
+   "yaw": 1.5708
+  },
+  {
+   "actor": "TnPickupFactory_11092",
+   "weapon": "HealGrenades",
+   "respawn": 1.0,
+   "pos": [
+    42.214,
+    41.0,
+    58.014
+   ],
+   "yaw": -3.14159
+  }
+ ]
 }

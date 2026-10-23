@@ -1406,6 +1406,11 @@ private:
     bool svInteractHeld(int player) const;
     void svFireGenerator(int generator, bool levelDrop = false);
     void svTickKismet();   // Wall_Crashers (map Kismet as data)
+    // Escalation weapons (E2b part 2): the SV spawn loadout, the pickup / dropped weapon take rules, the factories and drops.
+    Character* svMutablePawn(int player);
+    void svApplySpawnLoadout(Character& c);
+    bool svTakeWeapon(Character& c, int player, const Weapon& got);
+    void svTickWeaponPickups(float dt);
     bool svLaunching_ = false;   // the next resetForNewLevel is an Escalation level (transforming actors: the SV start state)
     SurvivalData svData_;
     SurvivalState sv_;

@@ -78,9 +78,17 @@ void Application::runEscalationTest() {
     ally = world_.addMatchOpponent("Ally", false);   // a second human (Remote kind) on the players' team
     m.playerMutable(ally->matchPlayer()).team = D.coopTeam;
     check(m.players()[(size_t)me].team == 0, "the player is on BrokenHope's co-op team (Autobots)");
+    check(D.weaponPickups.size() == 17, "17 weapon pickup factories (hidden until bought)");
     run(15.5f);
     int hordeAlive = 0;
     for (const auto& s : S.slots) hordeAlive += m.players()[(size_t)s.player].alive;
+    {   // SetPlayerDefaults (SV): the AssaultRifle replaces the primary and secondary
+        const auto& pc = world_.player().pawn();
+        int robot = 0; bool ar = false;
+        for (int i = 0; i < pc.weaponCount(); ++i)
+            if (pc.weaponAt(i).fireType != game::WeaponFire::Grenade) { ++robot; ar = ar || (pc.weaponAt(i).def && std::string(pc.weaponAt(i).def->id) == "AssaultRifle"); }
+        check(robot == 1 && ar, "the SV spawn loadout: the AssaultRifle only (plus the grenade bag)");
+    }
     check(m.state() == game::Match::State::InProgress && !world_.localPlayerDead() && ally->spawned() && hordeAlive == 0,
           "match started: players spawned, no horde (director-spawned only)");
     check(world_.hudState().svWave == 1 && world_.hudState().svNextWaveTime > 10 && world_.hudState().svNextWaveTime <= 15,
@@ -192,6 +200,25 @@ void Application::runEscalationTest() {
         bool zone = false; for (const auto& z : D.zones) if (z.id == "10523") zone = z.active;
         check(t > 3.2f && t < 3.5f && doors && zone, "Door generator 4199: ~3.33 s (3 per tick), doors 11450 / 9615 transform, zone 10523 activated");
         LOG_INFO("ESCTEST door bought in %.2f s, power %.0f, %d purchases", t, S.power[(size_t)me], S.purchases);
+    }
+    {   // a weapon generator: FlakGrenade 1835 (75) unhides its factory; the press takes the bag (a different bag is tossed)
+        const float t = buy("1835", 6.0f);
+        int k = -1; for (size_t i = 0; i < D.weaponPickups.size(); ++i) if (D.weaponPickups[i].actor == "TnWeaponPickupFactory_10216") k = (int)i;   // 1835 unhides _10216
+        check(t > 0.0f && k >= 0 && !S.weaponPicks[(size_t)k].hidden, "FlakGrenade generator: its weapon factory unhidden");
+        if (k >= 0) {
+            static core::Vec3 at; at = D.weaponPickups[(size_t)k].pos;
+            const auto& pc = world_.player().pawn();
+            bool hadOther = false;
+            for (int i = 0; i < pc.weaponCount(); ++i)
+                if (pc.weaponAt(i).fireType == game::WeaponFire::Grenade && pc.weaponAt(i).def && std::string(pc.weaponAt(i).def->id) != "FlakGrenades" &&
+                    pc.weaponAt(i).ammo + pc.weaponAt(i).reserve > 0) hadOther = true;
+            pin = &at; step(); step(); interact = true; step(); interact = false; step(); pin = nullptr;
+            bool flak = false;
+            for (int i = 0; i < pc.weaponCount(); ++i) flak = flak || (pc.weaponAt(i).def && std::string(pc.weaponAt(i).def->id) == "FlakGrenades");
+            check(flak && !S.weaponPicks[(size_t)k].available && (!hadOther || S.drops.size() == 1),
+                  "the press takes the Flak grenade bag; a different bag is tossed as a dropped pickup");
+            LOG_INFO("ESCTEST flak taken: had another bag %d, drops %zu, takes %d", (int)hadOther, S.drops.size(), S.weaponTakes);
+        }
     }
     {   // Wall_Crashers: a crash wall breaks on a pawn's first touch
         const game::SurvivalData::CrashWall& cw = D.crashWalls[0];

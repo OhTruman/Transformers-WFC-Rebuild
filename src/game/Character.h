@@ -440,6 +440,11 @@ public:
     const Health& health() const { return health_; }
     // Robot inventory: CharacterData.WeaponTypes in order, the first one active (CreateWeapons ActivateFirstWeapon) [CONF].
     Weapon& weapon() { return inventory_[(size_t)activeWeapon_]; }
+    // Escalation pickups: the robot inventory by index (a temp WT_Heavy weapon, when held, is the last); addWeapon keeps it last.
+    int weaponCount() const { return (int)inventory_.size(); }
+    Weapon& weaponAt(int i) { return inventory_[(size_t)i]; }
+    const Weapon& weaponAt(int i) const { return inventory_[(size_t)i]; }
+    void addWeapon(const Weapon& w) { if (tempWeapon_ && !inventory_.empty()) inventory_.insert(inventory_.end() - 1, w); else inventory_.push_back(w); }
     const Weapon& weapon() const { return inventory_[(size_t)activeWeapon_]; }
     const std::vector<Weapon>& inventory() const { return inventory_; }
     std::vector<Weapon>& inventoryMutable() { return inventory_; }

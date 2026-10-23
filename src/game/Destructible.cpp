@@ -25,7 +25,7 @@ void Destructible::transition(World& world, int to) {
 }
 
 void Destructible::applyDamage(World& world, float amount) {
-    if (state_ != 0 || amount <= 0.0f) return;
+    if (state_ != 0 || amount <= 0.0f || invulnerable_) return;
     health_ = std::max(0.0f, health_ - amount);
     if (health_ <= 0.0f) transition(world, 1);
 }

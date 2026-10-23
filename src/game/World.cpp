@@ -4447,6 +4447,7 @@ void World::tickMatch(float dt) {
                             pc.setSpecialty(sd->id, sd->speedMultiplier, sd->segments, sd->overshield);
                         else pc.clearSpecialty();
                         loadoutRefused_ = applyLoadout(&mp.selection);
+                        if (sv_.phase != SurvivalState::Phase::Off) svApplySpawnLoadout(pc);   // SetPlayerDefaults (SV)
                         tp3 = profNowMs();
                         mp.healthMax = pc.health().max;
                     }
@@ -4476,6 +4477,7 @@ void World::tickMatch(float dt) {
                         const bool chassisOk = applyChassisToPawn(o->pawn(), op.chassis);
                         const double to1 = profNowMs();
                         if (chassisOk) applyCharacterTo(o->pawn(), &op.selection, &op);
+                        if (chassisOk && sv_.phase != SurvivalState::Phase::Off && op.kind != ParticipantKind::Bot) svApplySpawnLoadout(o->pawn());
                         const double to2 = profNowMs();
                         core::Vec3 p = match_.starts()[(size_t)e.value].pos;
                         float gy; core::Vec3 gn;
@@ -7448,7 +7450,7 @@ void World::tickKillstreakItems(float dt) {
     }
     // Rocket turret (WT_Heavy): tossed on Transform to vehicle (DropHeavyWeapons) or a swap (ChangedWeapon) [CONF]; the
     // dropped turret pickup is not re-takeable here [PARTIAL].
-    if (pc.tempWeapon_ == 2 && (pc.isTransforming() || pc.form() == Form::Vehicle || pc.tempDropRequested_ || localDead_)) pc.removeTempWeapon();
+    if (!match_.settings().survival && pc.tempWeapon_ == 2 && (pc.isTransforming() || pc.form() == Form::Vehicle || pc.tempDropRequested_ || localDead_)) pc.removeTempWeapon();
     pc.tempDropRequested_ = false;
     for (size_t i = 0; i < mineFades_.size();) {   // [Gameplay] FadingOut ghosts (presentation): FadeOutTime 1 s
         if ((mineFades_[i].age += dt) >= 1.0f) { mineFades_.erase(mineFades_.begin() + (long)i); continue; }

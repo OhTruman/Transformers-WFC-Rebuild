@@ -109,6 +109,13 @@ bool SurvivalData::load(const std::string& map, SurvivalData& out) {
             const assets::Json& w = km["window"];
             out.window = {vol(w["enable"].asString()), vol(w["volume"].asString()), w["wall"].asString(), w["damage"].asFloat(0)};
         }
+        const assets::Json& wp = j["weaponPickups"];
+        for (size_t k = 0; k < wp.size(); ++k) {
+            const assets::Json& r = wp[k];
+            WeaponPickup w; w.actor = r["actor"].asString(); w.weapon = r["weapon"].asString(); w.respawn = r["respawn"].asFloat(2.0f);
+            w.pos = {r["pos"][0].asFloat(0), r["pos"][1].asFloat(0), r["pos"][2].asFloat(0)}; w.yaw = r["yaw"].asFloat(0);
+            out.weaponPickups.push_back(w);
+        }
         for (int t = 0; t < kSvTypes; ++t)
             for (size_t k = 0; k < j["initialSorted"][(size_t)t].size(); ++k) out.initialSorted[(size_t)t].push_back(j["initialSorted"][(size_t)t][k].asString());
         out.ok = !out.waves.empty() && !out.enemies.empty() && !out.zones.empty();
@@ -172,6 +179,14 @@ void World::setupSurvival() {
     sv_.reofferTimer.assign(svData_.generators.size(), 0.0f);
     sv_.factoryWasAvailable.assign(svData_.generators.size(), 1);
     sv_.crashDone.assign(svData_.crashWalls.size(), 0);
+    sv_.windowInside.assign(match_.players().size(), 0);
+    if (svData_.window.volume >= 0)   // PreGameplaySetup: SeqAct_TnToggleDestructible 1 -> _Invulnerable
+        for (Destructible* d : destructibles_) {
+            const std::string& n = d->name(); const std::string& w = svData_.window.wall;
+            if (n.size() >= w.size() && n.compare(n.size() - w.size(), w.size(), w) == 0) d->setInvulnerable(true);
+        }
+    sv_.weaponPicks.assign(svData_.weaponPickups.size(), SurvivalState::WeaponPick{});
+    sv_.pickupPress.assign(match_.players().size(), 0);
     sv_.gateOn.assign(svData_.roundGates.size(), 0);
     sv_.gateInside.assign(svData_.roundGates.size(), std::vector<uint8_t>(match_.players().size(), 0));
     for (size_t g = 0; g < svData_.generators.size(); ++g)
@@ -228,8 +243,138 @@ void World::svTickKismet() {
     }
     const SurvivalData::Window& w = svData_.window;
     if (w.volume >= 0 && !sv_.windowDone) {
-        if (!sv_.windowArmed && anyInside(w.enable, 1)) sv_.windowArmed = true;   // a player arms the AI-only touch
+        // TV 8879 per player pawn event: Touched -> the AI touch on + vulnerable; UnTouched -> off + invulnerable [RE review W1].
+        if (sv_.windowInside.size() < P.size()) sv_.windowInside.resize(P.size(), 0);
+        for (size_t q = 0; q < P.size(); ++q) {
+            const Character* c = P[q].kind != ParticipantKind::Bot ? participantPawn((int)q) : nullptr;
+            const uint8_t in = c && w.enable >= 0 && svData_.volumes[(size_t)w.enable].second.contains(c->position()) ? 1 : 0;
+            if (in != sv_.windowInside[q]) {
+                sv_.windowArmed = in != 0;
+                for (Destructible* d : destructibles_) {
+                    const std::string& n = d->name();
+                    if (n.size() >= w.wall.size() && n.compare(n.size() - w.wall.size(), w.wall.size(), w.wall) == 0) d->setInvulnerable(!sv_.windowArmed);
+                }
+            }
+            sv_.windowInside[q] = in;
+        }
         if (sv_.windowArmed && anyInside(w.volume, 2)) { sv_.windowDone = true; damageWall(w.wall, w.damage); LOG_INFO("escalation: window %s smashed by the horde", w.wall.c_str()); }
+    }
+}
+
+Character* World::svMutablePawn(int p) {
+    if (p == localPlayer_) return localDead_ ? nullptr : &player_.pawn();
+    if ((size_t)p < oppByPlayer_.size()) { MatchOpponent* o = oppByPlayer_[(size_t)p]; return o && o->spawned() ? &o->pawn() : nullptr; }
+    return nullptr;
+}
+
+// SetPlayerDefaults (TnPlayerPawnSurvival) [RE §1]: the primary and secondary weapons removed, a TnWeaponAssaultRifle given; the
+// grenade bag and the abilities stay [RE E2b §5]. Every spawn.
+void World::svApplySpawnLoadout(Character& c) {
+    const WeaponDef* ar = findWeaponDef("AssaultRifle");
+    if (!ar) return;
+    std::vector<Weapon> robot{Weapon::fromDef(*ar)};
+    for (int i = 0; i < c.weaponCount(); ++i) if (c.weaponAt(i).fireType == WeaponFire::Grenade) robot.push_back(c.weaponAt(i));
+    c.setLoadout(robot, c.vehicleWeapons());
+}
+
+// A pickup's weapon: PostInstantiateFromPickupFactory -> SetupAmmoForDefaultPlayerPickup [RE E2b §1]. PROV: a full clip + the initial
+// reserve until the PlayerData DefaultPickupAmount values land.
+static Weapon svPickupWeapon(const WeaponDef& d) {
+    Weapon w = Weapon::fromDef(d);
+    w.ammo = w.magSize; w.reserve = std::min(w.reserveMax, d.initialReserve);
+    return w;
+}
+
+// Taking a weapon pickup (factory or dropped) [RE E2b §1-§3]: returns whether it was taken.
+bool World::svTakeWeapon(Character& c, int player, const Weapon& got) {
+    if (!got.def) return false;
+    const std::string id = got.def->id;
+    const int type = got.def->typeCode;   // 0 robot weapon, 1 heavy, 4 grenade bag
+    for (int i = 0; i < c.weaponCount(); ++i) {   // owned: AddInventory merges -> AddAmmo(clip + reserve), reload if empty
+        Weapon& w = c.weaponAt(i);
+        if (!w.def || id != w.def->id) continue;
+        if (w.reserve >= w.reserveMax) return false;   // DenyPickupQuery: the reserve is full
+        w.reserve = std::min(w.reserveMax, w.reserve + got.ammo + got.reserve);
+        if (w.ammo == 0) { const int take = std::min(w.magSize, w.reserve); w.ammo = take; w.reserve -= take; }
+        ++sv_.ammoTakes;
+        return true;
+    }
+    auto toss = [&](const Weapon& w) {   // TnDroppedPickupWeapon with the tossed weapon's clip / reserve
+        if (!w.def || w.ammo + w.reserve <= 0) return;   // ShouldDestroyOnDrop: an empty weapon is destroyed, not dropped
+        SurvivalState::Drop d; d.w = w; d.pos = c.position(); d.life = 120.0f;   // CampaignLifeSpan 120 s (SV skill index 1) [RE E2b §5]
+        sv_.drops.push_back(d); ++sv_.tosses;
+    };
+    if (type == 4) {   // a grenade bag: holding a different bag -> toss it, take the new one
+        for (int i = 0; i < c.weaponCount(); ++i)
+            if (c.weaponAt(i).fireType == WeaponFire::Grenade) { toss(c.weaponAt(i)); c.weaponAt(i) = got; ++sv_.weaponTakes; return true; }
+        c.addWeapon(got); ++sv_.weaponTakes; return true;
+    }
+    // DropRobotWeapon: (2) the current heavy goes; (3) a free primary / secondary slot or a heavy taken -> nothing more;
+    // (4) else the current robot weapon, else the primary, else the secondary.
+    if (c.tempWeapon_ == 2) { toss(c.weapon()); c.removeTempWeapon(); }
+    if (type == 1) { c.grantTempWeapon(*got.def, 2, 1.0e9f); c.weapon() = got; ++sv_.weaponTakes; return true; }
+    std::vector<int> robot;
+    for (int i = 0; i < c.weaponCount(); ++i) if (c.weaponAt(i).fireType != WeaponFire::Grenade && c.weaponAt(i).def) robot.push_back(i);
+    if (robot.size() < 2) { c.addWeapon(got); ++sv_.weaponTakes; return true; }
+    int slot = robot[0];
+    for (int i : robot) if (i == c.activeWeaponIndex()) slot = i;
+    toss(c.weaponAt(slot));
+    c.weaponAt(slot) = got;
+    ++sv_.weaponTakes;
+    (void)player;
+    return true;
+}
+
+void World::svTickWeaponPickups(float dt) {
+    const std::vector<MatchPlayer>& P = match_.players();
+    for (SurvivalState::WeaponPick& w : sv_.weaponPicks)   // RespawnTime 2 s
+        if (!w.available && (w.respawn -= dt) <= 0.0f) w.available = true;
+    for (size_t k = 0; k < sv_.drops.size();)
+        if ((sv_.drops[k].life -= dt) <= 0.0f) sv_.drops.erase(sv_.drops.begin() + (long)k); else ++k;
+    auto near = [](const core::Vec3& a, const core::Vec3& b) {   // the pickup cylinder (200 UU radius, 100 UU half height) vs the pawn
+        const core::Vec3 d = a - b; return std::sqrt(d.x * d.x + d.z * d.z) < 2.0f && std::fabs(d.y) < 2.5f;
+    };
+    for (size_t q = 0; q < P.size(); ++q) {
+        if (P[q].kind == ParticipantKind::Bot) continue;   // AiInventoryType None: the horde never takes one
+        Character* c = svMutablePawn((int)q);
+        if (!c || c->moveForm() != Form::Robot || c->isTransforming() || c->health().isDead()) continue;   // CanPickupInventory
+        // Carried heavies are tossed on a swap / transform (WT_Heavy).
+        if (c->tempWeapon_ == 2 && c->tempDropRequested_) {
+            if (c->weapon().ammo + c->weapon().reserve > 0) { SurvivalState::Drop d; d.w = c->weapon(); d.pos = c->position(); d.life = 120.0f; sv_.drops.push_back(d); ++sv_.tosses; }
+            c->removeTempWeapon(); c->tempDropRequested_ = false;
+        }
+        const bool press = q < sv_.pickupPress.size() && sv_.pickupPress[q];
+        int bestF = -1, bestD = -1; float bestDist = 1e9f;
+        for (size_t k = 0; k < svData_.weaponPickups.size(); ++k) {
+            SurvivalState::WeaponPick& w = sv_.weaponPicks[k];
+            if (w.hidden || !w.available || !near(svData_.weaponPickups[k].pos, c->position())) continue;
+            const WeaponDef* def = findWeaponDef(svData_.weaponPickups[k].weapon.c_str());
+            if (!def) continue;
+            bool owned = false;
+            for (int i = 0; i < c->weaponCount(); ++i) owned = owned || (c->weaponAt(i).def && std::string(c->weaponAt(i).def->id) == def->id);
+            if (owned) {   // PickupWhenTouched: an owned weapon is ammo
+                if (svTakeWeapon(*c, (int)q, svPickupWeapon(*def))) { w.available = false; w.respawn = svData_.weaponPickups[k].respawn; }
+                continue;
+            }
+            const float d = core::length(svData_.weaponPickups[k].pos - c->position());
+            if (d < bestDist) { bestDist = d; bestF = (int)k; bestD = -1; }
+        }
+        for (size_t k = 0; k < sv_.drops.size(); ++k) {
+            const SurvivalState::Drop& d = sv_.drops[k];
+            if (!near(d.pos, c->position())) continue;
+            // TnDroppedPickup: bPickupWhenTouched false - press only, owned or not [RE E2b §5]
+            const float dist = core::length(d.pos - c->position());
+            if (dist < bestDist) { bestDist = dist; bestD = (int)k; bestF = -1; }
+        }
+        if (!press) continue;   // TnPickupManager: the press takes the closest valid touching pickup
+        if (bestF >= 0) {
+            const WeaponDef* def = findWeaponDef(svData_.weaponPickups[(size_t)bestF].weapon.c_str());
+            if (def && svTakeWeapon(*c, (int)q, svPickupWeapon(*def))) { sv_.weaponPicks[(size_t)bestF].available = false; sv_.weaponPicks[(size_t)bestF].respawn = svData_.weaponPickups[(size_t)bestF].respawn; }
+        } else if (bestD >= 0) {
+            const Weapon w = sv_.drops[(size_t)bestD].w;
+            sv_.drops.erase(sv_.drops.begin() + bestD);
+            svTakeWeapon(*c, (int)q, w);
+        }
     }
 }
 
@@ -319,6 +464,9 @@ void World::svFireGenerator(int gi, bool levelDrop) {
         bool ok = false;
         if (a.cls.find("PickupFactory") != std::string::npos && a.cls != "TnWeaponPickupFactory" && (a.op == "unhide" || a.op == "hide")) {
             for (PickupFactory* f : pickupFactories_) if (f->name() == a.target) { f->setHidden(a.op == "hide"); ok = true; }
+        } else if (a.cls == "TnWeaponPickupFactory" || a.cls == "TnPickupFactory") {
+            for (size_t k = 0; k < svData_.weaponPickups.size(); ++k)
+                if (svData_.weaponPickups[k].actor == a.target) { sv_.weaponPicks[k].hidden = a.op == "hide"; ok = true; }
         } else if (a.cls == "TnTransformingWorldActor") {
             const int i = transforming_.find(a.target);
             if (i >= 0) {
@@ -453,6 +601,7 @@ void World::tickSurvival(float dt) {
         sv_.allowDrain.resize(P.size(), 0); sv_.prevInteract.resize(P.size(), 0); sv_.drainClock.resize(P.size(), 0.0f);
     }
     svTickKismet();
+    svTickWeaponPickups(dt);
     // Item generators (map Kismet per generator, PickupStatusChange Taken): Hide; ModifySurvivalGeneratorPower(-cost); a level drop
     // (1 -> 0) fires "New Power Level" again - the event fires on negative changes too - so its actions re-apply (UnHide + the volume
     // off); Delay 2 s -> the volume Turn On. After the first purchase the item thus stays out as a normal respawning factory [RE E2a
@@ -489,6 +638,8 @@ void World::tickSurvival(float dt) {
         sv_.nearGenerator[q] = -1; sv_.drainFailed[q] = 0;
         const bool held = P[q].kind != ParticipantKind::Bot && svInteractHeld((int)q);
         const bool press = held && !sv_.prevInteract[q];
+        if (sv_.pickupPress.size() <= q) sv_.pickupPress.resize(q + 1, 0);
+        sv_.pickupPress[q] = press ? 1 : 0;
         sv_.prevInteract[q] = held ? 1 : 0;
         if (P[q].kind == ParticipantKind::Bot) continue;
         const Character* c = participantPawn((int)q);
