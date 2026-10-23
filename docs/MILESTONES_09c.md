@@ -4087,3 +4087,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 13:13 D2 + D3A shipped (8 / 10). Gameplay D3A mines check: 42 mines launched, 36 explode (shot / fuse / touch), no crash, no
   patch. Open: 64 D3A transforming actors have gameplay rows but no render node (AssetTools: are their levels chapter
   units? drop the rows if not). Air-nav queue + lanes reboot-safe and PERF_HOLD-aware (air_queue.sh, resume_lanes.ps1).
+2026-10-23 13:15 AssetTools data gaps found + GO: (1) 2 streaming levels with transforming actors had no render unit (D3A CourtTrans_VIG 64,
+  A2 DRIVE3_Trans_Design 1): units created + layout rerun; (2) A4 / D3A / D3B / A5 had no persistent unit dir, so the
+  whole-chapter gameplay.json (start points / pickups / map state) was never copied: fixed per chapter. ~10 min light jobs.
