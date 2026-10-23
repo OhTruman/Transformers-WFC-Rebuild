@@ -325,6 +325,9 @@ public:
     void hostPrivateNow();
     bool changeLobbyMode(const std::string& tag);
     void setLobbyService(const std::string& address);   // the Browse screen's Lobby Service entry (saved; sent to the session)
+    // Public matches (ONLINE_LOBBY_FLOW_V2 4, user: no server list): Quick Match = the original Find Match playlist choice;
+    // online it searches the mode's best-ping match (a gathering lobby or a match with open seats), else hosts one.
+    bool quickMatch(int playlistId);
     static const std::vector<std::string>& lobbyModes();   // the versus modes the Game Settings page offers
     // The Game Settings page's rows after Game Mode: the mode's own host options (fields with a header), then the PC rows
     // (Player Limit, the bot rows, Bot Difficulty, Iconic Characters, Kick Idle Players). Values are the labels the
@@ -419,7 +422,7 @@ private:
     LocalProfile profile_;
     std::unique_ptr<ISession> session_;
     SessionRole role_ = SessionRole::Offline;
-    enum class OnlinePending { None, Hosting, Joining } onlinePending_ = OnlinePending::None;
+    enum class OnlinePending { None, Hosting, Joining, Searching } onlinePending_ = OnlinePending::None;
     std::string joinCode_, joinAddress_;
     double joinStartedAt_ = 0.0;
     SessionLobby memberLobby_;                          // member: the host's lobby as last received
@@ -436,6 +439,7 @@ private:
     bool pttHeld_ = false;
     bool pttCapture_ = false;
     bool lobbyServiceSent_ = false;
+
     FirstRunUi firstRunUi_ = FirstRunUi::None;
     bool firstRunAsked_ = false, firstRunReshow_ = false;
     void showFirstRunPrompt();

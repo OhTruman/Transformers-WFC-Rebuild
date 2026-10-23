@@ -475,8 +475,8 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
     FlowTrace::emit("online.event", {{"type", sessionEventName(e.type)}, {"role", sessionRoleName(role_)}});
     using T = SessionEvent::Type;
     switch (e.type) {
-    case T::HostOpened:
-        if (onlinePending_ != OnlinePending::Hosting) break;
+    case T::HostOpened:   // our host session opened (Private Match), or a Quick Match found nothing: we host a public lobby
+        if (onlinePending_ != OnlinePending::Hosting && onlinePending_ != OnlinePending::Searching) break;
         onlinePending_ = OnlinePending::None;
         closePopup();
         role_ = SessionRole::Host;
@@ -487,7 +487,7 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
         hostOnlineGame(currentSettings_);
         break;
     case T::HostFailed:
-        if (onlinePending_ != OnlinePending::Hosting) break;
+        if (onlinePending_ != OnlinePending::Hosting && onlinePending_ != OnlinePending::Searching) break;
         onlinePending_ = OnlinePending::None;
         closePopup();
         showMessage(txt("$UIText.MessagePrompts.StrictNATTitle"),
@@ -496,8 +496,9 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
         break;
     case T::JoinProgress: break;   // the joining popup stays; the lobby's own connecting animation follows the join
     case T::Joined:
-    case T::MatchInProgress:
-        if (onlinePending_ != OnlinePending::Joining) break;
+    case T::MatchInProgress:   // a code join, or a Quick Match reservation accepted
+        if (onlinePending_ != OnlinePending::Joining && onlinePending_ != OnlinePending::Searching) break;
+        if (onlinePending_ == OnlinePending::Searching) { onlinePending_ = OnlinePending::Joining; closePopup(); }
         selfId_ = e.member;
         enterMemberLobby(e.lobby);
         if (e.type == T::MatchInProgress) memberLobby_.matchRunning = true;
@@ -556,6 +557,19 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
         }
         break;
     }
+    case T::SearchProgress:   // the original "Reserving space in game `i of `n"
+        if (onlinePending_ == OnlinePending::Searching && popup_.open) {
+            std::string m = txt("$UIText.MessagePrompts.ReservingMessage");
+            size_t at = m.find("`i"); if (at != std::string::npos) m.replace(at, 2, std::to_string(e.searchTried));
+            at = m.find("`n"); if (at != std::string::npos) m.replace(at, 2, std::to_string(e.searchOf));
+            popup_.message = m;
+            ++popup_.serial;
+        }
+        break;
+    case T::SearchCancelled:
+        if (onlinePending_ == OnlinePending::Searching) { onlinePending_ = OnlinePending::None; closePopup(); lobby_.playlistId = -1; }
+        FlowTrace::emit("online.quickMatch", {{"state", "cancelled"}});
+        break;
     case T::MemberVoice:
         voiceStates_[e.member.fingerprint] = VoiceState{e.headsetState, e.voiceVia};
         break;

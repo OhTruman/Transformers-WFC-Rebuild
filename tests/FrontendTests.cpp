@@ -1769,6 +1769,28 @@ static void testLobbyFlowV2() {
         r.f().profile().lobbyService.clear();
         r.f().profile().save();
     }
+    // LV5: Quick Match (online: the playlist choice searches): progress, then joined; a second search finds none -> hosts
+    {
+        using T = SessionEvent::Type;
+        SessionLobby l; l.gameModeTag = "TDM"; l.mapId = 508;
+        SessionEvent prog = ev(T::SearchProgress); prog.searchTried = 2; prog.searchOf = 5;
+        SessionEvent j = ev(T::Joined); j.lobby = l; j.member.fingerprint = "WFC-SELF-SELF-9";
+        OnlineRig r({after("quickMatch", prog), after("quickMatch", j, 0.5)});
+        r.f().call("Online.PlayPlaylist", {"1", "false"});
+        const bool searching = r.fake->count("quickMatch") == 1 && r.f().popup().open &&
+                               r.f().popup().title == r.rt->catalog().localizeKey("$UIText.MessagePrompts.SearchForGameTitle");
+        r.frames(2);
+        const bool reserving = r.f().popup().message.find("2") != std::string::npos && r.f().popup().message.find("5") != std::string::npos;
+        const bool joined = runUntil(*r.rt, [&] { return r.f().level() == LevelKind::GameLobby && !r.f().loading().active; }) &&
+                            r.f().sessionRole() == GameFlow::SessionRole::Member;
+        SessionEvent ho = ev(T::HostOpened); ho.joinCode = "7QK2M-9TDAB";
+        OnlineRig h({after("quickMatch", ho)});
+        h.f().call("Online.PlayPlaylist", {"1", "false"});
+        const bool hosted = runUntil(*h.rt, [&] { return h.f().level() == LevelKind::GameLobby && !h.f().loading().active; }) &&
+                            h.f().sessionRole() == GameFlow::SessionRole::Host && h.f().lobby().playlistId == 1;
+        check(r.ok && searching && reserving && joined && hosted, "lobby.LV5_quick_match",
+              std::to_string(searching) + std::to_string(reserving) + std::to_string(joined) + std::to_string(hosted));
+    }
     // LV4: a member cannot change the mode
     {
         OnlineRig r;
