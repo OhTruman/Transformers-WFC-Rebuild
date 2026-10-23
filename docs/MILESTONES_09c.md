@@ -4002,3 +4002,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   correctness bug found + fixed in the dedupe: LightMapTexture2D names collide across a chapter's packages and
   build_lighting copied pages by file name (D5 1 page / A1 27 pages came from the wrong package); conflicting names stay
   per unit; verified vs umodel per package (0 wrong / 0 missing). Root cause in Rendering's tool (told).
+2026-10-23 10:27 MERGED f72b1f21 campaign runtime 14 + 15 (244 player interacts, Omega Supreme boss fight, H5, H3 AI shoot / interact ops,
+  M5 ranges, M1 aux spawns) + the interact prompt glue; CAMPAIGNTEST 24 / 24. Gameplay left: M11 + FINAL_BASE_ITEMS; the
+  Frontend is done for the build. Chain lanes running (ETA ~16:00-16:30).
