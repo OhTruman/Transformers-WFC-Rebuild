@@ -3686,3 +3686,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 02:41 MERGED 29c1ce7d Escalation E2a (Remnant wave 1 spawns; PreGame from level start; power economy + generator actions: pickups,
   doors / bridges, zones; ESCTEST 25 / 25 + 5 / 5). RE reviews; Experimental reruns the ESC soak. Gameplay -> join-in-progress
   hooks, then E2b (nav cells on, DBV off, weapon factories, Wall_Crashers). Campaign frontend plan merged (C1-C6).
+2026-10-23 02:42 Nav verdicts (AssetTools): the rebuilt-nav regression comes from per-poly render meshes with cracks / holes the authored hulls
+  spanned (Debris -3,113 m2 walkable), so the original nav ships where it fits; Seed's off-mesh comes from the 40 #13 meshes ->
+  candidate v3 nav (shipped collision + authored hulls of those 40) for Gameplay's A/B; Berth = no hole (a hover on a BSP pit via
+  the rebuilt nav). FROZEN overlay_20261023d: 114 files (collision for all 10 maps; rebuilt nav on BrokenHope / Remnant / Seed).
