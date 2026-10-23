@@ -3641,3 +3641,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   listed, kept authored; >= 5 m overhang cases list-only); nav + air nav rebuilt; frozen overlay superset overlay_20261023c
   (135 files, 199.8 MB: 85 gltf_wfcmat + per-map collision_pawn / physics / bot_nav / bot_nav_air). Systems: refresh.sh -> 20261023c;
   Gameplay: BOTTEST + the floating detector on the adapted collision.
+2026-10-23 01:59 MERGED 2528df5e v3 vote wire + the two-window exit-crash fix (shutdownFrontend resets the driver first; kProtocol 0x57464303;
+  HostOpened carries the host id). Rendering #1 step B (rt2 07dc418f): frontend-scene textures survive release in an LRU pool
+  (600, WFC_TEXPOOLMAX); with the world.glb cache + AnimSet prefetch a revisited menu re-uploads only mesh buffers; runtime
+  check in their next relay (x28match 5 min + x30fe 3 min).
