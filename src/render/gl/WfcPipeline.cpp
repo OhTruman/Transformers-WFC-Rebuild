@@ -1789,6 +1789,7 @@ bool Pipeline::load(const std::string& mapName) {
                   srgbToLinear(c[2].asFloat(255) / 255.0f) * br * kFogInScale};
     }
 
+    loadPpvFogs(L);                                  // (post-process volume height fogs: the load's layers above are their base)
     {
         const assets::Json& P = L["postprocess"]["settings"];
         auto f = [&](const char* k, float d) { return P[k].asFloat(d); };
@@ -8984,6 +8985,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     deferTrans_ = true;
     distUsed_ = false;
     camPos_ = cam.pos;
+    ppvFogFrame();                                   // (post-process volume height fogs: the camera's volume, faded)
     znear_ = cam.znear; zfar_ = cam.zfar;
     if (motionVectorsOn()) {
         detectCameraCut(cam);
@@ -9591,6 +9593,128 @@ void Pipeline::r1BindDraw(int prog, int lm0, int arr) {
         glBindTexture(0x8C1A /*GL_TEXTURE_2D_ARRAY*/, (size_t)arr < vbArrays_.size() ? vbArrays_[(size_t)arr] : 0);
     }
     ActiveTexture(GL_TEXTURE0);
+}
+
+// Post-process volume height fog (RE CAMPAIGN_PPV_HEIGHTFOG_RE.md; AssetTools: MP_ESC_Remnant's PostProcessVolume_10624 links one,
+// 169 in the campaign). The load's layers are the base; the volume fogs come from lighting.json 'volume_fogs' (build_lighting.py).
+void Pipeline::loadPpvFogs(const assets::Json& L) {
+    ppvVolumes_.clear(); ppvLive_.clear(); ppvApplied_ = false; ppvLastTime_ = -1.0f;
+    fogBase_.on = fogOn_; fogBase_.n = fogN_; fogBase_.maxH = fogMaxH_; fogBase_.scale = fogScale_;
+    fogBase_.start = fogStart_; fogBase_.ext = fogExt_; fogBase_.in = fogIn_;
+    std::memcpy(fogBase_.L, fogL_, sizeof fogL_); std::memcpy(fogBase_.C, fogC_, sizeof fogC_);
+    std::memcpy(fogBase_.minH, fogMinH_, sizeof fogMinH_);
+    const assets::Json& V = L["volume_fogs"];
+    if (!V.isArray()) return;
+    for (size_t i = 0; i < V.size(); ++i) {
+        const assets::Json& v = V[i];
+        PpvVolume pv;
+        pv.priority = v["priority"].asFloat(0.0f);
+        pv.unbound = v["unbound"].asBool(false);
+        pv.interp = std::max(v["interpolation_s"].asFloat(1.0f), 1e-3f);
+        // the brush: one plane per polygon (glTF m), facing out (the brush's vertex centroid on the inner side)
+        const assets::Json& P = v["polygons_m"];
+        core::Vec3 cen{0, 0, 0}; int nv = 0;
+        for (size_t p = 0; p < P.size(); ++p)
+            for (size_t q = 0; q < P[p].size(); ++q) { cen = cen + core::Vec3{P[p][q][0].asFloat(), P[p][q][1].asFloat(), P[p][q][2].asFloat()}; ++nv; }
+        if (nv) cen = cen * (1.0f / (float)nv);
+        for (size_t p = 0; p < P.size(); ++p) {
+            if (P[p].size() < 3) continue;
+            auto vert = [&](size_t q) { return core::Vec3{P[p][q][0].asFloat(), P[p][q][1].asFloat(), P[p][q][2].asFloat()}; };
+            const core::Vec3 a = vert(0), b = vert(1), c = vert(2);
+            core::Vec3 n = core::cross(b - a, c - a);
+            const float len = core::length(n);
+            if (len < 1e-6f) continue;
+            n = n * (1.0f / len);
+            float d = core::dot(n, a);
+            if (core::dot(n, cen) - d > 0.0f) { n = n * -1.0f; d = -d; }
+            pv.planes.push_back({{n.x, n.y, n.z}, d});
+        }
+        const assets::Json& F = v["fogs"];
+        for (size_t f = 0; f < F.size(); ++f) {
+            const assets::Json& Fk = F[f];
+            const assets::Json& ck = Fk["LightColor"];
+            const float bk = Fk["LightBrightness"].asFloat(0.1f);
+            PpvFog pf;
+            pf.height = Fk["Height"].asFloat(0.0f); pf.density = Fk["Density"].asFloat(5e-5f);
+            pf.start = Fk["StartDistance"].asFloat(0.0f); pf.ext = Fk["ExtinctionDistance"].asFloat(1e8f);
+            pf.in = {srgbToLinear(ck[0].asFloat(255) / 255.0f) * bk * kFogInScale, srgbToLinear(ck[1].asFloat(255) / 255.0f) * bk * kFogInScale,
+                     srgbToLinear(ck[2].asFloat(255) / 255.0f) * bk * kFogInScale};
+            pf.priority = Fk["priority"].asBool(false);
+            pf.snap = Fk["transition_from_existing"].asBool(false);
+            pv.fogs.push_back(pf);
+        }
+        if (!pv.fogs.empty() && (pv.unbound || !pv.planes.empty())) ppvVolumes_.push_back(std::move(pv));
+    }
+    if (!ppvVolumes_.empty()) LOG_INFO("wfc: %zu post-process volume(s) with height fog", ppvVolumes_.size());
+}
+
+// per frame: the camera's volume (the highest priority containing it; the pawn's location in UE3, the camera when there is
+// none) supplies its fogs - each fading in (cur += (1 - cur) dt / T), the rest fading out (cur -= cur dt / T) and dropped;
+// bTransitionFromExistingHeightFog takes the value at once. The view's list: priority volume fogs, the level's, the other
+// volume fogs, at most 4, highest first (FScene::AddHeightFog order); only the density is interpolated.
+void Pipeline::ppvFogFrame() {
+    if (ppvVolumes_.empty()) return;
+    const float dt = ppvLastTime_ < 0.0f ? 0.0f : std::max(0.0f, time_ - ppvLastTime_);
+    ppvLastTime_ = time_;
+    int act = -1;
+    for (size_t i = 0; i < ppvVolumes_.size(); ++i) {
+        const PpvVolume& v = ppvVolumes_[i];
+        bool inside = v.unbound;
+        if (!inside) {
+            inside = true;
+            for (const PpvPlane& p : v.planes)
+                if (p.n[0] * camPos_.x + p.n[1] * camPos_.y + p.n[2] * camPos_.z - p.d > 0.0f) { inside = false; break; }
+        }
+        if (inside && (act < 0 || v.priority > ppvVolumes_[(size_t)act].priority)) act = (int)i;
+    }
+    for (PpvLive& l : ppvLive_) l.leaving = l.vol != act;
+    if (act >= 0)
+        for (size_t f = 0; f < ppvVolumes_[(size_t)act].fogs.size(); ++f) {
+            auto it = std::find_if(ppvLive_.begin(), ppvLive_.end(), [&](const PpvLive& l) { return l.vol == act && l.fog == (int)f; });
+            if (it == ppvLive_.end()) ppvLive_.push_back({act, (int)f, ppvVolumes_[(size_t)act].fogs[f].snap ? 1.0f : 0.0f, false});
+        }
+    for (PpvLive& l : ppvLive_) {
+        const float k = std::min(1.0f, dt / ppvVolumes_[(size_t)l.vol].interp);
+        l.cur = l.leaving ? l.cur - l.cur * k : l.cur + (1.0f - l.cur) * k;
+    }
+    ppvLive_.erase(std::remove_if(ppvLive_.begin(), ppvLive_.end(), [](const PpvLive& l) { return l.leaving && l.cur < 1e-3f; }), ppvLive_.end());
+    if (ppvLive_.empty()) {                          // (nothing from a volume: the load's layers, exactly)
+        if (ppvApplied_) {
+            fogOn_ = fogBase_.on; fogN_ = fogBase_.n; fogMaxH_ = fogBase_.maxH; fogScale_ = fogBase_.scale;
+            fogStart_ = fogBase_.start; fogExt_ = fogBase_.ext; fogIn_ = fogBase_.in;
+            std::memcpy(fogL_, fogBase_.L, sizeof fogL_); std::memcpy(fogC_, fogBase_.C, sizeof fogC_);
+            std::memcpy(fogMinH_, fogBase_.minH, sizeof fogMinH_);
+            ppvApplied_ = false;
+        }
+        return;
+    }
+    struct Lay { float h, scale, start, ext; core::Vec3 in; };
+    std::vector<Lay> pri, base, rest;
+    for (const PpvLive& l : ppvLive_) {
+        const PpvFog& F = ppvVolumes_[(size_t)l.vol].fogs[(size_t)l.fog];
+        (F.priority ? pri : rest).push_back({F.height, -(F.density * l.cur) / std::log(2.0f), F.start, F.ext, F.in});
+    }
+    if (fogBase_.on) {
+        base.push_back({fogBase_.maxH, fogBase_.scale, fogBase_.start, fogBase_.ext, fogBase_.in});
+        for (int k = 1; k < fogBase_.n && k < 4; ++k)
+            base.push_back({fogBase_.L[k - 1][0], fogBase_.L[k - 1][1], fogBase_.L[k - 1][2], fogBase_.L[k - 1][3],
+                            {fogBase_.C[k - 1][0], fogBase_.C[k - 1][1], fogBase_.C[k - 1][2]}});
+    }
+    std::vector<Lay> all = pri;
+    all.insert(all.end(), base.begin(), base.end());
+    all.insert(all.end(), rest.begin(), rest.end());
+    if (all.size() > 4) all.resize(4);
+    std::stable_sort(all.begin(), all.end(), [](const Lay& a, const Lay& b) { return a.h > b.h; });
+    fogOn_ = !all.empty() && !std::getenv("WFC_NOFOG");
+    fogN_ = (int)all.size();
+    fogMaxH_ = all[0].h; fogScale_ = all[0].scale; fogStart_ = all[0].start; fogExt_ = all[0].ext; fogIn_ = all[0].in;
+    for (int k = 0; k < 4; ++k) fogMinH_[k] = k + 1 < fogN_ ? all[(size_t)k + 1].h : -262144.0f;
+    for (int k = 1; k < fogN_; ++k) {
+        float* l = fogL_[k - 1]; float* c = fogC_[k - 1];
+        l[0] = all[(size_t)k].h; l[1] = all[(size_t)k].scale; l[2] = all[(size_t)k].start; l[3] = all[(size_t)k].ext;
+        c[0] = all[(size_t)k].in.x; c[1] = all[(size_t)k].in.y; c[2] = all[(size_t)k].in.z;
+    }
+    ppvApplied_ = true;
 }
 
 } // namespace wfc

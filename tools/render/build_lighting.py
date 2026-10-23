@@ -282,6 +282,51 @@ def fogs(repo):
     return out[:4]
 
 
+def volume_fogs(repo, mapname):
+    """PostProcessVolumeHeightFogComponent layers (AssetTools 2026-10-23: fogs() matches the exact class, so these were
+    skipped - 1 on MP_ESC_Remnant, 169 in the campaign) with the post-process volumes that link them (RE
+    CAMPAIGN_PPV_HEIGHTFOG_RE.md: same layer parameters / conversion as a HeightFog; a view uses the volume fogs of the
+    highest-priority volume at the pawn, priority-linked ones before the level fogs, the rest after, cap 4; density fades
+    in / out over InterpolationDuration, 1 s by default). The brush comes from the map's collision.json volumes (glTF m)."""
+    coll = {}
+    cp = os.path.join(VS_MAPS, mapname, 'collision.json')
+    if os.path.exists(cp):
+        for v in json.load(open(cp, encoding='utf-8')).get('volumes', []):
+            coll[v.get('actor')] = v.get('polygons_gltf') or []
+    out = []
+    for p in repo.pkgs:
+        for i, e in enumerate(p.exports):
+            if p.class_name(e) != 'PostProcessVolume' or 'Default__' in p.obj_name(i + 1):
+                continue
+            vpath = p.object_path(i + 1)
+            o = repo.obj(vpath) or {}
+            settings = {s['name']: s.get('value') for s in o.get('Settings') or [] if isinstance(s, dict)}
+            links = settings.get('PostProcessVolumeHeightFog') or []
+            fogs_ = []
+            for link in links:
+                lk = {s['name']: s.get('value') for s in link if isinstance(s, dict)}
+                actor = (lk.get('PostProcessVolumeHeightFogActor') or {}).get('ref')
+                comp = ((repo.obj(actor) or {}).get('Component') or {}).get('ref') if actor else None
+                if not comp:
+                    continue
+                f = dict(FOG_DEFAULTS); f.update(repo.obj(comp) or {})
+                if not f.get('bEnabled', True):
+                    continue
+                f['height_m'] = f['Height'] * 0.01
+                f['LightColor'] = fcolor_rgb(f.get('LightColor'))
+                f['object'] = comp
+                f['priority'] = bool(lk.get('bPriority', False))
+                f['transition_from_existing'] = bool(lk.get('bTransitionFromExistingHeightFog', False))
+                fogs_.append(f)
+            if not fogs_:
+                continue
+            name = vpath.split('.')[-1]
+            out.append({'volume': name, 'priority': float(o.get('Priority', 0.0)), 'unbound': bool(o.get('bUnbound', False)),
+                        'interpolation_s': float(settings.get('InterpolationDuration', 1.0) or 1.0),
+                        'polygons_m': coll.get(name, []), 'fogs': fogs_})
+    return out
+
+
 PF_INVISIBLE, PF_TWOSIDED, PF_PORTAL = 0x1, 0x100, 0x04000000
 
 
@@ -843,6 +888,18 @@ def main():
         json.dump(d, open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
         print(mapname, len(d['fogs']), 'enabled height fog layers:', [(f['object'].split('.')[-1], f['Height'], f['Density']) for f in d['fogs']])
         return
+    if len(sys.argv) > 3 and sys.argv[1] == '--volume-fogs-only':
+        # <map> <src lighting.json> <out dir>: the same file + 'volume_fogs' when the map has any (else unchanged)
+        from ue3obj import map_packages
+        mapname, src, out = sys.argv[2], sys.argv[3], sys.argv[4]
+        pkgs, _persistent = map_packages(mapname)
+        d = json.load(open(src, encoding='utf-8'))
+        vf = volume_fogs(Repo(pkgs), mapname)
+        if vf: d['volume_fogs'] = vf
+        os.makedirs(out, exist_ok=True)
+        json.dump(d, open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
+        print(mapname, len(vf), 'post-process volume(s) with height fog:', [(v['volume'], len(v['fogs']), len(v['polygons_m'])) for v in vf])
+        return
     if len(sys.argv) > 3 and sys.argv[1] == '--standalone-only':
         # <map> <src lighting.json> <out dir>: the same file + the placed light actors its 'lights' lack (by LightGuid)
         from ue3obj import map_packages
@@ -905,7 +962,9 @@ def main():
                'component_flags': component_flags(mapname),
                'light_visibility_volumes': light_visibility_volumes(repo, out),
                'lightmaps': {'props': props, 'atlases': atl},
-               'lights': L, 'fog': F, 'fogs': fogs(repo), 'postprocess': PP},
+               'lights': L, 'fog': F, 'fogs': fogs(repo), 'postprocess': PP,
+               # (only when the map has any: every other lighting.json stays byte-identical)
+               **({'volume_fogs': VF} if (VF := volume_fogs(repo, mapname)) else {})},
               open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
     from collections import Counter
     print('lightmapped components: %d (types %s); atlases %d; copied %d PNGs' % (len(props), kinds, len(atl), copied))
