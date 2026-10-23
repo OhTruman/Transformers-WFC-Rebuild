@@ -3703,3 +3703,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   lever. UDPSESSIONTEST PASS on the head (Gameplay's failures = Systems' port 14100 collision, moved to 24100+). Experimental:
   E2a rerun stable, 0 spawn-finder failures; Remnant headless never spawns (boot-path difference, Gameplay). Card: Rendering
   x33 + x34gi relay next, then the Frontend's campaign-menu shots, then Rendering's PPV fog Remnant pair.
+2026-10-23 02:58 Nav (Gameplay, headless): Seed v3 nav beats overlay d's rebuilt Seed nav clearly (stucks 0.84 / 0.96 vs 2.44 / 3.23 per
+  bot-min; failed 0.48 / 0.54 vs 1.21 / 4.75; faster) -> DECISION ship d + v3 (AssetTools freezes overlay_20261023e). Second NAVQ
+  seed 1234 base -> d: neutral to better (Gorge off-mesh 12.96 -> 2.36 %, BrokenHope 11.58 -> 9.03, Complex stucks 2.57 -> 0.93);
+  single-seed outliers Streets stucks 0.98 -> 2.54, Molten failed 0.52 -> 5.53 -> third seed on those two before the package.
+  BOTTEST 48 / 48 on d. Staged for the next build: E2FIX, first visits, PPV fog, Systems JIP. Card: Rendering relay in progress.
