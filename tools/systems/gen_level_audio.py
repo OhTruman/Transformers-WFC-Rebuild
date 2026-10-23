@@ -356,6 +356,30 @@ if len(sys.argv) > 1 and sys.argv[1] == '--campaign':
     audio_pkg = [x for x in subs if 'audio' in x.lower()]
     doc = level(chap, subs, geo, frozenset(am['cues']), audio_pkg[0] if audio_pkg else None, campaign=True)
     doc['campaign'] = True
+    # Subtitles (CAMPAIGN_AUDIO_DIALOG section 3): every localized wave the chapter's cues play -> its subtitle lines per language,
+    # from the chapter's own _LOC packages (SoundNodeWaveEx Subtitles [{Text, Time, UseSubtitles}], Duration). UseSubtitles false =
+    # authored not to show (kept, flagged: the HUD skips it). int = the English text; FRA where the chapter has it.
+    waves = set()
+    def walk(n):
+        if n.get('class') == 'SoundNodeWaveEx' and n.get('loc'): waves.add(n['node'])
+        for ch in n.get('children') or []: walk(ch)
+    for cd in doc['cues'].values(): walk(cd.get('tree') or {})
+    subs = {}
+    for wv in sorted(waves):
+        for lang, suffix in (('int', '_LOC_int'), ('fra', '_LOC_FRA')):
+            rows = c.execute("select package, props from objects where opath=? and class='SoundNodeWaveEx' and package like ?",
+                             (wv, chap + '%' + suffix)).fetchall()
+            if not rows:   # a wave shared with another chapter: its _LOC copy there (e.g. D5_OME's MGTRON_LK001521 sits in D3B's)
+                rows = c.execute("select package, props from objects where opath=? and class='SoundNodeWaveEx' and package like ? order by package",
+                                 (wv, '%' + suffix)).fetchall()
+            if not rows: continue
+            p = json.loads(rows[0][1] or '{}')
+            lines = [{'time': round(x.get('Time', 0.0), 3), 'text': x.get('Text', ''), 'show': bool(x.get('UseSubtitles', True))}
+                     for x in p.get('Subtitles') or [] if x.get('Text')]
+            if lines: subs.setdefault(wv, {'duration': round(p.get('Duration', 0.0), 3)})[lang] = lines
+    doc['subtitles'] = subs
+    print('%s: subtitles for %d of %d localized waves (%d with French)' % (chap, len(subs), len(waves),
+                                                                         sum(1 for v in subs.values() if 'fra' in v)))
     io.open(dst, 'w', encoding='utf-8', newline='\n').write(json.dumps(doc, separators=(',', ':')))
     sys.exit(0)
 
