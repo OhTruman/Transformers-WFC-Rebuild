@@ -897,6 +897,7 @@ public:
     bool campaignMap() const { return campaignMap_; }
     const CampaignChapter& campaignChapter() const { return cpChapter_; }
     const CampaignState& campaign() const { return cp_; }
+    bool cpRestartFromCheckpoint();   // RestartFromActiveCheckpoint (host; the Frontend's Restart From Last Checkpoint)
     int cpTestFireFactory(int k);   // WFC_CAMPAIGNTEST: Spawn Actor into factory k (its pool size, or -1)
     bool cpKismetActivate(KismetVM& vm, int op, int input);   // the level Kismet's host ops
     int cpAudioActivate(KismetVM& vm, int op, int input);      // [Systems] its audio ops: 0 not audio, 1 done (VM default out), 2 async
@@ -1434,6 +1435,10 @@ private:
     bool cpPawnFactoryActivate(KismetVM& vm, int op, int input);
     void cpTickFactories(float dt);
     void cpSyncPicks();
+    void cpApplyStreamingState(const std::string& state);
+    bool cpSetStreamingState(KismetVM& vm, int op);
+    bool cpForceIntoForm(KismetVM& vm, int op);
+    MatchLaunch cpLaunch_;                        // the campaign launch (Restart From Last Checkpoint)
     void cpCollectMovers();                       // WorldCampaignMatinee.cpp
     void cpSplitMovers(const render::MeshData& in, render::MeshData& out);
     void cpRegisterMovers();

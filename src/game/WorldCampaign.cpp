@@ -96,6 +96,11 @@ bool CampaignChapter::load(const std::string& chapter, CampaignChapter& out) {
     const assets::Json& sl = cj["sublevels"];
     for (size_t i = 0; i < sl.size(); ++i)
         if (sl[i]["in_initial_state"].asBool(false) || sl[i]["dir"].asString() == out.persistentDir) out.units.push_back(sl[i]["dir"].asString());
+    for (size_t i = 0; i < sl.size(); ++i) {   // every unit and its states (streaming)
+        const std::string d = sl[i]["dir"].asString();
+        out.allUnits.push_back(d);
+        for (size_t k = 0; k < sl[i]["visible_in_states"].size(); ++k) out.unitStates[d].push_back(sl[i]["visible_in_states"][k].asString());
+    }
     assets::Json nav;
     if (readJson(out.dir + "navigation.json", nav)) {
         const assets::Json& ns = nav["nodes"];
@@ -136,7 +141,7 @@ const CampaignChapter::Checkpoint* CampaignChapter::checkpoint(const std::string
 bool World::loadCampaignMesh(const std::string& file, render::MeshData& out) {
     out = render::MeshData{};
     int units = 0;
-    for (const std::string& u : cpChapter_.units) {
+    for (const std::string& u : file == "world.glb" ? cpChapter_.units : cpChapter_.allUnits) {   // collision: every unit (streaming, PROV)
         render::MeshData m;
         if (!std::ifstream(cpChapter_.dir + u + "/" + file, std::ios::binary)) continue;   // a unit without that file (no collision of its own)
         if (!assets::loadGlb(cpChapter_.dir + u + "/" + file, m) || m.empty()) continue;
@@ -234,6 +239,12 @@ void World::setupCampaign(const MatchLaunch& l) {
         cpLoadFactories();
         cpLoadActors();
         cpLoadMatinees();
+        {   // the start's streaming state: the launch checkpoint's, else WorldInfo.InitialStreamingState
+            const CampaignChapter::Checkpoint* lc = cpChapter_.checkpoint(cp_.checkpoint);
+            cp_.unitVisible.clear();
+            cpApplyStreamingState(lc && !lc->state.empty() ? lc->state : cpChapter_.initialState);
+        }
+        cpLaunch_ = l;
     }
     LOG_INFO("campaign: %s (MapId %d) %s, difficulty %d, the human as %s, squad %zu", cpChapter_.chapter.c_str(), cpChapter_.mapId,
              match_.settings().modeTag.c_str(), cp_.difficulty, cpChapter_.trio[(size_t)pick].c_str(), cp_.squad.size());
@@ -268,7 +279,9 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
         cpRequestMovie(op, o.authored["MovieName"].asString());   // [Systems] Stopped at its end (the frontend's movie player)
         return true;
     }
-    if (c == "SeqAct_SetStreamingState") {   // Started at once; Finished when the state is current (every unit of the start is loaded: PROV)
+    if (c == "SeqAct_SetStreamingState") return cpSetStreamingState(vm, op);
+    if (c == "TnSeqAct_ForceIntoForm") return cpForceIntoForm(vm, op);
+    if (false) {   // Started at once; Finished when the state is current (every unit of the start is loaded: PROV)
         vm.output(op, "Started"); vm.output(op, "Finished");
         return true;
     }

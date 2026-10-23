@@ -28,10 +28,13 @@ bool fileExists(const std::string& p) { return (bool)std::ifstream(p, std::ios::
 // The AI's body: AssetTools' campaign export of the AICD (out/campaign_characters/<id>, "CMP_<id>"), else the Escalation one
 // (out/escalation_characters/<id>, "ESC_<id>", PROV); an Autobot / Decepticon
 // variant without its own export borrows the other faction's (PROV, logged); none -> "" (the factory is held).
-std::string bodyForAicd(const std::string& aicd, std::string& note) {
-    std::string id = aicd;
+std::string bodyForAicd(const std::string& archetype, std::string& note) {
+    std::string id = afterDot(archetype);
+    const std::string pkg = archetype.substr(0, archetype.find('.'));
     if (id.size() > 5 && id.compare(id.size() - 5, 5, "_AICD") == 0) id.resize(id.size() - 5);
-    if (fileExists("F:/Transformers Rebuild/AssetTools/out/campaign_characters/" + id + "/character.json")) return "CMP_" + id;   // the campaign template
+    const std::string cmp = "F:/Transformers Rebuild/AssetTools/out/campaign_characters/";
+    if (fileExists(cmp + id + "/character.json")) return "CMP_" + id;   // the campaign template
+    if (fileExists(cmp + id + "__" + pkg + "/character.json")) return "CMP_" + id + "__" + pkg;   // a name in two packages: id__<package>
     const std::string root = "F:/Transformers Rebuild/AssetTools/out/escalation_characters/";
     if (fileExists(root + id + "/character.json")) return "ESC_" + id;
     for (const auto& sw : {std::make_pair(std::string("_Autobot"), std::string("_Decepticon")), std::make_pair(std::string("_Decepticon"), std::string("_Autobot"))}) {
@@ -77,12 +80,15 @@ void World::cpLoadFactories() {
             if (L.size() >= 3) F.points.push_back(core::Vec3{L[0].asFloat() * 0.01f, L[2].asFloat() * 0.01f, L[1].asFloat() * 0.01f});
         }
         if (F.ai) {
-            F.chassis = bodyForAicd(F.aicd, F.note);
+            F.chassis = bodyForAicd(f["factory"]["archetype"].asString(), F.note);
             if (F.chassis.empty()) F.note = "no character export for " + F.aicd;
         }
-        // The pool: one participant per spawn (never respawned; directorSpawned keeps them out of the match start).
+        // The pool: participants per body, shared by every factory of that body (never respawned; directorSpawned keeps them out of
+        // the match start): up to 8 alive per body, 96 in all (PROV: the original spawns pawns on demand).
+        std::vector<int>& shared = cp_.bodyPools[F.chassis];
+        const int target = std::min(8, (int)shared.size() + F.count);
         if (F.ai && !F.chassis.empty())
-            for (int c = 0; c < F.count && pool < 64; ++c, ++pool) {
+            for (int c = (int)shared.size(); c < target && pool < 96; ++c, ++pool) {
                 const int p = match_.addPlayerExact(F.aicd + " " + std::to_string(cp_.factories.size() + 1) + "." + std::to_string(c + 1), F.team);
                 MatchPlayer& mp = match_.playerMutable(p);
                 mp.kind = ParticipantKind::Bot;
@@ -96,13 +102,15 @@ void World::cpLoadFactories() {
                 smart_[(size_t)p] = SmartBot{};   // Classic (the campaign GOAP sets are a later step)
                 opponents_.push_back(o.get());
                 actors_.push_back(std::move(o));
-                F.pool.push_back(p);
+                shared.push_back(p);
             }
+        if (F.ai && !F.chassis.empty()) F.pool = shared;   // (refreshed below once every factory has grown its body's pool)
         if (!F.note.empty()) LOG_INFO("campaign: factory %s (%s): %s", afterDot(F.action).c_str(), F.aicd.c_str(), F.note.c_str());
         cp_.factories.push_back(F);
     }
+    for (CampaignFactory& F : cp_.factories) if (F.ai && !F.chassis.empty()) F.pool = cp_.bodyPools[F.chassis];
     rebuildOppIndex();
-    LOG_INFO("campaign: %zu pawn factories, %d AI participants pooled", cp_.factories.size(), pool);
+    LOG_INFO("campaign: %zu pawn factories, %d AI participants pooled in %zu bodies", cp_.factories.size(), pool, cp_.bodyPools.size());
 }
 
 // SeqAct_TnPawnFactory [C data, RE CAMPAIGN_KISMET_HANDLERS]: Spawn Actor -> spawn_count pawns at the spawn points (in order, cycling),
@@ -326,6 +334,51 @@ bool World::cpObjectiveGoal(BotBrain& b, BotGoal& g) {
     g.kind = BotGoalKind::Defend; g.pos = botSnap(it->second.pos); g.radius = it->second.radius; g.target = -1;
     b.mission = true;
     return true;
+}
+
+// ---- streaming (SeqAct_SetStreamingState) ----
+
+// The visible units of a LevelStreamingState (chapter.json visible_in_states; the persistent unit always): every unit is loaded at the
+// start (Rendering preloads them; the collision of every unit is merged, PROV), so a state change is a visibility change, Started and
+// Finished at once [C op semantics, RE CAMPAIGN_STREAMING section 3; PROV: no load time].
+void World::cpApplyStreamingState(const std::string& state) {
+    cp_.streamingState = state;
+    for (const std::string& u : cpChapter_.allUnits) {
+        auto it = cpChapter_.unitStates.find(u);
+        const bool vis = u == cpChapter_.persistentDir || (it != cpChapter_.unitStates.end() && std::find(it->second.begin(), it->second.end(), state) != it->second.end());
+        auto was = cp_.unitVisible.find(u);
+        if (was != cp_.unitVisible.end() && was->second == vis) continue;
+        cp_.unitVisible[u] = vis;
+        if (renderer_) renderer_->setChapterUnitVisible(u, vis);
+    }
+    LOG_INFO("campaign: streaming state %s", state.c_str());
+}
+
+bool World::cpSetStreamingState(KismetVM& vm, int op) {
+    cpApplyStreamingState(afterDot(vm.op(op).authored["StreamingState"].asString()));
+    vm.output(op, "Started"); vm.output(op, "Finished");
+    return true;
+}
+
+// TnSeqAct_ForceIntoForm: the targets change form (PROV: robot - the authored form property is not exported; RE asked).
+bool World::cpForceIntoForm(KismetVM& vm, int op) {
+    KismetVM::Op& o = vm.op(op);
+    const std::string f = o.authored["Form"].asString() + o.authored["DesiredForm"].asString();
+    const bool vehicle = f.find("Vehicle") != std::string::npos;
+    for (int p : cpTargets(vm, op, "Target")) if (Character* c = participantPawnMutable(p)) c->setForm(vehicle ? Form::Vehicle : Form::Robot);
+    if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
+    return true;
+}
+
+// Restart From Last Checkpoint (CheckpointManager.RestartFromActiveCheckpoint, the same map): the launch again at the active checkpoint -
+// AI destroyed, every participant respawned at the checkpoint, the level Kismet begun again with that CP (PROV: the map is not reloaded,
+// world state set by Kismet is rebuilt by the relaunch). Host only.
+bool World::cpRestartFromCheckpoint() {
+    if (!cp_.active && cpLaunch_.map.empty()) return false;
+    MatchLaunch l = cpLaunch_;
+    l.checkpoint = cp_.checkpoint;
+    LOG_INFO("campaign: restart from checkpoint %s", l.checkpoint.empty() ? "(the chapter start)" : l.checkpoint.c_str());
+    return launchMatch(l);
 }
 
 int World::cpTestFireFactory(int k) {

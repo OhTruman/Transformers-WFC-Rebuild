@@ -71,7 +71,7 @@ core::Vec3 ueToGltf(const float u[3]) { return core::Vec3{u[0] * 0.01f, u[2] * 0
 
 void World::cpCollectMovers() {
     cpMovers_.clear();
-    for (const std::string& u : cpChapter_.units) {
+    for (const std::string& u : cpChapter_.allUnits) {
         assets::Json pj;
         if (!readJ(cpChapter_.dir + u + "/physics.json", pj)) continue;
         const assets::Json& mv = pj["movers"];

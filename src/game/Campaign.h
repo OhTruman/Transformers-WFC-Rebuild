@@ -20,6 +20,8 @@ struct CampaignChapter {
     std::string dir;                     // <campaign root>/<chapter>/
     std::string persistentDir;           // "D5_OME_BASE" (the persistent level's unit; physics.json "world" holds its KillZ)
     std::string initialState;            // WorldInfo.InitialStreamingState
+    std::vector<std::string> allUnits;   // every sublevel dir of the chapter (streaming: all loaded at the start, shown per state)
+    std::map<std::string, std::vector<std::string>> unitStates;   // unit dir -> the LevelStreamingStates it is visible in
     std::vector<std::string> units;      // the sublevel dirs loaded at the start (initial state + the persistent level)
     int mapId = -1, faction = 0;         // TnDataProvider_MapInfo MapId (96..105); 0 Autobot, 1 Decepticon
     std::vector<std::string> trio;       // CampaignCharacters (CharacterName, the iconic order of TransLevels.ini)
@@ -87,6 +89,9 @@ struct CampaignState {
     std::vector<Interp> interps;              // one per SeqAct_Interp op
     int cineOp = -1, cineViewOp = -1;         // the op driving the local camera / the CinematicView
     std::string cineCamGroup;
+    std::map<std::string, std::vector<int>> bodyPools;   // step 6: AI participants per body (shared by the factories)
+    std::string streamingState;
+    std::map<std::string, bool> unitVisible;
     std::string humanChassis;                 // the human's current pick (the squad is the trio minus it)
     KismetVM vm;
     // [Systems] the VM's audio ops (LevelAudioScript hosted): VM op -> its audio op id ("<level>|<path under Main_Sequence>"; "" = not
