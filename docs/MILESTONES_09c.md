@@ -3548,3 +3548,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the Frontend's Host / Join wiring to UdpSession + a two-window menu match on this PC. Frontend CARD FREE: #4 PASS at runtime,
   #6 reproduced (15 rows), #1 profile: warm costs = frontend 3D scene load (~1.5 s menu, ~0.7 s lobbies) + party preview-body
   stalls; cold = first launch only. Card -> Rendering (8 min) -> Systems (#5 / #9 FX log).
+2026-10-23 00:56 NET.identity PASS on e0163393 (Experimental): 4,801 ticks, lan / typical / bad, peers + replay agree; covers the seat pieces +
+  spread. #18 float soak running (before count). Next identity row on 4bcfde3d incl. the UdpSession path.
