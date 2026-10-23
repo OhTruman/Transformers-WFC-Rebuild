@@ -153,7 +153,11 @@ void World::setupSurvival() {
     }
     if (!SurvivalData::load(mapName_, svData_)) { LOG_ERROR("escalation: no Escalation data for %s", mapName_.c_str()); return; }
     ensureBotNav();
-    {   // E2b part 3: the original NavigationCell mesh and its gating [AssetTools from escalation_navmesh.json + the generators' Kismet]
+    // E2b part 3: the original NavigationCell mesh and its gating [AssetTools from escalation_navmesh.json + the generators' Kismet].
+    // WFC_ESCNAV=1 only (Integration 2026-10-23) until the typed-link nav (v3) passes both maps' soaks; default = the versus nav + the
+    // door-box blocking + the PROV spawn stand-in.
+    static const bool escNavOn = std::getenv("WFC_ESCNAV") && std::atoi(std::getenv("WFC_ESCNAV")) != 0;
+    if (escNavOn) {
         BotNav esc;
         if (esc.load(svManifest(mapName_, "bot_nav_escalation.json"))) {
             botNav_ = std::move(esc);
@@ -818,6 +822,30 @@ void World::tickSurvival(float dt) {
         for (int z : now) if (std::find(was.begin(), was.end(), z) == was.end()) svTouch(z, +1);
         was = now;
     }
+    // PROV (E3, until the GOAP sets): the original's threat sensor keeps every player known (SeeEnemy at spawn, RE §9.1); the Classic
+    // brain forgets an unseen target after its memory, so once a second each horde bot is told where the nearest player is.
+    if (simTick_ % 60 == 0)
+        for (const SurvivalState::Slot& s : sv_.slots) {
+            if (!s.inUse) continue;
+            const Character* hc = participantPawn(s.player);
+            if (!hc) continue;
+            int bq = -1; float best = 1e18f;
+            for (size_t q = 0; q < P.size(); ++q) {
+                if (match_.sameTeam((int)q, s.player)) continue;   // every player-team participant (our team bots too)
+                const Character* c = participantPawn((int)q);
+                if (!c) continue;
+                const core::Vec3 d = c->position() - hc->position();
+                const float l = d.x * d.x + d.y * d.y + d.z * d.z;
+                if (l < best) { best = l; bq = (int)q; }
+            }
+            if (bq < 0) continue;
+            for (BotBrain& br : bots_)
+                if (br.player == s.player) {
+                    BotBrain::Seen& sn = br.seen[bq];
+                    if (!sn.visible) { sn.pos = participantPawn(bq)->actorLocation(); sn.time = match_.matchTime(); }
+                    if (br.target < 0) br.target = bq;
+                }
+        }
     // A dead horde pawn frees its slot (its cost leaves the alive cost; the horde never respawns).
     int aliveCost = 0, alive = 0;
     std::vector<int> living(svData_.enemies.size(), 0);

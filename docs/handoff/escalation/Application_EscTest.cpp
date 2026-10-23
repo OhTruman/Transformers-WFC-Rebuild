@@ -7,6 +7,7 @@
 #include "game/PickupFactory.h"
 #include "game/Destructible.h"
 
+#include <cstdlib>
 #include <algorithm>
 #include <cmath>
 
@@ -79,8 +80,10 @@ void Application::runEscalationTest() {
     m.playerMutable(ally->matchPlayer()).team = D.coopTeam;
     check(m.players()[(size_t)me].team == 0, "the player is on BrokenHope's co-op team (Autobots)");
     check(D.weaponPickups.size() == 17, "17 weapon pickup factories (hidden until bought)");
-    check(S.escNav && world_.botNav().cells().size() == 469 && S.navBlockedAtStart == 32 && S.generatorCells.size() == 12,
-          "the Escalation nav: 469 original NavigationCells, 32 blocked at start, 12 generators open cells");
+    const bool escNavOn = std::getenv("WFC_ESCNAV") && std::atoi(std::getenv("WFC_ESCNAV")) != 0;
+    if (escNavOn) check(S.escNav && world_.botNav().cells().size() == 469 && S.navBlockedAtStart == 32 && S.generatorCells.size() == 12,
+                        "the Escalation nav (WFC_ESCNAV): 469 original NavigationCells, 32 blocked at start, 12 generators open cells");
+    else check(!S.escNav, "the versus nav by default (the Escalation nav only with WFC_ESCNAV=1)");
     check(D.enemies[0].chassis == "ESC_Spider" && D.enemies[0].health == 20.0f && D.waves[9].decreaseTaken == 0 && D.waves[13].increaseDealt == 0,
           "the horde table: Spider body ESC_Spider 20 HP; wave 10 DecreaseDamageTaken L0, wave 14 IncreaseDamage L0");
     run(15.5f);
@@ -210,7 +213,7 @@ void Application::runEscalationTest() {
         check(t > 3.2f && t < 3.5f && doors && zone, "Door generator 4199: ~3.33 s (3 per tick), doors 11450 / 9615 transform, zone 10523 activated");
         bool open = false;
         for (const auto& gc : S.generatorCells) if (gc.first == "TnSurvivalGenerator_4199") { open = !gc.second.empty(); for (int c : gc.second) open = open && !world_.botNav().isBlocked(c); }
-        check(open, "Door generator 4199: its NavigationCells are released (the original's Turn On)");
+        if (escNavOn) check(open, "Door generator 4199: its NavigationCells are released (the original's Turn On)");
         LOG_INFO("ESCTEST door bought in %.2f s, power %.0f, %d purchases", t, S.power[(size_t)me], S.purchases);
     }
     {   // a weapon generator: FlakGrenade 1835 (75) unhides its factory; the press takes the bag (a different bag is tossed)

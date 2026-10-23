@@ -1,0 +1,82 @@
+diff --git a/src/core/Application_EscTest.cpp b/src/core/Application_EscTest.cpp
+index 01849846..2a7ca6d7 100644
+--- a/src/core/Application_EscTest.cpp
++++ b/src/core/Application_EscTest.cpp
+@@ -7,6 +7,7 @@
+ #include "game/PickupFactory.h"
+ #include "game/Destructible.h"
+ 
++#include <cstdlib>
+ #include <algorithm>
+ #include <cmath>
+ 
+@@ -79,8 +80,10 @@ void Application::runEscalationTest() {
+     m.playerMutable(ally->matchPlayer()).team = D.coopTeam;
+     check(m.players()[(size_t)me].team == 0, "the player is on BrokenHope's co-op team (Autobots)");
+     check(D.weaponPickups.size() == 17, "17 weapon pickup factories (hidden until bought)");
+-    check(S.escNav && world_.botNav().cells().size() == 469 && S.navBlockedAtStart == 32 && S.generatorCells.size() == 12,
+-          "the Escalation nav: 469 original NavigationCells, 32 blocked at start, 12 generators open cells");
++    const bool escNavOn = std::getenv("WFC_ESCNAV") && std::atoi(std::getenv("WFC_ESCNAV")) != 0;
++    if (escNavOn) check(S.escNav && world_.botNav().cells().size() == 469 && S.navBlockedAtStart == 32 && S.generatorCells.size() == 12,
++                        "the Escalation nav (WFC_ESCNAV): 469 original NavigationCells, 32 blocked at start, 12 generators open cells");
++    else check(!S.escNav, "the versus nav by default (the Escalation nav only with WFC_ESCNAV=1)");
+     check(D.enemies[0].chassis == "ESC_Spider" && D.enemies[0].health == 20.0f && D.waves[9].decreaseTaken == 0 && D.waves[13].increaseDealt == 0,
+           "the horde table: Spider body ESC_Spider 20 HP; wave 10 DecreaseDamageTaken L0, wave 14 IncreaseDamage L0");
+     run(15.5f);
+@@ -210,7 +213,7 @@ void Application::runEscalationTest() {
+         check(t > 3.2f && t < 3.5f && doors && zone, "Door generator 4199: ~3.33 s (3 per tick), doors 11450 / 9615 transform, zone 10523 activated");
+         bool open = false;
+         for (const auto& gc : S.generatorCells) if (gc.first == "TnSurvivalGenerator_4199") { open = !gc.second.empty(); for (int c : gc.second) open = open && !world_.botNav().isBlocked(c); }
+-        check(open, "Door generator 4199: its NavigationCells are released (the original's Turn On)");
++        if (escNavOn) check(open, "Door generator 4199: its NavigationCells are released (the original's Turn On)");
+         LOG_INFO("ESCTEST door bought in %.2f s, power %.0f, %d purchases", t, S.power[(size_t)me], S.purchases);
+     }
+     {   // a weapon generator: FlakGrenade 1835 (75) unhides its factory; the press takes the bag (a different bag is tossed)
+diff --git a/src/game/WorldSurvival.cpp b/src/game/WorldSurvival.cpp
+index 8596406c..d77774d0 100644
+--- a/src/game/WorldSurvival.cpp
++++ b/src/game/WorldSurvival.cpp
+@@ -153,7 +153,11 @@ void World::setupSurvival() {
+     }
+     if (!SurvivalData::load(mapName_, svData_)) { LOG_ERROR("escalation: no Escalation data for %s", mapName_.c_str()); return; }
+     ensureBotNav();
+-    {   // E2b part 3: the original NavigationCell mesh and its gating [AssetTools from escalation_navmesh.json + the generators' Kismet]
++    // E2b part 3: the original NavigationCell mesh and its gating [AssetTools from escalation_navmesh.json + the generators' Kismet].
++    // WFC_ESCNAV=1 only (Integration 2026-10-23) until the typed-link nav (v3) passes both maps' soaks; default = the versus nav + the
++    // door-box blocking + the PROV spawn stand-in.
++    static const bool escNavOn = std::getenv("WFC_ESCNAV") && std::atoi(std::getenv("WFC_ESCNAV")) != 0;
++    if (escNavOn) {
+         BotNav esc;
+         if (esc.load(svManifest(mapName_, "bot_nav_escalation.json"))) {
+             botNav_ = std::move(esc);
+@@ -818,6 +822,30 @@ void World::tickSurvival(float dt) {
+         for (int z : now) if (std::find(was.begin(), was.end(), z) == was.end()) svTouch(z, +1);
+         was = now;
+     }
++    // PROV (E3, until the GOAP sets): the original's threat sensor keeps every player known (SeeEnemy at spawn, RE §9.1); the Classic
++    // brain forgets an unseen target after its memory, so once a second each horde bot is told where the nearest player is.
++    if (simTick_ % 60 == 0)
++        for (const SurvivalState::Slot& s : sv_.slots) {
++            if (!s.inUse) continue;
++            const Character* hc = participantPawn(s.player);
++            if (!hc) continue;
++            int bq = -1; float best = 1e18f;
++            for (size_t q = 0; q < P.size(); ++q) {
++                if (match_.sameTeam((int)q, s.player)) continue;   // every player-team participant (our team bots too)
++                const Character* c = participantPawn((int)q);
++                if (!c) continue;
++                const core::Vec3 d = c->position() - hc->position();
++                const float l = d.x * d.x + d.y * d.y + d.z * d.z;
++                if (l < best) { best = l; bq = (int)q; }
++            }
++            if (bq < 0) continue;
++            for (BotBrain& br : bots_)
++                if (br.player == s.player) {
++                    BotBrain::Seen& sn = br.seen[bq];
++                    if (!sn.visible) { sn.pos = participantPawn(bq)->actorLocation(); sn.time = match_.matchTime(); }
++                    if (br.target < 0) br.target = bq;
++                }
++        }
+     // A dead horde pawn frees its slot (its cost leaves the alive cost; the horde never respawns).
+     int aliveCost = 0, alive = 0;
+     std::vector<int> living(svData_.enemies.size(), 0);
