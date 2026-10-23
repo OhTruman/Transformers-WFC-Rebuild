@@ -233,3 +233,30 @@ as Escalation**, so the behaviour is MP_ESCALATION §9.2 verbatim. Only the delt
 - **Exterior ruins brute:** move-to on spawn; deaths increment a counter.
 - **After_Ramp_2 Titan:** `DX_ENEMY_SPAWNED` / `DX_ENEMY_KILLED` dialogue cues; all killed → `BrutesDead`.
 - **No god-mode, HealthStatus or damage-threshold scripting** on any D1 heavy: they fight to death as in MP.
+
+---
+
+## D2_COR: no boss; Security Drones (+ Autobot jets)
+
+D2 is a flight chapter (Starscream / Thundercracker / Skywarp). Its only new enemy type is the **Security Drone**. The jets,
+snipers and the single Brute use the Escalation sets (MP_ESCALATION §9.2).
+
+### SecurityDrone_AICD (C)
+- **Template:** SecurityDrone_ROBODEF, **250 HP**, **starts and revives as a vehicle** (always flying), Autobot team.
+- **Action set:** ScanningIdle, plus the **RepairRay** as its weapon. Vehicle form only:
+  - **ShootAtTarget** with the precondition "target in the nearest range band (Close)";
+  - **ShootFromTactical** (move to a tactical node, then beam).
+  - The ray hits enemies with the enemy repair squib (`Squib_RepairEnemy_FX`, WEAPON_PRESENTATION_AUDIT), so it **damages players**.
+    H: it would also heal Autobot allies, but no heal action is authored.
+- **Targeting** (threat evaluators): damage-based; distance (min 1500, max 10000); AI ×0.75; **view angle 60°**, so it prefers
+  targets in front of it. Goal set: the generic Agent set.
+
+### Kismet hooks (C)
+- **Cave:** drones spawn in chains (each spawn triggers the next factory), go to a **TnInteractAirEmote** hover point
+  (`emote 1`), then engage. Kills increment a shared counter. One drone is **attached to an actor** and made untargetable at spawn
+  (SetTargetableByAi), then released by an event.
+- **IntroGorge:** two drones take **CauseDamage 240** on spawn, which leaves them at 10 HP: scripted near-dead drones for the
+  opening beat.
+- **Chamber `InitializeRockets`:** 4 drones; each spawn toggles an emitter after a 0.3 s delay (the rocket-prep FX).
+- **TNLMR / Cave:** move-to on spawn; combat-music events.
+- No god-mode or health scripting.
