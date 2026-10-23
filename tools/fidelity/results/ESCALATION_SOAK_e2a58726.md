@@ -24,3 +24,11 @@ Stable (no crash, assert, hang or non-zero exit), but two suspected E1 bugs, bot
 2. **BrokenHope: 'AllDead' game over with nobody dead.** 'game over at wave 1 (TnSurvivalGameOverMessage 1)' -> EndGame "AllDead"
    at ~48-52 s in every configuration, while the log shows no death and no respawn on the players' team (0 'MATCH respawn' lines;
    with 4 friendly bots + a bot-driven player too). Possibly the alive check counts pawns not yet spawned / in a launch, or the wrong team.
+
+## Gameplay's read (2026-10-23)
+- BrokenHope 'AllDead' = a real death (Match does not log kills): seed 7 'last player death: Player by Soldier_MachineGun_Decepticon_AICD
+  at 47 s' - the horde gets SeeEnemy on spawn as the original; friendly bots are not 'players' for AllDead (the original had none;
+  bots never fill co-op seats). Not a bug; Gameplay added the last death to the game-over line. Soaks judge BrokenHope on waves
+  reached / no crash, not on game-over time.
+- Remnant stuck wave 1 = a real E1 issue (every active zone scores 0 for ShortRange, the zone sort's tie order puts zero-point zones in
+  the top 3, all 5 tries fail every recheck); RE asked for the original order; fix with E2 -> rerun on that sha.
