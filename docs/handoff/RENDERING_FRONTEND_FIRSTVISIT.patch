@@ -1,0 +1,80 @@
+diff -ru a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
+--- a/src/render/gl/GLRenderer.cpp	2026-10-23 02:52:48.776223100 -0500
++++ b/src/render/gl/GLRenderer.cpp	2026-10-23 02:52:48.860009600 -0500
+@@ -776,6 +776,12 @@
+         uploadingFrontendWorld_ = false;
+         wfc_.prewarmPlacedFx();              // M58: its emitters' programs / textures / meshes, under the loading screen
+         wfc_.setFrontendScene(true);         // (playtest 2026-10-23 #1) its textures stay pooled for a revisit
++        {   // (#1) the other menu screens' map-FX documents parse on a worker now, so a first visit finds them parsed
++            std::vector<std::string> next;
++            for (const char* d : {"UI_FrontEnd", "UI_PartyLobby", "UI_Lobby"})
++                if (dir != d) next.push_back(data + "/" + d + "/map_fx_runtime.json");
++            wfc::Pipeline::prefetchMapFxDocs(next);
++        }
+         sceneDir_ = dir;
+         LOG_INFO("frontend scene %s loaded (%zu submeshes)", dir.c_str(), world.subs.size());
+         return sceneMesh_ != kInvalidMesh;
+diff -ru a/src/render/gl/WfcMapFx.cpp b/src/render/gl/WfcMapFx.cpp
+--- a/src/render/gl/WfcMapFx.cpp	2026-10-23 02:52:48.718524700 -0500
++++ b/src/render/gl/WfcMapFx.cpp	2026-10-23 02:52:48.867033500 -0500
+@@ -34,6 +34,7 @@
+ #include <cstring>
+ #include <fstream>
+ #include <filesystem>
++#include <future>
+ #include <list>
+ #include <memory>
+ #include <sstream>
+@@ -67,22 +68,36 @@
+ std::shared_ptr<const assets::Json> parsedJson(const std::string& path) {
+     struct Entry { std::string path; uintmax_t size; long long time; std::shared_ptr<const assets::Json> doc; };
+     static std::list<Entry> cache;
+-    static std::mutex mu;
+-    std::lock_guard<std::mutex> lock(mu);
++    static std::mutex mu;                              // (held for the lookup / insert only: a worker's parse never blocks a load)
+     std::error_code ec;
+     const uintmax_t size = std::filesystem::file_size(path, ec);
+     if (ec) return nullptr;
+     const long long time = (long long)std::filesystem::last_write_time(path, ec).time_since_epoch().count();
+-    for (auto it = cache.begin(); it != cache.end(); ++it)
+-        if (it->path == path && it->size == size && it->time == time) { cache.splice(cache.begin(), cache, it); return cache.front().doc; }
++    {
++        std::lock_guard<std::mutex> lock(mu);
++        for (auto it = cache.begin(); it != cache.end(); ++it)
++            if (it->path == path && it->size == size && it->time == time) { cache.splice(cache.begin(), cache, it); return cache.front().doc; }
++    }
+     const std::string txt = readFile(path);
+     auto doc = std::make_shared<assets::Json>();
+     if (txt.empty() || !assets::Json::parse(txt, *doc)) return nullptr;
++    std::lock_guard<std::mutex> lock(mu);
+     cache.remove_if([&](const Entry& e) { return e.path == path; });
+     cache.push_front({path, size, time, doc});
+     while (cache.size() > 4) cache.pop_back();
+     return doc;
+ }
++} // namespace
++
++// (playtest 2026-10-23 #1) the first visit of a menu screen: its map-FX document parses on a worker thread while the current
++// screen is up (the cache above is shared and locked), so the screen's load finds it parsed (party lobby: ~109 ms)
++void Pipeline::prefetchMapFxDocs(const std::vector<std::string>& paths) {
++    static std::future<void> pending;
++    if (pending.valid()) pending.wait();                 // (one prefetch at a time; the previous one is long done)
++    pending = std::async(std::launch::async, [paths] { for (const std::string& p : paths) parsedJson(p); });
++}
++
++namespace {
+ 
+ // A module distribution decoded from the compiled stream; a module whose stream did not carry it evaluates to 0
+ // (logged once per module / property) instead of aborting.
+diff -ru a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h	2026-10-23 02:52:48.747122700 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-23 02:52:59.388589300 -0500
+@@ -230,6 +230,8 @@
+     void setDisplayGamma(float g) { displayGamma_ = g > 0.5f && g < 5.0f ? g : 2.2f; }
+     // (playtest 2026-10-23 #1) mark the loaded map as a frontend scene: at release its textures stay uploaded in a pool for revisits
+     void setFrontendScene(bool on) { frontendScene_ = on; }
++    // (playtest #1) parse these map-FX documents (render-data map_fx_runtime.json paths) on a worker thread now, for a later load
++    static void prefetchMapFxDocs(const std::vector<std::string>& paths);
+     // per-frame draw counters (always on, cheap) and resource counts for IRenderer::renderDiagnostics
+     struct FrameCounts {
+         int draws = 0, worldDraws = 0, bspDraws = 0, dynamicDraws = 0, fxDraws = 0;

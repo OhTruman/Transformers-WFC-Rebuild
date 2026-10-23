@@ -776,6 +776,12 @@ public:
         uploadingFrontendWorld_ = false;
         wfc_.prewarmPlacedFx();              // M58: its emitters' programs / textures / meshes, under the loading screen
         wfc_.setFrontendScene(true);         // (playtest 2026-10-23 #1) its textures stay pooled for a revisit
+        {   // (#1) the other menu screens' map-FX documents parse on a worker now, so a first visit finds them parsed
+            std::vector<std::string> next;
+            for (const char* d : {"UI_FrontEnd", "UI_PartyLobby", "UI_Lobby"})
+                if (dir != d) next.push_back(data + "/" + d + "/map_fx_runtime.json");
+            wfc::Pipeline::prefetchMapFxDocs(next);
+        }
         sceneDir_ = dir;
         LOG_INFO("frontend scene %s loaded (%zu submeshes)", dir.c_str(), world.subs.size());
         return sceneMesh_ != kInvalidMesh;
