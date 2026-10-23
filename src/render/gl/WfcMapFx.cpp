@@ -831,10 +831,9 @@ void Pipeline::tickMapFx(float dt) {
                     rt.burstFired.clear();
                 } else {
                     rt.done = true;
-                    // (UE3 bKillOnCompleted: native semantics pending RE - a forced kill at completion would cut the tails of every
-                    // flagged short-duration effect; WFC_FXKILLCOMPLETED=1 tests it)
-                    static const bool killCompleted = std::getenv("WFC_FXKILLCOMPLETED") != nullptr;
-                    if (killCompleted && L.killOnCompleted) { rt.parts.clear(); rt.trail.clear(); }
+                    // (bKillOnCompleted kills nothing: the shipped HasCompleted 0x830288A8 counts an emitter complete only once its
+                    // loops are done AND no particle is alive, and then only releases the instance - RE 2026-10-23; the live
+                    // particles die naturally, as here: the instance is released below once done and empty)
                     continue;
                 }
             }
