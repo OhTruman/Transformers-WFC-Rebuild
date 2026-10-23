@@ -3829,3 +3829,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   channels (Team Radio default; VOICETEST / UDP / FLOW pass) with the Frontend's player card (73997b0d) + checklist refresh.
   CORRECTION: 06bd8aee's message says the frontend tests pass; on the head online.V2_voice_settings_and_ptt FAILS (246 pass)
   -> Frontend fixes it against the Team Radio default. Compile hold lifted.
+2026-10-23 07:01 MERGED 14549980 CAMPAIGN BOOT (D5_OME headless to InProgress with the AI squad; CAMPAIGNTEST 21 / 21 with WFC_MAP=D5_OME;
+  Kismet VM per RE K1-K6 + the native startup filter; KISMETTEST 10 / 10), 120aef77 Escalation pickup ammo, b949b58c V2 test
+  fix (frontend tests 247 / 247 PASS on the head). Package verify: HD + Opus + Play.bat boot clean; 3 package gaps (iconic
+  presets, mp_transforming_actors, ESC chassis exports) -> build_slim + repackage; campaign render data for D5 added to
+  build_slim. AssetTools: D5 chapter bot_nav.json (123 cells, 1 piece). Rendering: D5 RT calibration (sunless fit; lights
+  fit on 259 chapter lights) -> ships in D5_OME_BASE/vbake. Card: Rendering x4345 -> Systems' Streets re-verify -> Frontend
+  post-match check.
