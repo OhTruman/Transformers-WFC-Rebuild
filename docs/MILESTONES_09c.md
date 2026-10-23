@@ -3668,3 +3668,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (docs/handoff/USER_RETEST_CHECKLIST_2026-10-23.md). Escalation soak building on effecacc. Rendering CARD FREE (analysis pending).
 2026-10-23 02:12 RE E1 review: PASS with 3 fixes (PreGame clock from level start; zone activate / deactivate hook; Round Begin / End events)
   -> Gameplay folds them into E2.
+2026-10-23 02:13 CORRECTION e2a58726: effecacc had left src/core/Application_EscTest.cpp untracked (my staging used directory globs that
+  missed src/core); a clean checkout of effecacc / 718efdee did not link (Experimental). Rule: stage every '+++' path of a patch
+  by name and verify with git ls-files before committing.
