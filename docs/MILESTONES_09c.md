@@ -3911,3 +3911,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   rows, Online via queryOnline, Send Invite = code + sendInvite, InviteReceived popup -> join by code). 249 frontend tests.
   AssetTools: 57 campaign character templates building (D5 done, A1's 16 next); A1 vbake + pp volumes + battery
   destructibles + actors.json in.
+2026-10-23 08:15 MERGED 287085e3 campaign runtime 6 (streaming via setChapterUnitVisible, ForceIntoForm, per-body AI pools, restart from
+  checkpoint; wfc_fidelity link fix). AssetTools: 57 / 57 campaign AI bodies + 40 weapon records done (A1 factories
+  unheld); chain on A2. Rendering's CAMPAIGN_STREAM (setMapActorTransform + stage 3) recut against 287085e3.
