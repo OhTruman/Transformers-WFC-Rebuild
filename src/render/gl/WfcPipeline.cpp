@@ -4326,7 +4326,8 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     if (P.water) {   // (Water row, WfcWater.cpp) Enhanced: the scene depth / colour its reflections and absorption read; Original: off,
                      // and no scene copies made for it
         const int wm = waterMode();
-        Uniform1i(ULOC(P, "uWaterOn"), wm);
+        static const bool waterDebug = std::getenv("WFC_WATERDEBUG") != nullptr;
+        Uniform1i(ULOC(P, "uWaterOn"), wm == 1 && waterDebug ? 2 : wm);
         if (wm == 1 && P.blend >= 2) {                 // (translucent / additive only: the scene is complete by then)
             if (!P.sceneDepth) { ensureSceneDepth(); ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
                                  Uniform1i(ULOC(P, "uHasSceneDepth"), 1); }

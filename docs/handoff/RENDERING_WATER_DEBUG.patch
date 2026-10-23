@@ -1,0 +1,33 @@
+diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-23 03:47:49.907133900 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 03:47:50.008983300 -0500
+@@ -4326,7 +4326,8 @@
+     if (P.water) {   // (Water row, WfcWater.cpp) Enhanced: the scene depth / colour its reflections and absorption read; Original: off,
+                      // and no scene copies made for it
+         const int wm = waterMode();
+-        Uniform1i(ULOC(P, "uWaterOn"), wm);
++        static const bool waterDebug = std::getenv("WFC_WATERDEBUG") != nullptr;
++        Uniform1i(ULOC(P, "uWaterOn"), wm == 1 && waterDebug ? 2 : wm);
+         if (wm == 1 && P.blend >= 2) {                 // (translucent / additive only: the scene is complete by then)
+             if (!P.sceneDepth) { ensureSceneDepth(); ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
+                                  Uniform1i(ULOC(P, "uHasSceneDepth"), 1); }
+diff -ru a/src/render/gl/WfcWater.cpp b/src/render/gl/WfcWater.cpp
+--- a/src/render/gl/WfcWater.cpp	2026-10-23 03:47:49.879539900 -0500
++++ b/src/render/gl/WfcWater.cpp	2026-10-23 03:47:50.016508400 -0500
+@@ -15,7 +15,7 @@
+ 
+ // declared before main() in the water programs; called right after wfcMaterial(m, o)
+ const char* kFSWaterEnhance = R"(
+-uniform int uWaterOn;         // the Water row: 1 Enhanced (bound per draw); 0 = the authored material only
++uniform int uWaterOn;         // the Water row: 1 Enhanced (bound per draw), 2 its debug view (WFC_WATERDEBUG); 0 = the authored material only
+ uniform mat4 uViewProj;
+ void wfcWaterEnhance(MatIn m, inout MatOut o, mat3 tbn) {
+     if (uWaterOn == 0 || uBlend <= 1) return;   // (opaque water - CoolantFloor - draws in the opaque pass: no finished scene to reflect)
+@@ -50,6 +50,7 @@
+         }
+     }
+     o.EmissiveColor += refl * F * hitW;
++    if (uWaterOn == 2) { o.EmissiveColor = vec3(hitW, F, 0.2); o.Opacity = 1.0; }   // (WFC_WATERDEBUG: R the SSR hit weight, G Fresnel)
+     // the translucent liquids: absorption thickens with the liquid behind the surface (scene depth - this depth)
+     if (uBlend == 2) {
+         float thick = max(m.sceneDepth - m.pixelDepth, 0.0) * 0.01;
