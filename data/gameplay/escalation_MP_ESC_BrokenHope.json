@@ -175,7 +175,11 @@
    "cost": 5,
    "spawnType": 0,
    "loot": "GENERIC",
-   "power": 10.0
+   "power": 10.0,
+   "chassis": "ESC_Spider",
+   "robotWeapons": [],
+   "vehicleWeapons": [],
+   "health": 20
   },
   {
    "type": "Soldier_MachineGun_Decepticon_AICD",
@@ -186,7 +190,15 @@
    "cost": 10,
    "spawnType": 0,
    "loot": "SoldierDec",
-   "power": 25.0
+   "power": 25.0,
+   "chassis": "Car8",
+   "robotWeapons": [
+    "AssaultRifle"
+   ],
+   "vehicleWeapons": [
+    "AssaultRifleVehicle"
+   ],
+   "health": 150
   },
   {
    "type": "Soldier_Rocket_Decepticon_AICD",
@@ -197,7 +209,15 @@
    "cost": 20,
    "spawnType": 2,
    "loot": "SoldierDec",
-   "power": 30.0
+   "power": 30.0,
+   "chassis": "ESC_Soldier_Rocket_Decepticon",
+   "robotWeapons": [
+    "RocketLauncher"
+   ],
+   "vehicleWeapons": [
+    "RocketVehicle"
+   ],
+   "health": 150
   },
   {
    "type": "Soldier_Jet_Decepticon_AICD",
@@ -208,7 +228,15 @@
    "cost": 20,
    "spawnType": 3,
    "loot": "GENERIC",
-   "power": 75.0
+   "power": 75.0,
+   "chassis": "ESC_Soldier_Jet_Decepticon",
+   "robotWeapons": [
+    "HeavyMG"
+   ],
+   "vehicleWeapons": [
+    "PlaneMachineGun"
+   ],
+   "health": 250
   },
   {
    "type": "CQCSpecialist_Decepticon_AICD",
@@ -219,7 +247,13 @@
    "cost": 20,
    "spawnType": 0,
    "loot": "SoldierDec",
-   "power": 50.0
+   "power": 50.0,
+   "chassis": "ESC_CQCSpecialist_Decepticon",
+   "robotWeapons": [
+    "PlasmaCannon"
+   ],
+   "vehicleWeapons": [],
+   "health": 90
   },
   {
    "type": "CQCSpecialist_Decepticon_AICD",
@@ -230,7 +264,13 @@
    "cost": 20,
    "spawnType": 0,
    "loot": "SoldierDec",
-   "power": 50.0
+   "power": 50.0,
+   "chassis": "ESC_CQCSpecialist_Decepticon",
+   "robotWeapons": [
+    "PlasmaCannon"
+   ],
+   "vehicleWeapons": [],
+   "health": 90
   },
   {
    "type": "Brute_Decepticon_AICD",
@@ -241,7 +281,13 @@
    "cost": 60,
    "spawnType": 0,
    "loot": "BruteDec",
-   "power": 100.0
+   "power": 100.0,
+   "chassis": "ESC_Brute_Decepticon",
+   "robotWeapons": [
+    "HalberdAxe"
+   ],
+   "vehicleWeapons": [],
+   "health": 1500
   },
   {
    "type": "Soldier_Shotgun_Decepticon_AICD",
@@ -252,7 +298,15 @@
    "cost": 30,
    "spawnType": 0,
    "loot": "SoldierDec",
-   "power": 75.0
+   "power": 75.0,
+   "chassis": "ESC_Soldier_Shotgun_Decepticon",
+   "robotWeapons": [
+    "EmpShotgun"
+   ],
+   "vehicleWeapons": [
+    "AssaultRifleVehicle"
+   ],
+   "health": 150
   },
   {
    "type": "Soldier_Shotgun_Decepticon_AICD",
@@ -263,7 +317,15 @@
    "cost": 30,
    "spawnType": 0,
    "loot": "SoldierDec",
-   "power": 75.0
+   "power": 75.0,
+   "chassis": "ESC_Soldier_Shotgun_Decepticon",
+   "robotWeapons": [
+    "EmpShotgun"
+   ],
+   "vehicleWeapons": [
+    "AssaultRifleVehicle"
+   ],
+   "health": 150
   },
   {
    "type": "Soldier_Tank_Decepticon_AICD",
@@ -274,7 +336,13 @@
    "cost": 60,
    "spawnType": 4,
    "loot": "SoldierTankDec",
-   "power": 300.0
+   "power": 300.0,
+   "chassis": "ESC_Soldier_Tank_Decepticon",
+   "robotWeapons": [],
+   "vehicleWeapons": [
+    "TankCannon"
+   ],
+   "health": 6000
   },
   {
    "type": "Titan_Decepticon_AICD",
@@ -285,7 +353,13 @@
    "cost": 60,
    "spawnType": 0,
    "loot": "TitanDec",
-   "power": 100.0
+   "power": 100.0,
+   "chassis": "ESC_Titan_Decepticon",
+   "robotWeapons": [
+    "GatlingGun"
+   ],
+   "vehicleWeapons": [],
+   "health": 1250
   },
   {
    "type": "Brute_Decepticon_AICD",
@@ -296,7 +370,13 @@
    "cost": 60,
    "spawnType": 0,
    "loot": "BruteDec",
-   "power": 100.0
+   "power": 100.0,
+   "chassis": "ESC_Brute_Decepticon",
+   "robotWeapons": [
+    "HalberdAxe"
+   ],
+   "vehicleWeapons": [],
+   "health": 1500
   },
   {
    "type": "Titan_Decepticon_AICD",
@@ -307,7 +387,13 @@
    "cost": 60,
    "spawnType": 0,
    "loot": "BruteDec",
-   "power": 100.0
+   "power": 100.0,
+   "chassis": "ESC_Titan_Decepticon",
+   "robotWeapons": [
+    "GatlingGun"
+   ],
+   "vehicleWeapons": [],
+   "health": 1250
   }
  ],
  "zones": [

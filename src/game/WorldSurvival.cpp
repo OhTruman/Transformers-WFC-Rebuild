@@ -31,7 +31,15 @@ bool SurvivalData::load(const std::string& map, SurvivalData& out) {
         out.fillWaveReCheckTime = j["fillWaveReCheckTime"].asFloat(0.5f);
         const assets::Json& w = j["waves"];
         for (size_t i = 0; i < w.size(); ++i)
-            out.waves.push_back({(int)w[i]["budget"].asFloat(0), (int)w[i]["budgetAlive"].asFloat(0), (int)w[i]["deficit"].asFloat(0)});
+        {
+            Wave wv{(int)w[i]["budget"].asFloat(0), (int)w[i]["budgetAlive"].asFloat(0), (int)w[i]["deficit"].asFloat(0)};
+            for (size_t b = 0; b < w[i]["buffs"].size(); ++b) {
+                const std::string cls = w[i]["buffs"][b][0].asString(); const int lv = w[i]["buffs"][b][1].asInt(0);
+                if (cls == "TnBuffSurvivalDecreaseDamageTaken") wv.decreaseTaken = lv;
+                else if (cls == "TnBuffSurvivalIncreaseDamage") wv.increaseDealt = lv;
+            }
+            out.waves.push_back(wv);
+        }
         const assets::Json& en = j["enemies"];
         for (size_t i = 0; i < en.size(); ++i) {
             const assets::Json& r = en[i];
@@ -41,6 +49,9 @@ bool SurvivalData::load(const std::string& map, SurvivalData& out) {
             x.minCount = (int)r["minCount"].asFloat(0); x.maxCount = (int)r["maxCount"].asFloat(0);
             x.cost = (int)r["cost"].asFloat(0); x.spawnType = std::clamp((int)r["spawnType"].asFloat(0), 0, kSvTypes - 1);
             x.power = r["power"].asFloat(0);
+            x.chassis = r["chassis"].asString(); x.health = r["health"].asFloat(150.0f);
+            for (size_t k = 0; k < r["robotWeapons"].size(); ++k) x.robotWeapons.push_back(r["robotWeapons"][k].asString());
+            for (size_t k = 0; k < r["vehicleWeapons"].size(); ++k) x.vehicleWeapons.push_back(r["vehicleWeapons"][k].asString());
             out.enemies.push_back(x);
         }
         const assets::Json& zs = j["zones"];
@@ -146,9 +157,13 @@ void World::setupSurvival() {
             MatchPlayer& mp = match_.playerMutable(p);
             mp.kind = ParticipantKind::Bot;
             mp.directorSpawned = true;
-            match_.selectCharacter(p, id.selection);
-            preloadHeldWeaponModels(id.selection.weapons);
-            chassisAssets(resolveChassis(id.selection, match_.faction(p)));
+            // The entry's body (E3a): an iconic selection of its chassis; without one, the versus preset of the identity (PROV).
+            CharacterSelection sel = id.selection;
+            if (!svData_.enemies[e].chassis.empty()) { sel = CharacterSelection{}; sel.type = 1; sel.chassisId = svData_.enemies[e].chassis; }
+            match_.selectCharacter(p, sel);
+            preloadHeldWeaponModels(svData_.enemies[e].robotWeapons);
+            if (const ChassisAssets* ca = chassisAssets(resolveChassis(sel, match_.faction(p))); ca && !ca->error.empty())
+                LOG_WARN("escalation: horde body %s: %s", svData_.enemies[e].chassis.c_str(), ca->error.c_str());
             auto o = std::make_unique<MatchOpponent>(p, mp.team, true);
             addBotBrain(p, 1);
             if (smart_.size() <= (size_t)p) smart_.resize((size_t)p + 1);
@@ -376,6 +391,29 @@ void World::svTickWeaponPickups(float dt) {
             svTakeWeapon(*c, (int)q, w);
         }
     }
+}
+
+// A horde pawn's loadout and health at its spawn (E3a): the entry's robot / vehicle weapons and its ROBODEF health.
+void World::svApplyHordeStats(Character& c, int player) {
+    for (const SurvivalState::Slot& s : sv_.slots) {
+        if (s.player != player) continue;
+        const SurvivalData::Enemy& E = svData_.enemies[(size_t)s.enemy];
+        std::vector<Weapon> robot;
+        for (const std::string& w : E.robotWeapons) if (const WeaponDef* d = findWeaponDef(w)) robot.push_back(Weapon::fromDef(*d));
+        if (!robot.empty() || !E.vehicleWeapons.empty()) c.setLoadout(robot, E.vehicleWeapons.empty() ? c.vehicleWeapons() : E.vehicleWeapons);
+        c.health().max = E.health; c.health().current = E.health;
+        return;
+    }
+}
+
+// The wave buffs on damage: a horde victim's DecreaseDamageTaken, a horde instigator's IncreaseDamage.
+float World::svDamageMul(int victim, int instigator) const {
+    float m = 1.0f;
+    for (const SurvivalState::Slot& s : sv_.slots) {
+        if (s.player == victim) m *= s.takenMul;
+        if (s.player == instigator && instigator != victim) m *= s.dealtMul;
+    }
+    return m;
 }
 
 float World::svZoneScore(int z, int t) const {
@@ -756,6 +794,11 @@ void World::tickSurvival(float dt) {
             if (slot < 0) break;
             if (!svSpawn(slot)) { ++sv_.failedSpawns; LOG_INFO("escalation: Failed to find a place to spawn a dude (%s)", svData_.enemies[(size_t)e].type.c_str()); break; }
             sv_.slots[(size_t)slot].inUse = true;
+            {   // the wave's buffs, applied at spawn: DecreaseDamageTaken L0-4 x0.9..0.5, IncreaseDamage L0-4 x1.25..2.25 [RE §2]
+                const SurvivalData::Wave& wv = svData_.waves[(size_t)sv_.currentWave];
+                sv_.slots[(size_t)slot].takenMul = wv.decreaseTaken >= 0 ? 0.9f - 0.1f * (float)wv.decreaseTaken : 1.0f;
+                sv_.slots[(size_t)slot].dealtMul = wv.increaseDealt >= 0 ? 1.25f + 0.25f * (float)wv.increaseDealt : 1.0f;
+            }
             sv_.usedThisWave += svData_.enemies[(size_t)e].cost;
             ++sv_.spawns;
             sv_.spawnOrder.push_back(e);

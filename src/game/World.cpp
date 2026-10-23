@@ -3224,6 +3224,7 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
         if (ip && instigator != victim && ip->hoverState_ == 2) amount *= 1.4f;   // TnBuffIncreaseDamageDuringHover [0]
         if (ip && instigator != victim && ip->beaconDamageBuff_ > 0.0f) amount *= 1.15f;   // TnBuffAmmoBeaconIncreaseDamage [0]
     }
+    if (sv_.phase != SurvivalState::Phase::Off) amount *= svDamageMul(victim, instigator);   // Escalation wave buffs
     float applied = h->applyDamage(amount);
     if (applied > 0.0f) {                                   // TnPlayerPawn.TakeDamage -> ExposeSelf
         if (victim == localPlayer_) player_.pawn().exposeSelf(); else if (opp) opp->pawn().exposeSelf();
@@ -4483,6 +4484,7 @@ void World::tickMatch(float dt) {
                         float gy; core::Vec3 gn;
                         if (collision_.valid() && collision_.groundHeight(p.x, p.z, p.y + 0.5f, 1.0f, gy, gn)) p.y = gy;
                         o->spawnAt(p);
+                        if (chassisOk && op.directorSpawned) svApplyHordeStats(o->pawn(), o->matchPlayer());   // E3a: weapons + health (after respawnReset)
                         recordSpawnEvent(o->matchPlayer());
                         if (spawnProf()) LOG_INFO("SPAWNPROF opponent %d spawn: chassis apply %.1f ms, character %.1f ms, place+spawnAt %.1f ms (%s)",
                                                   o->matchPlayer(), to1 - to0, to2 - to1, profNowMs() - to2, op.chassis.c_str());
@@ -5062,7 +5064,9 @@ const World::ChassisAssets* World::chassisAssets(const std::string& id) {
         a->error = a->def.loadError;
     } else if ((chProf[0] = profNowMs(), !(loadRobotShared(a->def, a->robot) || assets::loadSkinnedGlb(ext + a->def.robotGlb, a->robot))) || (chProf[1] = profNowMs(), !a->robot.valid())) {
         a->error = "robot.glb failed to load for " + id;
-    } else if (!assets::loadSkinnedGlb(ext + a->def.vehicleGlb, a->vehicle) || (chProf[2] = profNowMs(), !a->vehicle.valid())) {
+    } else if (a->def.vehicleGlb.empty() && (a->def.flyerNoTransform = true, !assets::loadSkinnedGlb(ext + a->def.robotGlb, a->vehicle))) {
+        a->error = "robot.glb (as the vehicle stand-in) failed to load for " + id;   // no vehicle form (the Spider): never transforms
+    } else if (!a->def.vehicleGlb.empty() && (!assets::loadSkinnedGlb(ext + a->def.vehicleGlb, a->vehicle) || (chProf[2] = profNowMs(), !a->vehicle.valid()))) {
         a->error = "vehicle.glb failed to load for " + id;
     } else {
         resolveModelTextures(a->robot);

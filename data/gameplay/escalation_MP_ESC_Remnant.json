@@ -252,7 +252,13 @@
    "cost": 10,
    "spawnType": 1,
    "loot": "SoldierAut",
-   "power": 25.0
+   "power": 25.0,
+   "chassis": "ESC_HoloBrute_Autobot",
+   "robotWeapons": [
+    "CeremonialStaff"
+   ],
+   "vehicleWeapons": [],
+   "health": 1800
   },
   {
    "type": "Soldier_MachineGun_Autobot_AICD",
@@ -263,7 +269,15 @@
    "cost": 10,
    "spawnType": 1,
    "loot": "SoldierAut",
-   "power": 25.0
+   "power": 25.0,
+   "chassis": "Car9",
+   "robotWeapons": [
+    "AssaultRifle"
+   ],
+   "vehicleWeapons": [
+    "AssaultRifleVehicle"
+   ],
+   "health": 150
   },
   {
    "type": "Soldier_Rocket_Autobot_AICD",
@@ -274,7 +288,15 @@
    "cost": 20,
    "spawnType": 1,
    "loot": "SoldierAut",
-   "power": 30.0
+   "power": 30.0,
+   "chassis": "ESC_Soldier_Rocket_Autobot",
+   "robotWeapons": [
+    "RocketLauncher"
+   ],
+   "vehicleWeapons": [
+    "RocketVehicle"
+   ],
+   "health": 150
   },
   {
    "type": "CQCSpecialist_Autobot_AICD",
@@ -285,7 +307,13 @@
    "cost": 20,
    "spawnType": 1,
    "loot": "SoldierAut",
-   "power": 50.0
+   "power": 50.0,
+   "chassis": "ESC_CQCSpecialist_Autobot",
+   "robotWeapons": [
+    "PlasmaCannon"
+   ],
+   "vehicleWeapons": [],
+   "health": 90
   },
   {
    "type": "Soldier_Shotgun_Autobot_AICD",
@@ -296,7 +324,15 @@
    "cost": 25,
    "spawnType": 0,
    "loot": "SoldierAut",
-   "power": 75.0
+   "power": 75.0,
+   "chassis": "ESC_Soldier_Shotgun_Autobot",
+   "robotWeapons": [
+    "EmpShotgun"
+   ],
+   "vehicleWeapons": [
+    "AssaultRifleVehicle"
+   ],
+   "health": 150
   },
   {
    "type": "Titan_Autobot_AICD",
@@ -307,7 +343,13 @@
    "cost": 45,
    "spawnType": 0,
    "loot": "BruteAut",
-   "power": 100.0
+   "power": 100.0,
+   "chassis": "ESC_Titan_Autobot",
+   "robotWeapons": [
+    "GatlingGun"
+   ],
+   "vehicleWeapons": [],
+   "health": 1250
   },
   {
    "type": "Brute_Autobot_AICD",
@@ -318,7 +360,13 @@
    "cost": 45,
    "spawnType": 0,
    "loot": "BruteAut",
-   "power": 100.0
+   "power": 100.0,
+   "chassis": "ESC_Brute_Autobot",
+   "robotWeapons": [
+    "WarHammer"
+   ],
+   "vehicleWeapons": [],
+   "health": 1500
   },
   {
    "type": "Titan_Autobot_AICD",
@@ -329,7 +377,13 @@
    "cost": 45,
    "spawnType": 0,
    "loot": "TitanAut",
-   "power": 100.0
+   "power": 100.0,
+   "chassis": "ESC_Titan_Autobot",
+   "robotWeapons": [
+    "GatlingGun"
+   ],
+   "vehicleWeapons": [],
+   "health": 1250
   },
   {
    "type": "Brute_Autobot_AICD",
@@ -340,7 +394,13 @@
    "cost": 45,
    "spawnType": 0,
    "loot": "BruteAut",
-   "power": 100.0
+   "power": 100.0,
+   "chassis": "ESC_Brute_Autobot",
+   "robotWeapons": [
+    "WarHammer"
+   ],
+   "vehicleWeapons": [],
+   "health": 1500
   }
  ],
  "zones": [

@@ -1411,6 +1411,8 @@ private:
     void svApplySpawnLoadout(Character& c);
     bool svTakeWeapon(Character& c, int player, const Weapon& got);
     void svTickWeaponPickups(float dt);
+    void svApplyHordeStats(Character& c, int player);
+    float svDamageMul(int victim, int instigator) const;
     bool svLaunching_ = false;   // the next resetForNewLevel is an Escalation level (transforming actors: the SV start state)
     SurvivalData svData_;
     SurvivalState sv_;
