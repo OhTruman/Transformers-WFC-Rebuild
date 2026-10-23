@@ -1,0 +1,321 @@
+diff --git a/src/game/Campaign.h b/src/game/Campaign.h
+index 8c3e00f9..3113c030 100644
+--- a/src/game/Campaign.h
++++ b/src/game/Campaign.h
+@@ -8,6 +8,7 @@
+ #include "core/Math.h"
+ #include "game/Kismet.h"
+ 
++#include <map>
+ #include <string>
+ #include <vector>
+ 
+@@ -61,6 +62,9 @@ struct CampaignState {
+     std::vector<int> formPending;             // spawned with StartingFormOverride TF_Vehicle (the form change the step after)
+     int enemiesSpawned = 0;
+     std::vector<std::string> trioChassis;     // CampaignCharacters' chassis, trio order
++    struct Objective { core::Vec3 pos{0, 0, 0}; float radius = 5.0f; bool persistent = false; };
++    std::map<int, Objective> objectives;      // step 4: Kismet AI objectives per match player (MoveToActor / SetMoveToObjective)
++    std::map<std::string, core::Vec3> actorPos;   // actor name -> location (navigation.json, actors.json)
+     std::string humanChassis;                 // the human's current pick (the squad is the trio minus it)
+     KismetVM vm;
+ };
+diff --git a/src/game/ChassisDef.cpp b/src/game/ChassisDef.cpp
+index 2d1515e6..4d20ddff 100644
+--- a/src/game/ChassisDef.cpp
++++ b/src/game/ChassisDef.cpp
+@@ -149,7 +149,9 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
+     d = ChassisDef{};
+     d.id = id;
+     // "ESC_<id>": an Escalation horde body from AssetTools out/escalation_characters/<id> (its paths are ExtractedAssets-relative too).
+-    const std::string dir = id.rfind("ESC_", 0) == 0 ? vsRoot + "/../../AssetTools/out/escalation_characters/" + id.substr(4) + "/"
++    // "CMP_<id>": a campaign AI body from AssetTools out/campaign_characters/<id> (the TR_AiCharacterDefinition_p templates).
++    const std::string dir = id.rfind("CMP_", 0) == 0 ? vsRoot + "/../../AssetTools/out/campaign_characters/" + id.substr(4) + "/"
++                          : id.rfind("ESC_", 0) == 0 ? vsRoot + "/../../AssetTools/out/escalation_characters/" + id.substr(4) + "/"
+                                                      : vsRoot + "/Characters/" + id + "/";
+     std::string txt;
+     assets::Json c;
+@@ -195,7 +197,7 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
+     }
+     if (d.robotGlb.empty() || platform::dataFileSize(extRoot + d.robotGlb) < 0) { d.loadError = "robot.glb missing for " + id; return false; }
+     // A horde body without a vehicle form (the Spider: forms.vehicle skipped) never transforms; World loads its robot as the stand-in.
+-    if (id.rfind("ESC_", 0) == 0 && d.vehicleGlb.empty()) d.flyerNoTransform = true;
++    if ((id.rfind("ESC_", 0) == 0 || id.rfind("CMP_", 0) == 0) && d.vehicleGlb.empty()) d.flyerNoTransform = true;
+     else if (d.vehicleGlb.empty() || platform::dataFileSize(extRoot + d.vehicleGlb) < 0) { d.loadError = "vehicle.glb missing for " + id; return false; }
+ 
+     const assets::Json& arm = c["robot"]["arm_blueprint"];
+@@ -243,7 +245,7 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
+     R.momAirNeutral = mom["InAir"]["Neutral"].asFloat(R.momAirNeutral);
+     R.momAirBack = mom["InAir"]["Backward"].asFloat(R.momAirBack);
+     // Escalation horde bodies: their roster entry is keyed without the ESC_ prefix; none yet -> the default cylinder (PROV, warned).
+-    const bool esc = id.rfind("ESC_", 0) == 0;
++    const bool esc = id.rfind("ESC_", 0) == 0 || id.rfind("CMP_", 0) == 0;   // (campaign bodies: the same rule)
+     if (esc && !rosterEntry(id.substr(4))) {
+         static bool warned = false;
+         if (!warned) { warned = true; LOG_WARN("chassis %s: no roster_package entry yet - the default collision cylinder (PROV)", id.c_str()); }
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 793a6f0c..c17ddfd0 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -3164,6 +3164,7 @@ bool World::launchMatch(const MatchLaunch& l) {
+     }
+     int svTeam = -1;   // Escalation: every player on the map's co-op team (CoopInfo faction)
+     if (l.settings.survival) { SurvivalData d; if (SurvivalData::load(canonicalMapName(l.map), d)) svTeam = d.coopTeam; }
++    if (l.settings.campaign && campaignMap_) svTeam = cpChapter_.faction;   // campaign co-op: every human on the chapter's faction
+     cpLaunchCheckpoint_ = l.checkpoint;
+     startLocalMatch(l.settings, svTeam >= 0 ? svTeam : l.settings.campaign ? cpChapter_.faction : l.localTeam);   // [integration M08b] the lobby team
+     // Real voices: the original's 96 (FmodAudioDevice MaxChannels) for its <= 10-player matches; the ExtendedPlayers extension
+@@ -5231,7 +5232,8 @@ bool World::chassisEnergonDefault(const std::string& chassis, float out[3]) cons
+         std::string txt;
+         assets::Json j;
+         // an Escalation horde body ("ESC_<id>") lives in AssetTools out/escalation_characters/<id>/ (loadChassisDef's rule)
+-        const std::string cj = chassis.rfind("ESC_", 0) == 0 ? assetRoot() + "/../../AssetTools/out/escalation_characters/" + chassis.substr(4) + "/character.json"
++        const std::string cj = chassis.rfind("CMP_", 0) == 0 ? assetRoot() + "/../../AssetTools/out/campaign_characters/" + chassis.substr(4) + "/character.json"
++                             : chassis.rfind("ESC_", 0) == 0 ? assetRoot() + "/../../AssetTools/out/escalation_characters/" + chassis.substr(4) + "/character.json"
+                                                          : assetRoot() + "/Characters/" + chassis + "/character.json";
+         if (!chassis.empty() && readTextFile(cj, txt) && assets::Json::parse(txt, j) &&
+             j.has("energon_default")) {
+diff --git a/src/game/World.h b/src/game/World.h
+index ca661b93..19255278 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1424,6 +1424,11 @@ private:
+     bool cpPawnFactoryActivate(KismetVM& vm, int op, int input);
+     void cpTickFactories(float dt);
+     void cpSyncPicks();
++    void cpLoadActors();
++    bool cpActorPos(const std::string& path, core::Vec3& out) const;
++    std::vector<int> cpTargets(KismetVM& vm, int op, const std::string& link);
++    bool cpAiOpActivate(KismetVM& vm, int op, int input);
++    bool cpObjectiveGoal(BotBrain& b, BotGoal& g);
+     bool cpSquadMember(int p) const { return cp_.active && std::find(cp_.squad.begin(), cp_.squad.end(), p) != cp_.squad.end(); }
+     void tickSurvival(float dt);
+     float svZoneScore(int zone, int type) const;
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index 352e666d..8b5cb840 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -222,6 +222,7 @@ bool World::botModeGoal(BotBrain& b, const Character& pc, BotGoal& g) {
+     const unsigned role = (unsigned)b.player * 2654435761U >> 28;   // 0..15, fixed per participant
+     auto at = [&](BotGoalKind k, const core::Vec3& p, float r, bool mission) { g.kind = k; g.pos = botSnap(p); g.radius = r; b.mission = mission; g.hasTouch = true; g.touch = p; return true; };
+     const auto& objs = mapState_.objectives();
++    if (cp_.active && cpObjectiveGoal(b, g)) return true;   // campaign: a Kismet AI objective outranks following
+     if (cpSquadGoal(b, g)) return true;   // campaign AI squad: Move-To-Buddy (Kill outranks it)
+     switch (matchMode_) {
+         case MatchMode::KOTH: {
+diff --git a/src/game/WorldCampaign.cpp b/src/game/WorldCampaign.cpp
+index ab6a81a2..8e779ba4 100644
+--- a/src/game/WorldCampaign.cpp
++++ b/src/game/WorldCampaign.cpp
+@@ -230,6 +230,7 @@ void World::setupCampaign(const MatchLaunch& l) {
+         cp_.vm.log = std::getenv("WFC_KISMETLOG") != nullptr;
+         LOG_INFO("campaign: Kismet %s (%zu ops)", cp_.kismetLoaded ? "loaded" : "MISSING", cp_.vm.opCount());
+         cpLoadFactories();
++        cpLoadActors();
+     }
+     LOG_INFO("campaign: %s (MapId %d) %s, difficulty %d, the human as %s, squad %zu", cpChapter_.chapter.c_str(), cpChapter_.mapId,
+              match_.settings().modeTag.c_str(), cp_.difficulty, cpChapter_.trio[(size_t)pick].c_str(), cp_.squad.size());
+@@ -266,8 +267,9 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
+         return true;
+     }
+     if (c == "SeqAct_TnPawnFactory") return cpPawnFactoryActivate(vm, op, input);
++    if (cpAiOpActivate(vm, op, input)) return true;   // MoveToActor / SetMoveToObjective / UseInteract
+     if (c == "SeqAct_Conversation" && input == 0) { o.latent = true; o.timer = 3.0f; vm.output(op, "Played"); return true; }
+-    if (c == "SeqAct_Interp" || c == "SeqAct_MoviePlayer" || c == "SeqAct_TnAiMoveToActor" ||
++    if (c == "SeqAct_Interp" || c == "SeqAct_MoviePlayer" ||
+         c == "SeqAct_TnForceIntoForm" || c == "SeqAct_ActorFactory" || c == "SeqAct_ActorFactoryEx") { o.latent = true; o.timer = -1.0f; return true; }
+     return false;
+ }
+diff --git a/src/game/WorldCampaignRuntime.cpp b/src/game/WorldCampaignRuntime.cpp
+index eb016d6c..dc5e30d0 100644
+--- a/src/game/WorldCampaignRuntime.cpp
++++ b/src/game/WorldCampaignRuntime.cpp
+@@ -25,11 +25,13 @@ std::string manifestsRoot() { const char* mr = std::getenv("WFC_MANIFESTS"); ret
+ std::string afterDot(const std::string& s) { const size_t k = s.find_last_of('.'); return k == std::string::npos ? s : s.substr(k + 1); }
+ bool fileExists(const std::string& p) { return (bool)std::ifstream(p, std::ios::binary); }
+ 
+-// The AI's body: AssetTools' character export of the AICD (out/escalation_characters/<id>, loaded as "ESC_<id>"); an Autobot / Decepticon
++// The AI's body: AssetTools' campaign export of the AICD (out/campaign_characters/<id>, "CMP_<id>"), else the Escalation one
++// (out/escalation_characters/<id>, "ESC_<id>", PROV); an Autobot / Decepticon
+ // variant without its own export borrows the other faction's (PROV, logged); none -> "" (the factory is held).
+ std::string bodyForAicd(const std::string& aicd, std::string& note) {
+     std::string id = aicd;
+     if (id.size() > 5 && id.compare(id.size() - 5, 5, "_AICD") == 0) id.resize(id.size() - 5);
++    if (fileExists("F:/Transformers Rebuild/AssetTools/out/campaign_characters/" + id + "/character.json")) return "CMP_" + id;   // the campaign template
+     const std::string root = "F:/Transformers Rebuild/AssetTools/out/escalation_characters/";
+     if (fileExists(root + id + "/character.json")) return "ESC_" + id;
+     for (const auto& sw : {std::make_pair(std::string("_Autobot"), std::string("_Decepticon")), std::make_pair(std::string("_Decepticon"), std::string("_Autobot"))}) {
+@@ -178,33 +180,152 @@ void World::cpTickFactories(float dt) {
+     }
+ }
+ 
+-// The in-map pick (CharacterSelect_GFX -> Customize.SelectCharacter): the human takes the picked trio member; the AI squad is the trio
+-// minus the humans' picks, so a squad member holding the picked character takes the free one (its body swapped in place).
++// The in-map picks (CharacterSelect_GFX -> Customize.SelectCharacter), for 1-3 humans in seat order: each human keeps its pick unless an
++// earlier human holds it, then it takes the next free trio member (Integration's rule for co-op duplicates; the original greys taken
++// members out); the AI squad is the trio minus every human's character (SetupAiSquad again on each change): a member holding a human's
++// character swaps to a free one in place, surplus members leave (AiSquad.RemoveMember) [C rule, RE CAMPAIGN_SQUAD_AI section 1].
+ void World::cpSyncPicks() {
+-    if (!cp_.active || localPlayer_ < 0 || cp_.squad.empty()) return;
+-    const std::string mine = resolveChassis(match_.players()[(size_t)localPlayer_].selection, match_.faction(localPlayer_));
+-    if (mine == cp_.humanChassis) return;
+-    cp_.humanChassis = mine;
+-    for (size_t k = 0; k < cp_.squad.size(); ++k) {
+-        if (cp_.squadChassis[k] != mine) continue;
+-        std::string freeName, freeChassis;
+-        for (size_t t = 0; t < cpChapter_.trio.size() && t < cp_.trioChassis.size(); ++t) {
+-            const std::string& ch = cp_.trioChassis[t];
+-            if (ch == mine || std::find(cp_.squadChassis.begin(), cp_.squadChassis.end(), ch) != cp_.squadChassis.end()) continue;
+-            freeName = cpChapter_.trio[t]; freeChassis = ch; break;
++    if (!cp_.active || cp_.trioChassis.empty()) return;
++    std::vector<int> humans;
++    for (size_t q = 0; q < match_.players().size(); ++q)
++        if (match_.players()[q].kind != ParticipantKind::Bot && !match_.players()[q].dormant) humans.push_back((int)q);
++    std::string key;
++    for (int h : humans) key += std::to_string(h) + "=" + resolveChassis(match_.players()[(size_t)h].selection, match_.faction(h)) + ";";
++    if (key == cp_.humanChassis) return;
++    cp_.humanChassis = key;
++    auto iconic = [](const std::string& ch) { CharacterSelection sel; sel.type = 1; sel.chassisId = ch; return sel; };
++    std::vector<std::string> taken;
++    for (int h : humans) {
++        std::string ch = resolveChassis(match_.players()[(size_t)h].selection, match_.faction(h));
++        const bool inTrio = std::find(cp_.trioChassis.begin(), cp_.trioChassis.end(), ch) != cp_.trioChassis.end();
++        if (!inTrio || std::find(taken.begin(), taken.end(), ch) != taken.end()) {
++            for (const std::string& t : cp_.trioChassis) if (std::find(taken.begin(), taken.end(), t) == taken.end()) { ch = t; break; }
++            match_.selectCharacter(h, iconic(ch));
++            LOG_INFO("campaign: human p%d takes %s (the next free trio member)", h, ch.c_str());
+         }
+-        if (freeChassis.empty()) return;
++        taken.push_back(ch);
++    }
++    std::vector<size_t> freeIdx;   // the trio members no human holds, trio order
++    for (size_t t = 0; t < cp_.trioChassis.size(); ++t)
++        if (std::find(taken.begin(), taken.end(), cp_.trioChassis[t]) == taken.end()) freeIdx.push_back(t);
++    std::vector<uint8_t> used(cp_.trioChassis.size(), 0);
++    std::vector<int> keep; std::vector<std::string> keepCh;
++    std::vector<size_t> redo;
++    for (size_t k = 0; k < cp_.squad.size(); ++k) {   // members already holding a free member keep it
++        size_t t = cp_.trioChassis.size();
++        for (size_t f : freeIdx) if (!used[f] && cp_.trioChassis[f] == cp_.squadChassis[k]) { t = f; break; }
++        if (t < cp_.trioChassis.size()) { used[t] = 1; keep.push_back(cp_.squad[k]); keepCh.push_back(cp_.squadChassis[k]); }
++        else redo.push_back(k);
++    }
++    for (size_t k : redo) {
+         const int p = cp_.squad[k];
+-        CharacterSelection sel; sel.type = 1; sel.chassisId = freeChassis;
+-        match_.selectCharacter(p, sel);
++        size_t t = cp_.trioChassis.size();
++        for (size_t f : freeIdx) if (!used[f]) { t = f; break; }
+         MatchPlayer& mp = match_.playerMutable(p);
+-        mp.name = freeName;
+-        cp_.squadChassis[k] = freeChassis;
+-        chassisAssets(freeChassis);
++        if (t >= cp_.trioChassis.size()) {   // more AI than free members: RemoveMember
++            for (MatchOpponent* o : opponents_) if (o->matchPlayer() == p && o->spawned()) o->despawn();
++            mp.alive = false;
++            LOG_INFO("campaign: squad p%d leaves (every trio member is taken)", p);
++            continue;
++        }
++        used[t] = 1;
++        const std::string& ch = cp_.trioChassis[t];
++        match_.selectCharacter(p, iconic(ch));
++        mp.name = cpChapter_.trio[t];
++        chassisAssets(ch);
+         for (MatchOpponent* o : opponents_)
+-            if (o->matchPlayer() == p && o->spawned() && applyChassisToPawn(o->pawn(), freeChassis)) applyCharacterTo(o->pawn(), &mp.selection, &mp);
+-        LOG_INFO("campaign: the human picked %s; squad p%d is now %s (%s)", mine.c_str(), p, freeName.c_str(), freeChassis.c_str());
++            if (o->matchPlayer() == p && o->spawned() && applyChassisToPawn(o->pawn(), ch)) applyCharacterTo(o->pawn(), &mp.selection, &mp);
++        keep.push_back(p); keepCh.push_back(ch);
++        LOG_INFO("campaign: squad p%d is now %s (%s)", p, mp.name.c_str(), ch.c_str());
++    }
++    cp_.squad = keep; cp_.squadChassis = keepCh;
++}
++
++// ---- the AI ops (SeqAct_TnAi*): targets, destinations, objectives ----
++
++// An actor's location: a spawned pawn ("pawn:<p>"), AssetTools' actors.json (when delivered), else navigation.json's NavigationPoints.
++bool World::cpActorPos(const std::string& path, core::Vec3& out) const {
++    if (path.rfind("pawn:", 0) == 0) { if (const Character* c = participantPawn(std::atoi(path.c_str() + 5))) { out = c->position(); return true; } return false; }
++    const std::string key = afterDot(path);
++    auto it = cp_.actorPos.find(key);
++    if (it == cp_.actorPos.end()) return false;
++    out = it->second;
++    return true;
++}
++
++void World::cpLoadActors() {
++    cp_.actorPos.clear();
++    bool actorsFile = false;
++    for (const char* file : {"navigation.json", "actors.json"}) {
++        assets::Json j;
++        if (!readJsonFile(cpChapter_.dir + file, j)) continue;
++        actorsFile |= std::string(file) == "actors.json";
++        const assets::Json& ns = j[std::string(file) == "actors.json" ? "actors" : "nodes"];
++        for (size_t i = 0; i < ns.size(); ++i) {
++            const assets::Json& n = ns[i];
++            const std::string name = afterDot(n.has("object") ? n["object"].asString() : n["node"].asString());
++            const assets::Json& L = n["location_gltf"];
++            if (!name.empty() && L.size() >= 3) cp_.actorPos[name] = core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
++        }
++    }
++    LOG_INFO("campaign: %zu actor locations (navigation.json%s)", cp_.actorPos.size(), actorsFile ? " + actors.json" : "");
++}
++
++// The match players an op's link names: TnSeqVar_Buddy (BuddyIndex k = the k-th squad member, 1-based; none = every member), a pawn
++// object ("pawn:<p>", a factory's spawned variable), SeqVar_Player (every human).
++std::vector<int> World::cpTargets(KismetVM& vm, int op, const std::string& link) {
++    std::vector<int> out;
++    for (int i : vm.varLink(op, link)) {
++        const KismetVM::Var* v = vm.var(i);
++        if (!v) continue;
++        if (v->named >= 0) v = vm.var(v->named);
++        if (!v) continue;
++        if (v->cls == "TnSeqVar_Buddy") {
++            const int bi = v->i;
++            if (bi > 0 && (size_t)bi <= cp_.squad.size()) out.push_back(cp_.squad[(size_t)bi - 1]);
++            else for (int p : cp_.squad) out.push_back(p);
++        } else if (v->cls == "SeqVar_Player") {
++            for (size_t q = 0; q < match_.players().size(); ++q) if (match_.players()[q].kind != ParticipantKind::Bot) out.push_back((int)q);
++        } else if (v->obj.rfind("pawn:", 0) == 0) out.push_back(std::atoi(v->obj.c_str() + 5));
++    }
++    return out;
++}
++
++// SeqAct_TnAiMoveToActor (one move, In), SeqAct_TnAiSetMoveToObjective (Enable / Disable, Range), SeqAct_TnAiUseInteract (move to the
++// interact object; PROV: the interact itself is the generic Out), SeqAct_TnAiShootAtActor / UseTurret (PROV: the generic Out) [H].
++bool World::cpAiOpActivate(KismetVM& vm, int op, int input) {
++    KismetVM::Op& o = vm.op(op);
++    const std::string& c = o.cls;
++    const bool move = c == "SeqAct_TnAiMoveToActor", objective = c == "SeqAct_TnAiSetMoveToObjective", interact = c == "SeqAct_TnAiUseInteract";
++    if (!move && !objective && !interact) return false;
++    const std::vector<int> who = cpTargets(vm, op, "Target");
++    std::string dest = vm.objectOf(op, move ? "Destination" : objective ? "Objective Point" : "Interact Object");
++    if (dest.empty() && interact) dest = o.authored["Interact"].asString();
++    core::Vec3 at{0, 0, 0};
++    const bool found = !dest.empty() && cpActorPos(dest, at);
++    if (objective && input == 1) { for (int p : who) cp_.objectives.erase(p); }
++    else if (found) {
++        const std::string range = o.authored["Range"].asString();
++        const float r = range == "RANGE_Long" ? 25.0f : range == "RANGE_Medium" ? 12.0f : 5.0f;   // PROV radii
++        for (int p : who) cp_.objectives[p] = {at, r, !move && !interact};
++    } else if (!dest.empty()) LOG_INFO("campaign: %s: destination %s not located (actors.json pending)", afterDot(o.path).c_str(), afterDot(dest).c_str());
++    if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
++    return true;
++}
++
++// A Kismet objective outranks following (below Kill): the bot goes to it; a one-shot move ends on arrival.
++bool World::cpObjectiveGoal(BotBrain& b, BotGoal& g) {
++    auto it = cp_.objectives.find(b.player);
++    if (it == cp_.objectives.end()) return false;
++    const Character* me = participantPawn(b.player);
++    if (me && !it->second.persistent) {
++        const core::Vec3 d = me->position() - it->second.pos;
++        if (d.x * d.x + d.z * d.z < it->second.radius * it->second.radius) { cp_.objectives.erase(it); return false; }
+     }
++    g = BotGoal{};
++    g.kind = BotGoalKind::Defend; g.pos = botSnap(it->second.pos); g.radius = it->second.radius; g.target = -1;
++    b.mission = true;
++    return true;
+ }
+ 
+ int World::cpTestFireFactory(int k) {

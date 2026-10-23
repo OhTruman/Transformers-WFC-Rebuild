@@ -8,6 +8,7 @@
 #include "core/Math.h"
 #include "game/Kismet.h"
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -61,6 +62,9 @@ struct CampaignState {
     std::vector<int> formPending;             // spawned with StartingFormOverride TF_Vehicle (the form change the step after)
     int enemiesSpawned = 0;
     std::vector<std::string> trioChassis;     // CampaignCharacters' chassis, trio order
+    struct Objective { core::Vec3 pos{0, 0, 0}; float radius = 5.0f; bool persistent = false; };
+    std::map<int, Objective> objectives;      // step 4: Kismet AI objectives per match player (MoveToActor / SetMoveToObjective)
+    std::map<std::string, core::Vec3> actorPos;   // actor name -> location (navigation.json, actors.json)
     std::string humanChassis;                 // the human's current pick (the squad is the trio minus it)
     KismetVM vm;
     // [Systems] the VM's audio ops (LevelAudioScript hosted): VM op -> its audio op id ("<level>|<path under Main_Sequence>"; "" = not

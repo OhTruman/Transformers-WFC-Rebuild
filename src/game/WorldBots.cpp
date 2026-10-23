@@ -222,6 +222,7 @@ bool World::botModeGoal(BotBrain& b, const Character& pc, BotGoal& g) {
     const unsigned role = (unsigned)b.player * 2654435761U >> 28;   // 0..15, fixed per participant
     auto at = [&](BotGoalKind k, const core::Vec3& p, float r, bool mission) { g.kind = k; g.pos = botSnap(p); g.radius = r; b.mission = mission; g.hasTouch = true; g.touch = p; return true; };
     const auto& objs = mapState_.objectives();
+    if (cp_.active && cpObjectiveGoal(b, g)) return true;   // campaign: a Kismet AI objective outranks following
     if (cpSquadGoal(b, g)) return true;   // campaign AI squad: Move-To-Buddy (Kill outranks it)
     switch (matchMode_) {
         case MatchMode::KOTH: {

@@ -1034,6 +1034,11 @@ void UdpSession::tickService() {
             LOG_INFO("session: lobby service %s -> %s", serviceName_.c_str(), serviceAddr_.empty() ? "(unresolved)" : serviceAddr_.c_str());
         }
     }
+    // The invite mailbox (D13): this player is reachable by its fingerprint while a session is up (the service forgets it after 60 s).
+    if (t_ && !serviceAddr_.empty() && !self_.id.fingerprint.empty() && now_ - lastPresence_ >= 20.0) {
+        lastPresence_ = now_;
+        sendService("{\"op\":\"presence\",\"fp\":\"" + jsonEsc(self_.id.fingerprint) + "\",\"name\":\"" + jsonEsc(self_.displayName) + "\"}");
+    }
     // The host registers its lobby every 5 s (public: listed for Quick Match; private: its 6-letter code works).
     if (role_ == Role::Host && t_ && !serviceAddr_.empty() && now_ - lastRegister_ >= 5.0) {
         lastRegister_ = now_;
@@ -1053,12 +1058,49 @@ void UdpSession::tickService() {
     if (hostPending_ && (!disc_ || discDone_) && (!serviceCode_.empty() || serviceAddr_.empty() || now_ - hostStart_ >= 1.5)) finishHostOpened();
 }
 
+void UdpSession::sendInvite(const std::string& fingerprint, const std::string& code) {
+    if (!t_ || serviceAddr_.empty()) {
+        SessionEvent e; e.type = SessionEvent::Type::InviteSent; e.member.fingerprint = fingerprint; e.value = -1; emit(e);
+        return;
+    }
+    if (now_ - lastPresence_ >= 1.0) { lastPresence_ = -1e9; tickService(); }   // the service must know the sender first
+    sendService("{\"op\":\"invite\",\"to\":\"" + jsonEsc(fingerprint) + "\",\"from\":\"" + jsonEsc(self_.id.fingerprint) +
+                "\",\"name\":\"" + jsonEsc(self_.displayName) + "\",\"code\":\"" + jsonEsc(code) + "\"}");
+    LOG_INFO("session: invite %s to %s", code.c_str(), fingerprint.c_str());
+}
+
+void UdpSession::queryOnline(const std::vector<std::string>& fingerprints) {
+    if (!t_ || serviceAddr_.empty()) return;
+    std::string j = "{\"op\":\"online\",\"fps\":[";
+    for (size_t i = 0; i < fingerprints.size() && i < 64; ++i) j += (i ? ",\"" : "\"") + jsonEsc(fingerprints[i]) + "\"";
+    sendService(j + "]}");
+}
+
 void UdpSession::handleService(const std::string& from, const std::vector<uint8_t>& d) {
     if (from != serviceAddr_) return;
     assets::Json m;
     if (!assets::Json::parse(std::string((const char*)d.data() + 4, d.size() - 4), m)) return;
     serviceReplied_ = true;
     const std::string op = m["op"].asString();
+    if (op == "invited") {   // the mailbox: someone invites us to their game / party code
+        SessionEvent e; e.type = SessionEvent::Type::InviteReceived;
+        e.member.fingerprint = m["from"].asString(); e.info.displayName = m["name"].asString(); e.joinCode = m["code"].asString();
+        LOG_INFO("session: invite from %s (%s) to %s", e.info.displayName.c_str(), e.member.fingerprint.c_str(), e.joinCode.c_str());
+        emit(e);
+        return;
+    }
+    if (op == "invite_sent") {
+        SessionEvent e; e.type = SessionEvent::Type::InviteSent; e.member.fingerprint = m["to"].asString(); e.value = m["ok"].asBool(false) ? 1 : 0;
+        emit(e);
+        return;
+    }
+    if (op == "online") {
+        SessionEvent e; e.type = SessionEvent::Type::OnlineStatus;
+        for (size_t i = 0; i < m["fps"].size(); ++i) e.online.push_back(m["fps"][i].asString());
+        emit(e);
+        return;
+    }
+    if (op == "presence_ok") return;
     if (op == "registered") {
         const bool first = serviceCode_.empty();
         serviceCode_ = m["code"].asString();

@@ -3172,6 +3172,7 @@ bool World::launchMatch(const MatchLaunch& l) {
     }
     int svTeam = -1;   // Escalation: every player on the map's co-op team (CoopInfo faction)
     if (l.settings.survival) { SurvivalData d; if (SurvivalData::load(canonicalMapName(l.map), d)) svTeam = d.coopTeam; }
+    if (l.settings.campaign && campaignMap_) svTeam = cpChapter_.faction;   // campaign co-op: every human on the chapter's faction
     cpLaunchCheckpoint_ = l.checkpoint;
     startLocalMatch(l.settings, svTeam >= 0 ? svTeam : l.settings.campaign ? cpChapter_.faction : l.localTeam);   // [integration M08b] the lobby team
     // Real voices: the original's 96 (FmodAudioDevice MaxChannels) for its <= 10-player matches; the ExtendedPlayers extension
@@ -5239,7 +5240,8 @@ bool World::chassisEnergonDefault(const std::string& chassis, float out[3]) cons
         std::string txt;
         assets::Json j;
         // an Escalation horde body ("ESC_<id>") lives in AssetTools out/escalation_characters/<id>/ (loadChassisDef's rule)
-        const std::string cj = chassis.rfind("ESC_", 0) == 0 ? assetRoot() + "/../../AssetTools/out/escalation_characters/" + chassis.substr(4) + "/character.json"
+        const std::string cj = chassis.rfind("CMP_", 0) == 0 ? assetRoot() + "/../../AssetTools/out/campaign_characters/" + chassis.substr(4) + "/character.json"
+                             : chassis.rfind("ESC_", 0) == 0 ? assetRoot() + "/../../AssetTools/out/escalation_characters/" + chassis.substr(4) + "/character.json"
                                                          : assetRoot() + "/Characters/" + chassis + "/character.json";
         if (!chassis.empty() && readTextFile(cj, txt) && assets::Json::parse(txt, j) &&
             j.has("energon_default")) {

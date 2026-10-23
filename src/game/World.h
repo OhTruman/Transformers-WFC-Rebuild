@@ -1426,6 +1426,11 @@ private:
     bool cpPawnFactoryActivate(KismetVM& vm, int op, int input);
     void cpTickFactories(float dt);
     void cpSyncPicks();
+    void cpLoadActors();
+    bool cpActorPos(const std::string& path, core::Vec3& out) const;
+    std::vector<int> cpTargets(KismetVM& vm, int op, const std::string& link);
+    bool cpAiOpActivate(KismetVM& vm, int op, int input);
+    bool cpObjectiveGoal(BotBrain& b, BotGoal& g);
     bool cpSquadMember(int p) const { return cp_.active && std::find(cp_.squad.begin(), cp_.squad.end(), p) != cp_.squad.end(); }
     void tickSurvival(float dt);
     float svZoneScore(int zone, int type) const;

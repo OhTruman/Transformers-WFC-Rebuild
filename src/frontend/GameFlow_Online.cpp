@@ -3,6 +3,11 @@
 // ISession (Session.h) is Systems'; tests drive these flows with FakeSession. Popup texts are the original's INT texts
 // where one exists (ONLINE_MP_UI_STRINGS.md), else the rebuild's own ($WfcPC.Online).
 #include "frontend/GameFlow.h"
+#include <sstream>
+#include <fstream>
+#include "frontend/OpenPath.h"
+#include "frontend/DataPaths.h"
+#include "assets/Json.h"
 
 #include <algorithm>
 #include <cctype>
@@ -240,7 +245,17 @@ void GameFlow::onlineTick() {
     }
     if (role_ != SessionRole::Offline) syncVoiceSettings();
     else voiceSent_.clear();
-    if (!lobbyServiceSent_) { session_->setLobbyService(profile_.lobbyService); lobbyServiceSent_ = true; }
+    if (!lobbyServiceSent_) {   // the profile's LobbyService, else the shipped default (data/frontend/online_service.json) [Systems]
+        std::string svc = profile_.lobbyService;
+        if (svc.empty()) {
+            std::ifstream f(openPath(frontendDataFile("online_service.json")), std::ios::binary);
+            std::stringstream ss; ss << f.rdbuf();
+            assets::Json j;
+            if (f.good() && assets::Json::parse(ss.str(), j)) svc = j["lobby_service"].asString();
+        }
+        session_->setLobbyService(svc);
+        lobbyServiceSent_ = true;
+    }
     if (!pendingEndTitle_.empty() && !travelPending_ && !loading_.active) {   // the session-end message, after the travel
         showMessage(pendingEndTitle_, pendingEndMessage_);
         pendingEndTitle_.clear();

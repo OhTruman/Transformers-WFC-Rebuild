@@ -231,6 +231,7 @@ void World::setupCampaign(const MatchLaunch& l) {
         LOG_INFO("campaign: Kismet %s (%zu ops)", cp_.kismetLoaded ? "loaded" : "MISSING", cp_.vm.opCount());
         if (cp_.kismetLoaded) cpAudioBind();
         cpLoadFactories();
+        cpLoadActors();
     }
     LOG_INFO("campaign: %s (MapId %d) %s, difficulty %d, the human as %s, squad %zu", cpChapter_.chapter.c_str(), cpChapter_.mapId,
              match_.settings().modeTag.c_str(), cp_.difficulty, cpChapter_.trio[(size_t)pick].c_str(), cp_.squad.size());
@@ -268,8 +269,9 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
         return true;
     }
     if (c == "SeqAct_TnPawnFactory") return cpPawnFactoryActivate(vm, op, input);
+    if (cpAiOpActivate(vm, op, input)) return true;   // MoveToActor / SetMoveToObjective / UseInteract
     if (c == "SeqAct_Conversation" && input == 0) { o.latent = true; o.timer = 3.0f; vm.output(op, "Played"); return true; }
-    if (c == "SeqAct_Interp" || c == "SeqAct_MoviePlayer" || c == "SeqAct_TnAiMoveToActor" ||
+    if (c == "SeqAct_Interp" || c == "SeqAct_MoviePlayer" ||
         c == "SeqAct_TnForceIntoForm" || c == "SeqAct_ActorFactory" || c == "SeqAct_ActorFactoryEx") { o.latent = true; o.timer = -1.0f; return true; }
     return false;
 }

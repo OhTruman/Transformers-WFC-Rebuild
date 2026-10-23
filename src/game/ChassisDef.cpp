@@ -149,7 +149,9 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     d = ChassisDef{};
     d.id = id;
     // "ESC_<id>": an Escalation horde body from AssetTools out/escalation_characters/<id> (its paths are ExtractedAssets-relative too).
-    const std::string dir = id.rfind("ESC_", 0) == 0 ? vsRoot + "/../../AssetTools/out/escalation_characters/" + id.substr(4) + "/"
+    // "CMP_<id>": a campaign AI body from AssetTools out/campaign_characters/<id> (the TR_AiCharacterDefinition_p templates).
+    const std::string dir = id.rfind("CMP_", 0) == 0 ? vsRoot + "/../../AssetTools/out/campaign_characters/" + id.substr(4) + "/"
+                          : id.rfind("ESC_", 0) == 0 ? vsRoot + "/../../AssetTools/out/escalation_characters/" + id.substr(4) + "/"
                                                      : vsRoot + "/Characters/" + id + "/";
     std::string txt;
     assets::Json c;
@@ -195,7 +197,7 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     }
     if (d.robotGlb.empty() || platform::dataFileSize(extRoot + d.robotGlb) < 0) { d.loadError = "robot.glb missing for " + id; return false; }
     // A horde body without a vehicle form (the Spider: forms.vehicle skipped) never transforms; World loads its robot as the stand-in.
-    if (id.rfind("ESC_", 0) == 0 && d.vehicleGlb.empty()) d.flyerNoTransform = true;
+    if ((id.rfind("ESC_", 0) == 0 || id.rfind("CMP_", 0) == 0) && d.vehicleGlb.empty()) d.flyerNoTransform = true;
     else if (d.vehicleGlb.empty() || platform::dataFileSize(extRoot + d.vehicleGlb) < 0) { d.loadError = "vehicle.glb missing for " + id; return false; }
 
     const assets::Json& arm = c["robot"]["arm_blueprint"];
@@ -243,7 +245,7 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     R.momAirNeutral = mom["InAir"]["Neutral"].asFloat(R.momAirNeutral);
     R.momAirBack = mom["InAir"]["Backward"].asFloat(R.momAirBack);
     // Escalation horde bodies: their roster entry is keyed without the ESC_ prefix; none yet -> the default cylinder (PROV, warned).
-    const bool esc = id.rfind("ESC_", 0) == 0;
+    const bool esc = id.rfind("ESC_", 0) == 0 || id.rfind("CMP_", 0) == 0;   // (campaign bodies: the same rule)
     if (esc && !rosterEntry(id.substr(4))) {
         static bool warned = false;
         if (!warned) { warned = true; LOG_WARN("chassis %s: no roster_package entry yet - the default collision cylinder (PROV)", id.c_str()); }

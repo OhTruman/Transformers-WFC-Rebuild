@@ -69,6 +69,8 @@ public:
     void cancelSearch() override;
     void setLobbyService(const std::string& address) override;
     bool supportsLateJoin() const override { return true; }
+    void sendInvite(const std::string& fingerprint, const std::string& code) override;
+    void queryOnline(const std::vector<std::string>& fingerprints) override;
     void joinRunningMatch() override;
     void setLateJoinLimit(double maxMatchSeconds) override { lateJoinLimitS_ = maxMatchSeconds; }
     bool simHeld() const override { return held_; }
@@ -194,6 +196,7 @@ private:
     std::shared_ptr<struct ServiceResolve> serviceResolve_;
     bool serviceReplied_ = false, serviceWanted_ = false;
     double lastRegister_ = -1e9, serviceAskedAt_ = 0.0, registeredAt_ = -1.0;
+    double lastPresence_ = -1e9;   // the invite mailbox: presence every 20 s while a session transport is up
     frontend::SessionHostSettings hostSettings_;
     Search search_ = Search::None;
     frontend::SessionGameQuery searchQuery_;

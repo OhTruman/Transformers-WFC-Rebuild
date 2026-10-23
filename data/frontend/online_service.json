@@ -1,0 +1,4 @@
+{
+ "comment": "The lobby service the game uses when the profile names none (Systems; docs/handoff/LOBBY_VPS_SETUP.md). Empty = no service: LAN and direct address joins only. Set to <VPS IPv4>:14010 once the server is up.",
+ "lobby_service": ""
+}

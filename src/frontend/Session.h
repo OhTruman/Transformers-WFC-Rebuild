@@ -149,6 +149,10 @@ struct SessionEvent {
         MemberVoice,       // member, headsetState (0 no voice / 1 voice on / 2 speaking): PlayerList_GFX HeadsetState;
                            // voiceVia: 1 radio / 2 proximity while speaking (both: radio), for the talker cue
         CatchUpProgress,   // late join: catchUpTick / catchUpTarget while the joiner replays the host's input log
+        // [Systems] the invite mailbox (ONLINE_MP_PHASE2_FLOWS I2, D13; the lobby service, no accounts):
+        InviteReceived,    // member.fingerprint = the sender, info.displayName = its name, joinCode = the code to join
+        InviteSent,        // member.fingerprint = the receiver; value 1 delivered, 0 the receiver is not online, -1 no lobby service
+        OnlineStatus,      // online = the asked fingerprints that are online now (queryOnline)
     } type = Type::LobbyState;
     double time = 0.0;
     std::string joinCode, address;
@@ -175,12 +179,13 @@ struct SessionEvent {
     bool lateJoin = false;
     int lateSeat = -1;                        // [Systems] lateJoin: this joiner's match seat (a Reserved slot of `lobby`) = the launch's localSeat
     int catchUpTick = 0, catchUpTarget = 0;   // CatchUpProgress
+    std::vector<std::string> online;          // OnlineStatus
 };
 inline const char* sessionEventName(SessionEvent::Type t) {
     static const char* const k[] = {"HostOpened", "HostFailed", "JoinProgress", "Joined", "JoinFailed", "MatchInProgress",
                                     "LobbyState", "MemberJoined", "MemberLeft", "CountdownStarted", "PeerLoaded", "AllLoaded",
                                     "PeerDropped", "HostLost", "ConnectionLost", "Desync", "Kicked", "GameList", "SearchProgress",
-                                    "SearchCancelled", "MemberVoice", "CatchUpProgress"};
+                                    "SearchCancelled", "MemberVoice", "CatchUpProgress", "InviteReceived", "InviteSent", "OnlineStatus"};
     const int i = (int)t;
     return i >= 0 && i < (int)(sizeof k / sizeof k[0]) ? k[i] : "?";
 }
@@ -226,6 +231,12 @@ public:
     // [Systems] Host, before requestStart: the catch-up limit in seconds of match time (0 = joining a running match refused ->
     // JoinFailed{Full}; past it -> JoinFailed{TooFarAlong}). The seats are the launch roster's Reserved slots.
     virtual void setLateJoinLimit(double maxMatchSeconds) { (void)maxMatchSeconds; }
+    // [Systems] The invite mailbox (D13) through the lobby service: while a session is up (a party or game lobby) this player is
+    // reachable by its fingerprint. sendInvite posts `code` (the current game / party code) to that player -> InviteSent; an
+    // invite to us -> InviteReceived. queryOnline -> OnlineStatus (the Friends List's Online text; at most 64 asked). No service:
+    // InviteSent{-1} (the clipboard path stays the fallback).
+    virtual void sendInvite(const std::string& fingerprint, const std::string& code) { (void)fingerprint; (void)code; }
+    virtual void queryOnline(const std::vector<std::string>& fingerprints) { (void)fingerprints; }
 };
 
 // Match-side plumbing for WFC_SESSIONTEST (Gameplay's harness, ONLINE_MP_FRONTEND_TESTS.md section 4); declared here so
