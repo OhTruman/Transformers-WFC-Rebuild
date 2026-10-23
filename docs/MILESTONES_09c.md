@@ -3978,3 +3978,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   0 -> -68,736 UU over 19.94 s) should carry the players to the bottom (Elevator_Art / CommandCenter_Art, both in
   LevelStart); our pod stays at the start height -> the move track isn't applied to that actor class or the pawns aren't
   carried: Gameplay.
+2026-10-23 09:24 BROAD PASS #2 (Experimental, d48f995d): ALL PASS, no findings (TDM 20 / 20, campaign 4 / 4, ESC both maps with
+  combat, net rows identical). Remaining before the FINAL cut: Gameplay (lift platform move, Omega AI, hit reactions, horde
+  melee rule, the six PROV fixes), AssetTools chain A2..D3B (+ per-chapter dedupe / pp / actors / characters), Rendering's
+  held patch, Frontend Claim + re-draft; then broad pass #3 + the combined timed gate + refresh.sh.
