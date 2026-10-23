@@ -3763,3 +3763,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   record, then ConnectionLost: a ~45 s cold map load (fresh shader cache) vs the host's 8 s member timeout, no keepalive during
   the blocking load. Systems: late-join load window + keepalives (top priority). Next pt9 with a pre-warmed member cache.
   Card: Rendering x39tune.
+2026-10-23 04:20 MERGED 7f218986 Escalation weapon factory visuals (render_index_extra.json regenerated for both ESC maps: 17 + 17),
+  c0fb8fff Smoke row dev-only. RE: RelativeToInitial order C (VMX decode; tools/re/vmx128dis.py). pt9 folders persist
+  between runs (warm Berth); Systems' late-join load window pending.
