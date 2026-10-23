@@ -159,6 +159,30 @@ public:
     // left, cinematic cut): temporal upscaling / frame generation drop their history. reason: a short static string
     // for the log. Large jumps are also detected from the camera itself; this covers the cuts it cannot see.
     virtual void notifyCameraCut(const char* reason) { (void)reason; }
+    // Campaign post-process (RE CAMPAIGN_POSTPROCESS_RE.md). A chapter's PostProcessVolumes come with its render data
+    // (<chapter>/postprocess_volumes.json, tools/render/build_campaign_pp.py); Kismet toggles them by actor name
+    // (SeqAct_Toggle on a (Dynamic)PostProcessVolume: "PostProcessVolume_15759").
+    virtual void setPostProcessVolumeEnabled(const std::string& volume, bool on) { (void)volume; (void)on; }
+    // A matinee cutscene's per-frame view (Gameplay's SeqAct_Interp playback): the camera itself goes through the normal
+    // camera and notifyCameraCut("matinee") on director cuts; this carries the rest. Unset fields keep the defaults.
+    struct PostOverride {                 // the CameraActor's CamOverridePostProcess (UE3 FPostProcessSettings fields)
+        bool bloom = true, dof = false, sceneEffect = true;
+        float bloomScale = 1.0f, bloomThreshold = 1.0f;
+        float dofFocusDistance = 0.0f, dofNearFalloff = 2000.0f, dofFarFalloff = 2000.0f, dofFalloffExponent = 4.0f;
+        float dofMaxNearBlur = 1.0f, dofMaxFarBlur = 1.0f;
+        float shadows[3] = {0, 0, 0}, highlights[3] = {1, 1, 1}, midtones[3] = {1, 1, 1};
+        float desaturation = 0.0f;
+        std::string lut;                  // ColorCorrectionTexture object path ("" none)
+    };
+    struct CinematicView {
+        bool active = false;              // false: the plain game view (the rest ignored)
+        float aspect = 0.0f;              // > 0: letterboxed to this aspect (CameraActor bConstrainAspectRatio / AspectRatio)
+        float fade[4] = {0, 0, 0, 0};     // the director's Fade track / camera fade: rgb + amount (1 = the colour alone)
+        float colorScale[3] = {1, 1, 1};  // matinee ColorScale (scene colour multiplier)
+        float ppAlpha = 0.0f;             // CamOverridePostProcess blend (0 = the volumes' result, 1 = pp alone)
+        PostOverride pp;
+    };
+    virtual void setCinematicView(const CinematicView& view) { (void)view; }
     // FSR 3 frame generation (PC ADAPTATION, M5 C; off by default, never chosen by auto-detect). It presents through a
     // D3D12 swapchain that must exist before the window's first GL present, so it is decided at start-up:
     // render::setFrameGenerationAtStartup(on) before createGLRenderer (a changed setting applies at the next launch).

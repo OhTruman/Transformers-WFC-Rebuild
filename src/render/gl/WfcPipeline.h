@@ -918,6 +918,21 @@ private:
         core::Vec3 shadows{0, 0, 0}, highlights{1, 1, 1}, midtones{1, 1, 1};
         float desat = 0.0f;
     } post_;
+    static void parsePost(const assets::Json& P, Post& out);   // FPostProcessSettings (resolved) -> Post
+    // (campaign) the chapter's volumes over the world default; the per-frame blend writes post_ and the LUT pair below
+    struct PpVol { std::string name; float priority = 0.0f; bool enabled = true; std::vector<std::array<float, 4>> planes;
+                   Post s; GLuint lut = 0; float interp[4] = {1, 1, 1, 1}; };   // (interp: bloom, DOF, motion blur, scene)
+    std::vector<PpVol> ppVols_;
+    PpVol ppWorld_;
+    bool ppChapter_ = false;
+    std::map<std::string, GLuint> ppLuts_;            // by ColorCorrectionTexture object path
+    int ppTarget_ = -2;                               // -1 the world default, >= 0 a volume; -2 none yet
+    Post ppFrom_, ppTo_, ppCur_; float ppToInterp_[4] = {1, 1, 1, 1}; float ppT0_ = 0.0f, ppCurLutLerp_ = 1.0f;
+    GLuint ppFromLut_ = 0, ppToLut_ = 0;
+    IRenderer::CinematicView cin_;
+    GLuint postLutA_ = 0, postLutB_ = 0; float postLutLerp_ = 0.0f;   // the post shader's LUT pair (chapter frames)
+    float postColorScale_[3] = {1, 1, 1}, postFade_[4] = {0, 0, 0, 0}, postLetterbox_[2] = {0.5f, 0.5f};
+    void chapterPostFrame();
     GLuint clutTex_ = 0;
     int clutSize_ = 32;
     float znear_ = 0.1f, zfar_ = 20000.0f;
@@ -1294,6 +1309,10 @@ public:
     // (0 strongest, 2 mild); scale 1 and sharpness < 0 = off (the original presentation)
     void setUpscaling(float scale, float sharpness);
     void notifyCameraCut(const char* reason) { cutPending_ = true; cutPendingWhy_ = reason ? reason : "explicit"; }
+    // campaign post-process chain (WfcCampaignPost.cpp; RE CAMPAIGN_POSTPROCESS_RE.md)
+    void loadChapterPost(const std::string& chapterDir);
+    void setPostVolumeEnabled(const std::string& name, bool on);
+    void setCinematicView(const IRenderer::CinematicView& v) { cin_ = v; }
     void setFsr3(bool on) { fsr3On_ = on; }            // with setUpscaling's scale: FSR 3.1 instead of FSR 1 (WfcFsr3.cpp)
     static bool fsr3RuntimeShipped();                  // the FFX loader + Agility runtime beside the exe (file checks)
     void setAnisotropy(int level);              // 4 (original MaxAnisotropy, default) / 8 / 16
