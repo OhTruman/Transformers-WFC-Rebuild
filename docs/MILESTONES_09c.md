@@ -3692,3 +3692,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the rebuilt nav). FROZEN overlay_20261023d: 114 files (collision for all 10 maps; rebuilt nav on BrokenHope / Remnant / Seed).
 2026-10-23 02:43 RE E2a review: correct except G1 (a bought item stays out for good in the original: the -cost drop re-fires New Power Level)
   -> DECISION faithful; Gameplay folds it into E2b.
+2026-10-23 02:46 MERGED campaign frontend C1 / C4 (Solo -> Mission Select -> SOLO campaign lobby; difficulty profile 12; [Campaign] progress
+  section) + C3 (CampaignSelect from the shipped TransLevels.ini: 84 checkpoint thumbs, trios, 10 chapters; ?Checkpoint on the
+  URL; chapters unavailable until runtime data exists). Frontend -> C2, C5.
