@@ -3926,3 +3926,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Escalation drops drawn (Rendering). AssetTools: chapter-root physics.json (audio touch zones) for A1 / D5 + the chain.
   Rendering: all Escalation / campaign render items done except the eye pass; Systems: campaign audio complete for 10
   chapters, matinee timeline hook next.
+2026-10-23 08:35 CAMPAIGN MILESTONE RUN (Frontend, d3c3e1af, 4 runs): menu flow PASS on D5 + A1 in Off + Realistic (trio pick + squad swap,
+  checkpoint saves, 0 unanswered bridge calls, 0 held ops, no crashes); D5 looks right; A1 WORLD BLACK in both modes
+  (bsp.glb missing A1_IAC_Base; fade / unlit lift suspected) -> Rendering + Gameplay; A1 Realistic load 142 s with a 16 s
+  gap (17.6 GB private). Card: Rendering x51.
