@@ -5230,7 +5230,10 @@ bool World::chassisEnergonDefault(const std::string& chassis, float out[3]) cons
         std::array<float, 4> v{0, 0, 0, 0};
         std::string txt;
         assets::Json j;
-        if (!chassis.empty() && readTextFile(assetRoot() + "/Characters/" + chassis + "/character.json", txt) && assets::Json::parse(txt, j) &&
+        // an Escalation horde body ("ESC_<id>") lives in AssetTools out/escalation_characters/<id>/ (loadChassisDef's rule)
+        const std::string cj = chassis.rfind("ESC_", 0) == 0 ? assetRoot() + "/../../AssetTools/out/escalation_characters/" + chassis.substr(4) + "/character.json"
+                                                         : assetRoot() + "/Characters/" + chassis + "/character.json";
+        if (!chassis.empty() && readTextFile(cj, txt) && assets::Json::parse(txt, j) &&
             j.has("energon_default")) {
             const assets::Json& e = j["energon_default"];
             v = {e["R"].asFloat(), e["G"].asFloat(), e["B"].asFloat(), 1.0f};

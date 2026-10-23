@@ -909,7 +909,7 @@ void Application::attachPresenter() {
     frontend_->script().qaHook = [this](const std::string& cmd) {
         std::string why;
         if (cmd != "die") why = "unknown qa command";
-        else if (netDriver_ || frontend_->flow().sessionRole() != frontend::GameFlow::SessionRole::Offline) why = "online match";
+        else if (netDriver_) why = "online match";   // a lockstep match (a solo Private Match host runs no driver: allowed)
         else if (!world_.matchActive() || world_.presented().matchState != (int)game::Match::State::InProgress) why = "no match in progress";
         else if (world_.localPlayerDead()) why = "the local pawn is dead";
         if (!why.empty()) { frontend::FlowTrace::emit("script.qa", {{"cmd", cmd}, {"result", "skipped"}, {"why", why}}); return; }
