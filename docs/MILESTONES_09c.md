@@ -4090,3 +4090,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 13:15 AssetTools data gaps found + GO: (1) 2 streaming levels with transforming actors had no render unit (D3A CourtTrans_VIG 64,
   A2 DRIVE3_Trans_Design 1): units created + layout rerun; (2) A4 / D3A / D3B / A5 had no persistent unit dir, so the
   whole-chapter gameplay.json (start points / pickups / map state) was never copied: fixed per chapter. ~10 min light jobs.
+2026-10-23 13:30 AssetTools fixes landed for D3A / A2 / A4 (new streaming units CourtTrans_VIG + DRIVE3_Trans_Design, persistent Base
+  units with the whole-chapter gameplay.json). Gameplay D3A rerun: 9 units at start incl. Base, pickups 8 factories load,
+  340 transforming actors all with nodes, no crash. D3B / A5 get the same on shipping.
