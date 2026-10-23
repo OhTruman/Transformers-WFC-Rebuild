@@ -81,8 +81,11 @@ void Application::runEscalationTest() {
     check(m.players()[(size_t)me].team == 0, "the player is on BrokenHope's co-op team (Autobots)");
     check(D.weaponPickups.size() == 17, "17 weapon pickup factories (hidden until bought)");
     const bool escNavOn = std::getenv("WFC_ESCNAV") && std::atoi(std::getenv("WFC_ESCNAV")) != 0;
-    if (escNavOn) check(S.escNav && world_.botNav().cells().size() == 469 && S.navBlockedAtStart == 32 && S.generatorCells.size() == 12,
-                        "the Escalation nav (WFC_ESCNAV): 469 original NavigationCells, 32 blocked at start, 12 generators open cells");
+    if (escNavOn) {
+        size_t original = 0; for (const auto& c : world_.botNav().cells()) original += !c.versusOnly;   // v3: + merged versus cells after them
+        check(S.escNav && original == 469 && S.navBlockedAtStart == 32 && S.generatorCells.size() == 12,
+              "the Escalation nav (WFC_ESCNAV): 469 original NavigationCells, 32 blocked at start, 12 generators open cells");
+    }
     else check(!S.escNav, "the versus nav by default (the Escalation nav only with WFC_ESCNAV=1)");
     check(D.enemies[0].chassis == "ESC_Spider" && D.enemies[0].health == 20.0f && D.waves[9].decreaseTaken == 0 && D.waves[13].increaseDealt == 0,
           "the horde table: Spider body ESC_Spider 20 HP; wave 10 DecreaseDamageTaken L0, wave 14 IncreaseDamage L0");

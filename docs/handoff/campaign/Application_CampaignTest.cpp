@@ -25,6 +25,12 @@ void Application::runCampaignTest() {
     auto run = [&](float secs) { for (int k = 0; k < (int)(secs / dt); ++k) step(); };
     auto hdist = [](const core::Vec3& a, const core::Vec3& b) { return std::sqrt((a.x - b.x) * (a.x - b.x) + (a.z - b.z) * (a.z - b.z)); };
     const game::CampaignChapter& C = world_.campaignChapter();
+    if (!world_.campaignMap() || C.chapter != "D5_OME") {   // the harness runs on the loaded map: refuse anything else cleanly
+        LOG_ERROR("CAMPAIGNTEST needs WFC_MAP=D5_OME (loaded: %s)", world_.mapName().c_str());
+        LOG_INFO("CAMPAIGNTEST SUMMARY: 0/1 checks passed");
+        exitCode_ = 1;
+        return;
+    }
     check(world_.campaignMap() && C.ok && C.chapter == "D5_OME" && C.mapId == 105 && C.faction == 1 && C.units.size() == 6,
           "D5_OME: a campaign chapter (MapId 105, Decepticon), 6 units loaded at the start (initial state Arena + the persistent level)");
     check(world_.usingSlice() && world_.collision() != nullptr, "the chapter World: the units' collision_pawn.glb merged (no graybox fallback)");
