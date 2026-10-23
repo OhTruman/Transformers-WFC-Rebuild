@@ -134,17 +134,22 @@ AnimNodeSlot vtable +0x1D8 / +0x1DC.
 - IMF_RelativeToInitial matrix order: VMX, not decompiled (H stock).
 - Slerp shortest-path behaviour (0x82B82FA8): H stock.
 
-## 11. AnimControl track-side position (H: the native GetAnimForTime was not located)
-I decompiled the whole Matinee code range (0x82C00000–0x82CC0000, about 3,200 functions) and searched for the key-array walk
-(0x1C-byte keys: StartTime, AnimSeqName, AnimStartOffset, AnimEndOffset, AnimPlayRate, bLooping / bReverse bits at +0x18). That
-found only the editor key add / set functions (0x82C24160 / 0x82C070A8), which confirm the key layout and the **bit order:
-bLooping = bit 31, bReverse = bit 30**. The evaluator itself is likely inlined into UpdateTrack and wasn't isolated.
+## 11. AnimControl track-side position (C, GetAnimForTime 0x82C0BFE8, superseding the earlier H)
+- **The key layout corrects the earlier guess:** keys are **0x18 bytes**, array at track +0x80 / +0x84: StartTime +0x00,
+  AnimSeqName +0x04, AnimStartOffset +0x08, AnimEndOffset +0x0C, AnimPlayRate +0x10, flags +0x14 (**bLooping bit 31, bReverse
+  bit 30**).
+- L = the sequence length (AnimSequence +0x38, found through the track's AnimSets, 0x82C02078).
 
-**Stock UE3 formula (H):** with key k = the last key whose StartTime ≤ t (key 0 if t is before it):
-- L = sequence length; span = L − StartOffset − EndOffset;
-- p = (t − k.StartTime) · AnimPlayRate;
-- looping: p = fmod(p, span); otherwise **clamp p to span**, so it holds the last frame past the end;
-- reverse: pos = (L − EndOffset) − p; otherwise pos = StartOffset + p;
-- then `SetAnimPosition(slot, channel, k.AnimSeqName, pos, bFireNotifies = !jump, k.bLooping)` → §9.
-
-Data: 1,177 of 6,609 keys loop and 202 are reversed.
+**Evaluation:**
+```
+no keys                  -> name None, position 0
+t < key0.StartTime       -> key0's anim, position = key0.StartOffset (then reverse if key0.bReverse)
+else k = the last key with StartTime <= t:
+    p = (t - k.StartTime) * k.AnimPlayRate
+    if k.bLooping: span = max(L - StartOffset - EndOffset, 0.01); pos = fmod(p, span) + StartOffset
+    else:          pos = clamp(StartOffset + p, 0, (L - EndOffset) + 1e-4)     // holds the last frame past the end
+    if k.bReverse: pos = (L - EndOffset) - (pos - StartOffset)                 // 0x82C02110
+    bLooping out = k.bLooping
+```
+Then `SetAnimPosition(slot, channel, name, pos, bFireNotifies, bLooping)` (§9). Past the end of a non-looping key the pose holds
+the end frame until the next key starts. Data: 1,177 of 6,609 keys loop and 202 are reversed.
