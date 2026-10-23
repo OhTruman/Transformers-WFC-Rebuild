@@ -141,3 +141,26 @@ groups whose actor has a Base.
 - **Never play 6–9** (the other languages).
 - The per-language text movies get the same list. In French that would request track 6, which doesn't exist in their 6-track
   files (H: no voice there).
+
+## Pass 3: RandomSeed writer (still UNKNOWN; narrowed)
+
+**The reader** (C, 0x82E982E8, the material pixel-shader SetMesh):
+- if the shader has the RandomSeed parameter (shader-param slot +0x7C), it uploads **one float4 register = `*(u32*)(MeshElement + 0xBC)`**,
+  raw bits as stored.
+- Next to it, `MeshElement + 0xC0` bit 30 selects the ±1 "two-sided sign" constant.
+
+**No data source:**
+- no authored property anywhere holds a seed (authored.db props scan);
+- no Engine / HM_Engine / TransGame class has a RandomSeed-like property for primitives (only SpeedTree / foliage / terrain seeds,
+  which these materials don't use).
+- So the writer is native mesh-element setup code.
+
+**The candidate set** (`opscanr` stores to both +0xBC and +0xC0 in 0x82D00000–0x83100000): **129 functions** (list in
+`work/q/rs_s2.txt`, not committed). Static analysis can't pick the right one without the FMeshElement type.
+
+**Missing evidence:** a runtime capture (PIX / memory watch on +0xBC of the mesh element passed to 0x82E982E8), or typing FMeshElement
+in Ghidra and following the static / skeletal proxy element fills.
+
+**Impact is small:** only two materials use it (`CHR_Transformer_NormSpec_Cust_E_Mat`, `DarkEnergonCrystal_MAT`).
+- Build: keep **0** (every instance shows the first variant).
+- Or, as a **PC adaptation**, a stable per-component hash, if Rendering prefers visible variety. Label it as such.
