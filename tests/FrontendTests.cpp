@@ -2053,7 +2053,7 @@ static void testLobbyFlowV2() {
         d6.f().call("Online.JoinGame", {"7QK2M-9TDAB"});
         const bool waits = runUntil(*d6.rt, [&] { return d6.f().level() == LevelKind::GameLobby && !d6.f().loading().active; }) &&
                            d6.f().matchInProgressForMember() && d6.fake->count("joinRunningMatch") == 0;
-        SessionEvent late = ev(T::CountdownStarted); late.lateJoin = true; late.seed = 42u;
+        SessionEvent late = ev(T::CountdownStarted); late.lateJoin = true; late.seed = 42u; late.lateSeat = 1;
         late.launchUrl = "MP_IAC_Streets_Base_m?GameModeTag=TDM?GameTeamStatus=3?MapId=508?listen";
         SessionSlot hs; hs.kind = SessionSlot::Kind::Human; hs.member.fingerprint = "WFC-HOST-HOST-1"; hs.team = 0;
         SessionSlot me; me.kind = SessionSlot::Kind::Human; me.member.fingerprint = "WFC-SELF-SELF-9"; me.team = 1;
@@ -2067,6 +2067,8 @@ static void testLobbyFlowV2() {
                              !r.f().lobby().countingDown && r.f().currentMatch().seed == 42u && r.f().currentMatch().teamIndex == 1;
         r.f().matchLoaded();   // the Application loads the world; the replay (CatchUpProgress) runs under the load gate
         const bool progress = runUntil(*r.rt, [&] { return r.f().loading().message.find("50") != std::string::npos; });
+        r.f().characterSelected();   // the late joiner picks: the match has begun - no PreGameCountdown, it spawns at once
+        const bool begun = r.f().ui().openMovie() != "UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1";
         // a refusal (the match is past the catch-up limit): the lobby wait stays, with the reason
         SessionEvent tfa = ev(T::JoinFailed); tfa.joinFailure = SessionJoinFailure::TooFarAlong;
         OnlineRig x({after("join", mip), after("joinRunningMatch", tfa)});
@@ -2074,8 +2076,8 @@ static void testLobbyFlowV2() {
         x.f().call("Online.JoinGame", {"7QK2M-9TDAB"});
         const bool refused = runUntil(*x.rt, [&] { return x.popupIs("$WfcPC.Online.LateJoinTitle", "$WfcPC.Online.LateJoinTooLate"); }) &&
                              x.f().level() == LevelKind::GameLobby && x.f().matchInProgressForMember();
-        check(d6.ok && waits && r.ok && asked && loading && progress && x.ok && refused, "lobby.LV8_join_in_progress",
-              std::to_string(waits) + std::to_string(asked) + std::to_string(loading) + std::to_string(progress) + std::to_string(refused));
+        check(d6.ok && waits && r.ok && asked && loading && progress && begun && x.ok && refused, "lobby.LV8_join_in_progress",
+              std::to_string(waits) + std::to_string(asked) + std::to_string(loading) + std::to_string(progress) + std::to_string(begun) + std::to_string(refused));
     }
     // LV4: a member cannot change the mode
     {
