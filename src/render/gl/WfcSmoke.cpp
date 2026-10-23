@@ -35,6 +35,7 @@ uniform vec3 uSmokeDirC[3];   // colour x attenuation x visibility
 uniform vec3 uSmokeInvRef;    // 1 / E_ref per channel
 uniform vec4 uSmokeFlow;      // x amplitude (UV), y spatial frequency (1/m), z speed, w = 1 on
 uniform int uSmokeDebug;      // WFC_SMOKEDEBUG=1: the smoke pixels show E / E_ref x 0.5 (opaque), the lighting response itself
+uniform vec4 uSmokeTune;      // x the response's contrast exponent, y the puff-shape strength (m), z the self-shadow floor
 float wfcSmokePhase(vec3 L) { // Henyey-Greenstein, g = 0.3, x 4 pi (isotropic = 1): forward scattering towards the eye
     const float g = 0.3;
     float c = dot(-L, normalize(uCamPos - vPos));
@@ -51,14 +52,21 @@ void main() {
         m.uv0 += f * (uSmokeFlow.x * edge);
     }
     MatOut o; wfcMaterial(m, o);
+    // the puff's shape: the opacity falls off towards a puff's edge, so its gradient (world space, from the screen derivatives)
+    // points into the puff; against it, blended with the view, a pseudo-normal - the lights wrap around it (a lit side and a
+    // self-shadowed side instead of a flat card)
+    vec3 dPx = dFdx(vPos), dPy = dFdy(vPos);
+    vec3 grad = dFdx(o.Opacity) * dPx / max(dot(dPx, dPx), 1e-8) + dFdy(o.Opacity) * dPy / max(dot(dPy, dPy), 1e-8);
+    vec3 Np = normalize(normalize(uCamPos - vPos) - grad * uSmokeTune.y);
     vec3 E = uSmokeAmb;
     for (int i = 0; i < 3; ++i) {
         if (i >= uSmokeDirN) break;
-        E += uSmokeDirC[i] * (0.5 * wfcSmokePhase(uSmokeDirL[i]));
+        float wrap = mix(uSmokeTune.z, 1.2, clamp(0.5 + 0.5 * dot(Np, uSmokeDirL[i]), 0.0, 1.0));
+        E += uSmokeDirC[i] * (0.5 * wfcSmokePhase(uSmokeDirL[i]) * wrap);
     }
     MatOut w = o; w.DiffuseColor = vec3(1.0); w.SpecularColor = vec3(0.0);
     if (uTLN > 0 || uTLAllN > 0) E += wfcTransientLights(normalize(uCamPos - vPos), w);
-    vec3 c = o.EmissiveColor * (E * uSmokeInvRef);
+    vec3 c = o.EmissiveColor * min(pow(max(E * uSmokeInvRef, vec3(0.0)), vec3(uSmokeTune.x)), vec3(6.0));   // (contrast: shade darker, light brighter)
     if (uSmokeDebug != 0) { if (o.Opacity < 0.02) discard; oColor = vec4(E * uSmokeInvRef * 0.5, 1.0); return; }
     wfcTranslucentOut(c, o.Opacity);
     c = wfcCanvasOut(wfcFog(c));
@@ -164,8 +172,11 @@ void Pipeline::bindSmoke(const Program& P) {
     Uniform3fv(cachedUniformLocation(P.id, "uSmokeDirL"), 3, L3);
     Uniform3fv(cachedUniformLocation(P.id, "uSmokeDirC"), 3, C3);
     Uniform3f(cachedUniformLocation(P.id, "uSmokeInvRef"), inv.x, inv.y, inv.z);
-    static const float flowAmp = std::getenv("WFC_SMOKEFLOW") ? (float)std::atof(std::getenv("WFC_SMOKEFLOW")) : 0.035f;
+    static const float flowAmp = std::getenv("WFC_SMOKEFLOW") ? (float)std::atof(std::getenv("WFC_SMOKEFLOW")) : 0.06f;
     Uniform4f(cachedUniformLocation(P.id, "uSmokeFlow"), flowAmp, 0.45f, 0.6f, P.smokeFlow && flowAmp > 0.0f ? 1.0f : 0.0f);
+    static const float contrast = std::getenv("WFC_SMOKECONTRAST") ? (float)std::atof(std::getenv("WFC_SMOKECONTRAST")) : 1.6f;
+    static const float shape = std::getenv("WFC_SMOKESHAPE") ? (float)std::atof(std::getenv("WFC_SMOKESHAPE")) : 2.0f;
+    Uniform4f(cachedUniformLocation(P.id, "uSmokeTune"), contrast, shape, 0.3f, 0.0f);
     static const int debug = std::getenv("WFC_SMOKEDEBUG") ? 1 : 0;
     Uniform1i(cachedUniformLocation(P.id, "uSmokeDebug"), debug);
 }

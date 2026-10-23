@@ -17,6 +17,7 @@ namespace wfc {
 const char* kFSWaterEnhance = R"(
 uniform int uWaterOn;         // the Water row: 1 Enhanced (bound per draw), 2 its debug view (WFC_WATERDEBUG); 0 = the authored material only
 uniform mat4 uViewProj;
+uniform float uWaterReflK;     // the reflection gain (WFC_WATERREFL, default 2.5) - with a Fresnel floor of 0.1
 void wfcWaterEnhance(MatIn m, inout MatOut o, mat3 tbn) {
     if (uWaterOn == 0 || uBlend <= 1) return;   // (opaque water - CoolantFloor - draws in the opaque pass: no finished scene to reflect)
     // a finer moving ripple octave (world xz, metres) on the authored panned normal
@@ -49,7 +50,7 @@ void wfcWaterEnhance(MatIn m, inout MatOut o, mat3 tbn) {
             break;
         }
     }
-    o.EmissiveColor += refl * F * hitW;
+    o.EmissiveColor += refl * max(F, 0.1) * hitW * uWaterReflK;   // (first Remnant sheet: hits found but ~3 % at the angles players see)
     if (uWaterOn == 2) { o.EmissiveColor = vec3(hitW, F, 0.2); o.Opacity = 1.0; }   // (WFC_WATERDEBUG: R the SSR hit weight, G Fresnel)
     // the translucent liquids: absorption thickens with the liquid behind the surface (scene depth - this depth)
     if (uBlend == 2) {
