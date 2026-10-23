@@ -3671,3 +3671,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 02:13 CORRECTION e2a58726: effecacc had left src/core/Application_EscTest.cpp untracked (my staging used directory globs that
   missed src/core); a clean checkout of effecacc / 718efdee did not link (Experimental). Rule: stage every '+++' path of a patch
   by name and verify with git ls-files before committing.
+2026-10-23 02:13 #1 with the parse cache: warm revisits 103-184 ms (from 300); Rendering cuts 59e339fd. Smoke: the per-draw light cull
+  masked every flash for sprite groups (zero bounds at the origin) -> fixed rt2 8ac67dbf; reference = level ambient only.
+  Card -> Rendering x32smoke 02:22 (Frontend's 1.5-min look shares the window, one exe at a time by direct coordination).
