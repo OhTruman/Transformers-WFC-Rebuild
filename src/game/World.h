@@ -237,6 +237,7 @@ struct HudGameState {
     bool cpCinematic = false;   // SeqAct_ToggleCinematicMode on: the HUD hides
     std::string cpInteract;     // the local player's interact prompt: the TnInteract class in reach (empty = none)
     int svPower = 0; std::string svGeneratorName; int svGeneratorNeeded = -1;
+    float svAbilityResource = -1.0f;   // Escalation: the local player's ability resource, normalized (1 = an ability ready; -1 outside it)
     bool svDowned = false; float svDownedHealth = 0.0f; bool svReviveTarget = false; float svReviveProgress = -1.0f;
     // TDM player tags (TnObjectiveMarkerTypeTransformerVersus): hidden for self and the dead; allies labelled,
     // enemy markers disabled by default (no TnBuffSeeEnemyObjectiveMarkers / HardLocked / Revenge buffs here).

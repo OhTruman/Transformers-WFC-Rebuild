@@ -3648,8 +3648,12 @@ bool World::remoteTriggerAbility(SeatRef& s, int slot, float aimYaw, const core:
     Character& pc = *s.pc;
     if (slot < 0 || slot > 1 || pc.weapon().reloading() || pc.isDodging() || pc.jammedRemain_ > 0.0f) return false;
     Character::AbilitySlot& a = pc.abilities_[slot];
-    if (!a.implemented || a.spam > 0.0f || a.cooldown > 0.0f || a.pendingCooldown) return false;
     const int p = s.player;
+    // Escalation: a player's abilities run on the ability resource (>= 100 to trigger; no cooldown) instead of the cooldowns
+    const bool resMode = sv_.phase != SurvivalState::Phase::Off && p >= 0 && (size_t)p < match_.players().size() &&
+                         match_.players()[(size_t)p].kind != ParticipantKind::Bot;
+    if (resMode) { if (!a.implemented || a.spam > 0.0f || (size_t)p >= sv_.abilityResource.size() || sv_.abilityResource[(size_t)p] < 100.0f) return false; }
+    else if (!a.implemented || a.spam > 0.0f || a.cooldown > 0.0f || a.pendingCooldown) return false;
     if (a.id == "Whirlwind") { if (pc.isMeleeing()) return false; startMeleeFor(pc, p, true, aimYaw); if (!pc.isMeleeing()) return false; }
     else if (a.id == "Dodge") {   // TnPlayerInput.Dodge: |Up| >= |Right| ? (Up < 0 back : forward) : (Right < 0 left : right)
         in.dodgeDir = std::fabs(in.moveForward) >= std::fabs(in.moveRight) ? (in.moveForward < 0.0f ? 4 : 3) : (in.moveRight < 0.0f ? 1 : 2);
@@ -3680,7 +3684,8 @@ bool World::remoteTriggerAbility(SeatRef& s, int slot, float aimYaw, const core:
     }
     else if (a.id == "GuidedMissile") { if (seatGuiding(p)) return false; startSeatMissile(p, aimYaw, 0.0f); }
     else return false;
-    a.spam = 1.0f; a.pendingCooldown = true;
+    a.spam = 1.0f;
+    if (resMode) sv_.abilityResource[(size_t)p] = 0.0f; else a.pendingCooldown = true;
     if (participantAbilityHook) presentHook([this, p, id = std::string(a.id), ch = pc.chassis().id, at = pc.actorLocation()] { participantAbilityHook(p, id, ch, at); });
     return true;
 }
@@ -4343,6 +4348,7 @@ HudGameState World::hudState() const {
         h.svGameOver = sv_.phase == SurvivalState::Phase::GameOver;
         if (localPlayer_ >= 0 && (size_t)localPlayer_ < sv_.power.size()) {
             h.svPower = (int)sv_.power[(size_t)localPlayer_];
+            if ((size_t)localPlayer_ < sv_.abilityResource.size()) h.svAbilityResource = sv_.abilityResource[(size_t)localPlayer_] / 100.0f;
             const int g = sv_.nearGenerator[(size_t)localPlayer_];
             if (g >= 0) { h.svGeneratorName = svData_.generators[(size_t)g].nameKey; h.svGeneratorNeeded = (int)std::ceil(svData_.generators[(size_t)g].cost - sv_.pool[(size_t)g]); }
         }
