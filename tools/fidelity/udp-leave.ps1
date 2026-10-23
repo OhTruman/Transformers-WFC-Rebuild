@@ -2,7 +2,7 @@
 # match: -Mode end = the leaver's WFC_MATCH_SECONDS ends early (its own "match ended, leave"); -Mode kill = its PID is killed at
 # -LeaveAt s after AllLoaded (a hard drop); -Mode switch = WFC_UDPLEAVE_AT (if the build has it). Direct loopback, hash every tick.
 param([Parameter(Mandatory)][string]$Bin, [Parameter(Mandatory)][string]$Out, [ValidateSet('end', 'kill', 'switch')][string]$Mode = 'end',
-      [int]$Seconds = 120, [int]$LeaveAt = 60, [string]$Map = 'MP_IAC_Streets', [int]$Port = 14400, [int]$Seats = 3)   # -Seats 2 = a 1v1 (host + leaver)
+      [int]$Seconds = 120, [int]$LeaveAt = 60, [string]$Map = 'MP_IAC_Streets', [int]$Port = 14400, [int]$Seats = 3, [switch]$Empty, [int]$Bots = 2)   # -Bots N = BotsFriendly / BotsEnemy (0 = humans only: a Forfeit needs a team with nobody, bots count)   # -Empty: WFC_UDPLEAVE_EMPTY=1 on every peer (empty seat + Forfeit; default since ae9bbb6e = a bot takes the slot)   # -Seats 2 = a 1v1 (host + leaver)
 if (Test-Path $Out) { Remove-Item -Recurse -Force $Out }; New-Item -ItemType Directory -Force $Out | Out-Null
 $procs = @{}
 function Start-Peer($role, $extra) {
@@ -10,7 +10,8 @@ function Start-Peer($role, $extra) {
     $saved = @{}; Get-ChildItem env: | ? { $_.Name -like 'WFC_*' } | % { $saved[$_.Name] = $_.Value; Remove-Item -LiteralPath "env:$($_.Name)" }
     $e = @{ WFC_NULLRENDER = '1'; WFC_MUTE = '1'; WFC_NOINTERACT = '1'; WFC_AUTODETECT = '0'; WFC_SEED = '7'; WFC_FLOWSEED = '7'; WFC_SKIPINTRO = '1';
             WFC_PLAYERBOT = '1'; WFC_MATCH_SECONDS = "$Seconds"; WFC_RENDER_DATA = 'F:/Transformers Rebuild/Rebuild/work/render'; WFC_UDPSEATS = "$Seats";
-            WFC_MATCH_URL = "$($Map)?GameModeTag=TDM?BotsFriendly=2?BotsEnemy=2?PointsToWin=1000"; WFC_NET_HASH_EVERY = '1'; WFC_NET_LOG = (Join-Path $dir 'net.csv') }
+            WFC_MATCH_URL = "$($Map)?GameModeTag=TDM?BotsFriendly=$Bots?BotsEnemy=$Bots?PointsToWin=1000"; WFC_NET_HASH_EVERY = '1'; WFC_NET_LOG = (Join-Path $dir 'net.csv') }
+    if ($Empty) { $e['WFC_UDPLEAVE_EMPTY'] = '1' }
     foreach ($k in $extra.Keys) { $e[$k] = $extra[$k] }
     foreach ($k in $e.Keys) { Set-Item "env:$k" $e[$k] }
     $p = Start-Process -FilePath (Join-Path $Bin 'wfc_rebuild.exe') -WorkingDirectory $dir -WindowStyle Hidden -PassThru; $null = $p.Handle
@@ -33,7 +34,7 @@ $roles = @($procs.Keys | Sort-Object)
 foreach ($r in $roles) { if (-not $procs[$r].WaitForExit(($Seconds + 240) * 1000)) { Stop-Process -Id $procs[$r].Id -Force; Write-Host "  $r TIMEOUT (killed PID $($procs[$r].Id))" } }
 foreach ($r in $roles) {
     $log = Join-Path $Out "$r\wfc.log"
-    $ev = Select-String -LiteralPath $log -Pattern '(UDPMATCH (done|<-)|NET seat \d+ (left|dropped|timed out)|[Ff]orfeit|dormant)[^|]{0,110}' -ErrorAction SilentlyContinue | % { $_.Matches[0].Value } | Select-Object -Unique -Last 5
+    $ev = Select-String -LiteralPath $log -Pattern '(UDPMATCH (done|<-)|NET (driver: )?seat \d+ (left|leaves|dropped|timed out)|[Ff]orfeit|dormant|MATCH (leave|end))[^|]{0,110}' -ErrorAction SilentlyContinue | % { $_.Matches[0].Value } | Select-Object -Unique -Last 5
     Write-Host "$r exit $($procs[$r].ExitCode): $($ev -join ' / ')"
 }
 Write-Host ("own exes left: " + @(Get-Process wfc_rebuild -ErrorAction SilentlyContinue | ? { $_.Path -like "$Bin*" }).Count)
