@@ -66,3 +66,18 @@ matched; the horde had nobody to hunt. Fix: GAMEPLAY_ESCALATION_E2FIX.patch (age
 **PASS** on Gameplay's criterion: Remnant's player spawns, waves 1 (100) and 2 (150) clear, wave 3 (budget 200) begins at the same
 point on both seeds; no failed spawn, no crash / assert. BrokenHope as designed (a lone headless player dies to wave 1). 0 generator buys
 (no human). Logs work/stabsoak/esc_309/ (WFC_ESCLOG on).
+
+## Rerun on bfee6521 (E3a2: WFC_ESCLOG logs every kill / buy / take) - 2026-10-23 04:31
+
+| Run | Exit | Waves begun / cleared | ESCLOG kills | Kill sources | Buys / takes | End |
+|---|---|---|---|---|---|---|
+| Remnant seed 7 | 0 | 3 / 2 | 35 | **all 35 'by p-1 Engine.DmgType_Suicided'** (21 HoloBrute, 13 Soldier_MachineGun, 1 Soldier_Rocket) | 0 / 0 | 300 s |
+| Remnant seed 1234 | 0 | 3 / 2 | 35 | identical: all suicides | 0 / 0 | 300 s |
+| BrokenHope seed 7 | 0 | 1 / 0 | 12 | weapon kills (players' bots: CarMachineGun, HeavyPistol, HomingRocket, BurstRifle; horde kills a bot and the player) | 0 / 0 | game over 63 s |
+| BrokenHope seed 1234 | 0 | 1 / 0 | 5 | weapon kills (Shotgun, BurstRifle, Sentry, ...) | 0 / 0 | game over 46 s |
+
+**New suspect (Remnant):** no horde member on Remnant is killed by a player or a weapon - every death is 'Suicided' by the world (p-1),
+and they come exactly 3 s apart (t 45.0, 48.1, 51.1, 54.1, 57.1, then 78.1, 81.1, 84.1, 87.1, 90.2 -> 'wave 1 cleared'), in step with the
+director's 3 s spawn recheck. So Remnant's 'waves 1-2 cleared' are the director culling its own horde (a stuck / unreachable cull, a
+kill volume at the spawn zones 11696 / 1584 / 9840, or a respawn that suicides the previous body), not combat. Buys / takes 0 as
+Gameplay expects headless (no Interact). VOICETEST on bfee6521: PASS. Logs work/stabsoak/esc_bfee/.
