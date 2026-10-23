@@ -3520,3 +3520,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   as coarse and per-vertex -> Rendering re-checks the ExtinctionDistance branch; per-pixel stays meanwhile). RE -> campaign list.
 2026-10-23 00:33 RE campaign residual list approved (Matinee native -> buddy / togetherness -> dialog timing -> streaming notifies -> save body
   serializer -> ActorFactory -> FaceFX clamping -> small items); RE on #1.
+2026-10-23 00:40 Campaign render-data gaps a-e DONE (AssetTools): fog cause = build_lighting matches HeightFogComponent exactly, the campaign's
+  169 PostProcessVolumeHeightFogComponents (and 1 on Remnant) are skipped -> Rendering adds subclass matching + RE's volume-gating
+  semantics (Remnant = a recorded MP change with an eye row); inline light-map lists, per-chapter material lists, the per-sublevel
+  split (392 folders, 996 MB, PASS) delivered; MERGED c2e5950f the MP-neutral VS_ROOT / VS_MAPS tools diff. Seed nav rebuilt on the
+  adapted collision (overlay_20261023b, 90 files; Systems switches refresh.sh); the centre bot strand = steering, Gameplay re-tests.
