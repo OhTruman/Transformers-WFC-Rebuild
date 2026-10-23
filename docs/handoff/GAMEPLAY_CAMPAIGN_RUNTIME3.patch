@@ -1,0 +1,372 @@
+diff --git a/src/core/Application_CampaignTest.cpp b/src/core/Application_CampaignTest.cpp
+index 162abb25..7cecd633 100644
+--- a/src/core/Application_CampaignTest.cpp
++++ b/src/core/Application_CampaignTest.cpp
+@@ -105,6 +105,22 @@ void Application::runCampaignTest() {
+     LOG_INFO("CAMPAIGNTEST Kismet: %d activations, cap hits %d, checkpoints reached %zu, mission complete %d; generic Out:%s", total, S.vm.queueCapHits,
+              S.checkpointsReached.size(), (int)S.missionComplete, held.c_str());
+     check(total > 0 && !S.missionComplete && m.state() == game::Match::State::InProgress, "30 s at Stage 2: the Kismet runs, no false MissionComplete");
++    {   // step 3: the pawn factories and the in-map pick
++        int ai = 0, pooled = 0, firstAi = -1;
++        for (size_t k = 0; k < S.factories.size(); ++k) if (S.factories[k].ai) { ++ai; pooled += (int)S.factories[k].pool.size(); if (firstAi < 0 && !S.factories[k].pool.empty()) firstAi = (int)k; }
++        check(S.factories.size() == 30 && ai == 26 && pooled >= 24, "D5 pawn factories: 30 (26 AI), the Jet factories pooled");
++        const int n = world_.cpTestFireFactory(firstAi);
++        run(2.0f);
++        bool alive = false; int team = -1;
++        if (firstAi >= 0) for (int p : S.factories[(size_t)firstAi].pool) if (m.players()[(size_t)p].alive) { alive = true; team = m.players()[(size_t)p].team; }
++        check(n > 0 && alive && team == 0 && S.enemiesSpawned >= 1, "Spawn Actor: the factory spawns its Autobot AI at its spawn point");
++        game::CharacterSelection pick; pick.type = 1; pick.chassisId = "Car3";   // the in-map pick: Breakdown
++        const bool ok = world_.match().selectCharacter(world_.localMatchPlayer(), pick);
++        run(0.2f);
++        const bool swapped = std::find(S.squadChassis.begin(), S.squadChassis.end(), "Car3") == S.squadChassis.end() &&
++                             std::find(S.squadChassis.begin(), S.squadChassis.end(), "Tank") != S.squadChassis.end();
++        check(ok && swapped, "the in-map pick of Breakdown: accepted; the squad becomes Megatron + Soundwave");
++    }
+     LOG_INFO("CAMPAIGNTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+     exitCode_ = fails ? 1 : 0;
+ }
+diff --git a/src/game/Campaign.h b/src/game/Campaign.h
+index 8f3608d7..8c3e00f9 100644
+--- a/src/game/Campaign.h
++++ b/src/game/Campaign.h
+@@ -32,6 +32,17 @@ struct CampaignChapter {
+     const Checkpoint* checkpoint(const std::string& nameOrPath) const;   // by actor name / path suffix / tag
+ };
+ 
++// A SeqAct_TnPawnFactory of the level Kismet (AssetTools next_map/<CH>_pawn_factories.json) and its pooled AI participants.
++struct CampaignFactory {
++    std::string action, cls, aicd, chassis, spawnedVar, note;
++    int op = -1, team = 0, count = 1, pending = 0, spawned = 0;
++    bool ai = false, vehicle = false, alert = true, heldLogged = false;
++    float delay = 0.5f, timer = 0.0f;
++    std::vector<core::Vec3> points;
++    std::vector<std::string> outputs;
++    std::vector<int> pool;
++};
++
+ struct CampaignState {
+     bool active = false;
+     int difficulty = 1;                  // ?WfcDifficulty 0 / 1 / 2 (GameDifficulty)
+@@ -46,6 +57,11 @@ struct CampaignState {
+     size_t killsSeen = 0;                // Match::killHistory entries already looked at
+     std::vector<std::string> checkpointsReached;   // NotifyReachedCheckpoint (SeqAct_SetActiveCheckpoint), in order
+     bool kismetLoaded = false, kismetBegun = false;
++    std::vector<CampaignFactory> factories;   // step 3: the pawn factories
++    std::vector<int> formPending;             // spawned with StartingFormOverride TF_Vehicle (the form change the step after)
++    int enemiesSpawned = 0;
++    std::vector<std::string> trioChassis;     // CampaignCharacters' chassis, trio order
++    std::string humanChassis;                 // the human's current pick (the squad is the trio minus it)
+     KismetVM vm;
+ };
+ 
+diff --git a/src/game/Kismet.h b/src/game/Kismet.h
+index 3039b056..544e4ec3 100644
+--- a/src/game/Kismet.h
++++ b/src/game/Kismet.h
+@@ -81,6 +81,7 @@ public:
+ 
+     // Variables.
+     std::vector<int> varLink(int op, const std::string& link) const;
++    int varCount() const { return (int)vars_.size(); }
+     Var* var(int i) { return i >= 0 && (size_t)i < vars_.size() ? &vars_[(size_t)i] : nullptr; }
+     int intOf(int op, const std::string& link, int def) const;
+     float floatOf(int op, const std::string& link, float def) const;
+diff --git a/src/game/Match.h b/src/game/Match.h
+index ea41b971..a0735512 100644
+--- a/src/game/Match.h
++++ b/src/game/Match.h
+@@ -189,7 +189,7 @@ public:
+         if (p < 0 || (size_t)p >= players_.size()) return false;
+         // GRI.ValidateCharacterSelection (Iconic Mode): an iconic character another participant already holds (any team) is refused
+         // silently; ReplicatedCharacterData is untouched [CONF RE]. Bots play the class presets and never claim.
+-        if (s_.iconicMode && s.type == 1)
++        if (s_.iconicMode && !s_.campaign && s.type == 1)   // campaign: the in-map pick takes a squad member's character (World swaps)
+             for (size_t i = 0; i < players_.size(); ++i)
+                 if ((int)i != p && players_[i].hasSelectedCharacter && players_[i].selection.type == 1 && players_[i].selection.chassisId == s.chassisId)
+                     return false;
+diff --git a/src/game/World.h b/src/game/World.h
+index 5271f055..ca661b93 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -897,6 +897,7 @@ public:
+     bool campaignMap() const { return campaignMap_; }
+     const CampaignChapter& campaignChapter() const { return cpChapter_; }
+     const CampaignState& campaign() const { return cp_; }
++    int cpTestFireFactory(int k);   // WFC_CAMPAIGNTEST: Spawn Actor into factory k (its pool size, or -1)
+     bool cpKismetActivate(KismetVM& vm, int op, int input);   // the level Kismet's host ops
+     void cpKismetLatent(KismetVM& vm, int op, float dt);
+     // The map's transforming actors (Rendering: draw each actor's glb at matrix with its clip at t, unless hidden).
+@@ -1419,6 +1420,10 @@ private:
+     const Character* cpLeader(int bot) const;
+     bool cpSquadGoal(BotBrain& b, BotGoal& g);
+     bool cpLeaderMoved(const BotBrain& b) const;
++    void cpLoadFactories();                       // WorldCampaignRuntime.cpp
++    bool cpPawnFactoryActivate(KismetVM& vm, int op, int input);
++    void cpTickFactories(float dt);
++    void cpSyncPicks();
+     bool cpSquadMember(int p) const { return cp_.active && std::find(cp_.squad.begin(), cp_.squad.end(), p) != cp_.squad.end(); }
+     void tickSurvival(float dt);
+     float svZoneScore(int zone, int type) const;
+diff --git a/src/game/WorldCampaign.cpp b/src/game/WorldCampaign.cpp
+index d594bde3..ab6a81a2 100644
+--- a/src/game/WorldCampaign.cpp
++++ b/src/game/WorldCampaign.cpp
+@@ -202,6 +202,8 @@ void World::setupCampaign(const MatchLaunch& l) {
+         if (alnumLower(cpChapter_.trio[(size_t)k]) == alnumLower(l.character) || l.character == std::to_string(k)) pick = k;
+     auto iconic = [](const std::string& chassis) { CharacterSelection s; s.type = 1; s.chassisId = chassis; return s; };
+     const std::string mine = chassisForCharacter(cpChapter_.trio[(size_t)pick]);
++    for (const std::string& n : cpChapter_.trio) cp_.trioChassis.push_back(chassisForCharacter(n));
++    cp_.humanChassis = mine;
+     if (localPlayer_ >= 0 && !mine.empty()) match_.selectCharacter(localPlayer_, iconic(mine));
+     // SetupAiSquad: the trio minus the humans' picks become AI buddies (IsAiBuddy, DownedEnabled false).
+     std::vector<int> others;
+@@ -227,6 +229,7 @@ void World::setupCampaign(const MatchLaunch& l) {
+         cp_.vm.setHost(cpHost_.get());
+         cp_.vm.log = std::getenv("WFC_KISMETLOG") != nullptr;
+         LOG_INFO("campaign: Kismet %s (%zu ops)", cp_.kismetLoaded ? "loaded" : "MISSING", cp_.vm.opCount());
++        cpLoadFactories();
+     }
+     LOG_INFO("campaign: %s (MapId %d) %s, difficulty %d, the human as %s, squad %zu", cpChapter_.chapter.c_str(), cpChapter_.mapId,
+              match_.settings().modeTag.c_str(), cp_.difficulty, cpChapter_.trio[(size_t)pick].c_str(), cp_.squad.size());
+@@ -262,8 +265,9 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
+         vm.output(op, "Started"); vm.output(op, "Finished");
+         return true;
+     }
++    if (c == "SeqAct_TnPawnFactory") return cpPawnFactoryActivate(vm, op, input);
+     if (c == "SeqAct_Conversation" && input == 0) { o.latent = true; o.timer = 3.0f; vm.output(op, "Played"); return true; }
+-    if (c == "SeqAct_Interp" || c == "SeqAct_TnPawnFactory" || c == "SeqAct_MoviePlayer" || c == "SeqAct_TnAiMoveToActor" ||
++    if (c == "SeqAct_Interp" || c == "SeqAct_MoviePlayer" || c == "SeqAct_TnAiMoveToActor" ||
+         c == "SeqAct_TnForceIntoForm" || c == "SeqAct_ActorFactory" || c == "SeqAct_ActorFactoryEx") { o.latent = true; o.timer = -1.0f; return true; }
+     return false;
+ }
+@@ -288,6 +292,8 @@ void World::tickCampaign(float dt) {
+         LOG_INFO("campaign: Kismet begun at %s", cp_.checkpoint.empty() ? "the chapter start" : cp_.checkpoint.c_str());
+     }
+     if (cp_.kismetBegun && !cp_.gameOver) cp_.vm.tick(dt);
++    cpSyncPicks();
++    if (!cp_.gameOver) cpTickFactories(dt);
+     // TnCampaignGame.Killed: a human killed by anything but DmgType_Suicided -> CampaignGameOver (solo: never downed).
+     const auto& kh = match_.killHistory();
+     for (; cp_.killsSeen < kh.size(); ++cp_.killsSeen) {
+diff --git a/src/game/WorldCampaignRuntime.cpp b/src/game/WorldCampaignRuntime.cpp
+new file mode 100644
+index 00000000..eb016d6c
+--- /dev/null
++++ b/src/game/WorldCampaignRuntime.cpp
+@@ -0,0 +1,216 @@
++// Campaign runtime step 3: the level Kismet's pawn factories (SeqAct_TnPawnFactory over AssetTools next_map/<CH>_pawn_factories.json),
++// the spawned AI's alert-to-player awareness, and the in-map character pick (the human takes a trio member, the squad is the rest).
++// See Campaign.h.
++#include "game/World.h"
++#include "assets/Json.h"
++#include "core/Log.h"
++
++#include <algorithm>
++#include <cmath>
++#include <cstdlib>
++#include <fstream>
++#include <sstream>
++
++namespace game {
++
++namespace {
++
++bool readJsonFile(const std::string& path, assets::Json& j) {
++    std::ifstream f(path, std::ios::binary);
++    if (!f) return false;
++    std::stringstream ss; ss << f.rdbuf();
++    return assets::Json::parse(ss.str(), j);
++}
++std::string manifestsRoot() { const char* mr = std::getenv("WFC_MANIFESTS"); return mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests"; }
++std::string afterDot(const std::string& s) { const size_t k = s.find_last_of('.'); return k == std::string::npos ? s : s.substr(k + 1); }
++bool fileExists(const std::string& p) { return (bool)std::ifstream(p, std::ios::binary); }
++
++// The AI's body: AssetTools' character export of the AICD (out/escalation_characters/<id>, loaded as "ESC_<id>"); an Autobot / Decepticon
++// variant without its own export borrows the other faction's (PROV, logged); none -> "" (the factory is held).
++std::string bodyForAicd(const std::string& aicd, std::string& note) {
++    std::string id = aicd;
++    if (id.size() > 5 && id.compare(id.size() - 5, 5, "_AICD") == 0) id.resize(id.size() - 5);
++    const std::string root = "F:/Transformers Rebuild/AssetTools/out/escalation_characters/";
++    if (fileExists(root + id + "/character.json")) return "ESC_" + id;
++    for (const auto& sw : {std::make_pair(std::string("_Autobot"), std::string("_Decepticon")), std::make_pair(std::string("_Decepticon"), std::string("_Autobot"))}) {
++        const size_t k = id.find(sw.first);
++        if (k == std::string::npos) continue;
++        std::string alt = id; alt.replace(k, sw.first.size(), sw.second);
++        if (fileExists(root + alt + "/character.json")) { note = "PROV: " + alt + "'s body"; return "ESC_" + alt; }
++    }
++    return {};
++}
++
++} // namespace
++
++void World::cpLoadFactories() {
++    cp_.factories.clear();
++    assets::Json j;
++    if (!readJsonFile(manifestsRoot() + "/next_map/" + cpChapter_.chapter + "_pawn_factories.json", j)) {
++        LOG_WARN("campaign: no pawn factories for %s", cpChapter_.chapter.c_str());
++        return;
++    }
++    const int enemyTeam = cpChapter_.faction == 0 ? 1 : 0;
++    int pool = 0;
++    const assets::Json& fs = j["pawn_factories"];
++    for (size_t i = 0; i < fs.size(); ++i) {
++        const assets::Json& f = fs[i];
++        CampaignFactory F;
++        F.action = f["action"].asString();
++        F.op = cp_.vm.find(F.action);
++        F.cls = f["factory"]["class"].asString();
++        F.aicd = afterDot(f["factory"]["archetype"].asString());
++        F.ai = F.cls == "TnActorFactoryAI";
++        const std::string ft = f["factory"]["FactionTeam"].asString();
++        F.team = ft.find("Autobots") != std::string::npos ? 0 : ft.find("Decepticons") != std::string::npos ? 1 : enemyTeam;
++        F.vehicle = f["factory"]["StartingFormOverride"].asString() == "TF_Vehicle";
++        F.alert = f["factory"]["AlertToPlayer"].asBool(true);
++        F.count = std::max(1, f["spawn_count"].asInt(1));
++        F.delay = f["spawn_delay"].asFloat(0.5f);
++        F.spawnedVar = f["spawned_variable"].asString();
++        for (size_t k = 0; k < f["outputs"].size(); ++k) F.outputs.push_back(f["outputs"][k]["output"].asString());
++        const assets::Json& sp = f["spawn_points"];
++        for (size_t k = 0; k < sp.size(); ++k) {   // glTF metres Y-up = 0.01 x (x, z, y)_UE
++            const assets::Json& L = sp[k]["location_ue"];
++            if (L.size() >= 3) F.points.push_back(core::Vec3{L[0].asFloat() * 0.01f, L[2].asFloat() * 0.01f, L[1].asFloat() * 0.01f});
++        }
++        if (F.ai) {
++            F.chassis = bodyForAicd(F.aicd, F.note);
++            if (F.chassis.empty()) F.note = "no character export for " + F.aicd;
++        }
++        // The pool: one participant per spawn (never respawned; directorSpawned keeps them out of the match start).
++        if (F.ai && !F.chassis.empty())
++            for (int c = 0; c < F.count && pool < 64; ++c, ++pool) {
++                const int p = match_.addPlayerExact(F.aicd + " " + std::to_string(cp_.factories.size() + 1) + "." + std::to_string(c + 1), F.team);
++                MatchPlayer& mp = match_.playerMutable(p);
++                mp.kind = ParticipantKind::Bot;
++                mp.directorSpawned = true;
++                CharacterSelection sel; sel.type = 1; sel.chassisId = F.chassis;
++                match_.selectCharacter(p, sel);
++                chassisAssets(F.chassis);
++                auto o = std::make_unique<MatchOpponent>(p, mp.team, true);
++                addBotBrain(p, std::clamp(cp_.difficulty, 0, 2));
++                if (smart_.size() <= (size_t)p) smart_.resize((size_t)p + 1);
++                smart_[(size_t)p] = SmartBot{};   // Classic (the campaign GOAP sets are a later step)
++                opponents_.push_back(o.get());
++                actors_.push_back(std::move(o));
++                F.pool.push_back(p);
++            }
++        if (!F.note.empty()) LOG_INFO("campaign: factory %s (%s): %s", afterDot(F.action).c_str(), F.aicd.c_str(), F.note.c_str());
++        cp_.factories.push_back(F);
++    }
++    rebuildOppIndex();
++    LOG_INFO("campaign: %zu pawn factories, %d AI participants pooled", cp_.factories.size(), pool);
++}
++
++// SeqAct_TnPawnFactory [C data, RE CAMPAIGN_KISMET_HANDLERS]: Spawn Actor -> spawn_count pawns at the spawn points (in order, cycling),
++// spawn_delay apart; the spawned variable names the last pawn; "All Pawns Spawned" after the last. A factory without a body (no export,
++// or the Omega batteries: destructibles) is held latent (PROV, logged once).
++bool World::cpPawnFactoryActivate(KismetVM& vm, int op, int input) {
++    for (CampaignFactory& F : cp_.factories) {
++        if (F.op != op) continue;
++        KismetVM::Op& o = vm.op(op);
++        if (input != 0) return true;   // Stop / other inputs: nothing to do yet
++        if (F.pool.empty() || F.points.empty()) {
++            if (!F.heldLogged) { F.heldLogged = true; LOG_INFO("campaign: factory %s held (%s)", afterDot(F.action).c_str(), F.note.empty() ? "no spawn points" : F.note.c_str()); }
++            o.latent = true; o.timer = -1.0f;
++            return true;
++        }
++        F.pending = F.count; F.timer = 0.0f;
++        o.latent = true; o.timer = -1.0f;
++        return true;
++    }
++    return false;
++}
++
++void World::cpTickFactories(float dt) {
++    for (CampaignFactory& F : cp_.factories) {
++        if (F.pending <= 0 || (F.timer -= dt) > 0.0f) continue;
++        int p = -1;
++        for (int q : F.pool) if (!match_.players()[(size_t)q].alive) { p = q; break; }
++        if (p < 0) { F.pending = 0; continue; }   // every pooled pawn alive (MaxSpawnedInWorld)
++        const core::Vec3 at = F.points[(size_t)(F.spawned % (int)F.points.size())];
++        float yaw = 0.0f;
++        if (const Character* lead = cpLeader(p)) { const core::Vec3 d = lead->position() - at; yaw = std::atan2(-d.x, -d.z); }
++        match_.restartPlayerAt(p, at, yaw);
++        if (F.vehicle) cp_.formPending.push_back(p);
++        ++F.spawned; ++cp_.enemiesSpawned;
++        LOG_INFO("campaign: factory %s spawned p%d %s at (%.1f %.1f %.1f)", afterDot(F.action).c_str(), p, F.chassis.c_str(), at.x, at.y, at.z);
++        if (!F.spawnedVar.empty())
++            for (int v = 0; v < cp_.vm.varCount(); ++v)
++                if (KismetVM::Var* var = cp_.vm.var(v); var && var->varName == F.spawnedVar) var->obj = "pawn:" + std::to_string(p);
++        if (--F.pending > 0) { F.timer = F.delay; continue; }
++        if (F.op >= 0) {
++            const bool all = std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Spawned") != F.outputs.end();
++            cp_.vm.finishLatent(F.op, all ? "All Pawns Spawned" : (F.outputs.empty() ? "Out" : F.outputs.front()));
++        }
++    }
++    // StartingFormOverride TF_Vehicle: the pawn changes form once it stands (the step after its spawn)
++    for (size_t k = 0; k < cp_.formPending.size();) {
++        Character* c = participantPawnMutable(cp_.formPending[k]);
++        if (c) { c->setForm(Form::Vehicle); cp_.formPending[k] = cp_.formPending.back(); cp_.formPending.pop_back(); }
++        else ++k;
++    }
++    // AlertToPlayer: the spawned AI knows the nearest participant of the other team (as the Escalation horde's threat sensor, PROV)
++    if (simTick_ % 60 != 0) return;
++    for (const CampaignFactory& F : cp_.factories) {
++        if (!F.alert) continue;
++        for (int p : F.pool) {
++            const Character* me = participantPawn(p);
++            if (!me) continue;
++            int bq = -1; float best = 1e18f;
++            for (size_t q = 0; q < match_.players().size(); ++q) {
++                if (match_.sameTeam((int)q, p)) continue;
++                const Character* c = participantPawn((int)q);
++                if (!c) continue;
++                const core::Vec3 d = c->position() - me->position();
++                const float l = d.x * d.x + d.y * d.y + d.z * d.z;
++                if (l < best) { best = l; bq = (int)q; }
++            }
++            if (bq < 0) continue;
++            for (BotBrain& br : bots_)
++                if (br.player == p) {
++                    BotBrain::Seen& sn = br.seen[bq];
++                    if (!sn.visible) { sn.pos = participantPawn(bq)->actorLocation(); sn.time = match_.matchTime(); }
++                    if (br.target < 0) br.target = bq;
++                }
++        }
++    }
++}
++
++// The in-map pick (CharacterSelect_GFX -> Customize.SelectCharacter): the human takes the picked trio member; the AI squad is the trio
++// minus the humans' picks, so a squad member holding the picked character takes the free one (its body swapped in place).
++void World::cpSyncPicks() {
++    if (!cp_.active || localPlayer_ < 0 || cp_.squad.empty()) return;
++    const std::string mine = resolveChassis(match_.players()[(size_t)localPlayer_].selection, match_.faction(localPlayer_));
++    if (mine == cp_.humanChassis) return;
++    cp_.humanChassis = mine;
++    for (size_t k = 0; k < cp_.squad.size(); ++k) {
++        if (cp_.squadChassis[k] != mine) continue;
++        std::string freeName, freeChassis;
++        for (size_t t = 0; t < cpChapter_.trio.size() && t < cp_.trioChassis.size(); ++t) {
++            const std::string& ch = cp_.trioChassis[t];
++            if (ch == mine || std::find(cp_.squadChassis.begin(), cp_.squadChassis.end(), ch) != cp_.squadChassis.end()) continue;
++            freeName = cpChapter_.trio[t]; freeChassis = ch; break;
++        }
++        if (freeChassis.empty()) return;
++        const int p = cp_.squad[k];
++        CharacterSelection sel; sel.type = 1; sel.chassisId = freeChassis;
++        match_.selectCharacter(p, sel);
++        MatchPlayer& mp = match_.playerMutable(p);
++        mp.name = freeName;
++        cp_.squadChassis[k] = freeChassis;
++        chassisAssets(freeChassis);
++        for (MatchOpponent* o : opponents_)
++            if (o->matchPlayer() == p && o->spawned() && applyChassisToPawn(o->pawn(), freeChassis)) applyCharacterTo(o->pawn(), &mp.selection, &mp);
++        LOG_INFO("campaign: the human picked %s; squad p%d is now %s (%s)", mine.c_str(), p, freeName.c_str(), freeChassis.c_str());
++    }
++}
++
++int World::cpTestFireFactory(int k) {
++    if (k < 0 || (size_t)k >= cp_.factories.size() || cp_.factories[(size_t)k].op < 0) return -1;
++    cp_.vm.impulse(cp_.factories[(size_t)k].op, 0);
++    return (int)cp_.factories[(size_t)k].pool.size();
++}
++
++} // namespace game

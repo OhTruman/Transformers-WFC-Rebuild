@@ -897,6 +897,7 @@ public:
     bool campaignMap() const { return campaignMap_; }
     const CampaignChapter& campaignChapter() const { return cpChapter_; }
     const CampaignState& campaign() const { return cp_; }
+    int cpTestFireFactory(int k);   // WFC_CAMPAIGNTEST: Spawn Actor into factory k (its pool size, or -1)
     bool cpKismetActivate(KismetVM& vm, int op, int input);   // the level Kismet's host ops
     void cpKismetLatent(KismetVM& vm, int op, float dt);
     // The map's transforming actors (Rendering: draw each actor's glb at matrix with its clip at t, unless hidden).
@@ -1419,6 +1420,10 @@ private:
     const Character* cpLeader(int bot) const;
     bool cpSquadGoal(BotBrain& b, BotGoal& g);
     bool cpLeaderMoved(const BotBrain& b) const;
+    void cpLoadFactories();                       // WorldCampaignRuntime.cpp
+    bool cpPawnFactoryActivate(KismetVM& vm, int op, int input);
+    void cpTickFactories(float dt);
+    void cpSyncPicks();
     bool cpSquadMember(int p) const { return cp_.active && std::find(cp_.squad.begin(), cp_.squad.end(), p) != cp_.squad.end(); }
     void tickSurvival(float dt);
     float svZoneScore(int zone, int type) const;

@@ -189,7 +189,7 @@ public:
         if (p < 0 || (size_t)p >= players_.size()) return false;
         // GRI.ValidateCharacterSelection (Iconic Mode): an iconic character another participant already holds (any team) is refused
         // silently; ReplicatedCharacterData is untouched [CONF RE]. Bots play the class presets and never claim.
-        if (s_.iconicMode && s.type == 1)
+        if (s_.iconicMode && !s_.campaign && s.type == 1)   // campaign: the in-map pick takes a squad member's character (World swaps)
             for (size_t i = 0; i < players_.size(); ++i)
                 if ((int)i != p && players_[i].hasSelectedCharacter && players_[i].selection.type == 1 && players_[i].selection.chassisId == s.chassisId)
                     return false;

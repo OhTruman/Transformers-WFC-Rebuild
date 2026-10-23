@@ -202,6 +202,8 @@ void World::setupCampaign(const MatchLaunch& l) {
         if (alnumLower(cpChapter_.trio[(size_t)k]) == alnumLower(l.character) || l.character == std::to_string(k)) pick = k;
     auto iconic = [](const std::string& chassis) { CharacterSelection s; s.type = 1; s.chassisId = chassis; return s; };
     const std::string mine = chassisForCharacter(cpChapter_.trio[(size_t)pick]);
+    for (const std::string& n : cpChapter_.trio) cp_.trioChassis.push_back(chassisForCharacter(n));
+    cp_.humanChassis = mine;
     if (localPlayer_ >= 0 && !mine.empty()) match_.selectCharacter(localPlayer_, iconic(mine));
     // SetupAiSquad: the trio minus the humans' picks become AI buddies (IsAiBuddy, DownedEnabled false).
     std::vector<int> others;
@@ -227,6 +229,7 @@ void World::setupCampaign(const MatchLaunch& l) {
         cp_.vm.setHost(cpHost_.get());
         cp_.vm.log = std::getenv("WFC_KISMETLOG") != nullptr;
         LOG_INFO("campaign: Kismet %s (%zu ops)", cp_.kismetLoaded ? "loaded" : "MISSING", cp_.vm.opCount());
+        cpLoadFactories();
     }
     LOG_INFO("campaign: %s (MapId %d) %s, difficulty %d, the human as %s, squad %zu", cpChapter_.chapter.c_str(), cpChapter_.mapId,
              match_.settings().modeTag.c_str(), cp_.difficulty, cpChapter_.trio[(size_t)pick].c_str(), cp_.squad.size());
@@ -262,8 +265,9 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
         vm.output(op, "Started"); vm.output(op, "Finished");
         return true;
     }
+    if (c == "SeqAct_TnPawnFactory") return cpPawnFactoryActivate(vm, op, input);
     if (c == "SeqAct_Conversation" && input == 0) { o.latent = true; o.timer = 3.0f; vm.output(op, "Played"); return true; }
-    if (c == "SeqAct_Interp" || c == "SeqAct_TnPawnFactory" || c == "SeqAct_MoviePlayer" || c == "SeqAct_TnAiMoveToActor" ||
+    if (c == "SeqAct_Interp" || c == "SeqAct_MoviePlayer" || c == "SeqAct_TnAiMoveToActor" ||
         c == "SeqAct_TnForceIntoForm" || c == "SeqAct_ActorFactory" || c == "SeqAct_ActorFactoryEx") { o.latent = true; o.timer = -1.0f; return true; }
     return false;
 }
@@ -288,6 +292,8 @@ void World::tickCampaign(float dt) {
         LOG_INFO("campaign: Kismet begun at %s", cp_.checkpoint.empty() ? "the chapter start" : cp_.checkpoint.c_str());
     }
     if (cp_.kismetBegun && !cp_.gameOver) cp_.vm.tick(dt);
+    cpSyncPicks();
+    if (!cp_.gameOver) cpTickFactories(dt);
     // TnCampaignGame.Killed: a human killed by anything but DmgType_Suicided -> CampaignGameOver (solo: never downed).
     const auto& kh = match_.killHistory();
     for (; cp_.killsSeen < kh.size(); ++cp_.killsSeen) {

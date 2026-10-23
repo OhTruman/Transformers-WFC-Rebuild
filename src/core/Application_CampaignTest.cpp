@@ -105,6 +105,22 @@ void Application::runCampaignTest() {
     LOG_INFO("CAMPAIGNTEST Kismet: %d activations, cap hits %d, checkpoints reached %zu, mission complete %d; generic Out:%s", total, S.vm.queueCapHits,
              S.checkpointsReached.size(), (int)S.missionComplete, held.c_str());
     check(total > 0 && !S.missionComplete && m.state() == game::Match::State::InProgress, "30 s at Stage 2: the Kismet runs, no false MissionComplete");
+    {   // step 3: the pawn factories and the in-map pick
+        int ai = 0, pooled = 0, firstAi = -1;
+        for (size_t k = 0; k < S.factories.size(); ++k) if (S.factories[k].ai) { ++ai; pooled += (int)S.factories[k].pool.size(); if (firstAi < 0 && !S.factories[k].pool.empty()) firstAi = (int)k; }
+        check(S.factories.size() == 30 && ai == 26 && pooled >= 24, "D5 pawn factories: 30 (26 AI), the Jet factories pooled");
+        const int n = world_.cpTestFireFactory(firstAi);
+        run(2.0f);
+        bool alive = false; int team = -1;
+        if (firstAi >= 0) for (int p : S.factories[(size_t)firstAi].pool) if (m.players()[(size_t)p].alive) { alive = true; team = m.players()[(size_t)p].team; }
+        check(n > 0 && alive && team == 0 && S.enemiesSpawned >= 1, "Spawn Actor: the factory spawns its Autobot AI at its spawn point");
+        game::CharacterSelection pick; pick.type = 1; pick.chassisId = "Car3";   // the in-map pick: Breakdown
+        const bool ok = world_.match().selectCharacter(world_.localMatchPlayer(), pick);
+        run(0.2f);
+        const bool swapped = std::find(S.squadChassis.begin(), S.squadChassis.end(), "Car3") == S.squadChassis.end() &&
+                             std::find(S.squadChassis.begin(), S.squadChassis.end(), "Tank") != S.squadChassis.end();
+        check(ok && swapped, "the in-map pick of Breakdown: accepted; the squad becomes Megatron + Soundwave");
+    }
     LOG_INFO("CAMPAIGNTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
     exitCode_ = fails ? 1 : 0;
 }

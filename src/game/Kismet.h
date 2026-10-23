@@ -81,6 +81,7 @@ public:
 
     // Variables.
     std::vector<int> varLink(int op, const std::string& link) const;
+    int varCount() const { return (int)vars_.size(); }
     Var* var(int i) { return i >= 0 && (size_t)i < vars_.size() ? &vars_[(size_t)i] : nullptr; }
     int intOf(int op, const std::string& link, int def) const;
     float floatOf(int op, const std::string& link, float def) const;

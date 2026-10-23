@@ -32,6 +32,17 @@ struct CampaignChapter {
     const Checkpoint* checkpoint(const std::string& nameOrPath) const;   // by actor name / path suffix / tag
 };
 
+// A SeqAct_TnPawnFactory of the level Kismet (AssetTools next_map/<CH>_pawn_factories.json) and its pooled AI participants.
+struct CampaignFactory {
+    std::string action, cls, aicd, chassis, spawnedVar, note;
+    int op = -1, team = 0, count = 1, pending = 0, spawned = 0;
+    bool ai = false, vehicle = false, alert = true, heldLogged = false;
+    float delay = 0.5f, timer = 0.0f;
+    std::vector<core::Vec3> points;
+    std::vector<std::string> outputs;
+    std::vector<int> pool;
+};
+
 struct CampaignState {
     bool active = false;
     int difficulty = 1;                  // ?WfcDifficulty 0 / 1 / 2 (GameDifficulty)
@@ -46,6 +57,11 @@ struct CampaignState {
     size_t killsSeen = 0;                // Match::killHistory entries already looked at
     std::vector<std::string> checkpointsReached;   // NotifyReachedCheckpoint (SeqAct_SetActiveCheckpoint), in order
     bool kismetLoaded = false, kismetBegun = false;
+    std::vector<CampaignFactory> factories;   // step 3: the pawn factories
+    std::vector<int> formPending;             // spawned with StartingFormOverride TF_Vehicle (the form change the step after)
+    int enemiesSpawned = 0;
+    std::vector<std::string> trioChassis;     // CampaignCharacters' chassis, trio order
+    std::string humanChassis;                 // the human's current pick (the squad is the trio minus it)
     KismetVM vm;
 };
 
