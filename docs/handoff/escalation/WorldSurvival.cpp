@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 
 namespace game {
@@ -66,6 +67,27 @@ bool SurvivalData::load(const std::string& map, SurvivalData& out) {
             for (size_t k = 0; k < sp.size(); ++k)
                 z.spawnPoints.push_back({sp[k][0].asFloat(0), sp[k][1].asFloat(0), sp[k][2].asFloat(0), sp[k][3].asFloat(0)});
         }
+        const assets::Json& gs = j["generators"];
+        for (size_t i = 0; i < gs.size(); ++i) {
+            const assets::Json& r = gs[i];
+            Generator g;
+            g.id = r["id"].asString(); g.nameKey = r["nameKey"].asString(); g.volume = r["volume"].asString();
+            g.cost = r["cost"].asInt(0); g.drainRate = r["drainRate"].asFloat(0.0f);
+            g.location = {r["location"][0].asFloat(0), r["location"][1].asFloat(0), r["location"][2].asFloat(0)};
+            g.mn = {r["min"][0].asFloat(0), r["min"][1].asFloat(0), r["min"][2].asFloat(0)};
+            g.mx = {r["max"][0].asFloat(0), r["max"][1].asFloat(0), r["max"][2].asFloat(0)};
+            for (size_t k = 0; k < r["planes"].size(); ++k) {
+                const assets::Json& q = r["planes"][k];
+                g.planes.push_back({q[0].asFloat(0), q[1].asFloat(0), q[2].asFloat(0), q[3].asFloat(0)});
+            }
+            for (size_t k = 0; k < r["actions"].size(); ++k) {
+                const assets::Json& a = r["actions"][k];
+                g.actions.push_back({a["op"].asString(), a["class"].asString(), a["target"].asString()});
+            }
+            out.generators.push_back(g);
+        }
+        for (int t = 0; t < kSvTypes; ++t)
+            for (size_t k = 0; k < j["initialSorted"][(size_t)t].size(); ++k) out.initialSorted[(size_t)t].push_back(j["initialSorted"][(size_t)t][k].asString());
         out.ok = !out.waves.empty() && !out.enemies.empty() && !out.zones.empty();
         return out.ok;
     }
@@ -110,7 +132,31 @@ void World::setupSurvival() {
     sv_.universal.assign(nz, 0.0f);
     sv_.current.assign(nz, {});
     sv_.pointIndex.assign(nz, 0);
+    for (size_t z = 0; z < nz; ++z) if (svData_.zones[z].active) sv_.zonesList.push_back((int)z);   // the data is in actor order
     for (int t = 0; t < kSvTypes; ++t) svSort(t);
+    // Economy: power per match player, a pool per generator. The pickup factories a generator unhides start hidden (bought, not placed).
+    sv_.power.assign(match_.players().size(), 0.0f);
+    sv_.pool.assign(svData_.generators.size(), 0.0f);
+    sv_.generatorDone.assign(svData_.generators.size(), 0);
+    sv_.generatorOff.assign(svData_.generators.size(), 0);
+    sv_.nearGenerator.assign(match_.players().size(), -1);
+    sv_.drainFailed.assign(match_.players().size(), 0);
+    sv_.killsSeen = match_.killHistory().size();
+    sv_.allowDrain.assign(match_.players().size(), 0);
+    sv_.prevInteract.assign(match_.players().size(), 0);
+    sv_.drainClock.assign(match_.players().size(), 0.0f);
+    sv_.itemFactory.assign(svData_.generators.size(), -1);
+    sv_.reofferTimer.assign(svData_.generators.size(), 0.0f);
+    for (size_t g = 0; g < svData_.generators.size(); ++g)
+        for (const SurvivalData::Generator::Action& a : svData_.generators[g].actions)
+            if (a.op == "unhide")
+                for (size_t f = 0; f < pickupFactories_.size(); ++f) if (pickupFactories_[f]->name() == a.target) sv_.itemFactory[g] = (int)f;
+    int hidden = 0;
+    for (const SurvivalData::Generator& g : svData_.generators)
+        for (const SurvivalData::Generator::Action& a : g.actions)
+            if (a.op == "unhide")
+                for (PickupFactory* f : pickupFactories_) if (f->name() == a.target) { f->setHidden(true); ++hidden; }
+    LOG_INFO("escalation: %zu generators, %d pickup factories hidden until bought", svData_.generators.size(), hidden);
     sv_.phase = SurvivalState::Phase::PreGame;
     LOG_INFO("escalation: %s: %zu waves, %zu enemy entries, %zu zones, %zu horde slots (team %d vs players' team %d)", mapName_.c_str(),
              svData_.waves.size(), svData_.enemies.size(), nz, sv_.slots.size(), horde, svData_.coopTeam);
@@ -120,12 +166,110 @@ float World::svZoneScore(int z, int t) const {
     return sv_.current[(size_t)z][(size_t)t] + sv_.universal[(size_t)z] + svData_.zones[(size_t)z].self[(size_t)t];
 }
 
-// Sorter for one type: the active zones by GetZoneScore, highest first.
+// The original binary's CRT qsort (MSVC qsort.c: CUTOFF 8 shortsort moving the max to the end, median of three, equal-skipping
+// partition, smaller side first). Unstable but deterministic: equal scores end in the original's order. Port of RE tools/msvc_qsort.py.
+template <class Cmp> static void msvcQsort(std::vector<int>& a, Cmp comp) {
+    const int n = (int)a.size();
+    if (n < 2) return;
+    auto sw = [&](int i, int j) { std::swap(a[(size_t)i], a[(size_t)j]); };
+    auto A = [&](int i) { return a[(size_t)i]; };
+    std::vector<int> lostk, histk;
+    int lo = 0, hi = n - 1;
+    for (;;) {
+        const int size = hi - lo + 1;
+        bool recursed = false;
+        if (size <= 8) {
+            for (int h = hi; h > lo; --h) {
+                int m = lo;
+                for (int p = lo + 1; p <= h; ++p) if (comp(A(p), A(m)) > 0) m = p;
+                sw(m, h);
+            }
+        } else {
+            int mid = lo + size / 2;
+            if (comp(A(lo), A(mid)) > 0) sw(lo, mid);
+            if (comp(A(lo), A(hi)) > 0) sw(lo, hi);
+            if (comp(A(mid), A(hi)) > 0) sw(mid, hi);
+            int loguy = lo, higuy = hi;
+            for (;;) {
+                if (mid > loguy) { ++loguy; while (loguy < mid && comp(A(loguy), A(mid)) <= 0) ++loguy; }
+                if (mid <= loguy) { ++loguy; while (loguy <= hi && comp(A(loguy), A(mid)) <= 0) ++loguy; }
+                --higuy;
+                while (higuy > mid && comp(A(higuy), A(mid)) > 0) --higuy;
+                if (higuy < loguy) break;
+                sw(loguy, higuy);
+                if (mid == higuy) mid = loguy;
+            }
+            ++higuy;
+            if (mid < higuy) { --higuy; while (higuy > mid && comp(A(higuy), A(mid)) == 0) --higuy; }
+            if (mid >= higuy) { --higuy; while (higuy > lo && comp(A(higuy), A(mid)) == 0) --higuy; }
+            if (higuy - lo >= hi - loguy) {
+                if (lo < higuy) { lostk.push_back(lo); histk.push_back(higuy); }
+                if (loguy < hi) { lo = loguy; recursed = true; }
+            } else {
+                if (loguy < hi) { lostk.push_back(loguy); histk.push_back(hi); }
+                if (lo < higuy) { hi = higuy; recursed = true; }
+            }
+        }
+        if (recursed) continue;
+        if (lostk.empty()) return;
+        lo = lostk.back(); lostk.pop_back(); hi = histk.back(); histk.pop_back();
+    }
+}
+
+// HmArraySorter.SortArray for one type: SortedIndices rebuilt from the Zones order, then qsort with CompareZoneScores (descending).
 void World::svSort(int t) {
     std::vector<int>& s = sv_.sorted[(size_t)t];
-    s.clear();
-    for (size_t z = 0; z < svData_.zones.size(); ++z) if (svData_.zones[z].active) s.push_back((int)z);
-    std::stable_sort(s.begin(), s.end(), [&](int a, int b) { return svZoneScore(a, t) > svZoneScore(b, t); });
+    s = sv_.zonesList;
+    msvcQsort(s, [&](int a, int b) { const float x = svZoneScore(a, t), y = svZoneScore(b, t); return x < y ? 1 : (x > y ? -1 : 0); });
+}
+
+// NotifyZoneActivated (AddItem at the end) / NotifyZoneDeactivated (RemoveItem), then SortAllArrays [RE E1 review F2, C].
+void World::svSetZoneActive(int z, bool on) {
+    if (z < 0 || (size_t)z >= svData_.zones.size() || svData_.zones[(size_t)z].active == on) return;
+    svData_.zones[(size_t)z].active = on;
+    if (on) sv_.zonesList.push_back(z);
+    else sv_.zonesList.erase(std::remove(sv_.zonesList.begin(), sv_.zonesList.end(), z), sv_.zonesList.end());
+    for (int k = 0; k < kSvTypes; ++k) svSort(k);
+}
+
+// Interact held this step by match player p (the seat command's held bit online and for remote seats; the local controller offline).
+bool World::svInteractHeld(int p) const {
+    if (p == localPlayer_ && !onlineSeats_) return player_.controller().interactHeld();
+    return (size_t)p < seatInteract_.size() && seatInteract_[(size_t)p] != 0;
+}
+
+// TnSeqEvent_SurvivalGenerator "New Power Level" -> the actions AssetTools resolved. Kinds not built yet (nav cells, dynamic blocking
+// volumes, weapon pickup factories, path nodes: E2b) are counted per purchase.
+void World::svFireGenerator(int gi) {
+    const SurvivalData::Generator& g = svData_.generators[(size_t)gi];
+    int done = 0, pending = 0;
+    bool doors = false;
+    for (const SurvivalData::Generator::Action& a : g.actions) {
+        bool ok = false;
+        if (a.cls.find("PickupFactory") != std::string::npos && a.cls != "TnWeaponPickupFactory" && (a.op == "unhide" || a.op == "hide")) {
+            for (PickupFactory* f : pickupFactories_) if (f->name() == a.target) { f->setHidden(a.op == "hide"); ok = true; }
+        } else if (a.cls == "TnTransformingWorldActor") {
+            const int i = transforming_.find(a.target);
+            if (i >= 0) {
+                if (a.op == "transform" || a.op == "untransform") { transforming_.setDesired((size_t)i, a.op == "transform" ? 1 : 0); doors = true; ok = true; }
+                else if (a.op == "unhide" || a.op == "hide") { transforming_.setShown((size_t)i, a.op == "unhide"); ok = true; }
+                else if (a.op == "collide") { transforming_.setCollide((size_t)i, true); doors = true; ok = true; }
+            }
+        } else if (a.cls == "TnSurvivalZoneVolume") {
+            for (size_t z = 0; z < svData_.zones.size(); ++z)
+                if ("TnSurvivalZoneVolume_" + svData_.zones[z].id == a.target) { svSetZoneActive((int)z, a.op == "on" || (a.op == "toggle" && !svData_.zones[z].active)); ok = true; }
+        } else if (a.cls == "TriggerVolume" && a.op == "off") {   // a generator's own ActivationVolume turned off: no longer usable
+            for (size_t k = 0; k < svData_.generators.size(); ++k) {
+                const std::string& v = svData_.generators[k].volume;
+                if (v.size() >= a.target.size() && v.compare(v.size() - a.target.size(), a.target.size(), a.target) == 0) sv_.generatorOff[k] = 1;
+            }
+            ok = true;
+        }
+        ok ? ++done : ++pending;
+    }
+    if (doors && botNav_.valid()) { transforming_.applyNavBlocks(botNav_); botNav_.recomputePieces(); }   // an opened doorway opens the nav
+    ++sv_.purchases;
+    LOG_INFO("escalation: generator %s (%s, %d) bought: %d actions applied, %d not built yet (E2b)", g.id.c_str(), g.nameKey.c_str(), g.cost, done, pending);
 }
 
 // TnSurvivalZoneVolume.Touch (sign +1) / UnTouch (-1) by a player pawn: UniversalScoreAdjustment -= 999 (OccupiedZoneScore),
@@ -161,6 +305,10 @@ bool World::svSpawn(int slot) {
         }
         const int z = sorted[(size_t)pick];
         const SurvivalData::Zone& zone = svData_.zones[(size_t)z];
+        static const bool slog = std::getenv("WFC_ESCLOG") != nullptr;   // DEV: every spawn try
+        if (slog) LOG_INFO("ESCLOG try %d type %d zone %s score %.0f points %d (top: %s %.0f / %s %.0f / %s %.0f)", attempt, t, zone.id.c_str(), svZoneScore(z, t), zone.points,
+                           svData_.zones[(size_t)sorted[0]].id.c_str(), svZoneScore(sorted[0], t), top > 1 ? svData_.zones[(size_t)sorted[1]].id.c_str() : "-",
+                           top > 1 ? svZoneScore(sorted[1], t) : 0.0f, top > 2 ? svData_.zones[(size_t)sorted[2]].id.c_str() : "-", top > 2 ? svZoneScore(sorted[2], t) : 0.0f);
         if (zone.points <= 0) continue;   // GetSpawnPoint: none (an error log in the original), the try is spent
         const int idx = sv_.pointIndex[(size_t)z] % zone.points;
         sv_.pointIndex[(size_t)z] = (idx + 1) % zone.points;
@@ -175,7 +323,10 @@ bool World::svSpawn(int slot) {
             at = {cx + rad * std::cos(a), zone.mx.y, cz + rad * std::sin(a)};
         }
         float gy = 0.0f; core::Vec3 gn;
-        if (!collision_.valid() || !collision_.groundHeight(at.x, at.z, at.y + 0.5f, 0.0f, gy, gn)) continue;
+        if (!collision_.valid() || !collision_.groundHeight(at.x, at.z, at.y + 0.5f, 0.0f, gy, gn)) {
+            if (slog) LOG_INFO("ESCLOG   point %d (%.2f %.2f %.2f): no ground below", idx, at.x, at.y, at.z);
+            continue;
+        }
         if ((size_t)idx >= zone.spawnPoints.size() && gy < zone.mn.y - 2.0f) continue;   // PROV point fell out of the zone
         at.y = gy;
         bool clear = true;   // IsSafeSpawnLocation (capsule): no live pawn within two radii + 1 m while the cylinders overlap in height
@@ -185,7 +336,7 @@ bool World::svSpawn(int slot) {
             const core::Vec3 d = c->position() - at;
             if (std::fabs(d.y) < 4.0f && std::sqrt(d.x * d.x + d.z * d.z) < 2.0f + c->cylinderRadius(c->moveForm()) + 1.0f) clear = false;
         }
-        if (!clear) continue;
+        if (!clear) { if (slog) LOG_INFO("ESCLOG   point %d (%.2f %.2f %.2f): occupied", idx, at.x, at.y, at.z); continue; }
         // Face the nearest player (PROV: the point's own rotation once the authored points land).
         if ((size_t)idx >= zone.spawnPoints.size()) {
             float best = 1e9f;
@@ -221,8 +372,63 @@ bool World::svSpawn(int slot) {
 void World::tickSurvival(float dt) {
     if (sv_.phase == SurvivalState::Phase::Off || sv_.phase == SurvivalState::Phase::GameOver) return;
     if (match_.state() == Match::State::MatchOver) { sv_.phase = SurvivalState::Phase::GameOver; return; }
+    // TnSurvivalGame.ElapsedTime counts from level start (the global Tick, PendingMatch included) [RE E1 review F1].
+    if (sv_.phase == SurvivalState::Phase::PreGame) sv_.phaseTime += dt;
     if (match_.state() != Match::State::InProgress) return;
     const std::vector<MatchPlayer>& P = match_.players();
+    if (sv_.power.size() < P.size()) {
+        sv_.power.resize(P.size(), 0.0f); sv_.nearGenerator.resize(P.size(), -1); sv_.drainFailed.resize(P.size(), 0);
+        sv_.allowDrain.resize(P.size(), 0); sv_.prevInteract.resize(P.size(), 0); sv_.drainClock.resize(P.size(), 0.0f);
+    }
+    // Item generators recharge (map Kismet per generator): PickupStatusChange Taken -> Hide + ModifySurvivalGeneratorPower(-cost) ->
+    // Delay 2 s -> the volume Turn On; one purchase per charge [RE E2 §1].
+    for (size_t g = 0; g < svData_.generators.size(); ++g) {
+        const int f = sv_.itemFactory[g];
+        if (f >= 0 && sv_.generatorDone[g] && !pickupFactories_[(size_t)f]->hidden() && !pickupFactories_[(size_t)f]->available()) {
+            pickupFactories_[(size_t)f]->setHidden(true);
+            sv_.pool[g] = 0.0f; sv_.generatorDone[g] = 0;
+            sv_.reofferTimer[g] = 2.0f;
+        }
+        if (sv_.reofferTimer[g] > 0.0f && (sv_.reofferTimer[g] -= dt) <= 0.0f) { sv_.reofferTimer[g] = 0.0f; sv_.generatorOff[g] = 0; }
+    }
+    // Killed: the killer's PRI gains the enemy's PowerReward (players only; clamped 0..9999).
+    for (const auto& k = match_.killHistory(); sv_.killsSeen < k.size(); ++sv_.killsSeen) {
+        const KillFeedEntry& e = k[sv_.killsSeen];
+        if (e.killer < 0 || (size_t)e.killer >= P.size() || P[(size_t)e.killer].kind == ParticipantKind::Bot) continue;
+        for (const SurvivalState::Slot& s : sv_.slots)
+            if (s.player == e.victim) sv_.power[(size_t)e.killer] = std::min(9999.0f, sv_.power[(size_t)e.killer] + svData_.enemies[(size_t)s.enemy].power);
+    }
+    // Generators (per occupying player pawn, so two players add up, each paying from their own power): _AllowDraining is reset on
+    // entering the ActivationVolume, set by an Interact press inside, cleared on release; while set, each 30 Hz tick drains
+    // int(max(1, tick x DrainRate)) capped at the remaining cost and the player's power into the shared pool. 0 drained: the fail
+    // sound. At the cost the generator fires its one level [RE E2 §3-§4].
+    for (size_t q = 0; q < P.size(); ++q) {
+        const int was = sv_.nearGenerator[q];
+        sv_.nearGenerator[q] = -1; sv_.drainFailed[q] = 0;
+        const bool held = P[q].kind != ParticipantKind::Bot && svInteractHeld((int)q);
+        const bool press = held && !sv_.prevInteract[q];
+        sv_.prevInteract[q] = held ? 1 : 0;
+        if (P[q].kind == ParticipantKind::Bot) continue;
+        const Character* c = participantPawn((int)q);
+        if (!c) { sv_.allowDrain[q] = 0; continue; }
+        for (size_t g = 0; g < svData_.generators.size(); ++g)
+            if (!sv_.generatorDone[g] && !sv_.generatorOff[g] && svData_.generators[g].contains(c->position())) { sv_.nearGenerator[q] = (int)g; break; }
+        const int g = sv_.nearGenerator[q];
+        if (g != was) { sv_.allowDrain[q] = 0; sv_.drainClock[q] = 0.0f; }   // entering (or leaving): _AllowDraining = false
+        if (g < 0) continue;
+        if (press) sv_.allowDrain[q] = 1;
+        if (!held) sv_.allowDrain[q] = 0;
+        if (!sv_.allowDrain[q]) continue;
+        const SurvivalData::Generator& G = svData_.generators[(size_t)g];
+        const float rate = G.drainRate > 0.0f ? G.drainRate : kSvDefaultDrainRate;
+        for (sv_.drainClock[q] += dt; sv_.drainClock[q] >= kSvDrainTick - 1e-6f && !sv_.generatorDone[(size_t)g]; sv_.drainClock[q] -= kSvDrainTick) {
+            const float need = (float)G.cost - sv_.pool[(size_t)g];
+            const float amt = std::min({std::floor(std::max(1.0f, kSvDrainTick * rate)), need, std::floor(sv_.power[q])});
+            if (amt <= 0.0f) { sv_.drainFailed[q] = 1; break; }   // DrainingFailedSound, beam off
+            sv_.power[q] -= amt; sv_.pool[(size_t)g] += amt;
+            if (sv_.pool[(size_t)g] >= (float)G.cost) { sv_.generatorDone[(size_t)g] = 1; svFireGenerator(g); }
+        }
+    }
     // Zone touches by player pawns (TnPlayerPawn only; a dead pawn untouches).
     if (sv_.touching.size() < P.size()) sv_.touching.resize(P.size());
     for (size_t q = 0; q < P.size(); ++q) {
@@ -255,12 +461,12 @@ void World::tickSurvival(float dt) {
         sv_.phase = SurvivalState::Phase::InWave;
         sv_.phaseTime = 0.0f;
         sv_.filling = true; sv_.fillTimer = svData_.fillWaveReCheckTime;   // FillOutWave: the first enemy at once
+        ++sv_.roundBegins;   // TnSeqEvent_SurvivalEvents "Round Begin" (ActivateSequenceEvent 1) [RE E1 review F3]
         LOG_INFO("escalation: wave %d begins (row %d: budget %d, alive %d, deficit %d)", sv_.displayWave + 1, sv_.currentWave,
                  svData_.waves[(size_t)sv_.currentWave].budget, svData_.waves[(size_t)sv_.currentWave].budgetAlive, svData_.waves[(size_t)sv_.currentWave].deficit);
     };
     switch (sv_.phase) {
         case SurvivalState::Phase::PreGame:
-            sv_.phaseTime += dt;
             if (humansSpawned() && sv_.phaseTime >= svData_.preGameTime) enterWave();
             break;
         case SurvivalState::Phase::BetweenWaves:
@@ -271,7 +477,14 @@ void World::tickSurvival(float dt) {
             bool anyHuman = false, anyAlive = false;
             for (const MatchPlayer& m : P) if (m.kind != ParticipantKind::Bot) { anyHuman = true; anyAlive = anyAlive || m.alive; }
             if (anyHuman && !anyAlive) {   // CheckLivingPlayers: every player dead -> EndGame("AllDead")
-                LOG_INFO("escalation: game over at wave %d (TnSurvivalGameOverMessage %d)", sv_.displayWave + 1, sv_.displayWave + 1);
+                std::string last = "none";   // the last player death (kills are not logged elsewhere)
+                for (auto it = match_.killHistory().rbegin(); it != match_.killHistory().rend(); ++it)
+                    if (it->victim >= 0 && (size_t)it->victim < P.size() && P[(size_t)it->victim].kind != ParticipantKind::Bot) {
+                        last = P[(size_t)it->victim].name + " by " + (it->killer >= 0 && (size_t)it->killer < P.size() ? P[(size_t)it->killer].name : std::string("world")) +
+                               " (" + it->damageType + ") at " + std::to_string((int)it->time) + " s";
+                        break;
+                    }
+                LOG_INFO("escalation: game over at wave %d (TnSurvivalGameOverMessage %d); last player death: %s", sv_.displayWave + 1, sv_.displayWave + 1, last.c_str());
                 match_.endSurvival("AllDead");
                 sv_.phase = SurvivalState::Phase::GameOver;
                 break;
@@ -279,6 +492,7 @@ void World::tickSurvival(float dt) {
             const SurvivalData::Wave& w = svData_.waves[(size_t)sv_.currentWave];
             if (sv_.usedThisWave >= w.budget && alive == 0) {   // the budget is spent and the horde is dead -> BetweenWaves
                 sv_.phase = SurvivalState::Phase::BetweenWaves;
+                ++sv_.roundEnds;   // "Round End" (ActivateSequenceEvent 0)
                 sv_.phaseTime = 0.0f; sv_.filling = false;
                 // RoundEnded: the respawn helper respawns every dead player (revive of the living: E4).
                 for (size_t q = 0; q < P.size(); ++q)
