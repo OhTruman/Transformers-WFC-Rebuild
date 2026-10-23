@@ -1,6 +1,6 @@
 diff -ru a/src/render/d3d12/D3D12RtBridge.cpp b/src/render/d3d12/D3D12RtBridge.cpp
---- a/src/render/d3d12/D3D12RtBridge.cpp	2026-10-23 08:15:34.731134500 -0500
-+++ b/src/render/d3d12/D3D12RtBridge.cpp	2026-10-23 08:15:34.829471600 -0500
+--- a/src/render/d3d12/D3D12RtBridge.cpp	2026-10-23 08:18:39.702504200 -0500
++++ b/src/render/d3d12/D3D12RtBridge.cpp	2026-10-23 08:18:39.800841100 -0500
 @@ -378,6 +378,32 @@
          return true;
  #endif
@@ -51,8 +51,8 @@ diff -ru a/src/render/d3d12/D3D12RtBridge.cpp b/src/render/d3d12/D3D12RtBridge.c
  bool rtBridgeGiSetup(const RtGiSetup&, std::vector<GLuint>& glTex) { glTex.clear(); return false; }
  double rtBridgeVramMB() { return 0.0; }
 diff -ru a/src/render/d3d12/D3D12RtBridge.h b/src/render/d3d12/D3D12RtBridge.h
---- a/src/render/d3d12/D3D12RtBridge.h	2026-10-23 08:15:34.761237700 -0500
-+++ b/src/render/d3d12/D3D12RtBridge.h	2026-10-23 08:15:34.836495700 -0500
+--- a/src/render/d3d12/D3D12RtBridge.h	2026-10-23 08:18:39.732607200 -0500
++++ b/src/render/d3d12/D3D12RtBridge.h	2026-10-23 08:18:39.807865300 -0500
 @@ -92,6 +92,7 @@
  };
  bool rtBridgeAddHitData(const RtHitData& d);
@@ -62,8 +62,8 @@ diff -ru a/src/render/d3d12/D3D12RtBridge.h b/src/render/d3d12/D3D12RtBridge.h
  // GL buffers written before the signal that D3D12 reads (Systems' skinned positions): signalled and reacquired with
  // the targets on every round trip until changed (n = 0 clears)
 diff -ru a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
---- a/src/render/gl/GLRenderer.cpp	2026-10-23 08:15:34.547003500 -0500
-+++ b/src/render/gl/GLRenderer.cpp	2026-10-23 08:15:34.843017900 -0500
+--- a/src/render/gl/GLRenderer.cpp	2026-10-23 08:18:39.519878300 -0500
++++ b/src/render/gl/GLRenderer.cpp	2026-10-23 08:18:39.814889100 -0500
 @@ -403,7 +403,8 @@
          if (wfc_.active() && !chapterMeshes_.empty() && chapterFrame_ != wfc_.frameNumber()) {
              chapterFrame_ = wfc_.frameNumber();
@@ -118,8 +118,8 @@ diff -ru a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
      bool frameGenerationAvailable() const override { return frameGenerationRuntimeShipped(); }
      bool frameGenerationActive() const override { return framegenActive(); }
 diff -ru a/src/render/gl/WfcCampaignPost.cpp b/src/render/gl/WfcCampaignPost.cpp
---- a/src/render/gl/WfcCampaignPost.cpp	2026-10-23 08:15:34.700028000 -0500
-+++ b/src/render/gl/WfcCampaignPost.cpp	2026-10-23 08:15:34.849038500 -0500
+--- a/src/render/gl/WfcCampaignPost.cpp	2026-10-23 08:18:39.672902800 -0500
++++ b/src/render/gl/WfcCampaignPost.cpp	2026-10-23 08:18:39.821913200 -0500
 @@ -92,7 +92,7 @@
      parsePost(J["world_default"], ppWorld_.s);
      interpOf(J["world_default"], ppWorld_.interp);
@@ -130,8 +130,8 @@ diff -ru a/src/render/gl/WfcCampaignPost.cpp b/src/render/gl/WfcCampaignPost.cpp
      }
      const assets::Json& V = J["volumes"];
 diff -ru a/src/render/gl/WfcMovers.cpp b/src/render/gl/WfcMovers.cpp
---- a/src/render/gl/WfcMovers.cpp	2026-10-23 08:15:34.640825000 -0500
-+++ b/src/render/gl/WfcMovers.cpp	2026-10-23 08:15:34.855561000 -0500
+--- a/src/render/gl/WfcMovers.cpp	2026-10-23 08:18:39.613699900 -0500
++++ b/src/render/gl/WfcMovers.cpp	2026-10-23 08:18:39.829941000 -0500
 @@ -405,5 +405,35 @@
      LOG_INFO("wfc: scene actors: %d poses, %d PHYS_Rotating, %d authored-hidden", poses, rot, hid);
  }
@@ -169,8 +169,8 @@ diff -ru a/src/render/gl/WfcMovers.cpp b/src/render/gl/WfcMovers.cpp
  } // namespace wfc
  } // namespace render
 diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
---- a/src/render/gl/WfcPipeline.cpp	2026-10-23 08:15:34.580116900 -0500
-+++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 08:15:34.863588700 -0500
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-23 08:18:39.553493600 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 08:18:39.838470500 -0500
 @@ -5164,14 +5164,14 @@
      drawSubs(g, model, !g.world);
      if (g.drawsBsp && bspMesh_ >= 0 && bspMesh_ != id) drawSubs(meshes_[(size_t)bspMesh_], model, false);
@@ -228,8 +228,8 @@ diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
      LOG_INFO("wfc: sublevel %s merged: +%zu materials, +%zu lights, +%zu lightmapped components, +%zu FX instances, BSP %s, decals %s",
               unit.c_str(), mats_.size() - mats0, lights_.size() - lights0, lightmaps_.size() - lm0, fxInstances_.size() - fx0,
 diff -ru a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
---- a/src/render/gl/WfcPipeline.h	2026-10-23 08:15:34.611223800 -0500
-+++ b/src/render/gl/WfcPipeline.h	2026-10-23 08:15:34.870612500 -0500
+--- a/src/render/gl/WfcPipeline.h	2026-10-23 08:18:39.583596600 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-23 08:18:39.847501100 -0500
 @@ -202,6 +202,14 @@
      // (chapter loader) the RT data (masked atlas, reflection hits, RT GI) waits for every unit: begin before the units load,
      // end with their world meshes - each one (and each unit's BSP) joins the RT static world, then the RT data is built once
@@ -276,8 +276,8 @@ diff -ru a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
      bool bspHosted_ = false;                         // (chapter loader) a world mesh already draws the BSP / decals
      bool chapterDefer_ = false;                      // (chapter loader) units still loading: the RT data waits
 diff -ru a/src/render/gl/WfcRt.cpp b/src/render/gl/WfcRt.cpp
---- a/src/render/gl/WfcRt.cpp	2026-10-23 08:15:34.669925000 -0500
-+++ b/src/render/gl/WfcRt.cpp	2026-10-23 08:15:34.878138200 -0500
+--- a/src/render/gl/WfcRt.cpp	2026-10-23 08:18:39.642297600 -0500
++++ b/src/render/gl/WfcRt.cpp	2026-10-23 08:18:39.855528700 -0500
 @@ -318,7 +318,7 @@
          }
      }
