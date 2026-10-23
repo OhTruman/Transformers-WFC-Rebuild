@@ -1,0 +1,196 @@
+diff --git a/src/game/Campaign.h b/src/game/Campaign.h
+index 9c18a8b8..a008b773 100644
+--- a/src/game/Campaign.h
++++ b/src/game/Campaign.h
+@@ -48,7 +48,10 @@ struct CampaignMatinee {
+     struct Group { std::string name; bool director = false; std::map<std::string, std::vector<std::string>> actors; std::vector<Track> tracks; };
+     float length = 0.0f;
+     std::vector<Group> groups;
++    std::string interpData;   // the InterpData path (the pawn-group key)
+ };
++// A matinee group bound to characters at runtime (CHARACTER:<ROBODEF>): their chassis and the anim file of each clip.
++struct CampaignPawnGroup { std::vector<std::string> chassis; std::map<std::string, std::string> clipFile; };
+ // An InterpActor of the chapter moved by a matinee: its moving collision set and its pose (glTF metres).
+ struct CampaignMover {
+     std::string name;
+@@ -119,7 +122,7 @@ struct CampaignState {
+     std::map<int, Objective> objectives;      // step 4: Kismet AI objectives per match player (MoveToActor / SetMoveToObjective)
+     std::map<std::string, core::Vec3> actorPos;   // actor name -> location (navigation.json, actors.json)
+     std::vector<CampaignMatinee> matinees;    // step 5: Matinee
+-    struct Interp { int matinee = -1, op = -1; std::string action; float rate = 1.0f, dir = 1.0f, pos = 0.0f; bool looping = false, rewindOnPlay = false, playing = false; bool viewing = false; float lastFade = 0.0f; };
++    struct Interp { int matinee = -1, op = -1; std::string action; float rate = 1.0f, dir = 1.0f, pos = 0.0f; bool looping = false, rewindOnPlay = false, playing = false; bool viewing = false; float lastFade = 0.0f; std::vector<int> cinePawns; };
+     std::vector<Interp> interps;              // one per SeqAct_Interp op
+     bool viewOn = false;                      // the CinematicView sent active
+     int cineOp = -1, cineViewOp = -1;         // the op driving the local camera / the CinematicView
+diff --git a/src/game/Character.cpp b/src/game/Character.cpp
+index 60d81457..93167a18 100644
+--- a/src/game/Character.cpp
++++ b/src/game/Character.cpp
+@@ -559,6 +559,13 @@ void Character::updateAnimation(float dt) {
+     struct TraceEnd { Character* c; ~TraceEnd() { c->endAnimTrace(); } } traceEnd{this};   // every return path
+     if (robotModel_ && !robotRig_.built && robotModel_->valid()) buildRobotRig(*robotModel_);
+     if (vehicleModel_ && !vehicleRig_.built && vehicleModel_->valid()) buildVehicleRig(*vehicleModel_);
++    // A campaign matinee drives this pawn (AnimControl on a CHARACTER group): its clip is the pose.
++    if (cineClip_ >= 0 && form_ == Form::Robot && robotModel_ && cineClip_ < (int)robotModel_->clips.size() && trans_ == Transition::None) {
++        animName_ = robotModel_->clips[(size_t)cineClip_].name;
++        assets::samplePose(*robotModel_, cineClip_, cineTime_, cineLoop_, basePose_);
++        finalizePose(*robotModel_, dt);
++        return;
++    }
+ 
+     // Advance the active clip's time (reset to 0 by beginBase on a change). A transformation plays at its
+     // Rate (1; 4 when downed), so the authored notify times are reached at t/Rate [CONF native M03 P10].
+diff --git a/src/game/Character.h b/src/game/Character.h
+index 4e0b477b..2625fc58 100644
+--- a/src/game/Character.h
++++ b/src/game/Character.h
+@@ -66,6 +66,9 @@ public:
+ 
+     // Transformation: plays paired transform clips with a mid-sequence skeleton handoff.
+     void beginTransform();
++    // Campaign matinee AnimControl: hold the robot model's clip `clip` at `time` as the whole pose (locomotion off) until cleared.
++    void setCineClip(int clip, float time, bool loop) { cineClip_ = clip; cineTime_ = time; cineLoop_ = loop; }
++    void clearCineClip() { cineClip_ = -1; }
+     bool isTransforming() const { return trans_ != Transition::None; }
+ 
+     // TnPawn speed multipliers (SetSpeedMultiplier / UpdateSpeeds): GroundSpeed/AirSpeed scale.
+@@ -694,6 +697,7 @@ private:
+     void beginBase(const assets::SkinnedModel& mdl, int key, float blendOnChange);
+     void finishBaseBlend(float dt);
+     void playClip(const assets::SkinnedModel& mdl, int clip, bool loop, float dt, float blendOnChange);
++    int cineClip_ = -1; float cineTime_ = 0.0f; bool cineLoop_ = false;   // a campaign matinee AnimControl (robot-model clip)
+     void finalizePose(const assets::SkinnedModel& mdl, float dt);
+     void vehicleHoverBlend();
+ 
+diff --git a/src/game/World.h b/src/game/World.h
+index 88200ca3..a653269e 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1470,6 +1470,9 @@ private:
+     void cpMatineeEnd(CampaignState::Interp& in);
+     void cpFlushCinematicView();
+     void cpLoadSkeletal();
++    void cpLoadPawnGroups();
++    void cpPlayPawnClip(CampaignState::Interp& in, const CampaignPawnGroup& g, const std::string& clip, float time, bool loop);
++    std::map<std::string, CampaignPawnGroup> cpPawnGroups_;   // "<InterpData>|<group>" -> its characters
+     void cpDrawSkeletal(render::IRenderer& r) const;
+     mutable std::map<std::string, CampaignSkel> cpSkel_;   // matinee skeletal actors (lazily loaded at their first draw)
+     std::vector<CampaignMover> cpMovers_;         // the chapter's InterpActors (kept across launches: loaded with the map)
+diff --git a/src/game/WorldCampaign.cpp b/src/game/WorldCampaign.cpp
+index 527b5424..52c601d9 100644
+--- a/src/game/WorldCampaign.cpp
++++ b/src/game/WorldCampaign.cpp
+@@ -240,6 +240,7 @@ void World::setupCampaign(const MatchLaunch& l) {
+         cpLoadActors();
+         cpLoadMatinees();
+         cpLoadSkeletal();
++        cpLoadPawnGroups();
+         cpLoadTouches();
+         cpLoadPlacedDestructibles();
+         cpBindMoverNav();   // (the nav is loaded by addBots above)
+diff --git a/src/game/WorldCampaignMatinee.cpp b/src/game/WorldCampaignMatinee.cpp
+index 461592d4..dc383a75 100644
+--- a/src/game/WorldCampaignMatinee.cpp
++++ b/src/game/WorldCampaignMatinee.cpp
+@@ -153,6 +153,7 @@ void World::cpLoadMatinees() {
+         const assets::Json& m = ms[i];
+         CampaignMatinee M;
+         M.length = m["length"].asFloat(0.0f);
++        M.interpData = m["interp_data"].asString();
+         for (size_t g = 0; g < m["groups"].size(); ++g) {
+             const assets::Json& G = m["groups"][g];
+             CampaignMatinee::Group grp;
+@@ -160,7 +161,10 @@ void World::cpLoadMatinees() {
+             grp.director = G["class"].asString() == "InterpGroupDirector";
+             for (const auto& kv : G["bound"].obj) {
+                 std::vector<std::string> as;
+-                for (size_t a = 0; a < kv.second["actors"].size(); ++a) as.push_back(shortName(kv.second["actors"][a].asString()));
++                for (size_t a = 0; a < kv.second["actors"].size(); ++a) {   // a runtime character binding stays "CHARACTER:<ROBODEF>"
++                    const std::string full = kv.second["actors"][a].asString();
++                    as.push_back(full.rfind("CHARACTER:", 0) == 0 ? full : shortName(full));
++                }
+                 grp.actors[kv.first] = as;
+             }
+             for (size_t t = 0; t < G["tracks"].size(); ++t) {
+@@ -277,6 +281,14 @@ void World::cpMatineeApply(CampaignState::Interp& in, float from, float to) {
+             } else if (t.kind == 2) {
+                 for (const auto& e : t.events) if (e.first <= to) camGroup = e.second;
+             } else if (t.kind == 3) { float v[3]; evalKeys(t.curve, to, v); fade = v[0]; haveFade = true; }
++            else if (t.kind == 5 && (act == g.actors.end() || act->second.empty() || act->second[0].rfind("CHARACTER:", 0) == 0)) {   // AnimControl on a pawn group (CHARACTER:<ROBODEF>)
++                int k = -1;
++                for (size_t e = 0; e < t.events.size(); ++e) if (t.events[e].first <= to) k = (int)e;
++                auto pg = cpPawnGroups_.find(M.interpData + "|" + g.name);
++                if (k >= 0 && pg != cpPawnGroups_.end())
++                    cpPlayPawnClip(in, pg->second, t.events[(size_t)k].second,
++                                   (to - t.events[(size_t)k].first) * t.animRate[(size_t)k] + t.animOffset[(size_t)k], t.animLoop[(size_t)k] != 0);
++            }
+             else if (t.kind == 5 && act != g.actors.end()) {   // AnimControl: the clip of the last key at or before `to`
+                 int k = -1;
+                 for (size_t e = 0; e < t.events.size(); ++e) if (t.events[e].first <= to) k = (int)e;
+@@ -357,6 +369,8 @@ void World::cpFlushCinematicView() {
+ void World::cpMatineeEnd(CampaignState::Interp& in) {
+     LOG_INFO("campaign: matinee %s ends at %.2f s", shortName(in.action).c_str(), in.pos);
+     in.viewing = false;
++    for (int p : in.cinePawns) if (Character* c = participantPawnMutable(p)) c->clearCineClip();   // the pawns go back to their own animation
++    in.cinePawns.clear();
+     if (cp_.cineOp == in.op) {
+         player_.controller().clearSpectatorView();
+         if (renderer_) renderer_->notifyCameraCut("matinee end");
+@@ -408,3 +422,57 @@ void World::cpDrawSkeletal(render::IRenderer& r) const {
+ }
+ 
+ } // namespace game
++
++namespace game {
++
++// The pawn groups of the chapter's matinees (matinee_skeletal.json pawn_groups: CHARACTER:<ROBODEF> bindings + clip -> anim file) and
++// the ROBODEF -> chassis map (roster_package.json chassis[].robot.definition).
++void World::cpLoadPawnGroups() {
++    cpPawnGroups_.clear();
++    assets::Json j;
++    if (!readJ(cpChapter_.dir + "matinee_skeletal.json", j)) return;
++    static std::map<std::string, std::string> robodefChassis;
++    if (robodefChassis.empty()) {
++        assets::Json r;
++        const char* mr = std::getenv("WFC_MANIFESTS");
++        if (readJ(std::string(mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests") + "/mp_content/roster_package.json", r))
++            for (const auto& kv : r["chassis"].obj) robodefChassis[kv.second["robot"]["definition"].asString()] = kv.first;
++    }
++    const assets::Json& gs = j["pawn_groups"];
++    for (size_t i = 0; i < gs.size(); ++i) {
++        const assets::Json& g = gs[i];
++        CampaignPawnGroup P;
++        for (size_t b = 0; b < g["bound"].size(); ++b) {
++            const std::string s = g["bound"][b].asString();
++            if (s.rfind("CHARACTER:", 0) == 0) { auto it = robodefChassis.find(s.substr(10)); if (it != robodefChassis.end()) P.chassis.push_back(it->second); }
++        }
++        for (const auto& kv : g["clip_map"].obj) P.clipFile[kv.first] = kv.second.asString();
++        if (!P.chassis.empty()) cpPawnGroups_[g["interp_data"].asString() + "|" + g["group"].asString()] = P;
++    }
++    LOG_INFO("campaign: %zu matinee pawn groups bound to characters", cpPawnGroups_.size());
++}
++
++// Play `clip` at `time` on every participant of the group's characters (the human or the squad holding that chassis): the clip is
++// appended to the chassis' robot model from its anim file once, then the pawn's forced-clip slot holds it while the matinee drives it.
++void World::cpPlayPawnClip(CampaignState::Interp& in, const CampaignPawnGroup& g, const std::string& clip, float time, bool loop) {
++    for (size_t q = 0; q < match_.players().size(); ++q) {
++        const std::string ch = resolveChassis(match_.players()[q].selection, match_.faction((int)q));
++        if (std::find(g.chassis.begin(), g.chassis.end(), ch) == g.chassis.end()) continue;
++        Character* c = participantPawnMutable((int)q);
++        const ChassisAssets* ca = chassisAssets(ch);
++        if (!c || !ca || !ca->ok) continue;
++        assets::SkinnedModel& model = const_cast<assets::SkinnedModel&>(ca->robot);
++        int ci = model.clipByName(clip);
++        if (ci < 0) {
++            auto f = g.clipFile.find(clip);
++            if (f != g.clipFile.end()) assets::loadAnimationsByName("F:/Transformers Rebuild/ExtractedAssets/" + f->second, model);
++            ci = model.clipByName(clip);
++            LOG_INFO("campaign: matinee clip %s on %s (p%zu): %s", clip.c_str(), ch.c_str(), q, ci >= 0 ? "loaded" : "NOT FOUND");
++            if (ci < 0) continue;
++        }
++        c->setCineClip(ci, time, loop);
++        if (std::find(in.cinePawns.begin(), in.cinePawns.end(), (int)q) == in.cinePawns.end()) in.cinePawns.push_back((int)q);
++    }
++}
++
++} // namespace game

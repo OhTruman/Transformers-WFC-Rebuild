@@ -1446,6 +1446,7 @@ private:
     void cpLoadTouches();
     int cpSpawnDestructible(const std::string& blueprint, const std::string& name, const core::Vec3& at, float yawDeg);   // WorldCampaignDestructibles.cpp
     void cpDesBounds(int i);
+    void cpDesCollide(int i);
     void cpDesTransition(int i, size_t piece, int to);
     void cpDamageDes(int i, float amount, int instigator, const std::string& type);
     int cpDesRayHit(const core::Vec3& o, const core::Vec3& dir, float range, float& t) const;
@@ -1469,6 +1470,9 @@ private:
     void cpMatineeEnd(CampaignState::Interp& in);
     void cpFlushCinematicView();
     void cpLoadSkeletal();
+    void cpLoadPawnGroups();
+    void cpPlayPawnClip(CampaignState::Interp& in, const CampaignPawnGroup& g, const std::string& clip, float time, bool loop);
+    std::map<std::string, CampaignPawnGroup> cpPawnGroups_;   // "<InterpData>|<group>" -> its characters
     void cpDrawSkeletal(render::IRenderer& r) const;
     mutable std::map<std::string, CampaignSkel> cpSkel_;   // matinee skeletal actors (lazily loaded at their first draw)
     std::vector<CampaignMover> cpMovers_;         // the chapter's InterpActors (kept across launches: loaded with the map)

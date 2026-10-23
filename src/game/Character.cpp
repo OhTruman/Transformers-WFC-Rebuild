@@ -559,6 +559,13 @@ void Character::updateAnimation(float dt) {
     struct TraceEnd { Character* c; ~TraceEnd() { c->endAnimTrace(); } } traceEnd{this};   // every return path
     if (robotModel_ && !robotRig_.built && robotModel_->valid()) buildRobotRig(*robotModel_);
     if (vehicleModel_ && !vehicleRig_.built && vehicleModel_->valid()) buildVehicleRig(*vehicleModel_);
+    // A campaign matinee drives this pawn (AnimControl on a CHARACTER group): its clip is the pose.
+    if (cineClip_ >= 0 && form_ == Form::Robot && robotModel_ && cineClip_ < (int)robotModel_->clips.size() && trans_ == Transition::None) {
+        animName_ = robotModel_->clips[(size_t)cineClip_].name;
+        assets::samplePose(*robotModel_, cineClip_, cineTime_, cineLoop_, basePose_);
+        finalizePose(*robotModel_, dt);
+        return;
+    }
 
     // Advance the active clip's time (reset to 0 by beginBase on a change). A transformation plays at its
     // Rate (1; 4 when downed), so the authored notify times are reached at t/Rate [CONF native M03 P10].

@@ -66,6 +66,9 @@ public:
 
     // Transformation: plays paired transform clips with a mid-sequence skeleton handoff.
     void beginTransform();
+    // Campaign matinee AnimControl: hold the robot model's clip `clip` at `time` as the whole pose (locomotion off) until cleared.
+    void setCineClip(int clip, float time, bool loop) { cineClip_ = clip; cineTime_ = time; cineLoop_ = loop; }
+    void clearCineClip() { cineClip_ = -1; }
     bool isTransforming() const { return trans_ != Transition::None; }
 
     // TnPawn speed multipliers (SetSpeedMultiplier / UpdateSpeeds): GroundSpeed/AirSpeed scale.
@@ -694,6 +697,7 @@ private:
     void beginBase(const assets::SkinnedModel& mdl, int key, float blendOnChange);
     void finishBaseBlend(float dt);
     void playClip(const assets::SkinnedModel& mdl, int clip, bool loop, float dt, float blendOnChange);
+    int cineClip_ = -1; float cineTime_ = 0.0f; bool cineLoop_ = false;   // a campaign matinee AnimControl (robot-model clip)
     void finalizePose(const assets::SkinnedModel& mdl, float dt);
     void vehicleHoverBlend();
 

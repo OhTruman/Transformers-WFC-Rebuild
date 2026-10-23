@@ -48,7 +48,10 @@ struct CampaignMatinee {
     struct Group { std::string name; bool director = false; std::map<std::string, std::vector<std::string>> actors; std::vector<Track> tracks; };
     float length = 0.0f;
     std::vector<Group> groups;
+    std::string interpData;   // the InterpData path (the pawn-group key)
 };
+// A matinee group bound to characters at runtime (CHARACTER:<ROBODEF>): their chassis and the anim file of each clip.
+struct CampaignPawnGroup { std::vector<std::string> chassis; std::map<std::string, std::string> clipFile; };
 // An InterpActor of the chapter moved by a matinee: its moving collision set and its pose (glTF metres).
 struct CampaignMover {
     std::string name;
@@ -61,11 +64,14 @@ struct CampaignMover {
 
 // A campaign destructible (an HmDestructible blueprint instance): its pieces' current states, health and timers, its hit box.
 struct CampaignDestructible {
-    struct State { int handle = 0; std::string name, mesh; float health = 0.0f, autoTime = 0.0f; std::vector<std::pair<int, std::string>> links; };
+    struct State { int handle = 0; std::string name, mesh; float health = 0.0f, autoTime = 0.0f; std::vector<std::pair<int, std::string>> links;
+                   bool blocks = false; int colSet = -1; };   // a static-mesh state blocks; its collision set (built once)
     struct Piece { std::string name; std::vector<State> states; int cur = 0; float health = 0.0f, timer = 0.0f; State* state(); };
     std::string name;
     core::Vec3 pos{0, 0, 0}, lo{0, 0, 0}, hi{0, 0, 0};
     float yawDeg = 0.0f;
+    core::Vec3 posUE{0, 0, 0}, rotDeg{0, 0, 0};   // the UE placement (location UU, pitch / yaw / roll degrees)
+    bool block = true;                            // the actor blocks (collision_flags.bBlockActors)
     std::vector<Piece> pieces;
     int lastHitter = -1;
     std::vector<int> events;   // its Kismet notification events (op indices)
@@ -116,7 +122,7 @@ struct CampaignState {
     std::map<int, Objective> objectives;      // step 4: Kismet AI objectives per match player (MoveToActor / SetMoveToObjective)
     std::map<std::string, core::Vec3> actorPos;   // actor name -> location (navigation.json, actors.json)
     std::vector<CampaignMatinee> matinees;    // step 5: Matinee
-    struct Interp { int matinee = -1, op = -1; std::string action; float rate = 1.0f, dir = 1.0f, pos = 0.0f; bool looping = false, rewindOnPlay = false, playing = false; bool viewing = false; float lastFade = 0.0f; };
+    struct Interp { int matinee = -1, op = -1; std::string action; float rate = 1.0f, dir = 1.0f, pos = 0.0f; bool looping = false, rewindOnPlay = false, playing = false; bool viewing = false; float lastFade = 0.0f; std::vector<int> cinePawns; };
     std::vector<Interp> interps;              // one per SeqAct_Interp op
     bool viewOn = false;                      // the CinematicView sent active
     int cineOp = -1, cineViewOp = -1;         // the op driving the local camera / the CinematicView
