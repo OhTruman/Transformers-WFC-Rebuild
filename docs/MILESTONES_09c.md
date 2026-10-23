@@ -3962,3 +3962,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   ~12 GB), HD optional pack brings it to ~37 GB.
 2026-10-23 09:04 AssetTools: unit lightmap copies removed for D5 + A1 (A1 3.3 GB -> 1.2 GB; only byte-identical files; the chain does the
   same per chapter). Frontend: campaign run #2 started on 022ba748 (5 runs incl. an A1 Realistic X3-off arm).
+2026-10-23 09:07 MERGED dba6a747 campaign runtime 12 + 13 (destructible collision per state: A1's 1,040 breakables now block; pawn-group
+  AnimControl: the A1 lift ride plays the trio's clips via Character::setCineClip). Gameplay left: Omega AI actions, hit
+  reactions, horde rules, then a PROV list for the final-build decision.
