@@ -47,6 +47,13 @@ foreach ($prof in ($Profiles -split ',')) {
             $g = $bye.Matches[0].Groups; $wall = if ($done) { [double]$done.Matches[0].Groups[2].Value } else { 1 }
             $line += (", out {0:N0} B/s, resends {1}, rtt {2} ms, stalled {3} ms total, worst tick stall {4:N0} ms" -f ([double]$g[1].Value / [Math]::Max(1, $wall)), $g[3].Value, $g[4].Value, $g[5].Value, $maxStall)
         }
+        # Visible hitches (net.csv wall_ms, 2026-10-23+): steps more than 50 ms apart. stall_ms also counts sub-frame waits of a peer
+        # that is merely gated by arrival (rttjump: ~9 ms on half the ticks, no stutter), so judge smoothness by these gaps.
+        if ($csv.Count -gt 1 -and $csv[0].PSObject.Properties.Name -contains 'wall_ms') {
+            $gaps = 0; $maxGap = 0.0
+            for ($k = 1; $k -lt $csv.Count; ++$k) { $gp = [double]$csv[$k].wall_ms - [double]$csv[$k - 1].wall_ms; if ($gp -gt 50) { ++$gaps }; if ($gp -gt $maxGap) { $maxGap = $gp } }
+            $line += (", hitches > 50 ms: {0} (max gap {1:N0} ms)" -f $gaps, $maxGap)
+        }
         Write-Host $line
         Select-String -LiteralPath $log -Pattern 'NET .*(DESYNC|timeout|left|mismatch)' | Select-Object -First 2 | ForEach-Object { Write-Host ('    ' + $_.Line.Substring(0, [Math]::Min(170, $_.Line.Length))) }
     }
