@@ -1,0 +1,768 @@
+diff --git a/src/assets/Gltf.cpp b/src/assets/Gltf.cpp
+index 05984b6f..1c0eee90 100644
+--- a/src/assets/Gltf.cpp
++++ b/src/assets/Gltf.cpp
+@@ -270,7 +270,12 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
+                 sm.lightmapComponent = node["extras"]["lightmap_component"].asString();
+                 sm.hiddenGame = node["extras"]["hidden_game"].asBool(false);
+                 sm.sourceSection = (int)pi;
+-                if (node["extras"]["kind"].asString() == "bsp")      // level BSP (unlit in world.glb)
++                // (campaign TnTransformingWorldActors: AssetTools' bind-pose nodes name their SkeletalMeshComponent, but the game
++                // addresses them by actor - setActorHidden while the World draws them posed, setMapActorTransform - and they
++                // carry no lightmap to join: keyed by the actor like StaticMeshActor nodes)
++                if (node["extras"]["skeletal_bind_pose"].asBool(false) && !node["extras"]["actor"].asString().empty())
++                    sm.component = "actor:" + node["extras"]["actor"].asString();
++                else if (node["extras"]["kind"].asString() == "bsp")      // level BSP (unlit in world.glb)
+                     sm.component = "bsp:" + node["extras"]["source"].asString();
+                 // StaticMeshActor / (Static)InterpActor nodes name only their actor: the renderer
+                 // resolves the actor's single StaticMeshComponent (lightmap join key).
+diff --git a/src/core/Application_CampaignTest.cpp b/src/core/Application_CampaignTest.cpp
+index d792428d..25809c56 100644
+--- a/src/core/Application_CampaignTest.cpp
++++ b/src/core/Application_CampaignTest.cpp
+@@ -51,7 +51,7 @@ void Application::runCampaignTest() {
+     run(1.5f);
+     check(m.state() == game::Match::State::InProgress && !world_.localPlayerDead(), "PendingMatch -> InProgress; the human spawned");
+     check(world_.player().pawn().chassis().id == "Tank" && m.players()[(size_t)me].team == 1, "the human plays Megatron (Tank) on the Decepticon team");
+-    check(hdist(world_.player().pawn().position(), C.playerStart.pos) < 3.0f, "the human starts at TnCampaignPlayerStart_16313");
++    check(hdist(world_.player().pawn().position(), C.checkpoints.front().pos) < 3.0f, "the human starts at the chapter's first checkpoint (Stage 1, 4578)");
+     bool squadIn = true;
+     for (int p : S.squad) squadIn = squadIn && m.players()[(size_t)p].alive && m.players()[(size_t)p].team == 1;
+     check(squadIn, "both squad members spawned on the human's team");
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index b9e71ded..37cc981e 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -1832,6 +1832,12 @@ void Application::routeMatchToFrontend(float dt) {
+             ha.id = a.id.empty() ? std::string("None") : a.id;
+             ha.cooldown = a.cooldownLeft;
+             ha.fraction = a.cooldownTime > 0.0f ? std::max(0.0f, std::min(1.0f, 1.0f - a.cooldownLeft / a.cooldownTime)) : 1.0f;
++            // [Frontend] Escalation: the ability meter is the ability resource, not a cooldown (Gameplay M11 svAbilityResource,
++            // 0..1, -1 outside Escalation): full = ready
++            if (h.svAbilityResource >= 0.0f && ha.id != "None") {
++                ha.fraction = std::max(0.0f, std::min(1.0f, h.svAbilityResource));
++                ha.cooldown = 1.0 - ha.fraction;
++            }
+             hf.abilities[i] = ha;
+         }
+         if (o.grenade.ammo >= 0) {
+diff --git a/src/game/Campaign.h b/src/game/Campaign.h
+index ac74542a..c17531c3 100644
+--- a/src/game/Campaign.h
++++ b/src/game/Campaign.h
+@@ -78,6 +78,7 @@ struct CampaignDestructible {
+     std::vector<Piece> pieces;
+     int lastHitter = -1;
+     std::vector<int> events;   // its Kismet notification events (op indices)
++    bool fixedBounds = false;  // the hit box is set by its owner (a sentry), not from the state meshes
+     bool gone = false;         // removed (its factory's Kill All)
+     bool off = false;          // SeqAct_TnToggleDestructible Turn Off: not damageable
+ };
+@@ -103,9 +104,24 @@ struct CampaignFactory {
+     std::vector<core::Vec3> points;
+     std::vector<std::string> outputs;
+     std::vector<int> spawnedDes;   // a destructible factory's spawned actors (Kill All)
++    std::vector<int> live;         // its spawned pawns still alive (Single / All Pawns Killed)
++    std::vector<int> liveSentries; // a sentry factory's living sentries (CampaignState::sentries indices)
+     std::vector<int> pool;
+ };
+ 
++// A sentry TURRETDEF (AssetTools spawnables.json) and a spawned sentry (a stationary AI turret on its placed body).
++struct CampaignSentryDef { std::string turretdef, weapon; float range = 80.0f, sight = 100.0f, lagDeg = 90.0f, aimDeg = 3.0f, deathLife = 1.0f, hp = 125.0f; };
++struct CampaignSentry {
++    int def = -1, factory = -1, des = -1, forced = -1;
++    std::string body;                 // the placed turret body actor (hidden after its death)
++    core::Vec3 pos{0, 0, 0};
++    float yaw = 0.0f, cool = 0.0f, deadT = 0.0f;
++    bool dead = false, dormant = false;
++};
++
++// A launched roller mine (its hit box / draw: a destructible).
++struct CampaignMine { int factory = -1, des = -1; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float fuse = 10.0f, damage = 200.0f, radius = 12.8f, speed = 20.0f; bool done = false; };
++
+ // A player interact (TnInteract*) and its TnSeqEvent_Interact events.
+ struct CampaignInteract {
+     std::string name, cls;
+@@ -166,6 +182,16 @@ struct CampaignState {
+     std::string interactPrompt;                // the local player's interact in reach (its class; empty = none)
+     std::vector<uint8_t> interactHeldPrev;
+     CampaignOmega omega;
++    size_t factoryKillsSeen = 0;               // the kill history read by the factory death outputs
++    struct SentryFactory { int def = -1, count = 1; std::vector<core::Vec3> points; std::vector<std::string> bodies; };
++    std::vector<CampaignSentryDef> sentryDefs;
++    std::map<std::string, SentryFactory> sentryFactories;   // factory action path -> its TURRETDEF + spawn points
++    std::vector<CampaignSentry> sentries;
++    struct MineFactory { float damage = 200.0f, radius = 12.8f, health = 30.0f, fuse = 10.0f, speed = 20.0f; std::vector<core::Vec3> points; };
++    std::map<std::string, MineFactory> mineFactories;   // factory action path -> its authored mine values + spawn points
++    std::vector<CampaignMine> mines;
++    std::vector<std::pair<int, std::vector<int>>> transformOps;   // TnSeqAct_TransformWorldProp waiting for Finished: op, actors
++    bool transformMoved = false;               // a matinee moved a transforming actor (nav blocks re-applied at rest)
+     std::map<int, std::string> shootAt;        // SeqAct_TnAiShootAtActor: AI player -> its forced fire target
+     std::map<int, std::string> aiUse;          // SeqAct_TnAiUseInteract: AI player -> the interact it goes to use
+     std::map<std::string, std::vector<core::Vec3>> auxSpawns;   // checkpoint actor -> its AuxilliarySpawnPoints
+diff --git a/src/game/TransformingActors.cpp b/src/game/TransformingActors.cpp
+index b7b826c3..8ed842dd 100644
+--- a/src/game/TransformingActors.cpp
++++ b/src/game/TransformingActors.cpp
+@@ -31,19 +31,28 @@ std::vector<core::Vec3> boxTris(const core::Mat4& local, const core::Vec3& h) {
+ } // namespace
+ 
+ bool TransformingActors::load(const std::string& mapName, const std::string& manifestRoot, CollisionWorld& pawn, CollisionWorld* weapon) {
++    campaign_ = false;
++    return loadFile(manifestRoot + "/maps/mp_transforming_actors.json", mapName, manifestRoot + "/..", pawn, weapon);
++}
++
++bool TransformingActors::loadChapter(const std::string& path, const std::string& toolsRoot, CollisionWorld& pawn, CollisionWorld* weapon) {
++    campaign_ = true;
++    return loadFile(path, std::string(), toolsRoot, pawn, weapon);
++}
++
++bool TransformingActors::loadFile(const std::string& path, const std::string& mapName, const std::string& toolsRoot, CollisionWorld& pawn, CollisionWorld* weapon) {
+     actors_.clear();
+-    const std::string path = manifestRoot + "/maps/mp_transforming_actors.json";
+     std::ifstream f(path, std::ios::binary);
+     if (!f) return false;
+     std::stringstream ss; ss << f.rdbuf();
+     assets::Json root;
+     if (!assets::Json::parse(ss.str(), root)) { LOG_WARN("transforming actors: cannot parse %s", path.c_str()); return false; }
+-    const std::string toolsRoot = manifestRoot + "/..";   // glb paths are AssetTools-relative ("manifests/maps/transforming_actors/...")
++    // glb paths are AssetTools-relative ("manifests/maps/transforming_actors/..."): toolsRoot
+     std::map<std::string, std::shared_ptr<assets::SkinnedModel>> models;
+     const assets::Json& acts = root["actors"];
+     for (size_t i = 0; i < acts.size(); ++i) {
+         const assets::Json& j = acts[i];
+-        if (j["map"].asString() != mapName) continue;
++        if (!mapName.empty() && j["map"].asString() != mapName) continue;   // (a chapter file: every row)
+         const std::string meshName = j["mesh"].asString();
+         const assets::Json& m = root["meshes"][meshName];
+         Actor a;
+@@ -53,6 +62,8 @@ bool TransformingActors::load(const std::string& mapName, const std::string& man
+         a.length = std::max(0.01f, m["clip_length_s"].asFloat(1.0f));
+         a.matrix = matFrom(j["gltf_matrix"]);
+         a.bridge = meshName.rfind("NEU_Bridge", 0) == 0;
++        a.startTransformed = j["start_transformed"].asBool(false) || j["initial_state"].asString() == "Transformed";
++        a.baseMatrix = a.matrix;
+         // Level start: a Transform input fired directly by SeqEvent_SequenceActivated (Rust; the op's SeqCond_GameRuleActive inputs are
+         // dead authoring, RE CONFIRMED) -> Transform at match start in every mode.
+         const assets::Json& drivers = j["drivers"];
+@@ -99,7 +110,7 @@ bool TransformingActors::load(const std::string& mapName, const std::string& man
+ 
+ void TransformingActors::resetForNewMatch(CollisionWorld& pawn, CollisionWorld* weapon, bool escalation) {
+     for (Actor& a : actors_) {
+-        if (!escalation && a.startDesired == 0 && !a.bridge) {
++        if (!escalation && !campaign_ && a.startDesired == 0 && !a.bridge) {
+             // Versus on the Escalation-only maps (BrokenHope / Remnant: CompatibleGameTypes SV, RE MP_TRANSFORMING_ACTORS_RE.md section 4):
+             // no authored versus state. Integration decision 2026-10-17 (option c): the doors Transformed from the start (t = length, no
+             // animation; the late-Escalation layout). The BrokenHope bridges keep their Escalation start state (retracted, hidden, no
+@@ -109,8 +120,8 @@ void TransformingActors::resetForNewMatch(CollisionWorld& pawn, CollisionWorld*
+             pose(a, pawn, weapon);
+             continue;
+         }
+-        a.t = 0.0f;                          // Escalation (and Rust in every mode): Untransformed at the start (bridges: PreGameplaySetup's Untransform)
+-        a.desired = a.startDesired;          // Rust doors: Transform at level start
++        a.t = campaign_ && a.startTransformed ? a.length : 0.0f;   // Escalation (and Rust in every mode): Untransformed at the start (bridges: PreGameplaySetup's Untransform); campaign: authored
++        a.desired = campaign_ && a.startTransformed ? 1 : a.startDesired;   // Rust doors: Transform at level start
+         a.hidden = a.bridge;                 // bridges: Hide + ChangeCollision NoCollision at setup
+         a.collide = !a.bridge;
+         a.posedT = -1.0f;
+diff --git a/src/game/TransformingActors.h b/src/game/TransformingActors.h
+index 9237c833..aeb6e0ae 100644
+--- a/src/game/TransformingActors.h
++++ b/src/game/TransformingActors.h
+@@ -40,6 +40,8 @@ public:
+         int desired = 0;                     // DesiredTransformState: 0 Untransformed, 1 Transformed
+         int startDesired = 0;                // at match start (Rust: Transform from SeqEvent_SequenceActivated)
+         bool hidden = false, collide = true, bridge = false;
++        bool startTransformed = false;       // campaign: the authored start state (initial_state Transformed)
++        core::Mat4 baseMatrix;               // the authored gltf_matrix (matrix = a matinee's translation x it)
+         std::vector<Body> bodies;
+         std::vector<Box> boxes;
+         std::shared_ptr<const assets::SkinnedModel> model;
+@@ -48,12 +50,21 @@ public:
+     };
+     // Loads this map's actors (none: an empty list, nothing changes) and adds their collision sets to pawn / weapon.
+     bool load(const std::string& mapName, const std::string& manifestRoot, CollisionWorld& pawn, CollisionWorld* weapon);
++    // A campaign chapter's actors (every row of the file; glb paths relative to toolsRoot); they start in their authored state.
++    bool loadChapter(const std::string& path, const std::string& toolsRoot, CollisionWorld& pawn, CollisionWorld* weapon);
+     void clear() { actors_.clear(); }
+     // Kismet: TnSeqAct_TransformWorldProp Transform (1) / Untransform (0); SeqAct_ChangeCollision / ToggleHidden for the bridges.
+     void setDesired(size_t i, int desired) { if (i < actors_.size()) actors_[i].desired = desired ? 1 : 0; }
+     // Escalation generators: SeqAct_ToggleHidden (UnHide / Hide) and SeqAct_ChangeCollision on an actor (the bridges); re-posed next tick.
+     void setShown(size_t i, bool shown) { if (i < actors_.size()) { actors_[i].hidden = !shown; actors_[i].posedT = -1.0f; } }
+     void setCollide(size_t i, bool on) { if (i < actors_.size()) { actors_[i].collide = on; actors_[i].posedT = -1.0f; } }
++    // Campaign: a matinee Move track moves the actor (A1's lift pod): its matrix = translate(offset) x the authored one; re-posed next tick.
++    void setOffset(size_t i, const core::Vec3& d) {
++        if (i >= actors_.size()) return;
++        Actor& a = actors_[i];
++        a.matrix = core::Mat4::translate(d) * a.baseMatrix;
++        a.posedT = -1.0f;
++    }
+     int find(const std::string& name) const { for (size_t i = 0; i < actors_.size(); ++i) if (actors_[i].name == name) return (int)i; return -1; }
+     // Match start (a fresh level): the start states above, t at the start pose. escalation: the SV game type (not in the rebuild yet).
+     void resetForNewMatch(CollisionWorld& pawn, CollisionWorld* weapon, bool escalation = false);
+@@ -69,6 +80,8 @@ public:
+ 
+ private:
+     std::vector<Actor> actors_;
++    bool campaign_ = false;   // loaded by loadChapter: the authored start states, no versus door rule
++    bool loadFile(const std::string& path, const std::string& mapName, const std::string& toolsRoot, CollisionWorld& pawn, CollisionWorld* weapon);
+     void pose(Actor& a, CollisionWorld& pawn, CollisionWorld* weapon);
+     core::Mat4 boneWorld(const Actor& a, int node, float t) const;
+ };
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index d8fd0d49..d73a3aa4 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -474,7 +474,13 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
+         mapState_.registerCollision(collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr, pawnMovers, weaponMovers);
+         {   // TnTransformingWorldActors (AssetTools mp_transforming_actors.json; the frontend's manifest root)
+             const char* mr = std::getenv("WFC_FRONTEND_MANIFESTS");
+-            transforming_.load(mapName_, mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests", collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
++            const std::string mroot = mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests";
++            if (campaignMap_) {   // a campaign chapter: AssetTools' <CH>/transforming_actors_gameplay.json
++                transforming_.loadChapter(cpChapter_.dir + "transforming_actors_gameplay.json", mroot + "/..", collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
++                LOG_INFO("campaign: %zu transforming world actors", transforming_.actors().size());
++                // drawn posed by TransformingActorsDraw: the bind-pose copies in the units' world.glb are hidden (Rendering 2026-10-23)
++                for (const TransformingActors::Actor& ta : transforming_.actors()) renderer.setActorHidden(ta.name, true);
++            } else transforming_.load(mapName_, mroot, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
+             syncTransformingActorSounds();
+         }
+         {   // the VehicleDying body pool: unit boxes (+-1), scaled by the pose; disabled until used
+@@ -4640,6 +4646,19 @@ void World::syncMapPresentation(render::IRenderer& r) const {
+                           sv_.weaponPicks[i].available;
+         r.setActorHidden(svData_.weaponPickups[i].actor, !live);
+     }
++    // (Escalation M11) the loot shards: FX_Pickups_p.FX.Shard_FX at each loot entry, 75 UU up (AssetTools
++    // escalation_loot_pickup.json). The shards are alike, so a pool of effect handles follows the live entries in order -
++    // repositioned every frame, grown / stopped to the count; a handle the renderer no longer knows (map change) respawns
++    for (size_t i = 0; i < sv_.loot.size(); ++i) {
++        const core::Vec3 p = sv_.loot[i].pos + core::Vec3{0.0f, 0.75f, 0.0f};
++        if (i >= lootFx_.size()) lootFx_.push_back(-1);
++        int& h = lootFx_[i];
++        if (h < 0 || !r.setParticleEffectTransform(h, p, core::Vec3{1, 0, 0}, core::Vec3{0, 1, 0}))
++            h = r.spawnParticleEffect("FX_Pickups_p.FX.Shard_FX", p, core::Vec3{1, 0, 0}, core::Vec3{0, 1, 0});
++    }
++    for (size_t i = sv_.loot.size(); i < lootFx_.size(); ++i)
++        if (lootFx_[i] >= 0) { r.stopParticleEffect(lootFx_[i]); lootFx_[i] = -1; }
++    lootFx_.resize(sv_.loot.size());
+     // (Escalation / campaign) the dropped weapons: the weapon's pickup mesh where it lies (Rendering spins / tilts / settles it)
+     for (const SurvivalState::Drop& d : sv_.drops) {
+         if (!d.w.def) continue;
+diff --git a/src/game/World.h b/src/game/World.h
+index 52ebb742..ae61f2be 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -895,6 +895,7 @@ public:
+     MatchOpponent* addMatchOpponent(const std::string& name, bool drawn);
+     // Escalation: the director state and the map's data (tests, HUD).
+     const SurvivalState& survival() const { return sv_; }
++    mutable std::vector<int> lootFx_;                // (Escalation M11) the loot shards' effect handles (draw: one per entry)
+     const SurvivalData& survivalData() const { return svData_; }
+     std::string svDropMesh(const std::string& weaponId) const;   // Escalation: a dropped weapon's mesh (content-relative glTF; Rendering)
+     int svTestSpawn(const std::string& typePrefix);   // WFC_ESCTEST: spawn one horde entry of that type now (its match player, or -1)
+@@ -1474,6 +1475,17 @@ private:
+     void cpOmegaFire(int target, float dmg, float radiusM, const char* type, float spread);
+     void cpTickOmega(float dt);
+     void cpTickAiUse();
++    bool cpTransformWorldProp(KismetVM& vm, int op, int input);
++    void cpTickTransformOps();
++    void cpTickFactoryKills();
++    void cpFactoryPawnDied(CampaignFactory& F, int victim);
++    void cpLoadSentryDefs();
++    bool cpSentryFactoryActivate(KismetVM& vm, int op, int input, CampaignFactory& F);
++    void cpTickSentries(float dt);
++    bool cpSentryOpActivate(KismetVM& vm, int op, int input);
++    void cpLoadMineDefs();
++    bool cpMineFactoryActivate(KismetVM& vm, int op, int input, CampaignFactory& F);
++    void cpTickMines(float dt);
+     bool cpShootAtPoint(int player, core::Vec3& out) const;
+     bool cpAuxSpawn(const std::string& actor, int k, core::Vec3& out);
+     void cpDrawDestructibles(render::IRenderer& r) const;
+diff --git a/src/game/WorldCampaign.cpp b/src/game/WorldCampaign.cpp
+index 799b28cd..dbd298cf 100644
+--- a/src/game/WorldCampaign.cpp
++++ b/src/game/WorldCampaign.cpp
+@@ -173,6 +173,9 @@ bool World::loadCampaignMesh(const std::string& file, render::MeshData& out) {
+ // (PROV: the original's AuxilliarySpawnPoints of the checkpoint are not exported yet; CAMPAIGN_SQUAD_AI_RE section 1).
+ void World::cpSetStarts(const std::string& checkpointName) {
+     const CampaignChapter::Checkpoint* cp = cpChapter_.checkpoint(checkpointName);
++    // the chapter start: the first checkpoint in DisplayOrder (the one the pre-gameplay pass makes active; A2's TnCampaignPlayerStart
++    // sits in the Soundwave arena, a leftover); the player start only for a chapter without checkpoints
++    if (!cp && checkpointName.empty() && !cpChapter_.checkpoints.empty()) cp = &cpChapter_.checkpoints.front();
+     const core::Vec3 at = cp ? cp->pos : cpChapter_.playerStart.pos;
+     const std::string actor = cp ? cp->actor : cpChapter_.playerStart.actor;
+     std::vector<Match::Start> st;
+@@ -243,6 +246,8 @@ void World::setupCampaign(const MatchLaunch& l) {
+         cpLoadSkeletal();
+         cpLoadPawnGroups();
+         cpLoadInteracts();
++        cpLoadSentryDefs();
++        cpLoadMineDefs();
+         cpLoadTouches();
+         cpLoadPlacedDestructibles();
+         cpBindMoverNav();   // (the nav is loaded by addBots above)
+@@ -294,6 +299,8 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
+     }
+     if (cpInteractActivate(vm, op, input)) return true;   // SeqAct_Toggle on interacts
+     if (cpToggleDestructible(vm, op, input)) return true;
++    if (cpTransformWorldProp(vm, op, input)) return true;   // doors / pods
++    if (cpSentryOpActivate(vm, op, input)) return true;     // sentry force target / dormant
+     if (cpOmegaActivate(vm, op, input)) return true;      // SetOmegaStage / CorruptOmegaBattery
+     if (c == "SeqAct_TnPawnFactory") return cpPawnFactoryActivate(vm, op, input);
+     if (cpInterpActivate(vm, op, input)) return true;   // SeqAct_Interp: Matinee
+@@ -473,6 +480,10 @@ void World::tickCampaign(float dt) {
+     cpTickDestructibles(dt);
+     cpTickInteracts(dt);
+     cpTickAiUse();
++    cpTickTransformOps();
++    cpTickFactoryKills();
++    if (!cp_.gameOver) cpTickSentries(dt);
++    if (!cp_.gameOver) cpTickMines(dt);
+     if (!cp_.gameOver) cpTickOmega(dt);
+     // TnCampaignGame.Killed: a human killed by anything but DmgType_Suicided -> CampaignGameOver (solo: never downed).
+     const auto& kh = match_.killHistory();
+diff --git a/src/game/WorldCampaignDestructibles.cpp b/src/game/WorldCampaignDestructibles.cpp
+index 39c015e9..80a84dfd 100644
+--- a/src/game/WorldCampaignDestructibles.cpp
++++ b/src/game/WorldCampaignDestructibles.cpp
+@@ -104,6 +104,7 @@ int World::cpSpawnDestructible(const std::string& blueprint, const std::string&
+ // The current states' mesh bounds (the hit box), world space (PROV: the AABB of the rotated mesh box).
+ void World::cpDesBounds(int i) {
+     CampaignDestructible& d = cp_.destructibles[(size_t)i];
++    if (d.fixedBounds) return;   // a sentry's hit box (set at its spawn)
+     bool any = false;
+     core::Vec3 lo{0, 0, 0}, hi{0, 0, 0};
+     for (CampaignDestructible::Piece& p : d.pieces) {
+diff --git a/src/game/WorldCampaignMatinee.cpp b/src/game/WorldCampaignMatinee.cpp
+index cbaef743..b4e845a4 100644
+--- a/src/game/WorldCampaignMatinee.cpp
++++ b/src/game/WorldCampaignMatinee.cpp
+@@ -142,6 +142,7 @@ void World::cpBindMoverNav() {
+ }
+ 
+ void World::cpSyncMoverNav() {
++    if (cp_.transformMoved && botNav_.valid()) { cp_.transformMoved = false; transforming_.applyNavBlocks(botNav_); }   // a moved transforming actor's nav blocks at rest
+     for (CampaignMover& m : cpMovers_) {
+         const core::Vec3 d = m.offset - m.navOffset;
+         if (m.navCells.empty() || (!m.navMoving && std::fabs(d.x) < 0.01f && std::fabs(d.y) < 0.01f && std::fabs(d.z) < 0.01f)) continue;
+@@ -330,9 +331,11 @@ void World::cpMatineeApply(CampaignState::Interp& in, float from, float to) {
+                     bool mover = false;
+                     for (const CampaignMover& m : cpMovers_) if (m.name == a) mover = true;
+                     core::Vec3 base;
+-                    if (!mover && renderer_ && a.rfind("CHARACTER:", 0) != 0 && cpActorPos(a, base)) {   // drawn only (no collision): e.g. A1's pod
++                    if (!mover && a.rfind("CHARACTER:", 0) != 0 && cpActorPos(a, base)) {   // a non-mover actor: e.g. A1's lift pod (TnTransformingWorldActor_6275)
+                         const core::Vec3 w = t.relative ? base + ueToGltf(p) : ueToGltf(p);
+-                        renderer_->setMapActorTransform(a, core::Vec3{w.x * 100.0f, w.z * 100.0f, w.y * 100.0f}, core::Vec3{r[1], r[2], r[0]});
++                        if (renderer_) renderer_->setMapActorTransform(a, core::Vec3{w.x * 100.0f, w.z * 100.0f, w.y * 100.0f}, core::Vec3{r[1], r[2], r[0]});
++                        const int ti = transforming_.find(a);   // a transforming actor: its collision rides along (re-posed next tick)
++                        if (ti >= 0) { transforming_.setOffset((size_t)ti, w - base); cp_.transformMoved = true; }
+                     }
+                     for (CampaignMover& m : cpMovers_) {
+                         if (m.name != a) continue;
+diff --git a/src/game/WorldCampaignRuntime.cpp b/src/game/WorldCampaignRuntime.cpp
+index 9b25361a..f09c8a1b 100644
+--- a/src/game/WorldCampaignRuntime.cpp
++++ b/src/game/WorldCampaignRuntime.cpp
+@@ -126,6 +126,8 @@ bool World::cpPawnFactoryActivate(KismetVM& vm, int op, int input) {
+             F.spawnedDes.clear();
+             return true;
+         }
++        if (F.cls == "TnActorFactorySentryAI") return cpSentryFactoryActivate(vm, op, input, F);
++        if (F.cls == "TnActorFactoryRollerMine") return cpMineFactoryActivate(vm, op, input, F);
+         if (input != 0) return true;   // Stop / other inputs: nothing to do yet
+         if (desFactory && !F.points.empty()) {   // a destructible factory: the blueprint at its spawn point
+             // named after its sequence + op (the four D5 battery sequences share the op name), the Spawned variable = "des:<i>"
+@@ -165,10 +167,15 @@ void World::cpTickFactories(float dt) {
+         match_.restartPlayerAt(p, at, yaw);
+         if (F.vehicle) cp_.formPending.push_back(p);
+         ++F.spawned; ++cp_.enemiesSpawned;
++        F.live.push_back(p);
+         LOG_INFO("campaign: factory %s spawned p%d %s at (%.1f %.1f %.1f)", afterDot(F.action).c_str(), p, F.chassis.c_str(), at.x, at.y, at.z);
+         if (!F.spawnedVar.empty())
+             for (int v = 0; v < cp_.vm.varCount(); ++v)
+                 if (KismetVM::Var* var = cp_.vm.var(v); var && var->varName == F.spawnedVar) var->obj = "pawn:" + std::to_string(p);
++        if (F.op >= 0) {   // the factory's Spawned variable + its "Spawned" output for each pawn
++            for (int v : cp_.vm.varLink(F.op, "Spawned")) if (KismetVM::Var* var = cp_.vm.var(v)) var->obj = "pawn:" + std::to_string(p);
++            if (std::find(F.outputs.begin(), F.outputs.end(), "Spawned") != F.outputs.end()) cp_.vm.output(F.op, "Spawned");
++        }
+         if (--F.pending > 0) { F.timer = F.delay; continue; }
+         if (F.op >= 0) {
+             const bool all = std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Spawned") != F.outputs.end();
+@@ -649,3 +656,377 @@ int World::cpTestFireFactory(int k) {
+ }
+ 
+ } // namespace game
++
++namespace game {
++
++// ---- TnSeqAct_TransformWorldProp: the campaign's TnTransformingWorldActors (doors, tube doors, the lift pods) ----
++
++// Untransform (0) / Transform (1) on the Target actors -> DesiredTransformState; the actors play their transform sequence at rate 1 and
++// pose their collision (TransformingActors, loaded from AssetTools' <CH>/transforming_actors_gameplay.json); the nav cells under the
++// closed ones are blocked at once (the rest pose). "Finished" (15 of A1's 41 ops) when every target reached it; an op without
++// targets in the data finishes at once (logged).
++bool World::cpTransformWorldProp(KismetVM& vm, int op, int input) {
++    KismetVM::Op& o = vm.op(op);
++    if (o.cls != "TnSeqAct_TransformWorldProp") return false;
++    std::vector<int> idx;
++    int named = 0;
++    for (int v : vm.varLink(op, "Target")) {
++        const KismetVM::Var* var = vm.var(v);
++        if (var && var->named >= 0) var = vm.var(var->named);
++        if (!var || var->obj.empty()) continue;
++        ++named;
++        const int i = transforming_.find(afterDot(var->obj));
++        if (i >= 0) { transforming_.setDesired((size_t)i, input == 1 ? 1 : 0); idx.push_back(i); }
++    }
++    if (!idx.empty() && botNav_.valid()) transforming_.applyNavBlocks(botNav_);
++    LOG_INFO("campaign: %s %s: %zu of %d actors", afterDot(o.path).c_str(), input == 1 ? "Transform" : "Untransform", idx.size(), named);
++    const bool finished = std::find_if(o.outputs.begin(), o.outputs.end(), [](const auto& x) { return x.first == "Finished"; }) != o.outputs.end();
++    if (finished && !idx.empty()) { o.latent = true; o.timer = -1.0f; cp_.transformOps.push_back({op, idx}); }
++    else if (finished) vm.output(op, "Finished");
++    return true;
++}
++
++void World::cpTickTransformOps() {
++    for (size_t k = 0; k < cp_.transformOps.size();) {
++        bool rest = true;
++        for (int i : cp_.transformOps[k].second) {
++            const TransformingActors::Actor& a = transforming_.actors()[(size_t)i];
++            if (a.t != (a.desired ? a.length : 0.0f)) rest = false;
++        }
++        if (!rest) { ++k; continue; }
++        cp_.vm.finishLatent(cp_.transformOps[k].first, "Finished");
++        cp_.transformOps.erase(cp_.transformOps.begin() + (long)k);
++    }
++}
++
++} // namespace game
++
++namespace game {
++
++// ---- SeqAct_TnPawnFactory death outputs: "Single Pawn Killed" per spawned pawn's death, "All Pawns Killed" once none of its spawns
++// lives (and none is pending) [C op outputs; the A1 / A2 / A3 encounters wait on them] ----
++void World::cpTickFactoryKills() {
++    const auto& kh = match_.killHistory();
++    if (cp_.factoryKillsSeen > kh.size()) cp_.factoryKillsSeen = 0;
++    for (; cp_.factoryKillsSeen < kh.size(); ++cp_.factoryKillsSeen) {
++        const int v = kh[cp_.factoryKillsSeen].victim;
++        for (CampaignFactory& F : cp_.factories) cpFactoryPawnDied(F, v);
++    }
++}
++
++void World::cpFactoryPawnDied(CampaignFactory& F, int victim) {
++    auto it = std::find(F.live.begin(), F.live.end(), victim);
++    if (it == F.live.end()) return;
++    F.live.erase(it);
++    if (F.op < 0) return;
++    if (std::find(F.outputs.begin(), F.outputs.end(), "Single Pawn Killed") != F.outputs.end()) cp_.vm.output(F.op, "Single Pawn Killed");
++    if (F.live.empty() && F.pending <= 0 && std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Killed") != F.outputs.end()) {
++        cp_.vm.output(F.op, "All Pawns Killed");
++        LOG_INFO("campaign: factory %s: All Pawns Killed", afterDot(F.action).c_str());
++    }
++}
++
++// ---- sentries (TnActorFactorySentryAI + a TURRETDEF: AssetTools out/campaign_characters/spawnables.json) ----
++// A TURRETDEF turns the placed turret body at the spawn point into a stationary AI sentry: it turns toward the nearest living enemy
++// in SightRadius at LagDegreesPerSecond and fires its weapon within MaxAttackRange when aimed (AimedAtTargetThreshold) with a line
++// of sight; it is a destructible (its hit box at the body) and dies at 0 HP -> the factory's Single / All Pawns Killed; the body hides
++// after LifeSpanAfterDeath. HP and fire from AssetTools' sentry DES and weapon fire blocks; PROV: the repair sentry does not repair.
++namespace {
++struct SentryFire { const char* weapon; bool hitscan; float damage, interval, speed, radius; bool homing; const char* type; };
++const SentryFire kSentryFire[] = {   // AssetTools weapon.json fire blocks (AI cadence = FireIntervalModifier.IntervalRange; metres)
++    {"TnWeaponSentryLight", true, 5.0f, 0.16f, 0, 0, false, "TnDamageTypeSentryLight"},
++    {"TnWeaponSentryRocket", false, 85.0f, 1.5f, 60.0f, 5.0f, false, "TnDamageTypeSentryRocket"},
++    {"TnWeaponSentryHomingRocket", false, 75.0f, 2.75f, 50.0f, 5.0f, true, "TnDamageTypeSentryRocket"},
++    {"TnWeaponWarshipHomingRocketSentry", false, 15.0f, 3.0f, 42.5f, 3.5f, true, "TnDamageTypeSentryRocket"},
++    {"TnWeaponSentryDeathBeam", true, 24.0f, 0.03f, 0, 0, false, "TnDamageTypeSentryDeathBeam"},   // DamagePerSecond 800
++    {"TnWeaponOmegaShipMG", false, 10.0f, 0.1f, 80.0f, 1.0f, false, "TnDamageTypeOmegaShipMG"},
++    {"TnWeaponOmegaShipRocket", false, 40.0f, 3.5f, 40.0f, 10.0f, false, "TnDamageTypeOmegaRocket"},
++    {"TnWeaponSentryRepair", true, 0.0f, 1.0f, 0, 0, false, "TnDamageTypeRepairEnemy"},   // repairs the AI's side: no attack (PROV)
++};
++std::string tailS(const std::string& s) { const size_t k = s.find_last_of('.'); return k == std::string::npos ? s : s.substr(k + 1); }
++}
++
++void World::cpLoadSentryDefs() {
++    cp_.sentryFactories.clear(); cp_.sentryDefs.clear(); cp_.sentries.clear();
++    assets::Json j;
++    if (!readJsonFile("F:/Transformers Rebuild/AssetTools/out/campaign_characters/spawnables.json", j)) return;
++    const assets::Json& ss = j["sentries"];
++    for (size_t i = 0; i < ss.size(); ++i) {
++        const assets::Json& v = ss[i]["values"];
++        CampaignSentryDef D;
++        D.turretdef = tailS(ss[i]["turretdef"].asString());
++        D.weapon = tailS(ss[i]["weapon"]["class"].asString());
++        D.range = v["MaxAttackRange"].asFloat(8000.0f) * 0.01f;
++        D.sight = v["SightRadius"].asFloat(10000.0f) * 0.01f;
++        D.lagDeg = v["LagDegreesPerSecond"].asFloat(90.0f);
++        D.aimDeg = v["AimedAtTargetThreshold"].asFloat(3.0f);
++        D.deathLife = v["LifeSpanAfterDeath"].asFloat(1.0f);
++        // the Destructible's first state's InitialHealth (AssetTools destructibles/<name>.json): Blaster / Rocket / Repair 125,
++        // SentryBall 135, the invisible death-beam ball 1000, the warship ball 10000 (no death state authored)
++        const std::string des = v["Destructible"].asString();
++        D.hp = des.find("Invis") != std::string::npos ? 1000.0f : des.find("Warship") != std::string::npos ? 10000.0f :
++               des.find("SentryBall") != std::string::npos ? 135.0f : 125.0f;
++        const int di = (int)cp_.sentryDefs.size();
++        cp_.sentryDefs.push_back(D);
++        const assets::Json& fs = ss[i]["factories"];
++        for (size_t f = 0; f < fs.size(); ++f) {
++            if (fs[f]["chapter"].asString() != cpChapter_.chapter) continue;
++            CampaignState::SentryFactory SF;
++            SF.def = di;
++            SF.count = std::max(1, fs[f]["spawn_count"].asInt(1));
++            for (size_t k = 0; k < fs[f]["spawn_points"].size(); ++k) {
++                const assets::Json& sp = fs[f]["spawn_points"][k];
++                const assets::Json& L = sp["location_gltf"];
++                if (L.size() < 3) continue;
++                SF.points.push_back(core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()});
++                SF.bodies.push_back(tailS(sp["object"].asString()));
++            }
++            cp_.sentryFactories[fs[f]["action"].asString()] = SF;
++        }
++    }
++    LOG_INFO("campaign: %zu sentry factories (%zu TURRETDEFs)", cp_.sentryFactories.size(), cp_.sentryDefs.size());
++}
++
++bool World::cpSentryFactoryActivate(KismetVM& vm, int op, int input, CampaignFactory& F) {
++    const int fi = (int)(&F - &cp_.factories[0]);
++    auto it = cp_.sentryFactories.find(F.action);
++    if (input == 4) {   // Kill All
++        for (CampaignSentry& s : cp_.sentries) if (s.factory == fi && !s.dead) { s.dead = true; s.deadT = 0.0f; cpRemoveDestructible(s.des); }
++        F.liveSentries.clear();
++        return true;
++    }
++    if (input != 0) return true;
++    if (it == cp_.sentryFactories.end() || it->second.points.empty()) {
++        LOG_INFO("campaign: sentry factory %s: no data", afterDot(F.action).c_str());
++        if (std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Spawned") != F.outputs.end()) vm.output(op, "All Pawns Spawned");
++        return true;
++    }
++    const CampaignState::SentryFactory SF = it->second;
++    const CampaignSentryDef D = cp_.sentryDefs[(size_t)SF.def];
++    for (int c = 0; c < SF.count; ++c) {
++        const size_t k = (size_t)c % SF.points.size();
++        CampaignSentry S;
++        S.def = SF.def; S.factory = fi; S.body = SF.bodies[k]; S.pos = SF.points[k];
++        // its hit box: a destructible with one 'alive' state (HP) that GenericDamage takes to 'dead'
++        CampaignDestructible d;
++        d.name = "sentry_" + S.body; d.pos = S.pos; d.block = false;
++        d.posUE = core::Vec3{S.pos.x * 100.0f, S.pos.z * 100.0f, S.pos.y * 100.0f};
++        CampaignDestructible::Piece P; P.name = "Turret";
++        CampaignDestructible::State alive; alive.handle = 0; alive.name = "Alive"; alive.health = D.hp;
++        alive.links.push_back({1, std::string("HmGenericDamageDestructionTrigger")});
++        CampaignDestructible::State dead; dead.handle = 1; dead.name = "Dead";
++        P.states.push_back(alive); P.states.push_back(dead); P.cur = 0; P.health = D.hp;
++        d.pieces.push_back(P);
++        d.fixedBounds = true; d.lo = S.pos - core::Vec3{1.0f, 1.0f, 1.0f}; d.hi = S.pos + core::Vec3{1.0f, 1.0f, 1.0f};
++        cp_.destructibles.push_back(d);
++        S.des = (int)cp_.destructibles.size() - 1;
++        cp_.sentries.push_back(S);
++        const int si = (int)cp_.sentries.size() - 1;
++        F.liveSentries.push_back(si);
++        for (int v : vm.varLink(op, "Spawned")) if (KismetVM::Var* var = vm.var(v)) var->obj = "sentry:" + std::to_string(si);
++        if (std::find(F.outputs.begin(), F.outputs.end(), "Spawned") != F.outputs.end()) vm.output(op, "Spawned");
++        if (renderer_) renderer_->setActorHidden(S.body, false);
++    }
++    LOG_INFO("campaign: sentry factory %s spawned %d %s (%s)", afterDot(F.action).c_str(), SF.count, D.turretdef.c_str(), D.weapon.c_str());
++    if (std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Spawned") != F.outputs.end()) vm.output(op, "All Pawns Spawned");
++    return true;
++}
++
++void World::cpTickSentries(float dt) {
++    for (size_t si = 0; si < cp_.sentries.size(); ++si) {
++        CampaignSentry& S = cp_.sentries[si];
++        const CampaignSentryDef& D = cp_.sentryDefs[(size_t)S.def];
++        if (S.dead) {
++            if (S.deadT >= 0.0f && (S.deadT += dt) >= D.deathLife) { S.deadT = -1.0f; if (renderer_) renderer_->setActorHidden(S.body, true); }
++            continue;
++        }
++        CampaignDestructible& d = cp_.destructibles[(size_t)S.des];
++        if (d.gone || d.pieces.empty() || d.pieces[0].cur != 0) {   // destroyed
++            S.dead = true; S.deadT = 0.0f;
++            cpRemoveDestructible(S.des);
++            LOG_INFO("campaign: sentry %s destroyed", S.body.c_str());
++            CampaignFactory& F = cp_.factories[(size_t)S.factory];
++            F.liveSentries.erase(std::remove(F.liveSentries.begin(), F.liveSentries.end(), (int)si), F.liveSentries.end());
++            if (F.op >= 0) {
++                if (std::find(F.outputs.begin(), F.outputs.end(), "Single Pawn Killed") != F.outputs.end()) cp_.vm.output(F.op, "Single Pawn Killed");
++                if (F.liveSentries.empty() && std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Killed") != F.outputs.end()) cp_.vm.output(F.op, "All Pawns Killed");
++            }
++            continue;
++        }
++        if (S.dormant || match_.state() != Match::State::InProgress) continue;
++        // the target: SeqAct_TnAiSentryForceTarget's, else the nearest living enemy (the AI's other side) in SightRadius with LOS
++        const int team = cp_.factories[(size_t)S.factory].team;
++        const core::Vec3 eye = S.pos + core::Vec3{0.0f, 0.5f, 0.0f};
++        int tgt = -1; float best = D.sight;
++        for (size_t q = 0; q < match_.players().size(); ++q) {
++            const MatchPlayer& mp = match_.players()[q];
++            if (!mp.alive || mp.team == team) continue;
++            const Character* c = participantPawn((int)q);
++            if (!c) continue;
++            const float L = core::length(c->actorLocation() - eye);
++            if ((S.forced >= 0 && (int)q != S.forced) || L > best) continue;
++            if (!botLineOfSight(eye, c->actorLocation())) continue;
++            best = L; tgt = (int)q;
++        }
++        if (tgt < 0) continue;
++        const core::Vec3 aim = participantPawn(tgt)->actorLocation() - eye;
++        const float want = std::atan2(-aim.x, -aim.z);
++        float dy = std::remainder(want - S.yaw, 6.2831853f);
++        const float step = D.lagDeg * 0.0174533f * dt;
++        S.yaw += std::clamp(dy, -step, step);
++        dy = std::remainder(want - S.yaw, 6.2831853f);
++        if ((S.cool -= dt) > 0.0f || best > D.range || std::fabs(dy) > D.aimDeg * 0.0174533f) continue;
++        const SentryFire* sf = nullptr;
++        for (const SentryFire& x : kSentryFire) if (D.weapon == x.weapon) sf = &x;
++        if (!sf || sf->damage <= 0.0f) { S.cool = 1.0f; continue; }
++        S.cool = sf->interval;
++        if (sf->hitscan) applyMatchDamage(tgt, -1, sf->damage, false, sf->type);
++        else {
++            Weapon w;
++            w.projSpeed = sf->speed; w.projDamage = sf->damage; w.projRadiusM = sf->radius; w.rangeM = D.range; w.damageType = sf->type;
++            w.projHoming = sf->homing; w.homingForce = sf->homing ? 200.0f : 0.0f;   // HomingForce 20000 UU/s^2 w.projMaxSpeed = sf->speed; w.lockRobots = true;
++            spawnProjectile(eye, core::normalize(aim) * sf->speed, w, -1);
++            if (sf->homing) projectiles_.back().target = tgt;
++        }
++    }
++}
++
++// SeqAct_TnAiSentryForceTarget (the sentries attack this target only) / SeqAct_TnAiSentrySetDormant (On: dormant).
++bool World::cpSentryOpActivate(KismetVM& vm, int op, int input) {
++    const KismetVM::Op& o = vm.op(op);
++    if (o.cls != "SeqAct_TnAiSentryForceTarget" && o.cls != "SeqAct_TnAiSentrySetDormant") return false;
++    std::vector<int> ss;
++    for (int v : vm.varLink(op, "Target")) {
++        const KismetVM::Var* var = vm.var(v);
++        if (var && var->named >= 0) var = vm.var(var->named);
++        if (var && var->obj.rfind("sentry:", 0) == 0) ss.push_back(std::atoi(var->obj.c_str() + 7));
++    }
++    if (o.cls == "SeqAct_TnAiSentryForceTarget") {
++        const std::vector<int> t = cpTargets(vm, op, "Force Target");
++        for (int i : ss) if (i >= 0 && (size_t)i < cp_.sentries.size()) cp_.sentries[(size_t)i].forced = t.empty() ? -1 : t.front();
++    } else for (int i : ss) if (i >= 0 && (size_t)i < cp_.sentries.size()) cp_.sentries[(size_t)i].dormant = input == 0;
++    if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
++    return true;
++}
++
++} // namespace game
++
++namespace game {
++
++// ---- roller mines (TnActorFactoryRollerMine -> TransGame.TnRollerMine: AssetTools spawnables.json roller_mine) ----
++// The factory's authored DamageRadius / DamageAmount / Health / Fuse / LocalLinearVelocity [C data]: the mine rolls out at the
++// launch speed, explodes when its Fuse runs out, when an enemy pawn touches it, or when shot to 0 Health (a destructible hit box);
++// the explosion is HurtRadius(DamageAmount, DamageRadius); each one gone -> the factory's Single / All Pawns Killed.
++// PROV: no rigid-body physics - it rolls on the ground toward the nearest enemy (the launch direction is not exported: the spawn
++// points are Emitters without a rotation in the data), steering at 10 m/s^2.
++void World::cpLoadMineDefs() {
++    cp_.mineFactories.clear(); cp_.mines.clear();
++    assets::Json j;
++    if (!readJsonFile("F:/Transformers Rebuild/AssetTools/out/campaign_characters/spawnables.json", j)) return;
++    const assets::Json& r = j["roller_mine"];
++    const assets::Json& cd = r["class_defaults"];
++    const assets::Json& fs = r["factories"];
++    for (size_t f = 0; f < fs.size(); ++f) {
++        if (fs[f]["chapter"].asString() != cpChapter_.chapter) continue;
++        const assets::Json& v = fs[f]["factory_values"];
++        CampaignState::MineFactory M;
++        M.damage = v["DamageAmount"].asFloat(cd["_DamageAmount"].asFloat(25.0f));
++        M.radius = v["DamageRadius"].asFloat(cd["_DamageRadius"].asFloat(1000.0f)) * 0.01f;
++        M.health = v["Health"].asFloat(cd["_Health"].asFloat(30.0f));
++        M.fuse = v["Fuse"].asFloat(cd["_Fuse"].asFloat(10.0f));
++        const assets::Json& lv = v["LocalLinearVelocity"];
++        M.speed = std::max(5.0f, std::sqrt(lv["X"].asFloat(0) * lv["X"].asFloat(0) + lv["Y"].asFloat(0) * lv["Y"].asFloat(0)) * 0.01f);
++        for (size_t k = 0; k < fs[f]["spawn_points"].size(); ++k) {
++            const assets::Json& L = fs[f]["spawn_points"][k]["location_ue"];
++            if (L.size() >= 3) M.points.push_back(core::Vec3{L[0].asFloat() * 0.01f, L[2].asFloat() * 0.01f, L[1].asFloat() * 0.01f});
++        }
++        cp_.mineFactories[fs[f]["action"].asString()] = M;
++    }
++    LOG_INFO("campaign: %zu roller mine factories", cp_.mineFactories.size());
++}
++
++bool World::cpMineFactoryActivate(KismetVM& vm, int op, int input, CampaignFactory& F) {
++    const int fi = (int)(&F - &cp_.factories[0]);
++    auto it = cp_.mineFactories.find(F.action);
++    if (input == 4) { for (CampaignMine& m : cp_.mines) if (m.factory == fi && !m.done) { m.fuse = 0.0f; } return true; }   // Kill All: they go off
++    if (input != 0) return true;
++    if (it == cp_.mineFactories.end() || it->second.points.empty()) {
++        LOG_INFO("campaign: roller mine factory %s: no data", afterDot(F.action).c_str());
++        if (std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Spawned") != F.outputs.end()) vm.output(op, "All Pawns Spawned");
++        return true;
++    }
++    const CampaignState::MineFactory M = it->second;
++    for (int c = 0; c < std::max(1, F.count); ++c) {
++        CampaignMine m;
++        m.factory = fi; m.pos = M.points[(size_t)c % M.points.size()]; m.fuse = M.fuse;
++        CampaignDestructible d;
++        d.name = "rollermine_" + std::to_string(cp_.mines.size()); d.pos = m.pos; d.block = false;
++        d.posUE = core::Vec3{m.pos.x * 100.0f, m.pos.z * 100.0f, m.pos.y * 100.0f};
++        CampaignDestructible::Piece P; P.name = "Mine";
++        CampaignDestructible::State alive; alive.handle = 0; alive.name = "Rolling"; alive.health = M.health;
++        alive.mesh = "content/FX_RollerMine_p/Mesh/RollerMine_STAT.gltf";
++        alive.links.push_back({1, std::string("HmGenericDamageDestructionTrigger")});
++        CampaignDestructible::State dead; dead.handle = 1; dead.name = "Exploded";
++        P.states.push_back(alive); P.states.push_back(dead); P.cur = 0; P.health = M.health;
++        d.pieces.push_back(P);
++        d.fixedBounds = true; d.lo = m.pos - core::Vec3{0.7f, 0.7f, 0.7f}; d.hi = m.pos + core::Vec3{0.7f, 0.7f, 0.7f};
++        cp_.destructibles.push_back(d);
++        m.des = (int)cp_.destructibles.size() - 1;
++        m.damage = M.damage; m.radius = M.radius; m.speed = M.speed;
++        cp_.mines.push_back(m);
++        F.liveSentries.push_back(-1 - (int)(cp_.mines.size() - 1));   // (mines share the live list: -1 - index)
++        if (std::find(F.outputs.begin(), F.outputs.end(), "Spawned") != F.outputs.end()) vm.output(op, "Spawned");
++    }
++    LOG_INFO("campaign: roller mine factory %s launched %d", afterDot(F.action).c_str(), std::max(1, F.count));
++    if (std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Spawned") != F.outputs.end()) vm.output(op, "All Pawns Spawned");
++    return true;
++}
++
++void World::cpTickMines(float dt) {
++    for (size_t mi = 0; mi < cp_.mines.size(); ++mi) {
++        CampaignMine& m = cp_.mines[mi];
++        if (m.done) continue;
++        CampaignDestructible& d = cp_.destructibles[(size_t)m.des];
++        const int team = cp_.factories[(size_t)m.factory].team;
++        // roll toward the nearest living enemy
++        int tgt = -1; float best = 1e30f;
++        for (size_t q = 0; q < match_.players().size(); ++q) {
++            const MatchPlayer& mp = match_.players()[q];
++            if (!mp.alive || mp.team == team) continue;
++            const Character* c = participantPawn((int)q);
++            if (!c) continue;
++            const float L = core::length(c->position() - m.pos);
++            if (L < best) { best = L; tgt = (int)q; }
++        }
++        if (tgt >= 0) {
++            core::Vec3 to = participantPawn(tgt)->position() - m.pos; to.y = 0.0f;
++            const float L = core::length(to);
++            if (L > 1e-3f) {
++                const core::Vec3 want = to * (m.speed / L);
++                const core::Vec3 dv = want - core::Vec3{m.vel.x, 0.0f, m.vel.z};
++                const float dl = core::length(dv), a = 10.0f * dt;
++                m.vel = m.vel + (dl > a ? dv * (a / dl) : dv);
++            }
++        }
++        m.pos = m.pos + m.vel * dt;
++        float gy; core::Vec3 n;
++        if (collision_.valid() && collision_.groundHeight(m.pos.x, m.pos.z, m.pos.y + 1.0f, 2.0f, gy, n)) m.pos.y = gy + 0.6f;
++        d.pos = m.pos; d.posUE = core::Vec3{m.pos.x * 100.0f, m.pos.z * 100.0f, m.pos.y * 100.0f};
++        d.lo = m.pos - core::Vec3{0.7f, 0.7f, 0.7f}; d.hi = m.pos + core::Vec3{0.7f, 0.7f, 0.7f};
++        const bool shot = d.gone || d.pieces.empty() || d.pieces[0].cur != 0;
++        const bool touched = tgt >= 0 && best < 1.5f;
++        if (!shot && !touched && (m.fuse -= dt) > 0.0f) continue;
++        m.done = true;
++        cpRemoveDestructible(m.des);
++        radiusDamage(m.pos, m.damage, m.radius, -1, "TnDamageTypeRollerMine");
++        LOG_INFO("campaign: roller mine %zu explodes (%s)", mi, shot ? "shot" : touched ? "touched" : "fuse");
++        CampaignFactory& F = cp_.factories[(size_t)m.factory];
++        F.liveSentries.erase(std::remove(F.liveSentries.begin(), F.liveSentries.end(), -1 - (int)mi), F.liveSentries.end());
++        if (F.op >= 0) {
++            if (std::find(F.outputs.begin(), F.outputs.end(), "Single Pawn Killed") != F.outputs.end()) cp_.vm.output(F.op, "Single Pawn Killed");
++            if (F.liveSentries.empty() && std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Killed") != F.outputs.end()) cp_.vm.output(F.op, "All Pawns Killed");
++        }
++    }
++}
++
++} // namespace game

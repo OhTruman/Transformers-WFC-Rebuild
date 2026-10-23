@@ -1483,6 +1483,9 @@ private:
     bool cpSentryFactoryActivate(KismetVM& vm, int op, int input, CampaignFactory& F);
     void cpTickSentries(float dt);
     bool cpSentryOpActivate(KismetVM& vm, int op, int input);
+    void cpLoadMineDefs();
+    bool cpMineFactoryActivate(KismetVM& vm, int op, int input, CampaignFactory& F);
+    void cpTickMines(float dt);
     bool cpShootAtPoint(int player, core::Vec3& out) const;
     bool cpAuxSpawn(const std::string& actor, int k, core::Vec3& out);
     void cpDrawDestructibles(render::IRenderer& r) const;

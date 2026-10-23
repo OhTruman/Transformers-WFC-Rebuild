@@ -247,6 +247,7 @@ void World::setupCampaign(const MatchLaunch& l) {
         cpLoadPawnGroups();
         cpLoadInteracts();
         cpLoadSentryDefs();
+        cpLoadMineDefs();
         cpLoadTouches();
         cpLoadPlacedDestructibles();
         cpBindMoverNav();   // (the nav is loaded by addBots above)
@@ -482,6 +483,7 @@ void World::tickCampaign(float dt) {
     cpTickTransformOps();
     cpTickFactoryKills();
     if (!cp_.gameOver) cpTickSentries(dt);
+    if (!cp_.gameOver) cpTickMines(dt);
     if (!cp_.gameOver) cpTickOmega(dt);
     // TnCampaignGame.Killed: a human killed by anything but DmgType_Suicided -> CampaignGameOver (solo: never downed).
     const auto& kh = match_.killHistory();

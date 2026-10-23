@@ -119,6 +119,9 @@ struct CampaignSentry {
     bool dead = false, dormant = false;
 };
 
+// A launched roller mine (its hit box / draw: a destructible).
+struct CampaignMine { int factory = -1, des = -1; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float fuse = 10.0f, damage = 200.0f, radius = 12.8f, speed = 20.0f; bool done = false; };
+
 // A player interact (TnInteract*) and its TnSeqEvent_Interact events.
 struct CampaignInteract {
     std::string name, cls;
@@ -184,6 +187,9 @@ struct CampaignState {
     std::vector<CampaignSentryDef> sentryDefs;
     std::map<std::string, SentryFactory> sentryFactories;   // factory action path -> its TURRETDEF + spawn points
     std::vector<CampaignSentry> sentries;
+    struct MineFactory { float damage = 200.0f, radius = 12.8f, health = 30.0f, fuse = 10.0f, speed = 20.0f; std::vector<core::Vec3> points; };
+    std::map<std::string, MineFactory> mineFactories;   // factory action path -> its authored mine values + spawn points
+    std::vector<CampaignMine> mines;
     std::vector<std::pair<int, std::vector<int>>> transformOps;   // TnSeqAct_TransformWorldProp waiting for Finished: op, actors
     bool transformMoved = false;               // a matinee moved a transforming actor (nav blocks re-applied at rest)
     std::map<int, std::string> shootAt;        // SeqAct_TnAiShootAtActor: AI player -> its forced fire target
