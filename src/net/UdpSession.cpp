@@ -433,6 +433,8 @@ void UdpSession::dropPeer(int seat, SessionLeaveReason why, bool notify) {
     if (t_) t_->removePeer(seat);
     const bool inMatch = matchReady();
     LOG_INFO("session: member %s (seat %d) gone (%d)%s", id.fingerprint.c_str(), seat, (int)why, inMatch ? " in the match" : "");
+    if (role_ == Role::Host && inMatch)   // the lockstep's leave protocol (the driver): its match seat
+        for (size_t i = 0; i < matchToSession_.size(); ++i) if (matchToSession_[i] == seat) droppedMatchSeats_.push_back((int)i);
     if (role_ == Role::Host && notify) {
         W w(kDropped); w.str(id.fingerprint); w.u8((int)why); w.u8(inMatch ? 1 : 0);
         sendAllMembers(w.b);
@@ -519,7 +521,8 @@ void UdpSession::joinRunningMatch() {
 }
 
 void UdpSession::reportCatchUp(uint32_t tick, uint32_t target) {
-    if (!lateJoin_ || (now_ - catchUpSentAt_ < 0.1 && tick < target)) return;   // ~10 a second, and the last one
+    if (!lateJoin_ || catchUpDone_ || (now_ - catchUpSentAt_ < 0.1 && tick < target)) return;   // ~10 a second, and the last one
+    if (tick >= target) catchUpDone_ = true;   // live: one final 100 % event, then none (Experimental: 4,532 after READY)
     if (tick == catchUpSent_ && catchUpSentAt_ >= 0.0) return;
     catchUpSent_ = tick; catchUpSentAt_ = now_;
     SessionEvent e; e.type = SessionEvent::Type::CatchUpProgress; e.catchUpTick = tick; e.catchUpTarget = target; emit(e);
@@ -759,7 +762,7 @@ void UdpSession::handleSeated(int seat, const std::vector<uint8_t>& d) {
         const int mine = r.u8();
         if (!r.ok || mine < 0 || (size_t)mine >= matchToSession_.size()) break;
         matchToSession_[(size_t)mine] = t_ ? t_->self() : kNoSession;
-        matchSelf_ = mine; lateJoin_ = true; matchRunning_ = false;
+        matchSelf_ = mine; lateJoin_ = true; matchRunning_ = false; catchUpDone_ = false; catchUpSentAt_ = -1.0;
         view_ = std::make_unique<MatchView>(*this);
         LOG_INFO("session: late join accepted - match seat %d of %zu", mine, matchToSession_.size());
         SessionEvent e; e.type = SessionEvent::Type::CountdownStarted;

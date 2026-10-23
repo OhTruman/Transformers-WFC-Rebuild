@@ -1,0 +1,558 @@
+diff -ruN a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+--- a/src/core/Application_Frontend.cpp	2026-10-23 03:36:07.525629900 -0500
++++ b/src/core/Application_Frontend.cpp	2026-10-23 03:36:07.542186500 -0500
+@@ -620,7 +620,7 @@
+                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
+                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
+                           "WFC_VEHTEST", "WFC_FOVTEST", "WFC_SCREENTEST", "WFC_TILETEST", "WFC_MODETEST", "WFC_CHASSISTEST",
+-                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_CAMPAIGNAUDIOTEST", "WFC_UDPHOST", "WFC_UDPJOIN", "WFC_ONLINEFLOWTEST", "WFC_SOLOLAUNCHTEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
++                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_CAMPAIGNAUDIOTEST", "WFC_UDPHOST", "WFC_UDPJOIN", "WFC_UDPLEAVE_AT", "WFC_ONLINEFLOWTEST", "WFC_SOLOLAUNCHTEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
+                           "WFC_SPAWNFILLTEST", "WFC_EXTRABODYTEST", "WFC_DOUBLEJUMPTEST",
+                           "WFC_DETERMINISMTEST", "WFC_WEAPONAUDIT", "WFC_VEHFRAMETEST", "WFC_VEHICLEAUDIT", "WFC_QABOTTEST", "WFC_MARKERSTEST", "WFC_STUCKSPOT_BOT", "WFC_ASYNCSTEPTEST", "WFC_ENGAGETEST", "WFC_EVICTTEST", "WFC_BARRIERWALKTEST"})   // [integration 09c] Gameplay 26d / 26h / 26k harnesses
+         if (std::getenv(v)) return false;
+@@ -2064,19 +2064,39 @@
+     const game::MatchLaunch duo = build(two);
+     check(duo.online && duo.humans.size() == 2 && duo.localSeat == 0, "with a second human: the seat order (the driver path)");
+     const float step = clock_.stepSeconds();
+-    auto run = [&](std::vector<uint64_t>& hashes) {
++    // mode 0: the synchronous step (World::tick). 1 / 2: the frame loop's async step - tickPrefix, GameMode, then launchStep (the
++    // remainder on the sim thread) overlapping the main thread's "draw", joined at the next frame top; 2 adds a varying 0-6 ms
++    // draw gap with presentation reads (render-only timing must not reach the sim: x33, Rendering 2026-10-23).
++    auto run = [&](std::vector<uint64_t>& hashes, int mode = 0) {
+         if (!world_.launchMatch(solo)) return false;
+         world_.match().requireCharacterSelection(world_.localMatchPlayer());
+         game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+         world_.match().selectCharacter(world_.localMatchPlayer(), cs);
++        uint32_t lcg = 12345u;
+         for (int i = 0; i < 1400; ++i) {
++            if (mode > 0) world_.joinStep();   // the frame top
+             platform::InputFrame input;
+             world_.playerBotInput(input, step);
+             world_.handleInput(input, step);
+-            world_.tick(step);
++            if (mode == 0) world_.tick(step);
++            else world_.tickPrefix(step);
+             gameMode_.tick(world_, step);
++            if (mode > 0) {
++                world_.launchStep();   // after the draw: overlaps endFrame / present / HUD
++                if (mode == 2) {
++                    lcg = lcg * 1664525u + 1013904223u;
++                    const auto until = std::chrono::steady_clock::now() + std::chrono::microseconds((lcg >> 8) % 6000);
++                    float acc = 0.0f;
++                    while (std::chrono::steady_clock::now() < until)   // presentation reads, as the HUD / renderer do
++                        for (size_t p = 0; p < world_.match().players().size(); ++p)
++                            if (const game::Character* c = world_.participantPawn((int)p)) acc += c->position().x;
++                    (void)acc;
++                }
++                world_.joinStep();   // the hash reads a whole step
++            }
+             if ((i + 1) % 100 == 0) hashes.push_back(world_.simStateHash());
+         }
++        world_.joinStep();
+         return true;
+     };
+     std::vector<uint64_t> h1, h2;
+@@ -2086,6 +2106,11 @@
+     for (size_t i = 0; i < h1.size() && i < h2.size(); ++i) if (h1[i] != h2[i]) { firstDiff = i; break; }
+     check(!h1.empty() && h1.size() == h2.size() && firstDiff == h1.size(), "same seed twice: equal simStateHash every 100 steps to 1400");
+     if (!h1.empty()) LOG_INFO("SOLOLAUNCHTEST hash at 1400: %016llx / %016llx", (unsigned long long)h1.back(), (unsigned long long)(h2.empty() ? 0 : h2.back()));
++    std::vector<uint64_t> h3, h4;
++    const bool ok3 = run(h3, 1), ok4 = run(h4, 2);
++    check(ok3 && ok4 && h3 == h1, "the async step (remainder on the sim thread) = the synchronous step, every 100 steps");
++    check(ok4 && h4 == h1, "the async step with a varying 0-6 ms draw gap + presentation reads = the synchronous step");
++    if (!h3.empty() && !h4.empty()) LOG_INFO("SOLOLAUNCHTEST async hash at 1400: %016llx / %016llx", (unsigned long long)h3.back(), (unsigned long long)h4.back());
+     LOG_INFO("SOLOLAUNCHTEST SUMMARY: %s (%d failed)", fails ? "FAIL" : "PASS", fails);
+     exitCode_ = fails ? 1 : 0;
+ }
+diff -ruN a/src/core/Application_Net.cpp b/src/core/Application_Net.cpp
+--- a/src/core/Application_Net.cpp	2026-10-23 03:36:07.492516300 -0500
++++ b/src/core/Application_Net.cpp	2026-10-23 03:36:07.508571700 -0500
+@@ -395,6 +395,19 @@
+     if constexpr (HasQueueLateSeat<W>::value) w.queueLateSeat(seat, r, atTick);
+     else LOG_WARN("online: World::queueLateSeat missing in this build - seat %d (%s) does not wake at tick %u", seat, r.name.c_str(), atTick);
+ }
++template <class W, class = void> struct HasQueueLeave : std::false_type {};
++template <class W> struct HasQueueLeave<W, std::void_t<decltype(std::declval<W&>().queueLeave(0, 0u))>> : std::true_type {};
++// A member left mid-match: its slot to a bot (bot fill on: Gameplay's applySlotSwap) or empty (World::queueLeave; Match's Forfeit
++// rule then runs by itself), at the agreed tick on every peer.
++template <class W> void seatLeft(W& w, int seat, uint32_t untilTick, bool toBot) {
++    if (toBot) { game::SlotSwap s; s.matchPlayer = seat; s.toBot = true; s.atTick = (int64_t)untilTick; w.applySlotSwap(s); return; }
++    if constexpr (HasQueueLeave<W>::value) w.queueLeave(seat, untilTick);
++    else LOG_WARN("online: World::queueLeave missing in this build - seat %d's participant stays (idle) after tick %u", seat, untilTick);
++}
++template <class W> bool hasBotFill(const W& w) {
++    for (const auto& p : w.match().players()) if (p.kind == game::ParticipantKind::Bot) return true;
++    return false;
++}
+ template <class W, class = void> struct HasSmallerTeam : std::false_type {};
+ template <class W> struct HasSmallerTeam<W, std::void_t<decltype(std::declval<const W&>().smallerTeam())>> : std::true_type {};
+ template <class W> int smallerTeamOf(const W& w) {
+@@ -451,6 +464,8 @@
+     c.keepHistory = localSeat == 0 && std::find(c.activeFrom.begin(), c.activeFrom.end(), 0u) != c.activeFrom.end();
+     c.pickJoinTeam = [this](int) { return smallerTeamOf(world_); };
+     c.seatPlayer = [this](int seat) { return seatPlayerOf(world_, seat); };
++    c.leaveToBot = [this](int) { return hasBotFill(world_); };
++    c.onSeatLeave = [this](int seat, uint32_t until, bool toBot) { seatLeft(world_, seat, until, toBot); };
+     c.onSeatJoin = [this](int seat, int team, bool local, uint32_t atTick) {
+         game::RemoteSeat r;
+         r.team = team; r.selected = false;
+@@ -475,7 +490,10 @@
+     }
+     d.frame(realDt);
+     if (udpSession_) {   // join in progress: the host's tick (the catch-up limit); a late joiner's replay -> CatchUpProgress
+-        if (d.localSeat() == 0) udpSession_->noteMatchTick((uint32_t)world_.simTick());
++        if (d.localSeat() == 0) {
++            udpSession_->noteMatchTick((uint32_t)world_.simTick());
++            for (int ms : udpSession_->takeDroppedMatchSeats()) d.dropSeat(ms);   // a member lost mid-match: the leave protocol
++        }
+         if (d.catchingUp()) udpSession_->reportCatchUp(d.catchUpTick(), d.catchUpTarget());
+         else if (udpSession_->lateJoin()) udpSession_->reportCatchUp(d.catchUpTick(), d.catchUpTick());   // the last one: done
+     }
+@@ -608,6 +626,11 @@
+     c.keepHistory = self == 0 && std::find(activeFrom.begin(), activeFrom.end(), 0u) != activeFrom.end();
+     c.pickJoinTeam = [this](int) { return smallerTeamOf(world_); };
+     c.seatPlayer = [this](int seat) { return seatPlayerOf(world_, seat); };
++    c.leaveToBot = [this](int) { return std::getenv("WFC_UDPLEAVE_TOBOT") != nullptr; };   // the harness: empty by default
++    c.onSeatLeave = [this](int seat, uint32_t until, bool toBot) {
++        LOG_INFO("UDPMATCH seat %d leaves at tick %u (%s)", seat, until, toBot ? "to a bot" : "empty");
++        seatLeft(world_, seat, until, toBot);
++    };
+     bool pickAfterWake = false;
+     c.onSeatJoin = [this, &s, &pickAfterWake](int seat, int team, bool local, uint32_t atTick) {
+         game::RemoteSeat r; r.team = team; r.member = s.matchMember(seat).fingerprint; r.name = s.matchMemberName(seat);
+@@ -619,7 +642,7 @@
+     long catchUpEvents = 0;
+     const float matchSeconds = (float)std::atof(std::getenv("WFC_MATCH_SECONDS") ? std::getenv("WFC_MATCH_SECONDS") : "60");
+     auto last = std::chrono::steady_clock::now();
+-    bool started = false, reachedEnd = false, hostLostEarly = false;
++    bool started = false, reachedEnd = false, hostLostEarly = false, leftByChoice = false;
+     long steps = 0;
+     while (!drv.finished()) {
+         for (auto& e : s.poll(now())) { LOG_INFO("UDPMATCH <- %s (in match)", frontend::sessionEventName(e.type)); ev.push_back(e); }
+@@ -628,7 +651,16 @@
+         last = t;
+         steps += drv.frame(dt);
+         if (pickAfterWake && !drv.catchingUp()) { pickAfterWake = false; drv.chooseCharacter(cs); LOG_INFO("UDPMATCH: the joiner picks its character"); }
+-        if (self == 0) s.noteMatchTick((uint32_t)world_.simTick());
++        if (self == 0) { s.noteMatchTick((uint32_t)world_.simTick()); for (int ms : s.takeDroppedMatchSeats()) drv.dropSeat(ms); }
++        // WFC_UDPLEAVE_AT=<match s> (a member): the pause menu's Leave Match - ISession::leave() (the session's LEAVE to the host),
++        // then the driver's BYE - at that match time, exit 0. The host and the others play on (the leave protocol).
++        static const float leaveAt = std::getenv("WFC_UDPLEAVE_AT") ? (float)std::atof(std::getenv("WFC_UDPLEAVE_AT")) : 0.0f;
++        if (leaveAt > 0.0f && self != 0 && world_.matchActive() && world_.match().elapsedTime() >= leaveAt) {
++            LOG_INFO("UDPMATCH: seat %d leaves the match at tick %lld (Leave Match)", self, (long long)world_.simTick());
++            s.leave();
++            leftByChoice = true;
++            break;
++        }
+         if (s.lateJoin()) s.reportCatchUp(drv.catchUpTick(), drv.catchingUp() ? drv.catchUpTarget() : drv.catchUpTick());
+         for (const SessionEvent& e : ev) if (e.type == T::CatchUpProgress) ++catchUpEvents;
+         ev.erase(std::remove_if(ev.begin(), ev.end(), [](const SessionEvent& e) { return e.type == T::CatchUpProgress; }), ev.end());
+@@ -642,7 +674,7 @@
+     const int st = drv.status();
+     LOG_INFO("UDPMATCH done: %ld steps, seat %d of %d, status %d, D %d, rtt %.1f ms%s", steps, self, n, st, drv.delay(), drv.rttMs(),
+              s.lateJoin() ? (", late join, " + std::to_string(catchUpEvents) + " CatchUpProgress events").c_str() : "");
+-    exitCode_ = st != 0 ? st : (hostLostEarly ? (has(T::HostLost) ? 5 : 4) : 0);   // the host leaving at the normal end = 0
++    exitCode_ = leftByChoice ? 0 : st != 0 ? st : (hostLostEarly ? (has(T::HostLost) ? 5 : 4) : 0);   // the host leaving at the normal end = 0
+ }
+ 
+ // WFC_UDPSESSIONTEST (no device, no window, loopback only - 127.0.0.1 binds, so no firewall prompt): two net::UdpSessions in this
+diff -ruN a/src/net/Lockstep.cpp b/src/net/Lockstep.cpp
+--- a/src/net/Lockstep.cpp	2026-10-23 03:36:07.321931300 -0500
++++ b/src/net/Lockstep.cpp	2026-10-23 03:36:07.339491600 -0500
+@@ -23,7 +23,8 @@
+ uint64_t get64(const uint8_t* p) { return (uint64_t)get32(p) | ((uint64_t)get32(p + 4) << 32); }
+ 
+ enum : uint8_t { kCmds = 1, kHello = 2, kHash = 3, kBye = 4, kPing = 5, kPong = 6, kVoice = 7, kEvent = 8,
+-                 kJoinReq = 9, kHist = 10, kReady = 11 };
++                 kJoinReq = 9, kHist = 10, kReady = 11, kLeaveQ = 12, kLeaveR = 13, kLeaveF = 14 };
++constexpr double kLeaveWaitMs = 1000.0;         // the host merges the members' leave reports for at most this long
+ enum : uint8_t { kHistTicks = 0, kHistEvent = 1, kHistHash = 2 };   // HIST sub-records
+ constexpr size_t kHistPacketBytes = 1100;      // under the transport's 2048-byte receive buffer, one datagram
+ constexpr double kFeedBytesPerMs = 2000.0;     // 2 MB/s history pacing (the reliable channel has no window of its own)
+@@ -80,6 +81,7 @@
+     eventSeen_.resize((size_t)cfg_.seats);
+     activeFrom_ = cfg_.activeFrom;
+     activeFrom_.resize((size_t)cfg_.seats, 1);
++    activeUntil_.assign((size_t)cfg_.seats, 0);
+     for (int s = 0; s < cfg_.seats; ++s)
+         if (activeFrom_[(size_t)s] == 0 || cfg_.lateJoin) hello_[(size_t)s] = 1;   // reserved seats / a late joiner wait for no HELLO
+     lastFullMs_.assign((size_t)cfg_.seats, 0.0);
+@@ -124,7 +126,7 @@
+         const double overdue = 1.5 * (double)std::max(srtt_, 20.0f) + 10.0;
+         const bool idle = nowMs() - lastSendMs_ >= 30.0;
+         for (int s = 0; s < cfg_.seats; ++s) {
+-            if (s == cfg_.self || activeFrom_[(size_t)s] == 0) continue;
++            if (s == cfg_.self || !joined(s)) continue;
+             // overdue: the peer still lacks a tick I first sent more than `overdue` ago (and no full window went out since)
+             auto next = producedMs_.find(peerAck_[(size_t)s] + 1);
+             const bool lost = next != producedMs_.end() && nowMs() - next->second >= overdue && nowMs() - lastFullMs_[(size_t)s] >= overdue;
+@@ -135,15 +137,69 @@
+     if (nowMs() - lastPingMs_ >= 250.0) {
+         lastPingMs_ = nowMs();
+         std::vector<uint8_t> b; put8(b, kPing); put8(b, (uint8_t)cfg_.self); put64(b, (uint64_t)(nowMs() * 1000.0));
+-        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && activeFrom_[(size_t)s] != 0) t_.sendUnreliable(s, b.data(), b.size());
++        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && joined(s)) t_.sendUnreliable(s, b.data(), b.size());
+     }
+     if (!feeds_.empty()) pumpFeeds();
++    for (size_t i = 0; i < leaves_.size();) {   // the host: a leave is decided once every joined member reported (or 1 s passed)
++        Leave& l = leaves_[i];
++        bool all = true;
++        for (int s = 1; s < cfg_.seats; ++s) if (s != l.seat && joined(s) && !l.reports.count(s)) all = false;
++        if (all || nowMs() - l.startMs >= kLeaveWaitMs) { finishLeave(l); leaves_.erase(leaves_.begin() + (long)i); continue; }
++        ++i;
++    }
+ }
+ 
+ bool Lockstep::seatActive(int seat, uint32_t tick) const {
+     if (seat < 0 || seat >= cfg_.seats) return false;
+-    const uint32_t a = activeFrom_[(size_t)seat];
+-    return a != 0 && tick >= a;
++    const uint32_t a = activeFrom_[(size_t)seat], u = activeUntil_[(size_t)seat];
++    return a != 0 && tick >= a && (u == 0 || tick < u);
++}
++
++bool Lockstep::joined(int seat) const {
++    return seat >= 0 && seat < cfg_.seats && activeFrom_[(size_t)seat] != 0 && activeUntil_[(size_t)seat] == 0;
++}
++
++// A member left mid-match (host only): ask every other member which of the leaver's commands it holds beyond ours.
++void Lockstep::dropSeat(int seat) {
++    if (cfg_.self != 0 || seat <= 0 || seat >= cfg_.seats || !joined(seat)) return;
++    for (const Leave& l : leaves_) if (l.seat == seat) return;
++    Leave l; l.seat = seat; l.startMs = nowMs();
++    std::vector<uint8_t> b; put8(b, kLeaveQ); put8(b, (uint8_t)cfg_.self); put8(b, (uint8_t)seat); put32(b, contiguous_[(size_t)seat] + 1);
++    for (int s = 1; s < cfg_.seats; ++s) if (s != seat && joined(s)) t_.sendReliable(s, b.data(), b.size());
++    leaves_.push_back(l);
++    LOG_INFO("NET seat %d left mid-match: asking the members for its commands beyond tick %u", seat, contiguous_[(size_t)seat]);
++}
++
++// Every report in (or the wait over): U = our contiguous tick of the leaver + 1 after the merge; each member gets what it lacks below U;
++// then the SeatLeave event.
++void Lockstep::finishLeave(Leave& l) {
++    const int seat = l.seat;
++    const uint32_t until = contiguous_[(size_t)seat] + 1;
++    for (const auto& r : l.reports) {
++        const uint32_t from = r.second + 1;
++        if (from >= until) continue;
++        std::vector<uint8_t> b; put8(b, kLeaveF); put8(b, (uint8_t)cfg_.self); put8(b, (uint8_t)seat); put32(b, from);
++        const size_t nAt = b.size(); put8(b, 0); put8(b, 0);
++        uint16_t n = 0;
++        for (uint32_t t = from; t < until && n < 1000; ++t, ++n) {
++            auto it = cmds_[(size_t)seat].find(t);
++            if (it == cmds_[(size_t)seat].end()) break;
++            b.insert(b.end(), it->second.begin(), it->second.end());
++        }
++        b[nAt] = (uint8_t)n; b[nAt + 1] = (uint8_t)(n >> 8);
++        t_.sendReliable(r.first, b.data(), b.size());
++    }
++    std::vector<uint8_t> pl; pl.push_back((uint8_t)seat); put32(pl, until); pl.push_back(leaveToBot_ && leaveToBot_(seat) ? 1 : 0);
++    submitEvent(kEventSeatLeave, pl);   // applies it here (applySeatLeave) and sends it to every joined seat
++    LOG_INFO("NET seat %d leaves at tick %u (%zu member reports merged)", seat, until, l.reports.size());
++}
++
++void Lockstep::applySeatLeave(const Event& e) {
++    if (e.payload.size() < 5) return;
++    const int seat = e.payload[0];
++    if (seat <= 0 || seat >= cfg_.seats || !joined(seat)) return;
++    activeUntil_[(size_t)seat] = get32(&e.payload[1]);
++    LOG_INFO("NET seat %d is empty from tick %u", seat, activeUntil_[(size_t)seat]);
+ }
+ 
+ // The host's history feed to each joining seat, paced (kFeedBytesPerMs): first every event it knows that this joiner has not had,
+@@ -222,9 +278,10 @@
+ void Lockstep::applySeatJoin(const Event& e) {
+     if (e.payload.size() < 6) return;
+     const int seat = e.payload[0];
+-    if (seat < 0 || seat >= cfg_.seats || activeFrom_[(size_t)seat] != 0) return;
++    if (seat < 0 || seat >= cfg_.seats || joined(seat)) return;
+     const uint32_t active = get32(&e.payload[1]);
+     activeFrom_[(size_t)seat] = active;
++    activeUntil_[(size_t)seat] = 0;
+     hello_[(size_t)seat] = 1;
+     LOG_INFO("NET seat %d is active from tick %u (joined at tick %u)", seat, active, e.atTick);
+     if (seat == cfg_.self) {   // this joiner: ticks it already passed to submitLocal from activeTick on had no command - empty ones
+@@ -302,6 +359,52 @@
+             }
+         break;
+     }
++    case kLeaveQ: {   // a member: report the leaver's commands we hold from `from` on
++        if (seat != 0 || d.size() < 7) return;
++        const int lv = d[2];
++        if (lv <= 0 || lv >= cfg_.seats) return;
++        const uint32_t from = get32(&d[3]), have = contiguous_[(size_t)lv];
++        std::vector<uint8_t> b; put8(b, kLeaveR); put8(b, (uint8_t)cfg_.self); put8(b, (uint8_t)lv); put32(b, have); put32(b, from);
++        const size_t nAt = b.size(); put8(b, 0); put8(b, 0);
++        uint16_t n = 0;
++        for (uint32_t t = from; t <= have && n < 1000; ++t, ++n) {
++            auto it = cmds_[(size_t)lv].find(t);
++            if (it == cmds_[(size_t)lv].end()) break;
++            b.insert(b.end(), it->second.begin(), it->second.end());
++        }
++        b[nAt] = (uint8_t)n; b[nAt + 1] = (uint8_t)(n >> 8);
++        t_.sendReliable(0, b.data(), b.size());
++        break;
++    }
++    case kLeaveR: {   // the host: a member's report
++        if (cfg_.self != 0 || d.size() < 13) return;   // a report with no commands is 13 bytes
++        const int lv = d[2];
++        const uint32_t have = get32(&d[3]), first = get32(&d[7]);
++        const size_t n = (size_t)d[11] | ((size_t)d[12] << 8);
++        if (lv <= 0 || lv >= cfg_.seats || d.size() < 13 + n * kWireCommandBytes) return;
++        for (size_t i = 0; i < n; ++i) {
++            WireCommand w; std::copy(d.begin() + (long)(13 + i * kWireCommandBytes), d.begin() + (long)(13 + (i + 1) * kWireCommandBytes), w.begin());
++            cmds_[(size_t)lv].emplace(first + (uint32_t)i, w);
++        }
++        uint32_t& c = contiguous_[(size_t)lv];
++        while (cmds_[(size_t)lv].count(c + 1)) ++c;
++        for (Leave& l : leaves_) if (l.seat == lv) l.reports[seat] = have;
++        break;
++    }
++    case kLeaveF: {   // a member: the leaver's commands we lacked below the agreed tick
++        if (seat != 0 || d.size() < 9) return;
++        const int lv = d[2];
++        const uint32_t first = get32(&d[3]);
++        const size_t n = (size_t)d[7] | ((size_t)d[8] << 8);
++        if (lv <= 0 || lv >= cfg_.seats || d.size() < 9 + n * kWireCommandBytes) return;
++        for (size_t i = 0; i < n; ++i) {
++            WireCommand w; std::copy(d.begin() + (long)(9 + i * kWireCommandBytes), d.begin() + (long)(9 + (i + 1) * kWireCommandBytes), w.begin());
++            cmds_[(size_t)lv].emplace(first + (uint32_t)i, w);
++        }
++        uint32_t& c = contiguous_[(size_t)lv];
++        while (cmds_[(size_t)lv].count(c + 1)) ++c;
++        break;
++    }
+     case kHist: {   // the joiner: the host's history feed
+         if (!cfg_.lateJoin || seat != 0 || d.size() < 3) return;
+         histStarted_ = true;
+@@ -391,6 +494,7 @@
+     case kBye: {
+         const uint32_t last = d.size() >= 6 ? get32(&d[2]) : 0;
+         LOG_INFO("NET seat %d left (its last tick %u)", seat, last);
++        if (seat != 0 && cfg_.seats > 2) { dropSeat(seat); break; }   // a member: the host runs the leave protocol; the match goes on
+         if (last > 0) endTick_ = endTick_ ? std::min(endTick_, last) : last;   // finish up to there, then end normally
+         else if (seat == 0) fail(Status::HostLost, "the host left");
+         break;
+@@ -461,7 +565,7 @@
+     }
+     uint32_t& h = contiguous_[(size_t)cfg_.self];
+     while (cmds_[(size_t)cfg_.self].count(h + 1)) ++h;
+-    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && activeFrom_[(size_t)s] != 0) sendCommands(s, false);
++    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && joined(s)) sendCommands(s, false);
+ }
+ 
+ bool Lockstep::haveAll(uint32_t tick) const {
+@@ -471,7 +575,7 @@
+     }
+     for (int s = 0; s < cfg_.seats; ++s) if (seatActive(s, tick) && !cmds_[(size_t)s].count(tick)) return false;
+     for (int s = 0; s < cfg_.seats; ++s) {   // every event stamped for this tick (or earlier) arrived
+-        if (s == cfg_.self || activeFrom_[(size_t)s] == 0) continue;
++        if (s == cfg_.self || activeFrom_[(size_t)s] == 0 || (activeUntil_[(size_t)s] != 0 && tick >= activeUntil_[(size_t)s])) continue;   // a leaver: its events up to U still count
+         const auto& a = eventsAnnounced_[(size_t)s];
+         auto it = a.lower_bound(tick);   // the announcement of a packet that covered this tick
+         if (it != a.end() && eventsReceived_[(size_t)s] < it->second) return false;
+@@ -489,7 +593,7 @@
+     put8(b, (uint8_t)len); put8(b, (uint8_t)(len >> 8));
+     b.insert(b.end(), payload.begin(), payload.begin() + (long)len);
+     put32(b, seq);
+-    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && activeFrom_[(size_t)s] != 0) t_.sendReliable(s, b.data(), b.size());
++    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && joined(s)) t_.sendReliable(s, b.data(), b.size());
+     Event e; e.seat = cfg_.self; e.atTick = at; e.kind = kind; e.seq = seq; e.payload.assign(payload.begin(), payload.begin() + (long)len);
+     acceptEvent(std::move(e));
+     return at;
+@@ -506,6 +610,7 @@
+     if (e.seat != cfg_.self) ++eventsReceived_[(size_t)e.seat];
+     if (cfg_.keepHistory) eventLog_.push_back(e);
+     if (e.kind == kEventSeatJoin && e.seat == 0) applySeatJoin(e);
++    if (e.kind == kEventSeatLeave && e.seat == 0) applySeatLeave(e);
+     eventQueue_.push_back(std::move(e));
+ }
+ 
+@@ -547,7 +652,7 @@
+     if (cfg_.keepHistory) hashLog_[tick] = h;
+     std::vector<uint8_t> b; put8(b, kHash); put8(b, (uint8_t)cfg_.self); put32(b, tick); put64(b, h);
+     if (seatActive(cfg_.self, tick))   // a joiner still catching up only checks (against the history): it sends no hashes yet
+-        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && activeFrom_[(size_t)s] != 0) t_.sendReliable(s, b.data(), b.size());
++        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && joined(s)) t_.sendReliable(s, b.data(), b.size());
+     auto it = peerHash_.find(tick);
+     if (it != peerHash_.end()) {
+         for (const auto& ph : it->second)
+@@ -601,7 +706,7 @@
+ void Lockstep::fanOutVoice(int talker, const uint8_t* p, size_t n) {
+     const uint8_t flags = n > 4 ? p[4] : 0;
+     for (int s = 0; s < cfg_.seats; ++s) {
+-        if (s == cfg_.self || s == talker || activeFrom_[(size_t)s] == 0) continue;
++        if (s == cfg_.self || s == talker || !joined(s)) continue;
+         if (voiceAudience_ && !voiceAudience_(talker, s, flags)) continue;
+         t_.sendUnreliable(s, p, n);
+         if (talker != cfg_.self) ++voiceRelayed_;
+@@ -610,7 +715,7 @@
+ 
+ void Lockstep::bye(uint32_t lastTick) {
+     std::vector<uint8_t> b; put8(b, kBye); put8(b, (uint8_t)cfg_.self); put32(b, lastTick);
+-    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && activeFrom_[(size_t)s] != 0) t_.sendReliable(s, b.data(), b.size());
++    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && joined(s)) t_.sendReliable(s, b.data(), b.size());
+     for (int i = 0; i < 20; ++i) t_.service();   // flush best-effort (the peers' acks may not come back before exit)
+     const NetStats st = t_.stats();
+     LOG_INFO("NET bye: sent %llu B / %llu pkts, received %llu B / %llu pkts, resends %llu, rtt %.1f ms, stalled %.0f ms total, D %d",
+diff -ruN a/src/net/Lockstep.h b/src/net/Lockstep.h
+--- a/src/net/Lockstep.h	2026-10-23 03:36:07.287814600 -0500
++++ b/src/net/Lockstep.h	2026-10-23 03:36:07.304873100 -0500
+@@ -24,6 +24,15 @@
+ //             steps (and each event it learns) until the joiner's seat is active - the joiner replays from tick 1 at full speed
+ //             (deterministic sim; the hashes check it) while the match runs on.
+ //  11 READY   (reliable, joiner -> host)  u8 type, u8 seat, u32 the joiner's next step: it is within a few ticks of the host.
++// Leaving mid-match (a member's BYE, or the host's dropSeat on a session drop): one agreed tick U from which the seat is empty again.
++//  12 LEAVEQ  (reliable, host -> members) u8 type, u8 seat (0), u8 leaver, u32 from (the host's contiguous tick of the leaver + 1)
++//  13 LEAVER  (reliable, member -> host)  u8 type, u8 seat, u8 leaver, u32 its contiguous tick, u32 first, u16 n, n x 23: the leaver's
++//             commands it holds from `from` on (a member can be up to D + 1 ticks ahead of the host on the leaver's stream)
++//  14 LEAVEF  (reliable, host -> members) u8 type, u8 seat (0), u8 leaver, u32 first, u16 n, n x 23: what that member lacks below U
++// The host merges the reports, U = its contiguous tick of the leaver + 1 (no peer can have stepped U: none holds the leaver's U),
++// forwards the missing commands and stamps the event kEventSeatLeave {u8 seat, u32 U}: every peer stops waiting on the seat from U
++// (NetMatchDriver::Config::onSeatLeave -> World::queueLeave(seat, U)); the seat is Reserved again (a later joiner can take it).
++// A peer that never answers in 1 s is left out of the merge (its BYE / timeout path ends its own match).
+ // The host then (onJoinReady -> activateSeat) submits the reliable event kind kEventSeatJoin {u8 seat, u32 activeTick, u8 team}
+ // stamped E = its next tick; activeTick = E + kJoinLeadTicks. Every peer sets the seat active from activeTick on arrival (no peer can
+ // have stepped E without the event); the sim adds / wakes the participant at E (NetMatchDriver::Config::onSeatJoin) and the joiner's
+@@ -71,6 +80,7 @@
+         bool keepHistory = false;   // the host: keep every command / event / hash for late joiners
+     };
+     static constexpr uint8_t kEventSeatJoin = 2;     // event kind (1 = Choose Character, NetMatchDriver)
++    static constexpr uint8_t kEventSeatLeave = 3;    // {u8 seat, u32 the first tick without it, u8 to a bot}
+     static constexpr uint32_t kJoinLeadTicks = 30;   // activeTick = the SeatJoin event's tick + this (0.5 s for the joiner's first commands)
+     enum class Status { Running = 0, Desync = 3, PeerTimeout = 4, HostLost = 5, LaunchMismatch = 6 };
+ 
+@@ -106,6 +116,10 @@
+     bool seatActive(int seat, uint32_t tick) const;   // the seat sends commands for this tick
+     bool selfActive() const { return seatActive(cfg_.self, localHigh_ + 1); }
+     uint32_t activeFrom(int seat) const { return seat >= 0 && seat < cfg_.seats ? activeFrom_[(size_t)seat] : 0; }
++    bool joined(int seat) const;                      // active now or later (not Reserved, not left): packets go to it
++    void dropSeat(int seat);                          // the host: a member left (session drop / its BYE) -> the leave protocol
++    // The host: whether a leaver's slot goes to a bot (bot fill on) or empties (Gameplay: applySlotSwap toBot / queueLeave).
++    void setLeaveToBot(std::function<bool(int seat)> f) { leaveToBot_ = std::move(f); }
+     // The host: a reserved seat's joiner is caught up (READY); the callback decides the team and calls activateSeat.
+     void setJoinReady(std::function<void(int seat)> f) { onJoinReady_ = std::move(f); }
+     uint32_t activateSeat(int seat, int team);      // the host: the SeatJoin event; returns the seat's activeTick
+@@ -164,6 +178,12 @@
+     FILE* log_ = nullptr;
+     // Join in progress.
+     std::vector<uint32_t> activeFrom_;
++    std::vector<uint32_t> activeUntil_;              // per seat: the first tick without it after a leave (0 = none)
++    struct Leave { int seat = -1; double startMs = 0.0; std::map<int, uint32_t> reports; };   // the host's open leave (member -> contiguous)
++    std::vector<Leave> leaves_;
++    std::function<bool(int)> leaveToBot_;
++    void finishLeave(Leave& l);
++    void applySeatLeave(const Event& e);
+     std::vector<Event> eventLog_;                    // the host: every event (any seat), in arrival order
+     std::map<uint32_t, uint64_t> hashLog_;           // the host: its own state hash per hashEvery tick
+     std::function<void(int)> onJoinReady_;
+diff -ruN a/src/net/NetMatchDriver.cpp b/src/net/NetMatchDriver.cpp
+--- a/src/net/NetMatchDriver.cpp	2026-10-23 03:36:07.389162000 -0500
++++ b/src/net/NetMatchDriver.cpp	2026-10-23 03:36:07.406220700 -0500
+@@ -94,6 +94,7 @@
+     lc.activeFrom = cfg.activeFrom; lc.lateJoin = cfg.lateJoin; lc.keepHistory = cfg.keepHistory;
+     impl_->ls = std::make_unique<Lockstep>(transport, lc);
+     impl_->live = !cfg.lateJoin;
++    if (cfg.leaveToBot) impl_->ls->setLeaveToBot(cfg.leaveToBot);
+     if (cfg.keepHistory) {
+         Lockstep* ls = impl_->ls.get();
+         std::function<int(int)> pick = cfg.pickJoinTeam;
+@@ -146,6 +147,12 @@
+             const int seat = ev.payload[0], team = ev.payload[5];
+             LOG_INFO("NET driver: seat %d joins at tick %u, team %d%s", seat, ev.atTick, team, seat == m.cfg.self ? " (this peer)" : "");
+             if (m.cfg.onSeatJoin) m.cfg.onSeatJoin(seat, team, seat == m.cfg.self, ev.atTick);
++        } else if (ev.kind == Lockstep::kEventSeatLeave && ev.payload.size() >= 6) {   // {u8 seat, u32 untilTick, u8 toBot}
++            const int seat = ev.payload[0];
++            const uint32_t until = (uint32_t)ev.payload[1] | ((uint32_t)ev.payload[2] << 8) | ((uint32_t)ev.payload[3] << 16) | ((uint32_t)ev.payload[4] << 24);
++            const bool toBot = ev.payload[5] != 0;
++            LOG_INFO("NET driver: seat %d leaves at tick %u (%s)", seat, until, toBot ? "a bot takes the slot" : "the slot empties");
++            if (m.cfg.onSeatLeave) m.cfg.onSeatLeave(seat, until, toBot);
+         }
+     }
+     if (m.voice) {   // the listener = the local pawn (its right vector from the facing yaw)
+@@ -225,6 +232,8 @@
+ VoiceSession* NetMatchDriver::voice() { return impl_->voice.get(); }
+ void NetMatchDriver::setTalking(bool talking) { impl_->talking = talking; }
+ 
++void NetMatchDriver::dropSeat(int seat) { impl_->ls->dropSeat(seat); }
++
+ void NetMatchDriver::chooseCharacter(const game::CharacterSelection& sel) {
+     const uint32_t at = impl_->ls->submitEvent(kEventSelection, encodeSelection(sel));
+     LOG_INFO("NET driver: Choose Character -> event at tick %u", at);
+diff -ruN a/src/net/NetMatchDriver.h b/src/net/NetMatchDriver.h
+--- a/src/net/NetMatchDriver.h	2026-10-23 03:36:07.355546800 -0500
++++ b/src/net/NetMatchDriver.h	2026-10-23 03:36:07.372103700 -0500
+@@ -53,6 +53,10 @@
+         std::function<void(int seat, int team, bool local, uint32_t atTick)> onSeatJoin;
+         // Seat -> match player for commands / voice (-1 = no participant yet). Unset: player == seat (the launch's seat order).
+         std::function<int(int seat)> seatPlayer;
++        // Leaving mid-match (Lockstep.h LEAVEQ): the host decides bot or empty; every peer, on the SeatLeave event: the seat's
++        // participant goes to a bot / leaves at untilTick (Gameplay: applySlotSwap toBot / World::queueLeave), the same tick everywhere.
++        std::function<bool(int seat)> leaveToBot;
++        std::function<void(int seat, uint32_t untilTick, bool toBot)> onSeatLeave;
+     };
+     // `transport` is the session's match view (seats = match seats); the driver owns the Lockstep built over it.
+     NetMatchDriver(game::World& world, INetTransport& transport, audio::IAudio* audio, const Config& cfg);
+@@ -79,6 +83,7 @@
+     int delay() const;                 // the current input delay D (ticks)
+     float rttMs() const;
+     void chooseCharacter(const game::CharacterSelection& sel);   // the local seat's in-match pick (Choose Character screen)
++    void dropSeat(int seat);           // the host: the session lost this match seat's member mid-match (the leave protocol)
+     VoiceSession* voice();             // null without the voice lane
+     void setTalking(bool talking);     // push-to-talk / open mic state from the session's voice settings
+ 
+diff -ruN a/src/net/UdpSession.cpp b/src/net/UdpSession.cpp
+--- a/src/net/UdpSession.cpp	2026-10-23 03:36:07.458901100 -0500
++++ b/src/net/UdpSession.cpp	2026-10-23 03:36:07.475959200 -0500
+@@ -433,6 +433,8 @@
+     if (t_) t_->removePeer(seat);
+     const bool inMatch = matchReady();
+     LOG_INFO("session: member %s (seat %d) gone (%d)%s", id.fingerprint.c_str(), seat, (int)why, inMatch ? " in the match" : "");
++    if (role_ == Role::Host && inMatch)   // the lockstep's leave protocol (the driver): its match seat
++        for (size_t i = 0; i < matchToSession_.size(); ++i) if (matchToSession_[i] == seat) droppedMatchSeats_.push_back((int)i);
+     if (role_ == Role::Host && notify) {
+         W w(kDropped); w.str(id.fingerprint); w.u8((int)why); w.u8(inMatch ? 1 : 0);
+         sendAllMembers(w.b);
+@@ -519,7 +521,8 @@
+ }
+ 
+ void UdpSession::reportCatchUp(uint32_t tick, uint32_t target) {
+-    if (!lateJoin_ || (now_ - catchUpSentAt_ < 0.1 && tick < target)) return;   // ~10 a second, and the last one
++    if (!lateJoin_ || catchUpDone_ || (now_ - catchUpSentAt_ < 0.1 && tick < target)) return;   // ~10 a second, and the last one
++    if (tick >= target) catchUpDone_ = true;   // live: one final 100 % event, then none (Experimental: 4,532 after READY)
+     if (tick == catchUpSent_ && catchUpSentAt_ >= 0.0) return;
+     catchUpSent_ = tick; catchUpSentAt_ = now_;
+     SessionEvent e; e.type = SessionEvent::Type::CatchUpProgress; e.catchUpTick = tick; e.catchUpTarget = target; emit(e);
+@@ -759,7 +762,7 @@
+         const int mine = r.u8();
+         if (!r.ok || mine < 0 || (size_t)mine >= matchToSession_.size()) break;
+         matchToSession_[(size_t)mine] = t_ ? t_->self() : kNoSession;
+-        matchSelf_ = mine; lateJoin_ = true; matchRunning_ = false;
++        matchSelf_ = mine; lateJoin_ = true; matchRunning_ = false; catchUpDone_ = false; catchUpSentAt_ = -1.0;
+         view_ = std::make_unique<MatchView>(*this);
+         LOG_INFO("session: late join accepted - match seat %d of %zu", mine, matchToSession_.size());
+         SessionEvent e; e.type = SessionEvent::Type::CountdownStarted;
+diff -ruN a/src/net/UdpSession.h b/src/net/UdpSession.h
+--- a/src/net/UdpSession.h	2026-10-23 03:36:07.423780600 -0500
++++ b/src/net/UdpSession.h	2026-10-23 03:36:07.440839100 -0500
+@@ -91,6 +91,8 @@
+     bool lateJoin() const { return lateJoin_; }
+     void noteMatchTick(uint32_t tick) { matchTick_ = tick; }
+     void reportCatchUp(uint32_t tick, uint32_t target);
++    // The host: match seats whose member the session lost mid-match since the last call (-> NetMatchDriver::dropSeat).
++    std::vector<int> takeDroppedMatchSeats() { std::vector<int> v; v.swap(droppedMatchSeats_); return v; }
+     uint32_t launchSeed() const { return launchSeed_; }
+     const frontend::SessionVoiceSettings& voiceSettings() const { return voice_; }
+     bool pushToTalk() const { return pushToTalk_; }
+@@ -188,10 +190,12 @@
+     std::vector<int> matchToSession_;      // match seat -> session seat
+     int matchSelf_ = -1;
+     std::vector<char> matchReserved_;      // per match seat: a Reserved slot of the launch roster
++    std::vector<int> droppedMatchSeats_;
+     bool lateJoin_ = false;
+     double lateJoinLimitS_ = 0.0;
+     uint32_t matchTick_ = 0, catchUpSent_ = 0;
+     double catchUpSentAt_ = -1.0;
++    bool catchUpDone_ = false;
+     frontend::SessionVoiceSettings voice_;
+     bool pushToTalk_ = false;
+     std::map<std::string, bool> muted_;

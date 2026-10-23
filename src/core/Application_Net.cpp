@@ -395,6 +395,19 @@ template <class W> void queueLateSeat(W& w, int seat, const game::RemoteSeat& r,
     if constexpr (HasQueueLateSeat<W>::value) w.queueLateSeat(seat, r, atTick);
     else LOG_WARN("online: World::queueLateSeat missing in this build - seat %d (%s) does not wake at tick %u", seat, r.name.c_str(), atTick);
 }
+template <class W, class = void> struct HasQueueLeave : std::false_type {};
+template <class W> struct HasQueueLeave<W, std::void_t<decltype(std::declval<W&>().queueLeave(0, 0u))>> : std::true_type {};
+// A member left mid-match: its slot to a bot (bot fill on: Gameplay's applySlotSwap) or empty (World::queueLeave; Match's Forfeit
+// rule then runs by itself), at the agreed tick on every peer.
+template <class W> void seatLeft(W& w, int seat, uint32_t untilTick, bool toBot) {
+    if (toBot) { game::SlotSwap s; s.matchPlayer = seat; s.toBot = true; s.atTick = (int64_t)untilTick; w.applySlotSwap(s); return; }
+    if constexpr (HasQueueLeave<W>::value) w.queueLeave(seat, untilTick);
+    else LOG_WARN("online: World::queueLeave missing in this build - seat %d's participant stays (idle) after tick %u", seat, untilTick);
+}
+template <class W> bool hasBotFill(const W& w) {
+    for (const auto& p : w.match().players()) if (p.kind == game::ParticipantKind::Bot) return true;
+    return false;
+}
 template <class W, class = void> struct HasSmallerTeam : std::false_type {};
 template <class W> struct HasSmallerTeam<W, std::void_t<decltype(std::declval<const W&>().smallerTeam())>> : std::true_type {};
 template <class W> int smallerTeamOf(const W& w) {
@@ -451,6 +464,8 @@ void Application::startNetDriver(const std::string& launchUrl, uint32_t seed, in
     c.keepHistory = localSeat == 0 && std::find(c.activeFrom.begin(), c.activeFrom.end(), 0u) != c.activeFrom.end();
     c.pickJoinTeam = [this](int) { return smallerTeamOf(world_); };
     c.seatPlayer = [this](int seat) { return seatPlayerOf(world_, seat); };
+    c.leaveToBot = [this](int) { return hasBotFill(world_); };
+    c.onSeatLeave = [this](int seat, uint32_t until, bool toBot) { seatLeft(world_, seat, until, toBot); };
     c.onSeatJoin = [this](int seat, int team, bool local, uint32_t atTick) {
         game::RemoteSeat r;
         r.team = team; r.selected = false;
@@ -475,7 +490,10 @@ void Application::tickNetDriver(double realDt) {
     }
     d.frame(realDt);
     if (udpSession_) {   // join in progress: the host's tick (the catch-up limit); a late joiner's replay -> CatchUpProgress
-        if (d.localSeat() == 0) udpSession_->noteMatchTick((uint32_t)world_.simTick());
+        if (d.localSeat() == 0) {
+            udpSession_->noteMatchTick((uint32_t)world_.simTick());
+            for (int ms : udpSession_->takeDroppedMatchSeats()) d.dropSeat(ms);   // a member lost mid-match: the leave protocol
+        }
         if (d.catchingUp()) udpSession_->reportCatchUp(d.catchUpTick(), d.catchUpTarget());
         else if (udpSession_->lateJoin()) udpSession_->reportCatchUp(d.catchUpTick(), d.catchUpTick());   // the last one: done
     }
@@ -608,6 +626,11 @@ void Application::runUdpSessionMatch() {
     c.keepHistory = self == 0 && std::find(activeFrom.begin(), activeFrom.end(), 0u) != activeFrom.end();
     c.pickJoinTeam = [this](int) { return smallerTeamOf(world_); };
     c.seatPlayer = [this](int seat) { return seatPlayerOf(world_, seat); };
+    c.leaveToBot = [this](int) { return std::getenv("WFC_UDPLEAVE_TOBOT") != nullptr; };   // the harness: empty by default
+    c.onSeatLeave = [this](int seat, uint32_t until, bool toBot) {
+        LOG_INFO("UDPMATCH seat %d leaves at tick %u (%s)", seat, until, toBot ? "to a bot" : "empty");
+        seatLeft(world_, seat, until, toBot);
+    };
     bool pickAfterWake = false;
     c.onSeatJoin = [this, &s, &pickAfterWake](int seat, int team, bool local, uint32_t atTick) {
         game::RemoteSeat r; r.team = team; r.member = s.matchMember(seat).fingerprint; r.name = s.matchMemberName(seat);
@@ -619,7 +642,7 @@ void Application::runUdpSessionMatch() {
     long catchUpEvents = 0;
     const float matchSeconds = (float)std::atof(std::getenv("WFC_MATCH_SECONDS") ? std::getenv("WFC_MATCH_SECONDS") : "60");
     auto last = std::chrono::steady_clock::now();
-    bool started = false, reachedEnd = false, hostLostEarly = false;
+    bool started = false, reachedEnd = false, hostLostEarly = false, leftByChoice = false;
     long steps = 0;
     while (!drv.finished()) {
         for (auto& e : s.poll(now())) { LOG_INFO("UDPMATCH <- %s (in match)", frontend::sessionEventName(e.type)); ev.push_back(e); }
@@ -628,7 +651,16 @@ void Application::runUdpSessionMatch() {
         last = t;
         steps += drv.frame(dt);
         if (pickAfterWake && !drv.catchingUp()) { pickAfterWake = false; drv.chooseCharacter(cs); LOG_INFO("UDPMATCH: the joiner picks its character"); }
-        if (self == 0) s.noteMatchTick((uint32_t)world_.simTick());
+        if (self == 0) { s.noteMatchTick((uint32_t)world_.simTick()); for (int ms : s.takeDroppedMatchSeats()) drv.dropSeat(ms); }
+        // WFC_UDPLEAVE_AT=<match s> (a member): the pause menu's Leave Match - ISession::leave() (the session's LEAVE to the host),
+        // then the driver's BYE - at that match time, exit 0. The host and the others play on (the leave protocol).
+        static const float leaveAt = std::getenv("WFC_UDPLEAVE_AT") ? (float)std::atof(std::getenv("WFC_UDPLEAVE_AT")) : 0.0f;
+        if (leaveAt > 0.0f && self != 0 && world_.matchActive() && world_.match().elapsedTime() >= leaveAt) {
+            LOG_INFO("UDPMATCH: seat %d leaves the match at tick %lld (Leave Match)", self, (long long)world_.simTick());
+            s.leave();
+            leftByChoice = true;
+            break;
+        }
         if (s.lateJoin()) s.reportCatchUp(drv.catchUpTick(), drv.catchingUp() ? drv.catchUpTarget() : drv.catchUpTick());
         for (const SessionEvent& e : ev) if (e.type == T::CatchUpProgress) ++catchUpEvents;
         ev.erase(std::remove_if(ev.begin(), ev.end(), [](const SessionEvent& e) { return e.type == T::CatchUpProgress; }), ev.end());
@@ -642,7 +674,7 @@ void Application::runUdpSessionMatch() {
     const int st = drv.status();
     LOG_INFO("UDPMATCH done: %ld steps, seat %d of %d, status %d, D %d, rtt %.1f ms%s", steps, self, n, st, drv.delay(), drv.rttMs(),
              s.lateJoin() ? (", late join, " + std::to_string(catchUpEvents) + " CatchUpProgress events").c_str() : "");
-    exitCode_ = st != 0 ? st : (hostLostEarly ? (has(T::HostLost) ? 5 : 4) : 0);   // the host leaving at the normal end = 0
+    exitCode_ = leftByChoice ? 0 : st != 0 ? st : (hostLostEarly ? (has(T::HostLost) ? 5 : 4) : 0);   // the host leaving at the normal end = 0
 }
 
 // WFC_UDPSESSIONTEST (no device, no window, loopback only - 127.0.0.1 binds, so no firewall prompt): two net::UdpSessions in this

@@ -24,6 +24,15 @@
 //             steps (and each event it learns) until the joiner's seat is active - the joiner replays from tick 1 at full speed
 //             (deterministic sim; the hashes check it) while the match runs on.
 //  11 READY   (reliable, joiner -> host)  u8 type, u8 seat, u32 the joiner's next step: it is within a few ticks of the host.
+// Leaving mid-match (a member's BYE, or the host's dropSeat on a session drop): one agreed tick U from which the seat is empty again.
+//  12 LEAVEQ  (reliable, host -> members) u8 type, u8 seat (0), u8 leaver, u32 from (the host's contiguous tick of the leaver + 1)
+//  13 LEAVER  (reliable, member -> host)  u8 type, u8 seat, u8 leaver, u32 its contiguous tick, u32 first, u16 n, n x 23: the leaver's
+//             commands it holds from `from` on (a member can be up to D + 1 ticks ahead of the host on the leaver's stream)
+//  14 LEAVEF  (reliable, host -> members) u8 type, u8 seat (0), u8 leaver, u32 first, u16 n, n x 23: what that member lacks below U
+// The host merges the reports, U = its contiguous tick of the leaver + 1 (no peer can have stepped U: none holds the leaver's U),
+// forwards the missing commands and stamps the event kEventSeatLeave {u8 seat, u32 U}: every peer stops waiting on the seat from U
+// (NetMatchDriver::Config::onSeatLeave -> World::queueLeave(seat, U)); the seat is Reserved again (a later joiner can take it).
+// A peer that never answers in 1 s is left out of the merge (its BYE / timeout path ends its own match).
 // The host then (onJoinReady -> activateSeat) submits the reliable event kind kEventSeatJoin {u8 seat, u32 activeTick, u8 team}
 // stamped E = its next tick; activeTick = E + kJoinLeadTicks. Every peer sets the seat active from activeTick on arrival (no peer can
 // have stepped E without the event); the sim adds / wakes the participant at E (NetMatchDriver::Config::onSeatJoin) and the joiner's
@@ -71,6 +80,7 @@ public:
         bool keepHistory = false;   // the host: keep every command / event / hash for late joiners
     };
     static constexpr uint8_t kEventSeatJoin = 2;     // event kind (1 = Choose Character, NetMatchDriver)
+    static constexpr uint8_t kEventSeatLeave = 3;    // {u8 seat, u32 the first tick without it, u8 to a bot}
     static constexpr uint32_t kJoinLeadTicks = 30;   // activeTick = the SeatJoin event's tick + this (0.5 s for the joiner's first commands)
     enum class Status { Running = 0, Desync = 3, PeerTimeout = 4, HostLost = 5, LaunchMismatch = 6 };
 
@@ -106,6 +116,10 @@ public:
     bool seatActive(int seat, uint32_t tick) const;   // the seat sends commands for this tick
     bool selfActive() const { return seatActive(cfg_.self, localHigh_ + 1); }
     uint32_t activeFrom(int seat) const { return seat >= 0 && seat < cfg_.seats ? activeFrom_[(size_t)seat] : 0; }
+    bool joined(int seat) const;                      // active now or later (not Reserved, not left): packets go to it
+    void dropSeat(int seat);                          // the host: a member left (session drop / its BYE) -> the leave protocol
+    // The host: whether a leaver's slot goes to a bot (bot fill on) or empties (Gameplay: applySlotSwap toBot / queueLeave).
+    void setLeaveToBot(std::function<bool(int seat)> f) { leaveToBot_ = std::move(f); }
     // The host: a reserved seat's joiner is caught up (READY); the callback decides the team and calls activateSeat.
     void setJoinReady(std::function<void(int seat)> f) { onJoinReady_ = std::move(f); }
     uint32_t activateSeat(int seat, int team);      // the host: the SeatJoin event; returns the seat's activeTick
@@ -164,6 +178,12 @@ private:
     FILE* log_ = nullptr;
     // Join in progress.
     std::vector<uint32_t> activeFrom_;
+    std::vector<uint32_t> activeUntil_;              // per seat: the first tick without it after a leave (0 = none)
+    struct Leave { int seat = -1; double startMs = 0.0; std::map<int, uint32_t> reports; };   // the host's open leave (member -> contiguous)
+    std::vector<Leave> leaves_;
+    std::function<bool(int)> leaveToBot_;
+    void finishLeave(Leave& l);
+    void applySeatLeave(const Event& e);
     std::vector<Event> eventLog_;                    // the host: every event (any seat), in arrival order
     std::map<uint32_t, uint64_t> hashLog_;           // the host: its own state hash per hashEvery tick
     std::function<void(int)> onJoinReady_;

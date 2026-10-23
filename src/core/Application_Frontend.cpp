@@ -628,7 +628,7 @@ bool Application::wantsFrontendBoot() {
                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
                           "WFC_VEHTEST", "WFC_FOVTEST", "WFC_SCREENTEST", "WFC_TILETEST", "WFC_MODETEST", "WFC_CHASSISTEST",
-                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_CAMPAIGNAUDIOTEST", "WFC_UDPHOST", "WFC_UDPJOIN", "WFC_ONLINEFLOWTEST", "WFC_SOLOLAUNCHTEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
+                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_CAMPAIGNAUDIOTEST", "WFC_UDPHOST", "WFC_UDPJOIN", "WFC_UDPLEAVE_AT", "WFC_ONLINEFLOWTEST", "WFC_SOLOLAUNCHTEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
                           "WFC_SPAWNFILLTEST", "WFC_EXTRABODYTEST", "WFC_DOUBLEJUMPTEST",
                           "WFC_DETERMINISMTEST", "WFC_WEAPONAUDIT", "WFC_VEHFRAMETEST", "WFC_VEHICLEAUDIT", "WFC_QABOTTEST", "WFC_MARKERSTEST", "WFC_STUCKSPOT_BOT", "WFC_ASYNCSTEPTEST", "WFC_ENGAGETEST", "WFC_EVICTTEST", "WFC_BARRIERWALKTEST"})   // [integration 09c] Gameplay 26d / 26h / 26k harnesses
         if (std::getenv(v)) return false;
@@ -2082,19 +2082,39 @@ void core::Application::runSoloLaunchTest() {
     const game::MatchLaunch duo = build(two);
     check(duo.online && duo.humans.size() == 2 && duo.localSeat == 0, "with a second human: the seat order (the driver path)");
     const float step = clock_.stepSeconds();
-    auto run = [&](std::vector<uint64_t>& hashes) {
+    // mode 0: the synchronous step (World::tick). 1 / 2: the frame loop's async step - tickPrefix, GameMode, then launchStep (the
+    // remainder on the sim thread) overlapping the main thread's "draw", joined at the next frame top; 2 adds a varying 0-6 ms
+    // draw gap with presentation reads (render-only timing must not reach the sim: x33, Rendering 2026-10-23).
+    auto run = [&](std::vector<uint64_t>& hashes, int mode = 0) {
         if (!world_.launchMatch(solo)) return false;
         world_.match().requireCharacterSelection(world_.localMatchPlayer());
         game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
         world_.match().selectCharacter(world_.localMatchPlayer(), cs);
+        uint32_t lcg = 12345u;
         for (int i = 0; i < 1400; ++i) {
+            if (mode > 0) world_.joinStep();   // the frame top
             platform::InputFrame input;
             world_.playerBotInput(input, step);
             world_.handleInput(input, step);
-            world_.tick(step);
+            if (mode == 0) world_.tick(step);
+            else world_.tickPrefix(step);
             gameMode_.tick(world_, step);
+            if (mode > 0) {
+                world_.launchStep();   // after the draw: overlaps endFrame / present / HUD
+                if (mode == 2) {
+                    lcg = lcg * 1664525u + 1013904223u;
+                    const auto until = std::chrono::steady_clock::now() + std::chrono::microseconds((lcg >> 8) % 6000);
+                    float acc = 0.0f;
+                    while (std::chrono::steady_clock::now() < until)   // presentation reads, as the HUD / renderer do
+                        for (size_t p = 0; p < world_.match().players().size(); ++p)
+                            if (const game::Character* c = world_.participantPawn((int)p)) acc += c->position().x;
+                    (void)acc;
+                }
+                world_.joinStep();   // the hash reads a whole step
+            }
             if ((i + 1) % 100 == 0) hashes.push_back(world_.simStateHash());
         }
+        world_.joinStep();
         return true;
     };
     std::vector<uint64_t> h1, h2;
@@ -2104,6 +2124,11 @@ void core::Application::runSoloLaunchTest() {
     for (size_t i = 0; i < h1.size() && i < h2.size(); ++i) if (h1[i] != h2[i]) { firstDiff = i; break; }
     check(!h1.empty() && h1.size() == h2.size() && firstDiff == h1.size(), "same seed twice: equal simStateHash every 100 steps to 1400");
     if (!h1.empty()) LOG_INFO("SOLOLAUNCHTEST hash at 1400: %016llx / %016llx", (unsigned long long)h1.back(), (unsigned long long)(h2.empty() ? 0 : h2.back()));
+    std::vector<uint64_t> h3, h4;
+    const bool ok3 = run(h3, 1), ok4 = run(h4, 2);
+    check(ok3 && ok4 && h3 == h1, "the async step (remainder on the sim thread) = the synchronous step, every 100 steps");
+    check(ok4 && h4 == h1, "the async step with a varying 0-6 ms draw gap + presentation reads = the synchronous step");
+    if (!h3.empty() && !h4.empty()) LOG_INFO("SOLOLAUNCHTEST async hash at 1400: %016llx / %016llx", (unsigned long long)h3.back(), (unsigned long long)h4.back());
     LOG_INFO("SOLOLAUNCHTEST SUMMARY: %s (%d failed)", fails ? "FAIL" : "PASS", fails);
     exitCode_ = fails ? 1 : 0;
 }

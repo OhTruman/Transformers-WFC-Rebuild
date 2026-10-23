@@ -94,6 +94,7 @@ NetMatchDriver::NetMatchDriver(game::World& world, INetTransport& transport, aud
     lc.activeFrom = cfg.activeFrom; lc.lateJoin = cfg.lateJoin; lc.keepHistory = cfg.keepHistory;
     impl_->ls = std::make_unique<Lockstep>(transport, lc);
     impl_->live = !cfg.lateJoin;
+    if (cfg.leaveToBot) impl_->ls->setLeaveToBot(cfg.leaveToBot);
     if (cfg.keepHistory) {
         Lockstep* ls = impl_->ls.get();
         std::function<int(int)> pick = cfg.pickJoinTeam;
@@ -146,6 +147,12 @@ int NetMatchDriver::frame(double dtSeconds) {
             const int seat = ev.payload[0], team = ev.payload[5];
             LOG_INFO("NET driver: seat %d joins at tick %u, team %d%s", seat, ev.atTick, team, seat == m.cfg.self ? " (this peer)" : "");
             if (m.cfg.onSeatJoin) m.cfg.onSeatJoin(seat, team, seat == m.cfg.self, ev.atTick);
+        } else if (ev.kind == Lockstep::kEventSeatLeave && ev.payload.size() >= 6) {   // {u8 seat, u32 untilTick, u8 toBot}
+            const int seat = ev.payload[0];
+            const uint32_t until = (uint32_t)ev.payload[1] | ((uint32_t)ev.payload[2] << 8) | ((uint32_t)ev.payload[3] << 16) | ((uint32_t)ev.payload[4] << 24);
+            const bool toBot = ev.payload[5] != 0;
+            LOG_INFO("NET driver: seat %d leaves at tick %u (%s)", seat, until, toBot ? "a bot takes the slot" : "the slot empties");
+            if (m.cfg.onSeatLeave) m.cfg.onSeatLeave(seat, until, toBot);
         }
     }
     if (m.voice) {   // the listener = the local pawn (its right vector from the facing yaw)
@@ -224,6 +231,8 @@ int NetMatchDriver::delay() const { return impl_->ls->delay(); }
 float NetMatchDriver::rttMs() const { return impl_->ls->rttMs(); }
 VoiceSession* NetMatchDriver::voice() { return impl_->voice.get(); }
 void NetMatchDriver::setTalking(bool talking) { impl_->talking = talking; }
+
+void NetMatchDriver::dropSeat(int seat) { impl_->ls->dropSeat(seat); }
 
 void NetMatchDriver::chooseCharacter(const game::CharacterSelection& sel) {
     const uint32_t at = impl_->ls->submitEvent(kEventSelection, encodeSelection(sel));

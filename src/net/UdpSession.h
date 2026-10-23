@@ -91,6 +91,8 @@ public:
     bool lateJoin() const { return lateJoin_; }
     void noteMatchTick(uint32_t tick) { matchTick_ = tick; }
     void reportCatchUp(uint32_t tick, uint32_t target);
+    // The host: match seats whose member the session lost mid-match since the last call (-> NetMatchDriver::dropSeat).
+    std::vector<int> takeDroppedMatchSeats() { std::vector<int> v; v.swap(droppedMatchSeats_); return v; }
     uint32_t launchSeed() const { return launchSeed_; }
     const frontend::SessionVoiceSettings& voiceSettings() const { return voice_; }
     bool pushToTalk() const { return pushToTalk_; }
@@ -188,10 +190,12 @@ private:
     std::vector<int> matchToSession_;      // match seat -> session seat
     int matchSelf_ = -1;
     std::vector<char> matchReserved_;      // per match seat: a Reserved slot of the launch roster
+    std::vector<int> droppedMatchSeats_;
     bool lateJoin_ = false;
     double lateJoinLimitS_ = 0.0;
     uint32_t matchTick_ = 0, catchUpSent_ = 0;
     double catchUpSentAt_ = -1.0;
+    bool catchUpDone_ = false;
     frontend::SessionVoiceSettings voice_;
     bool pushToTalk_ = false;
     std::map<std::string, bool> muted_;

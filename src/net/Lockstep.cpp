@@ -23,7 +23,8 @@ uint32_t get32(const uint8_t* p) { return (uint32_t)p[0] | ((uint32_t)p[1] << 8)
 uint64_t get64(const uint8_t* p) { return (uint64_t)get32(p) | ((uint64_t)get32(p + 4) << 32); }
 
 enum : uint8_t { kCmds = 1, kHello = 2, kHash = 3, kBye = 4, kPing = 5, kPong = 6, kVoice = 7, kEvent = 8,
-                 kJoinReq = 9, kHist = 10, kReady = 11 };
+                 kJoinReq = 9, kHist = 10, kReady = 11, kLeaveQ = 12, kLeaveR = 13, kLeaveF = 14 };
+constexpr double kLeaveWaitMs = 1000.0;         // the host merges the members' leave reports for at most this long
 enum : uint8_t { kHistTicks = 0, kHistEvent = 1, kHistHash = 2 };   // HIST sub-records
 constexpr size_t kHistPacketBytes = 1100;      // under the transport's 2048-byte receive buffer, one datagram
 constexpr double kFeedBytesPerMs = 2000.0;     // 2 MB/s history pacing (the reliable channel has no window of its own)
@@ -80,6 +81,7 @@ Lockstep::Lockstep(INetTransport& t, const Config& c) : t_(t), cfg_(c) {
     eventSeen_.resize((size_t)cfg_.seats);
     activeFrom_ = cfg_.activeFrom;
     activeFrom_.resize((size_t)cfg_.seats, 1);
+    activeUntil_.assign((size_t)cfg_.seats, 0);
     for (int s = 0; s < cfg_.seats; ++s)
         if (activeFrom_[(size_t)s] == 0 || cfg_.lateJoin) hello_[(size_t)s] = 1;   // reserved seats / a late joiner wait for no HELLO
     lastFullMs_.assign((size_t)cfg_.seats, 0.0);
@@ -124,7 +126,7 @@ void Lockstep::pump() {
         const double overdue = 1.5 * (double)std::max(srtt_, 20.0f) + 10.0;
         const bool idle = nowMs() - lastSendMs_ >= 30.0;
         for (int s = 0; s < cfg_.seats; ++s) {
-            if (s == cfg_.self || activeFrom_[(size_t)s] == 0) continue;
+            if (s == cfg_.self || !joined(s)) continue;
             // overdue: the peer still lacks a tick I first sent more than `overdue` ago (and no full window went out since)
             auto next = producedMs_.find(peerAck_[(size_t)s] + 1);
             const bool lost = next != producedMs_.end() && nowMs() - next->second >= overdue && nowMs() - lastFullMs_[(size_t)s] >= overdue;
@@ -135,15 +137,69 @@ void Lockstep::pump() {
     if (nowMs() - lastPingMs_ >= 250.0) {
         lastPingMs_ = nowMs();
         std::vector<uint8_t> b; put8(b, kPing); put8(b, (uint8_t)cfg_.self); put64(b, (uint64_t)(nowMs() * 1000.0));
-        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && activeFrom_[(size_t)s] != 0) t_.sendUnreliable(s, b.data(), b.size());
+        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && joined(s)) t_.sendUnreliable(s, b.data(), b.size());
     }
     if (!feeds_.empty()) pumpFeeds();
+    for (size_t i = 0; i < leaves_.size();) {   // the host: a leave is decided once every joined member reported (or 1 s passed)
+        Leave& l = leaves_[i];
+        bool all = true;
+        for (int s = 1; s < cfg_.seats; ++s) if (s != l.seat && joined(s) && !l.reports.count(s)) all = false;
+        if (all || nowMs() - l.startMs >= kLeaveWaitMs) { finishLeave(l); leaves_.erase(leaves_.begin() + (long)i); continue; }
+        ++i;
+    }
 }
 
 bool Lockstep::seatActive(int seat, uint32_t tick) const {
     if (seat < 0 || seat >= cfg_.seats) return false;
-    const uint32_t a = activeFrom_[(size_t)seat];
-    return a != 0 && tick >= a;
+    const uint32_t a = activeFrom_[(size_t)seat], u = activeUntil_[(size_t)seat];
+    return a != 0 && tick >= a && (u == 0 || tick < u);
+}
+
+bool Lockstep::joined(int seat) const {
+    return seat >= 0 && seat < cfg_.seats && activeFrom_[(size_t)seat] != 0 && activeUntil_[(size_t)seat] == 0;
+}
+
+// A member left mid-match (host only): ask every other member which of the leaver's commands it holds beyond ours.
+void Lockstep::dropSeat(int seat) {
+    if (cfg_.self != 0 || seat <= 0 || seat >= cfg_.seats || !joined(seat)) return;
+    for (const Leave& l : leaves_) if (l.seat == seat) return;
+    Leave l; l.seat = seat; l.startMs = nowMs();
+    std::vector<uint8_t> b; put8(b, kLeaveQ); put8(b, (uint8_t)cfg_.self); put8(b, (uint8_t)seat); put32(b, contiguous_[(size_t)seat] + 1);
+    for (int s = 1; s < cfg_.seats; ++s) if (s != seat && joined(s)) t_.sendReliable(s, b.data(), b.size());
+    leaves_.push_back(l);
+    LOG_INFO("NET seat %d left mid-match: asking the members for its commands beyond tick %u", seat, contiguous_[(size_t)seat]);
+}
+
+// Every report in (or the wait over): U = our contiguous tick of the leaver + 1 after the merge; each member gets what it lacks below U;
+// then the SeatLeave event.
+void Lockstep::finishLeave(Leave& l) {
+    const int seat = l.seat;
+    const uint32_t until = contiguous_[(size_t)seat] + 1;
+    for (const auto& r : l.reports) {
+        const uint32_t from = r.second + 1;
+        if (from >= until) continue;
+        std::vector<uint8_t> b; put8(b, kLeaveF); put8(b, (uint8_t)cfg_.self); put8(b, (uint8_t)seat); put32(b, from);
+        const size_t nAt = b.size(); put8(b, 0); put8(b, 0);
+        uint16_t n = 0;
+        for (uint32_t t = from; t < until && n < 1000; ++t, ++n) {
+            auto it = cmds_[(size_t)seat].find(t);
+            if (it == cmds_[(size_t)seat].end()) break;
+            b.insert(b.end(), it->second.begin(), it->second.end());
+        }
+        b[nAt] = (uint8_t)n; b[nAt + 1] = (uint8_t)(n >> 8);
+        t_.sendReliable(r.first, b.data(), b.size());
+    }
+    std::vector<uint8_t> pl; pl.push_back((uint8_t)seat); put32(pl, until); pl.push_back(leaveToBot_ && leaveToBot_(seat) ? 1 : 0);
+    submitEvent(kEventSeatLeave, pl);   // applies it here (applySeatLeave) and sends it to every joined seat
+    LOG_INFO("NET seat %d leaves at tick %u (%zu member reports merged)", seat, until, l.reports.size());
+}
+
+void Lockstep::applySeatLeave(const Event& e) {
+    if (e.payload.size() < 5) return;
+    const int seat = e.payload[0];
+    if (seat <= 0 || seat >= cfg_.seats || !joined(seat)) return;
+    activeUntil_[(size_t)seat] = get32(&e.payload[1]);
+    LOG_INFO("NET seat %d is empty from tick %u", seat, activeUntil_[(size_t)seat]);
 }
 
 // The host's history feed to each joining seat, paced (kFeedBytesPerMs): first every event it knows that this joiner has not had,
@@ -222,9 +278,10 @@ uint32_t Lockstep::activateSeat(int seat, int team) {
 void Lockstep::applySeatJoin(const Event& e) {
     if (e.payload.size() < 6) return;
     const int seat = e.payload[0];
-    if (seat < 0 || seat >= cfg_.seats || activeFrom_[(size_t)seat] != 0) return;
+    if (seat < 0 || seat >= cfg_.seats || joined(seat)) return;
     const uint32_t active = get32(&e.payload[1]);
     activeFrom_[(size_t)seat] = active;
+    activeUntil_[(size_t)seat] = 0;
     hello_[(size_t)seat] = 1;
     LOG_INFO("NET seat %d is active from tick %u (joined at tick %u)", seat, active, e.atTick);
     if (seat == cfg_.self) {   // this joiner: ticks it already passed to submitLocal from activeTick on had no command - empty ones
@@ -300,6 +357,52 @@ void Lockstep::handle(const NetPacket& p) {
                 LOG_INFO("NET late join: seat %d READY at tick %u (host at %u)", seat, d.size() >= 6 ? get32(&d[2]) : 0, hostStepped_);
                 if (onJoinReady_) onJoinReady_(seat);
             }
+        break;
+    }
+    case kLeaveQ: {   // a member: report the leaver's commands we hold from `from` on
+        if (seat != 0 || d.size() < 7) return;
+        const int lv = d[2];
+        if (lv <= 0 || lv >= cfg_.seats) return;
+        const uint32_t from = get32(&d[3]), have = contiguous_[(size_t)lv];
+        std::vector<uint8_t> b; put8(b, kLeaveR); put8(b, (uint8_t)cfg_.self); put8(b, (uint8_t)lv); put32(b, have); put32(b, from);
+        const size_t nAt = b.size(); put8(b, 0); put8(b, 0);
+        uint16_t n = 0;
+        for (uint32_t t = from; t <= have && n < 1000; ++t, ++n) {
+            auto it = cmds_[(size_t)lv].find(t);
+            if (it == cmds_[(size_t)lv].end()) break;
+            b.insert(b.end(), it->second.begin(), it->second.end());
+        }
+        b[nAt] = (uint8_t)n; b[nAt + 1] = (uint8_t)(n >> 8);
+        t_.sendReliable(0, b.data(), b.size());
+        break;
+    }
+    case kLeaveR: {   // the host: a member's report
+        if (cfg_.self != 0 || d.size() < 13) return;   // a report with no commands is 13 bytes
+        const int lv = d[2];
+        const uint32_t have = get32(&d[3]), first = get32(&d[7]);
+        const size_t n = (size_t)d[11] | ((size_t)d[12] << 8);
+        if (lv <= 0 || lv >= cfg_.seats || d.size() < 13 + n * kWireCommandBytes) return;
+        for (size_t i = 0; i < n; ++i) {
+            WireCommand w; std::copy(d.begin() + (long)(13 + i * kWireCommandBytes), d.begin() + (long)(13 + (i + 1) * kWireCommandBytes), w.begin());
+            cmds_[(size_t)lv].emplace(first + (uint32_t)i, w);
+        }
+        uint32_t& c = contiguous_[(size_t)lv];
+        while (cmds_[(size_t)lv].count(c + 1)) ++c;
+        for (Leave& l : leaves_) if (l.seat == lv) l.reports[seat] = have;
+        break;
+    }
+    case kLeaveF: {   // a member: the leaver's commands we lacked below the agreed tick
+        if (seat != 0 || d.size() < 9) return;
+        const int lv = d[2];
+        const uint32_t first = get32(&d[3]);
+        const size_t n = (size_t)d[7] | ((size_t)d[8] << 8);
+        if (lv <= 0 || lv >= cfg_.seats || d.size() < 9 + n * kWireCommandBytes) return;
+        for (size_t i = 0; i < n; ++i) {
+            WireCommand w; std::copy(d.begin() + (long)(9 + i * kWireCommandBytes), d.begin() + (long)(9 + (i + 1) * kWireCommandBytes), w.begin());
+            cmds_[(size_t)lv].emplace(first + (uint32_t)i, w);
+        }
+        uint32_t& c = contiguous_[(size_t)lv];
+        while (cmds_[(size_t)lv].count(c + 1)) ++c;
         break;
     }
     case kHist: {   // the joiner: the host's history feed
@@ -391,6 +494,7 @@ void Lockstep::handle(const NetPacket& p) {
     case kBye: {
         const uint32_t last = d.size() >= 6 ? get32(&d[2]) : 0;
         LOG_INFO("NET seat %d left (its last tick %u)", seat, last);
+        if (seat != 0 && cfg_.seats > 2) { dropSeat(seat); break; }   // a member: the host runs the leave protocol; the match goes on
         if (last > 0) endTick_ = endTick_ ? std::min(endTick_, last) : last;   // finish up to there, then end normally
         else if (seat == 0) fail(Status::HostLost, "the host left");
         break;
@@ -461,7 +565,7 @@ void Lockstep::submitLocal(uint32_t tick, const game::RemoteCommand& c) {
     }
     uint32_t& h = contiguous_[(size_t)cfg_.self];
     while (cmds_[(size_t)cfg_.self].count(h + 1)) ++h;
-    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && activeFrom_[(size_t)s] != 0) sendCommands(s, false);
+    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && joined(s)) sendCommands(s, false);
 }
 
 bool Lockstep::haveAll(uint32_t tick) const {
@@ -471,7 +575,7 @@ bool Lockstep::haveAll(uint32_t tick) const {
     }
     for (int s = 0; s < cfg_.seats; ++s) if (seatActive(s, tick) && !cmds_[(size_t)s].count(tick)) return false;
     for (int s = 0; s < cfg_.seats; ++s) {   // every event stamped for this tick (or earlier) arrived
-        if (s == cfg_.self || activeFrom_[(size_t)s] == 0) continue;
+        if (s == cfg_.self || activeFrom_[(size_t)s] == 0 || (activeUntil_[(size_t)s] != 0 && tick >= activeUntil_[(size_t)s])) continue;   // a leaver: its events up to U still count
         const auto& a = eventsAnnounced_[(size_t)s];
         auto it = a.lower_bound(tick);   // the announcement of a packet that covered this tick
         if (it != a.end() && eventsReceived_[(size_t)s] < it->second) return false;
@@ -489,7 +593,7 @@ uint32_t Lockstep::submitEvent(uint8_t kind, const std::vector<uint8_t>& payload
     put8(b, (uint8_t)len); put8(b, (uint8_t)(len >> 8));
     b.insert(b.end(), payload.begin(), payload.begin() + (long)len);
     put32(b, seq);
-    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && activeFrom_[(size_t)s] != 0) t_.sendReliable(s, b.data(), b.size());
+    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && joined(s)) t_.sendReliable(s, b.data(), b.size());
     Event e; e.seat = cfg_.self; e.atTick = at; e.kind = kind; e.seq = seq; e.payload.assign(payload.begin(), payload.begin() + (long)len);
     acceptEvent(std::move(e));
     return at;
@@ -506,6 +610,7 @@ void Lockstep::acceptEvent(Event e) {
     if (e.seat != cfg_.self) ++eventsReceived_[(size_t)e.seat];
     if (cfg_.keepHistory) eventLog_.push_back(e);
     if (e.kind == kEventSeatJoin && e.seat == 0) applySeatJoin(e);
+    if (e.kind == kEventSeatLeave && e.seat == 0) applySeatLeave(e);
     eventQueue_.push_back(std::move(e));
 }
 
@@ -547,7 +652,7 @@ void Lockstep::reportHash(uint32_t tick, uint64_t h) {
     if (cfg_.keepHistory) hashLog_[tick] = h;
     std::vector<uint8_t> b; put8(b, kHash); put8(b, (uint8_t)cfg_.self); put32(b, tick); put64(b, h);
     if (seatActive(cfg_.self, tick))   // a joiner still catching up only checks (against the history): it sends no hashes yet
-        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && activeFrom_[(size_t)s] != 0) t_.sendReliable(s, b.data(), b.size());
+        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && joined(s)) t_.sendReliable(s, b.data(), b.size());
     auto it = peerHash_.find(tick);
     if (it != peerHash_.end()) {
         for (const auto& ph : it->second)
@@ -601,7 +706,7 @@ void Lockstep::sendVoice(const uint8_t* p, size_t n) {
 void Lockstep::fanOutVoice(int talker, const uint8_t* p, size_t n) {
     const uint8_t flags = n > 4 ? p[4] : 0;
     for (int s = 0; s < cfg_.seats; ++s) {
-        if (s == cfg_.self || s == talker || activeFrom_[(size_t)s] == 0) continue;
+        if (s == cfg_.self || s == talker || !joined(s)) continue;
         if (voiceAudience_ && !voiceAudience_(talker, s, flags)) continue;
         t_.sendUnreliable(s, p, n);
         if (talker != cfg_.self) ++voiceRelayed_;
@@ -610,7 +715,7 @@ void Lockstep::fanOutVoice(int talker, const uint8_t* p, size_t n) {
 
 void Lockstep::bye(uint32_t lastTick) {
     std::vector<uint8_t> b; put8(b, kBye); put8(b, (uint8_t)cfg_.self); put32(b, lastTick);
-    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && activeFrom_[(size_t)s] != 0) t_.sendReliable(s, b.data(), b.size());
+    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && joined(s)) t_.sendReliable(s, b.data(), b.size());
     for (int i = 0; i < 20; ++i) t_.service();   // flush best-effort (the peers' acks may not come back before exit)
     const NetStats st = t_.stats();
     LOG_INFO("NET bye: sent %llu B / %llu pkts, received %llu B / %llu pkts, resends %llu, rtt %.1f ms, stalled %.0f ms total, D %d",
