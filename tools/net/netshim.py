@@ -77,6 +77,7 @@ def main():
             k = f"{i}>{j}"; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.bind(("127.0.0.1", port)); s.setblocking(False)
             socks[s] = (k, j); dirs[k] = Direction(k, parse_profile(over.get(k, a.profile)), a.seed, t0); pmap[k] = port; port += 1
     out = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    rev = {k: s for s, (k, _) in socks.items()}   # direction -> its listening socket (also the sender for the reverse direction)
     print(json.dumps(pmap), flush=True)
     if a.map: json.dump({"ports": pmap, "peers": {k: f"{h}:{p}" for k, (h, p) in peers.items()}, "seed": a.seed,
                          "profiles": {k: d.p for k, d in dirs.items()}}, open(a.map, "w"), indent=1)
@@ -86,7 +87,11 @@ def main():
         while end is None or time.perf_counter() < end:
             now = time.perf_counter()
             while heap and heap[0][0] <= now:
-                _, _, data, dst, k = heapq.heappop(heap); out.sendto(data, peers[dst]); dirs[k].stats["delivered"] += 1
+                _, _, data, dst, k = heapq.heappop(heap)
+                # sent FROM the reverse direction's port ("A>B" goes out of the "B>A" socket): a peer that answers the source address
+                # (the online session learns member addresses that way) reaches the shim port that routes back
+                src, _ = k.split(">")
+                (rev.get(f"{dst}>{src}") or out).sendto(data, peers[dst]); dirs[k].stats["delivered"] += 1
             wait = max(0.0, min(0.05, (heap[0][0] - now) if heap else 0.05))
             r, _, _ = select.select(list(socks), [], [], wait)
             for s in r:
