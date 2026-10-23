@@ -4113,3 +4113,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 14:11 Set-dressing look (Frontend): A1 OK (nodes draw, 2 authored hidden sent); A2 sent 0 authored hidden vs 55 hidden nodes in
   the data -> Gameplay + AssetTools check the actors.json bHidden key (data or tiny reader fix). A5 shipped (9 / 10);
   D3B last, then the outside list. Air-nav queue started.
+2026-10-23 14:18 MERGED 78caf2bc authored hides limited to drawable classes + name conflicts left visible (the bHidden export marks
+  thousands of class-default rows: volumes, lights, sounds; 35 short-name conflicts across levels: path keys on both sides
+  = post-build). CODE CANDIDATE 78caf2bc. Frontend reruns A1 + A2 on it; Experimental rebuilds the gate head; Gameplay
+  folds it into FINAL_BASE_ITEMS.
