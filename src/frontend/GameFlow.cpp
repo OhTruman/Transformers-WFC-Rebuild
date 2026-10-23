@@ -20,6 +20,7 @@ constexpr const char* kPartyLobbyUrl = "UI_PartyLobby_m?game=TransContent.TnPart
 const char* const kIntroMovies[] = {"Logo_Activision", "Logo_Hasbro", "Logo_HighMoon", "FMV_intro"};
 // GameLobby timings [CONFIRMED Xe-TransGame.ini / authored defaults, RE 2.4].
 constexpr int kShortCountdown = 10;          // BeginShortCountdown (private, host started)
+constexpr int kPublicMinPlayers = 2;          // public lobby autostart (Integration decision 2026-10-23)
 constexpr int kLobbyIntermissionTime = 45;   // BeginIntermissionCountdown (public autostart)
 
 std::string lowerStr(std::string s) { for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; }
@@ -1118,6 +1119,9 @@ void GameFlow::sendOnlineLaunch() {
 // once NumRequiredPlayers humans are in [RE fc12ceb]; it stops again if they drop below before the launch.
 
 void GameFlow::voteBegin(int round, const std::vector<int>& exclude) {
+    // Integration decision 2026-10-23 (RE ONLINE_PC_DEVIATIONS row 13): a public lobby starts by itself at 2 humans, after
+    // the original 45 s intermission; the host cannot start it early (CanHostRequestGameStart = IsPrivateMatch).
+    lobby_.numRequiredPlayers = kPublicMinPlayers;
     std::vector<const MapInfo*> pool = cat_->compatibleMaps(lobby_.gameModeTag, true);
     pool.erase(std::remove_if(pool.begin(), pool.end(), [&](const MapInfo* m) {
         return std::find(exclude.begin(), exclude.end(), m->mapId) != exclude.end(); }), pool.end());

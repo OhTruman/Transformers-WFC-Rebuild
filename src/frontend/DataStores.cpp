@@ -48,6 +48,12 @@ std::string DataStores::read(const std::string& markup, bool* known) {
         // TnVersusGameOverMessage [RE A5]: a forfeit (Systems 10.5 / Gameplay's 1.5 s team-forfeit check: a team has no
         // players left) shows the winners the original ForfeitMessage "Enemy team forfeits"; otherwise Gameplay's line.
         const MatchValues& mv = flow_.matchValues();
+        // Escalation's loss (every player dead): TnSurvivalGameOverMessage "You survived until wave `r" with the wave
+        // reached (DisplayWave + 1) [MP_ESCALATION_RE 8.4, RE end-of-match check]; EndGameStats shows it as its header.
+        if (mv.endReason == "AllDead" && mv.svWave > 0) {
+            const std::string m = cat_.localize("TransContent", "TnSurvivalGameOverMessage", "Message");
+            if (!m.empty()) return replaceAll(m, "`r", std::to_string(mv.svWave));
+        }
         if (mv.endReason == "Forfeit" && mv.winnerTeam >= 0 && mv.winnerTeam == mv.myTeam) {
             const std::string f = cat_.localize("TransContent", "TnVersusGameOverMessage", "ForfeitMessage");
             if (!f.empty()) return f;
@@ -132,6 +138,7 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<CurrentGame:CanHostRequestGameStart>")
         return b(flow_.level() == LevelKind::GameLobby && L.mapSelectionMethod == 1 && !L.countdownRubicon && L.mapId >= 0 &&
                  flow_.sessionRole() != GameFlow::SessionRole::Member &&     // an online member never starts the game
+                 flow_.mapVote().round == 0 &&   // CanHostRequestGameStart = IsPrivateMatch: a public lobby starts by itself [RE]
                  (flow_.sessionRole() == GameFlow::SessionRole::Offline || L.lobbyStatus == 3));   // online: the original gate (D4)
     if (markup == "<CurrentGame:LobbyStatus>") {
         if (flow_.level() != LevelKind::GameLobby || L.countingDown) return "";
@@ -233,6 +240,7 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
         if (live && !mv.players.empty()) {
             // Gameplay's match roster (local player first as in GRI order of joining).
             for (const MatchValues::Player& p : mv.players) {
+                if (p.directorSpawned) continue;   // Escalation's horde slots are not players (the original lists PRIs only)
                 const GameFlow::OnlineMember* om = online && p.remote ? flow_.memberForPlayer(p) : nullptr;
                 if (om) {   // another peer's human: its row as in the lobby, with the match's score
                     std::string headset;

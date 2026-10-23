@@ -1,0 +1,30 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 470477d..cc2f2f4 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -94,9 +94,15 @@ template <class P>
+ struct HasParticipantInfo<P, std::void_t<decltype(std::declval<const P&>().kind == decltype(std::declval<const P&>().kind)::Bot),
+                                          decltype(std::declval<const P&>().level), decltype(std::declval<const P&>().specialty)>>
+     : std::true_type {};
++// Gameplay E1 (d89a41f0): MatchPlayer::directorSpawned marks Escalation's horde slots; detected.
++template <class P, class = void> struct HasDirectorSpawned : std::false_type {};
++template <class P> struct HasDirectorSpawned<P, std::void_t<decltype(std::declval<P&>().directorSpawned)>> : std::true_type {};
++// [integration a8c85480] Gameplay E1 landed: fail the build, not the roster filter, if the field goes away.
++static_assert(HasDirectorSpawned<game::MatchPlayer>::value, "game::MatchPlayer::directorSpawned (Gameplay E1)");
+ template <class P> void fillParticipant(const P& mp, frontend::MatchValues::Player& p) {
+     if constexpr (HasParticipantInfo<P>::value) { using Kind = decltype(mp.kind); p.bot = mp.kind == Kind::Bot; p.level = mp.level; p.specialty = mp.specialty; }
+-    else { (void)mp; (void)p; }
++    if constexpr (HasDirectorSpawned<P>::value) p.directorSpawned = mp.directorSpawned;
++    (void)mp; (void)p;
+ }
+ // Online match side (ONLINE_MP_FRONTEND_TESTS.md section 4; Gameplay item 4, agreed 2026-10-17): MatchPlayer kind Remote +
+ // sessionMember -> the roster's remote / member (the scoreboard's platform tag and voice columns); the frontend's online slots
+@@ -437,6 +443,8 @@ struct HasSurvivalHud<H, std::void_t<decltype(std::declval<H&>().svWave), declty
+                                      decltype(std::declval<H&>().svGameOver)>> : std::true_type {};
+ template <class H, class = void> struct HasSurvivalPower : std::false_type {};
+ template <class H> struct HasSurvivalPower<H, std::void_t<decltype(std::declval<H&>().svPower)>> : std::true_type {};
++static_assert(HasSurvivalHud<game::HudGameState>::value && HasSurvivalPower<game::HudGameState>::value,
++              "game::HudGameState svWave / svNextWaveTime / svGameOver / svPower (Gameplay E1)");
+ template <class H> void fillSurvival(const H& h, frontend::MatchValues& v) {
+     if constexpr (HasSurvivalHud<H>::value) {
+         v.svWave = h.svWave;

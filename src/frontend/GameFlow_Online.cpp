@@ -461,6 +461,7 @@ void GameFlow::enterMemberLobby(const SessionLobby& lobby) {
 void GameFlow::applyMemberLobby() {   // the host's choices on the member's lobby (map, teams); options are display-only
     // (the lobby exit countdown runs on the member itself from CountdownStarted, as on the host)
     if (memberLobby_.voteRound != vote_.round) myVote_ = -1;   // a new round (None of these re-roll): the vote resets
+    if (memberLobby_.voteRound > 0) lobby_.numRequiredPlayers = 2;   // the public autostart count, as the host's voteBegin
     vote_.maps = memberLobby_.voteMaps;
     vote_.counts = memberLobby_.voteCounts;
     vote_.round = memberLobby_.voteRound;

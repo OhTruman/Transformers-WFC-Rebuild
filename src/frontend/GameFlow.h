@@ -76,6 +76,7 @@ struct MatchValues {
         bool remote = false;           // Gameplay ParticipantKind::Remote: another peer's human (online)
         std::string member;            // its session member (Gameplay MatchPlayer::sessionMember; "" = the host / unknown)
         int power = 0;                 // Escalation: PRI._CurrentPower 0..9999 (<CurrentGame:Players> _CurrentPower)
+        bool directorSpawned = false;  // Escalation: a horde slot of the wave director (Gameplay MatchPlayer) - never listed
     };
     std::vector<Player> players;
     // Escalation (MP_ESCALATION_RE 8.1; Gameplay HudGameState sv*): GRI survival values for Hud_GFX
