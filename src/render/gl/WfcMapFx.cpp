@@ -1672,6 +1672,39 @@ void Pipeline::drawMapPresentation() {
             }
         }
     }
+    // dropped weapons (RE PICKUP_IDLE_MOTION_RE.md 2: TnDroppedPickupWeapon): the weapon's pickup mesh on the floor, tilted by
+    // SpawnOffsetAngle (pitch 3000) and PickupScale (KamikazeMines: none, 1.2), PHYS_Rotating at Yaw 10000 (54.93 deg/s) from its
+    // landing; the Defragger materialize / fade-out at LifeSpan - 2 s as a scale envelope (below)
+    for (const DropRT& d : dropQueue_) {
+        if (d.lifeLeft <= 0.0f || d.gltf.empty()) continue;
+        auto it = dropMeshes_.find(d.gltf);
+        if (it == dropMeshes_.end()) {
+            PickupMeshRT pm;
+            pm.gltf = d.gltf;
+            std::string obj = d.gltf.substr(0, d.gltf.rfind('.'));            // "WEP_X_p/WEP_X_SKEL.gltf" -> "WEP_X_p.WEP_X_SKEL"
+            std::replace(obj.begin(), obj.end(), '/', '.');
+            pm.mesh = obj;
+            ensurePickupMesh(pm);
+            it = dropMeshes_.emplace(d.gltf, pm.meshId >= 0 ? pm.meshId : -2).first;
+        }
+        if (it->second < 0) continue;
+        float z = d.pos[2];
+        float zHit = 0.0f;
+        if (groundBelowUE(d.pos[0], d.pos[1], d.pos[2] + 50.0f, zHit) && d.pos[2] - zHit < 400.0f) z = zHit;   // (on the floor)
+        const float yaw = (120.0f - d.lifeLeft) * 10000.0f;                    // UU: Yaw 10000 / s since it landed
+        float rows[3][3];
+        rotRows(d.mines ? 0.0f : 3000.0f, yaw, 0.0f, rows);
+        // (the Defragger materialize on landing / fade-out at LifeSpan - 2 s, approximated by a scale envelope: the static
+        // path has no Defrag material swap - in over 1 s, out over the last 2 s)
+        const float age = 120.0f - d.lifeLeft;
+        const float env = std::min(std::min(std::max(age, 0.0f), 1.0f), std::min(std::max(d.lifeLeft * 0.5f, 0.0f), 1.0f));
+        const float k = (d.mines ? 1.2f : 1.0f) * env * env * (3.0f - 2.0f * env);
+        if (k <= 1e-3f) continue;
+        for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) rows[r][c] *= k;
+        const float t[3] = {d.pos[0], d.pos[1], z};
+        draw(it->second, ueRowsToGltf(rows, t));
+    }
+    dropQueue_.clear();
     sec(1);
     // particles
     core::Vec3 camR{camView_.m[0], camView_.m[4], camView_.m[8]};
