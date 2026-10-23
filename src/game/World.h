@@ -1263,6 +1263,7 @@ private:
     void applyPendingSelections();
     bool pbSandbox_ = false;            // online: the player bot's brain is running (input only: its actions become presses)
     uint32_t pbPress_ = 0;              // the presses it asked for (platform::Button bits)
+    std::vector<uint8_t> seatInteract_;   // each seat's last command Interact held bit (Escalation generators)
     std::vector<char> seatFineAim_;     // online: each seat's last command FineAim bit (the snapshot's fine-aim flag)
     void tickSeatDrain(Character& pc, int p, float dt);   // TnBuffDrainSource for a seat (remote, or the online local seat)
     bool seatHuman(int p) const { return p >= 0 && (size_t)p < match_.players().size() && match_.players()[(size_t)p].kind != ParticipantKind::Bot; }
@@ -1395,6 +1396,10 @@ private:
     void svSort(int type);
     void svTouch(int zone, int sign);
     bool svSpawn(int slot);
+    void svSetZoneActive(int zone, bool on);
+    bool svInteractHeld(int player) const;
+    void svFireGenerator(int generator);
+    bool svLaunching_ = false;   // the next resetForNewLevel is an Escalation level (transforming actors: the SV start state)
     SurvivalData svData_;
     SurvivalState sv_;
     std::vector<ColActor> colActors_;

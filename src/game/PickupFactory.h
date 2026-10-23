@@ -64,12 +64,15 @@ public:
     float respawnRemaining() const { return respawnRemain_; }
     float respawnTime() const { return respawnTime_; }
     // Visual state for Rendering/Systems (SetPickupVisible / SetPickupHidden) [CONF RE d50e2a9]:
-    bool meshVisible() const { return available_; }
+    bool meshVisible() const { return available_ && !hidden_; }
+    // Escalation: a bought factory is hidden (no mesh, no effects, no touch, no timer) until its generator's SeqAct_ToggleHidden UnHide.
+    void setHidden(bool h) { hidden_ = h; }
+    bool hidden() const { return hidden_; }
     // CustomPickupEffect (HealthPickup_FX / OvershieldPickup_FX): shown and active only while available.
-    bool customEffectActive() const { return available_ && kind_ != Kind::AmmoCrate; }
+    bool customEffectActive() const { return available_ && !hidden_ && kind_ != Kind::AmmoCrate; }
     // PickupEffect (Pickup_FX) highlight beam: ActivateSystem in SetPickupVisible only when
     // ShouldDisplayHighlightFx, which is true only for the ammo-crate (weapon) factory.
-    bool beamActive() const { return available_ && shouldDisplayHighlightFx(kind_); }
+    bool beamActive() const { return available_ && !hidden_ && shouldDisplayHighlightFx(kind_); }
     static bool shouldDisplayHighlightFx(Kind k) { return k == Kind::AmmoCrate; }
     // Authored inventory data.
     static const char* className(Kind k);
@@ -84,6 +87,7 @@ private:
     float respawnTime_;
     int index_;
     bool available_ = true;
+    bool hidden_ = false;
     // Per touching pawn (match player index): Touch = overlap begin; ValidTouch FastTrace failure: retry after 0.5 s while still touching.
     struct Touch { bool overlapping = false, now = false, began = false; float recheck = 0.0f; };
     std::map<int, Touch> touch_;

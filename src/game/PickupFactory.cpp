@@ -77,6 +77,7 @@ void PickupFactory::take(World& world, Character& c) {
 //              a pawn already standing on it is re-tested at once. The actor is never destroyed.
 // Touch is an overlap BEGIN, so other factories do not re-grant to a pawn that was already standing on them.
 void PickupFactory::tick(World& world, float dt) {
+    if (hidden_) return;   // Escalation: not bought yet
     // The pawns that can take it (offline the local pawn; online every human seat by match player index).
     static std::vector<std::pair<int, Character*>> pawns;
     world.pickupPawns(pawns);

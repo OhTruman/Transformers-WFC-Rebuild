@@ -2737,7 +2737,7 @@ void World::resetForNewLevel() {
     // A new match is a fresh load of the map in the original (MatchOver -> ReturnToGameLobby -> ServerTravel).
     mapState_.resetForNewMatch();
     if (collision_.valid()) mapState_.tick(0.0f, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
-    if (collision_.valid()) transforming_.resetForNewMatch(collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);   // a fresh level
+    if (collision_.valid()) transforming_.resetForNewMatch(collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr, svLaunching_);   // a fresh level
     syncTransformingActorSounds();   // the reset's snap (e.g. the versus doors start open) plays nothing
     dyingQueue_.clear();
     for (DyingBody& b : dyingBodies_) { b.remain = 0.0f; if (b.pawnSet >= 0) collision_.setDynamicEnabled(b.pawnSet, false); if (b.weaponSet >= 0 && weaponCollision_.valid()) weaponCollision_.setDynamicEnabled(b.weaponSet, false); }
@@ -3115,6 +3115,7 @@ bool World::launchMatch(const MatchLaunch& l) {
     // All six versus modes run on the shared framework (CTF rounds / EXT bomb: Pass 22).
     matchMode_ = mode;
     mapState_.setMode(mode);
+    svLaunching_ = l.settings.survival;
     resetForNewLevel();
     clearMatchActors();   // the previous match's projectiles and ability actors go with it (a fresh level in the original)
     removeBots();   // the previous match's bots leave with it (a new match is a fresh level in the original)
@@ -3469,6 +3470,8 @@ void World::applySeat(SeatRef& s, const RemoteCommand& c, float dt) {
     auto held = [&](platform::Button b) { return ((c.buttons >> (int)b) & 1u) != 0; };
     auto down = [&](platform::Button b) { return ((c.pressed >> (int)b) & 1u) != 0; };
     s.pressesPickup = held(platform::Button::Interact) || down(platform::Button::Interact);   // TryPickup
+    if (seatInteract_.size() <= (size_t)p) seatInteract_.resize((size_t)p + 1, 0);
+    seatInteract_[(size_t)p] = held(platform::Button::Interact) ? 1 : 0;
     {
         MoveIntent in;
         in.moveForward = c.moveForward / 127.0f; in.moveRight = c.moveRight / 127.0f;
@@ -4205,6 +4208,11 @@ HudGameState World::hudState() const {
         if (sv_.phase == SurvivalState::Phase::PreGame) h.svNextWaveTime = (int)std::ceil(std::max(0.0f, svData_.preGameTime - sv_.phaseTime));
         else if (sv_.phase == SurvivalState::Phase::BetweenWaves) h.svNextWaveTime = (int)std::ceil(std::max(0.0f, svData_.timeBetweenWaves - sv_.phaseTime));
         h.svGameOver = sv_.phase == SurvivalState::Phase::GameOver;
+        if (localPlayer_ >= 0 && (size_t)localPlayer_ < sv_.power.size()) {
+            h.svPower = (int)sv_.power[(size_t)localPlayer_];
+            const int g = sv_.nearGenerator[(size_t)localPlayer_];
+            if (g >= 0) { h.svGeneratorName = svData_.generators[(size_t)g].nameKey; h.svGeneratorNeeded = (int)std::ceil(svData_.generators[(size_t)g].cost - sv_.pool[(size_t)g]); }
+        }
     }
     return h;
 }

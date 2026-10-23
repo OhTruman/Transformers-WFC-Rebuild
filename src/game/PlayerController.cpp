@@ -206,6 +206,7 @@ void PlayerController::handleInput(const platform::InputFrame& inRaw, float dt) 
     if (in.wasPressed(Button::Melee)) wantMelee_ = true;
     if (in.wasPressed(Button::Grenade)) wantGrenade_ = true;
     if (in.wasPressed(Button::Interact)) wantPickup_ = true;
+    interactHeld_ = in.isDown(Button::Interact);
     // Shipped PC bindings: mouse wheel and PageUp / PageDown are all "NextWeapon" (TnInventoryManager.NextWeapon cycles from the
     // pending weapon) [CONF Xe-TransInput.ini via RE MILESTONE05_PLAYTEST_RE 1.1].
     if (in.wasPressed(Button::NextWeapon) || in.wasPressed(Button::PrevWeapon) || in.mouseWheel != 0.0f) wantSwitch_ = 1;

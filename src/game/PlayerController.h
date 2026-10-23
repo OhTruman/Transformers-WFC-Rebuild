@@ -252,12 +252,14 @@ private:
     float lookUpSmoothed_ = 0.0f, tank180Cooldown_ = 0.0f;
     int wantSwitch_ = 0;
     bool wantKillstreak_ = false, wantMelee_ = false, wantGrenade_ = false, wantPickup_ = false;
+    bool interactHeld_ = false;
 public:
     bool consumeKillstreakRequest() { bool b = wantKillstreak_; wantKillstreak_ = false; return b; }
     bool consumeMeleeRequest() { bool b = wantMelee_; wantMelee_ = false; return b; }
     bool fireHeld() const { return wantFire_ || fireLatch_; }
     bool consumeGrenadeRequest() { bool b = wantGrenade_; wantGrenade_ = false; return b; }
     bool consumePickupRequest() { bool b = wantPickup_; wantPickup_ = false; return b; }
+    bool interactHeld() const { return interactHeld_; }   // Interact held this frame (Escalation generators: _AllowDraining)
 private:
     int wantAbility_ = -1, abilityTriggers_ = 0;
     float abilityStickFwd_ = 0.0f, abilityStickRight_ = 0.0f;

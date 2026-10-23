@@ -13,6 +13,9 @@ def short(z):
     return z.replace('TnSurvivalZoneVolume_', '')
 
 incs = []
+# RE (escalation_zone_order.json, a5cc309): the PersistentLevel actor order of the zones (Initialize walks AllActors, adding the active
+# ones in that order) and, as a test vector, every type's initial sorted order (the binary's MSVC qsort).
+ORDER = json.load(open(ROOT + '/RE-Workspace/work/handoff/escalation_zone_order.json'))
 for m in ['MP_ESC_BrokenHope', 'MP_ESC_Remnant']:
     re_ = json.load(open(ROOT + '/RE-Workspace/notes/data/escalation/' + m + '.json'))
     geo = json.load(open(ROOT + '/AssetTools/manifests/maps/' + m + '/escalation_geometry.json'))
@@ -38,7 +41,10 @@ for m in ['MP_ESC_BrokenHope', 'MP_ESC_Remnant']:
                      'power': e['PowerReward']} for e in sl['Enemies']],
         'zones': [],
     }
-    for z in re_['zones']:
+    key = m.replace('MP_ESC_', '')
+    rank = {zid: i for i, zid in enumerate(ORDER['zone_actor_order'][key])}
+    out['initialSorted'] = [ORDER['initial_sorted'][key][t] for t in ['Standard', 'ShortRange', 'LongRange', 'Air', 'Boss']]
+    for z in sorted(re_['zones'], key=lambda q: rank[short(q['object'])]):   # actor order
         name = z['object']
         b = boxes.get(name)
         if not b: raise SystemExit('no geometry for ' + name)
@@ -50,6 +56,43 @@ for m in ['MP_ESC_BrokenHope', 'MP_ESC_Remnant']:
                         for c in z.get('ZoneChanges', [])],
             'min': [round(v, 3) for v in b[0]], 'max': [round(v, 3) for v in b[1]],
             'spawnPoints': spawns.get(name, []),   # AssetTools spawn_points (x, y, z glTF m, yaw); empty: a PROV point in the box
+        })
+    # Generators (TnSurvivalGenerator): cost (one power level in MP), DrainRate (None = the CDO's, resolved at runtime), the
+    # ActivationVolume as outward planes (n, d: inside where n.p <= d) + its box, and AssetTools' resolved New Power Level actions
+    # (remote-event chains and object variables followed) flattened to (op, class, target).
+    def planes(polys):
+        pts = [p for poly in polys for p in poly]
+        c = [sum(p[i] for p in pts) / len(pts) for i in range(3)]
+        out_ = []
+        for poly in polys:
+            a, b, q = poly[0], poly[1], poly[2]
+            u = [b[i] - a[i] for i in range(3)]; v = [q[i] - a[i] for i in range(3)]
+            n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]
+            ln = math.sqrt(sum(x * x for x in n))
+            if ln < 1e-9: continue
+            n = [x / ln for x in n]
+            d = sum(n[i] * a[i] for i in range(3))
+            if sum(n[i] * c[i] for i in range(3)) > d: n = [-x for x in n]; d = -d
+            out_.append([round(x, 5) for x in n] + [round(d, 4)])
+        return out_
+    OPS = {'SeqAct_ToggleHidden': {'UnHide': 'unhide', 'Hide': 'hide'}, 'TnSeqAct_TransformWorldProp': {'Transform': 'transform', 'Untransform': 'untransform'},
+           'SeqAct_ChangeCollision': {'In': 'collide'}, 'SeqAct_Toggle': {'Turn On': 'on', 'Turn Off': 'off', 'Toggle': 'toggle'}}
+    out['generators'] = []
+    for g in geo['generators']:
+        pts = [p for poly in g['activation_polygons_gltf'] for p in poly]
+        acts = []
+        for e in g['events']:
+            for a in e['actions']:
+                op = OPS.get(a['class'], {}).get(str(a.get('input')))
+                if not op: continue
+                for t in a.get('targets', []) or []:
+                    acts.append({'op': op, 'class': t['class'], 'target': t['target']})
+        out['generators'].append({
+            'id': g['generator'].replace('TnSurvivalGenerator_', ''), 'nameKey': g['name_key'], 'cost': g['power_levels'][0] if g['power_levels'] else 0,
+            'drainRate': g['drain_rate'], 'location': g['location_gltf'], 'volume': g['activation_volume'],
+            'planes': planes(g['activation_polygons_gltf']),
+            'min': [round(min(p[i] for p in pts), 3) for i in range(3)], 'max': [round(max(p[i] for p in pts), 3) for i in range(3)],
+            'actions': acts,
         })
     path = os.path.join(OUT, 'escalation_' + m + '.json')
     with open(path, 'w') as f:

@@ -39,7 +39,7 @@ MatchSettings MatchSettings::forMode(const std::string& tag) {
     // ESC (Escalation, TnSurvivalGame): co-op against the horde, no score goal, no time limit, up to 4 players (the horde is ours
     // to size: one participant per spawn-list entry x MaxCount) [CONF RE MP_ESCALATION_RE §1].
     else if (tag == "ESC") { s.teamGame = true; s.goalScore = 0; s.timeLimit = 0; s.gameType = "TNGT_SV"; s.teamScoreAmount = 0;
-                             s.reportKills = false; s.reportPoints = false; s.survival = true; s.maxPlayers = 128; s.maxPerTeam = 128; s.maxBotsPerTeam = 128; }
+                             s.reportKills = false; s.reportPoints = false; s.survival = true; s.matchAutoStartCountdown = 15; s.maxPlayers = 128; s.maxPerTeam = 128; s.maxBotsPerTeam = 128; }
     else { s.modeTag = "TDM"; s.teamGame = true; s.goalScore = 40; s.timeLimit = 900; s.gameType = "TNGT_TDM"; }
     return s;
 }

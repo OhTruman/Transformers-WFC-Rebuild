@@ -51,6 +51,10 @@ public:
     void clear() { actors_.clear(); }
     // Kismet: TnSeqAct_TransformWorldProp Transform (1) / Untransform (0); SeqAct_ChangeCollision / ToggleHidden for the bridges.
     void setDesired(size_t i, int desired) { if (i < actors_.size()) actors_[i].desired = desired ? 1 : 0; }
+    // Escalation generators: SeqAct_ToggleHidden (UnHide / Hide) and SeqAct_ChangeCollision on an actor (the bridges); re-posed next tick.
+    void setShown(size_t i, bool shown) { if (i < actors_.size()) { actors_[i].hidden = !shown; actors_[i].posedT = -1.0f; } }
+    void setCollide(size_t i, bool on) { if (i < actors_.size()) { actors_[i].collide = on; actors_[i].posedT = -1.0f; } }
+    int find(const std::string& name) const { for (size_t i = 0; i < actors_.size(); ++i) if (actors_[i].name == name) return (int)i; return -1; }
     // Match start (a fresh level): the start states above, t at the start pose. escalation: the SV game type (not in the rebuild yet).
     void resetForNewMatch(CollisionWorld& pawn, CollisionWorld* weapon, bool escalation = false);
     // Advances t toward desired at rate 1 and poses the collision sets.
