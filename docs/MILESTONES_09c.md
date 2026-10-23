@@ -3814,3 +3814,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   leader / host migration in the original (ours: D12 promote + HostLost -> party lobby stay); voice team-only in team
   matches, open in FFA / after EndGame (Systems); mute / report = PC addition behind Gamer Card (Frontend). Rendering:
   per-plume blob split built (x43 rerun tests it). Card: Frontend pt9 on e5674e33.
+2026-10-23 06:40 pt9 PASS on ba9d1dcb (two windows, real menus, loopback): public Quick Match lobby -> autostart -> the member joins by
+  code mid-match (21 s load, 120 s window), catches up, wakes at tick 2317, held Choose Character applied at 2356, spawns on
+  team 1, plays; leaves at 4561 -> a bot takes the slot; 0 desyncs, clean exits. INTERNAL PACKAGE WORD GIVEN to Systems
+  (refresh.sh on ba9d1dcb, overlay_20261023g, WFC_OPUS=1; internal only, not the user's final build).
+  RE: Escalation waves (no player-count / difficulty scaling; end screen 15 s, 0 XP); loot from the spawn-list row.
