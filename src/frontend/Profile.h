@@ -114,6 +114,11 @@ public:
     bool onlineFirstRunShown = false;
     // [Lobby] LastMode: the Game Settings mode last used (Private Match hosts with it at once; ONLINE_LOBBY_FLOW_V2 2.1).
     std::string lobbyLastMode;
+    // [RecentPlayers] (ONLINE_MP_PHASE2_FLOWS I1 / D15, PC adaptation): everyone met online, the last 50 by last seen, newest
+    // first - the Friends List's rows. Written only when not empty (offline profiles unchanged).
+    struct RecentPlayer { std::string fingerprint, name; long long lastSeen = 0; };
+    std::vector<RecentPlayer> recentPlayers;
+    void noteRecentPlayer(const std::string& fingerprint, const std::string& name, long long now);
     std::string lobbyService;   // [Online] LobbyService: the lobby service address ("" = none: LAN only); written only when set
     // Voice chat (PC EXTENSION, decision D7 + proximity; ONLINE_MP_FLOWS.md 3.12): the Settings > Audio voice rows and the
     // per-player mutes (fingerprints, local only). [Voice], written only when something differs from the defaults.

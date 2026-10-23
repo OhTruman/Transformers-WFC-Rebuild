@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <ctime>
 
 #include "frontend/FlowTrace.h"
 
@@ -153,6 +154,47 @@ void GameFlow::publicSnakeDraft() {
     FlowTrace::emit("lobby.snakeDraft", {{"by", "level"}, {"order", order}});
 }
 
+void GameFlow::noteRecentPlayer(const SessionMemberId& id, const std::string& name) {
+    if (id.fingerprint.empty() || id == selfId_) return;
+    profile_.noteRecentPlayer(id.fingerprint, name, (long long)std::time(nullptr));
+    profile_.save();
+}
+
+BridgeValue GameFlow::sendGameInvite(const std::string& nick) {
+    // D13: always the current game / party code to the clipboard ("Invite code copied. Send it to `p." PC text); also posted
+    // through the invite mailbox -> InviteSent (1: GameInviteSentMessage, the original text).
+    const std::string code = role_ == SessionRole::Host ? joinCode_ : lastJoinTarget_;
+    const LocalProfile::RecentPlayer* who = nullptr;
+    for (const auto& r : profile_.recentPlayers) if (r.name == nick) { who = &r; break; }
+    if (!session_ || role_ == SessionRole::Offline || code.empty() || !who) {
+        showMessage(txt("$UIText.MessagePrompts.GenericErrorTitle"), txt("$WfcPC.Online.InviteNoGame"));
+        FlowTrace::emit("online.invite", {{"to", nick}, {"result", code.empty() ? "no game code" : "no such player"}});
+        return false;
+    }
+    if (code != invitedForCode_) { invitedHere_.clear(); invitedForCode_ = code; }
+    invitedHere_.insert(who->fingerprint);
+    clipboardRequest_ = code;
+    session_->sendInvite(who->fingerprint, code);
+    std::string m = txt("$WfcPC.Online.InviteCopied");
+    const size_t at = m.find("`p");
+    if (at != std::string::npos) m.replace(at, 2, nick);
+    showMessage(txt("$UIText.Lobby.InviteFriends"), m);
+    FlowTrace::emit("online.invite", {{"to", who->fingerprint}, {"code", code}, {"result", "copied + posted"}});
+    return true;
+}
+
+BridgeValue GameFlow::joinFriendGame(const std::string& nick) {
+    for (const GameInvite& i : invites_)
+        if (i.name == nick) {
+            const std::string code = i.code;
+            invites_.erase(std::remove_if(invites_.begin(), invites_.end(), [&](const GameInvite& g) { return g.name == nick; }), invites_.end());
+            FlowTrace::emit("online.inviteAccepted", {{"from", nick}, {"code", code}});
+            return onlineJoin(code);
+        }
+    showMessage(txt("$UIText.MessagePrompts.JoinGameInviteFailedTitle"), txt("$UIText.MessagePrompts.JoinGameInviteFailedMessage"));
+    return false;
+}
+
 std::vector<std::string> GameFlow::claimedIconicCharacters() const {
     std::vector<std::string> out;
     // iconic mode, and campaign co-op: a trio member another human holds is greyed in CharacterSelect (Gameplay refuses it)
@@ -288,6 +330,12 @@ void GameFlow::onlineTick() {
     if (level_ == LevelKind::GameLobby && vote_.round > 0) lobby_.numPlayers = 1 + (int)onlineMembers_.size();   // "Finding `p more players"
     if (level_ == LevelKind::GameLobby && role_ != SessionRole::Offline && !lobby_.countingDown) lobby_.lobbyStatus = onlineGateStatus();
     if (role_ == SessionRole::Host) applyBrowserCap("tick");
+    if (session_ && role_ != SessionRole::Offline && !profile_.recentPlayers.empty() && clock_ - onlineQueryAt_ >= 20.0) {
+        onlineQueryAt_ = clock_;
+        std::vector<std::string> fps;
+        for (const auto& r : profile_.recentPlayers) if (fps.size() < 64) fps.push_back(r.fingerprint);
+        session_->queryOnline(fps);
+    }
     if (role_ == SessionRole::Host && level_ == LevelKind::GameLobby) voteTick();   // public lobbies (4.1)
     if (role_ == SessionRole::Host && level_ == LevelKind::GameLobby) {   // the host's lobby to every member, on change
         const SessionLobby l = hostLobbySnapshot();
@@ -470,6 +518,7 @@ BridgeValue GameFlow::onlineJoin(const std::string& targetIn) {
     }
     onlinePending_ = OnlinePending::Joining;
     joinStartedAt_ = clock_;
+    lastJoinTarget_ = target;   // a member's invites pass on the code it joined with
     session_->join(target);
     Popup p;   // "Joining..." / "Joining game..." with Cancel (original texts)
     p.title = txt("$UIText.MessagePrompts.JoinFriendGameTitle");
@@ -630,7 +679,37 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
         if (level_ == LevelKind::Match) returnToGameLobby();
         break;
     case T::LobbyState:
-        if (role_ == SessionRole::Member) memberLobby_ = e.lobby;
+        if (role_ == SessionRole::Member) {
+            for (const SessionMemberInfo& mi : e.lobby.members)
+                if (!(mi.id == selfId_) && std::none_of(profile_.recentPlayers.begin(), profile_.recentPlayers.end(),
+                                                    [&](const LocalProfile::RecentPlayer& r) { return r.fingerprint == mi.id.fingerprint; }))
+                    noteRecentPlayer(mi.id, mi.displayName);
+            memberLobby_ = e.lobby;
+        }
+        break;
+    case T::InviteReceived: {   // "`p wants to play": A Join -> Online.JoinFriendGame; the FriendMessages row stays until used
+        invites_.erase(std::remove_if(invites_.begin(), invites_.end(), [&](const GameInvite& i) { return i.fingerprint == e.member.fingerprint; }),
+                       invites_.end());
+        invites_.push_back({e.member.fingerprint, e.info.displayName, e.joinCode});
+        noteRecentPlayer(e.member, e.info.displayName);
+        Popup p;
+        p.title = txt("$UIText.Lobby.InviteFriends");
+        p.message = txt("$UIText.MessagePrompts.GameInviteReceivedMessage");
+        const size_t at = p.message.find("`p");
+        if (at != std::string::npos) p.message.replace(at, 2, e.info.displayName);
+        p.a = PopupButton{txt("$UIText.MessagePrompts.JoinFriendGameJoinButton"), "inviteJoin:" + e.info.displayName, true};
+        p.b = PopupButton{txt("$UIText.ButtonHints.Back"), "", true};
+        p.showDefaultButtons = false;
+        showPopup(p);
+        FlowTrace::emit("online.inviteReceived", {{"from", e.member.fingerprint}, {"name", e.info.displayName}, {"code", e.joinCode}});
+        break;
+    }
+    case T::InviteSent:
+        FlowTrace::emit("online.inviteSent", {{"to", e.member.fingerprint},
+                                              {"result", e.value == 1 ? "delivered" : e.value == 0 ? "not online" : "no lobby service"}});
+        break;
+    case T::OnlineStatus:
+        friendsOnline_ = std::set<std::string>(e.online.begin(), e.online.end());
         break;
     case T::MemberJoined: {   // host: a new member (connecting until it has a character), or its updated info
         if (role_ != SessionRole::Host) break;
@@ -642,6 +721,7 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
             m.team = botRows() == BotRows::Teams ? pickOnlineTeam() : 255;
             m.connecting = !e.info.hasCharacter && e.info.characterSlot.empty();
             onlineMembers_.push_back(m);
+            noteRecentPlayer(e.member, e.info.displayName);
             if (isMuted(e.member) || isBlocked(e.member)) session_->setMuted(e.member, true);   // a remembered mute / block (profile)
             FlowTrace::emit("online.memberJoined", {{"member", e.member.fingerprint}, {"name", e.info.displayName}, {"team", std::to_string(m.team)},
                                                     {"platform", e.info.platform == SessionPlatform::Web ? "Web" : "PC"}});

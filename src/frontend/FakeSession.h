@@ -77,6 +77,12 @@ public:
     float mic = 0.0f;   // scripted Mic Test level
     float micLevel() const override { return mic; }
     void setMuted(const SessionMemberId& m, bool muted) override { Call c = mk("setMuted"); c.arg = m.fingerprint + (muted ? ",1" : ",0"); calls_.push_back(c); }
+    void sendInvite(const std::string& fingerprint, const std::string& code) override { Call c = mk("sendInvite"); c.arg = fingerprint + "," + code; calls_.push_back(c); }
+    void queryOnline(const std::vector<std::string>& fingerprints) override {
+        Call c = mk("queryOnline");
+        for (const std::string& f : fingerprints) c.arg += (c.arg.empty() ? "" : ",") + f;
+        calls_.push_back(c);
+    }
 
     std::vector<SessionEvent> poll(double now) override {
         now_ = now;

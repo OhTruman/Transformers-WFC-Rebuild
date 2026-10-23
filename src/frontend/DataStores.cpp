@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <ctime>
 
 namespace frontend {
 
@@ -214,6 +215,37 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
             c.rows.push_back({std::to_string(m.mapId), m.mapFilename, m.friendlyName, m.imagePath, types, std::to_string(m.faction),
                               std::to_string(m.presenceId), cat_.localize("TransGame", m.mapFilename + " TnDataProvider_MapInfo", "Description")});
             c.enabled.push_back(m.hasRequiredAssets);
+        }
+        return true;
+    }
+    if (markup == "<OnlinePlayerData:Friends>") {   // I1 (D15): the recent players, newest first
+        c.columns = {"NickName", "PresenceInfo", "bHaveInvited", "bHasInvitedYou", "bIsOnline", "bIsJoinable", "bIsPlaying", "bIsPlayingThisGame",
+                     "bHasVoiceSupport"};
+        for (const LocalProfile::RecentPlayer& r : flow_.profile().recentPlayers) {
+            const bool online = flow_.friendOnline(r.fingerprint);
+            bool invitedYou = false;
+            for (const GameFlow::GameInvite& i : flow_.gameInvites()) invitedYou = invitedYou || i.fingerprint == r.fingerprint;
+            std::string presence;
+            if (online) presence = cat_.localize("UIText", "OnlineFriends", "Online");
+            else {
+                char d[32] = {};
+                const std::time_t t = (std::time_t)r.lastSeen;
+                if (const std::tm* tm = std::localtime(&t)) std::strftime(d, sizeof d, "%Y-%m-%d", tm);
+                presence = cat_.localizeKey("$WfcPC.Online.LastPlayed");
+                const size_t at = presence.find("`d");
+                if (at != std::string::npos) presence.replace(at, 2, d);
+            }
+            auto b = [](bool v) { return std::string(v ? "1" : "0"); };
+            c.rows.push_back({r.name, presence, b(flow_.haveInvited(r.fingerprint)), b(invitedYou), b(online), b(invitedYou), b(false), b(false), b(true)});
+            c.enabled.push_back(true);
+        }
+        return true;
+    }
+    if (markup == "<OnlinePlayerData:FriendMessages>") {   // I2: received game invites ("Sent you a game invite!")
+        c.columns = {"SendingPlayerNick", "Message", "bIsFriendInvite", "bWasAccepted", "bWasDenied"};
+        for (const GameFlow::GameInvite& i : flow_.gameInvites()) {
+            c.rows.push_back({i.name, cat_.localize("UIText", "OnlineFriends", "Invited"), "0", "0", "0"});
+            c.enabled.push_back(true);
         }
         return true;
     }
