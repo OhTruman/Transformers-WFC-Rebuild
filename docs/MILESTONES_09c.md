@@ -4026,3 +4026,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   unanswered bridge calls; D5 + A1 x Off / Realistic from the menus (pick, squad swap, game over path), TDM Streets 4v4,
   Escalation Remnant (wave 1 game over -> stats -> lobby); 249 / 249 frontend tests. Shots: Rebuild-Frontend/work/bins/final/
   (eye pass with Rendering). Notes: bot_skill.json warning = the run dir's cwd (data/frontend has it; build_slim ships it).
+2026-10-23 10:59 EYE PASS PASS (Rendering, sheet Rebuild-Rendering work/wobble/final_sheet.png): D5 / A1 both modes, TDM, Escalation clean;
+  black frames = menus (Mission Failed, scoreboard). Open: the A1 lift matinee Interp_15149 never starts in the menu run
+  with an idle human (Gameplay asked: trigger = human in the pod? else a bug); esc_p05 cyan shape = GFx wave intro? (Frontend
+  asked). Post-build: silence poses for non-resident units.
