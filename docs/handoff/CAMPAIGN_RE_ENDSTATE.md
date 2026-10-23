@@ -164,3 +164,31 @@ in Ghidra and following the static / skeletal proxy element fills.
 **Impact is small:** only two materials use it (`CHR_Transformer_NormSpec_Cust_E_Mat`, `DarkEnergonCrystal_MAT`).
 - Build: keep **0** (every instance shows the first variant).
 - Or, as a **PC adaptation**, a stable per-component hash, if Rendering prefers visible variety. Label it as such.
+
+## Pass 4: every chapter, which open / closed rows it exercises (C, authored.db; `work/handoff/campaign_endstate_usage.json`)
+
+| Chapter | move tracks | RelativeToInitial | quat | AnimControl | FaceFX | conversations | ForceIntoForm | pseudo-god toggles | AddMarker | movies | MissionComplete |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A1_IAC | 1163 | 1078 | 311 | 1047 | 12 | 72 | 14 | 0 | 48 | 2 | 1 |
+| A2_KON | 720 | 638 | 183 | 661 | 24 | 134 | 8 | 0 | 33 | 1 | 1 |
+| A3_COR | 617 | 333 | 112 | 695 | 9 | 99 | 16 | 3 | 48 | 1 | 1 |
+| A4_ORB | 762 | 460 | 224 | 345 | 3 | 95 | 16 | 0 | 50 | 2 | 1 |
+| A5_TRY | 324 | 154 | 29 | 295 | 5 | 25 | 0 | 0 | 15 | 3 | 1 |
+| D1_ORB | 759 | 469 | 74 | 741 | 19 | 56 | 5 | 0 | 35 | 2 | 1 |
+| D2_COR | 736 | 547 | 178 | 247 | 2 | 81 | 3 | 0 | 30 | 1 | 1 |
+| D3A_IAC | 516 | 340 | 66 | 796 | 14 | 155 | 18 | 5 | 62 | 1 | 1 |
+| D3B_IAC | 523 | 144 | 39 | 456 | 19 | 118 | 12 | 1 | 59 | 1 | 1 |
+| D5_OME | 101 | 22 | 2 | 77 | 13 | 42 | 0 | 1 | 4 | 2 | 1 |
+
+(Pseudo-god here counts SeqAct_TogglePseudoGodMode only; TnSeqAct_SetAiGodStatus GOD_PseudoOn is separate, CAMPAIGN_BOSSES.)
+
+**The remaining open rows don't depend on the chapter.** Every chapter exercises the same set:
+- **RelativeToInitial order** (H, only Base-attached groups);
+- **FMV speaker layout** (H);
+- **the RandomSeed writer** (UNKNOWN; only Cust_E characters and the dark-energon crystals in D1 / D3A);
+- **the FaceFX bone mapping** (Gameplay);
+- **streaming listeners 0x36–0x38 and the named-level step** (not needed);
+- **the checkpoint binary / field order** (not needed);
+- **the HUD anchor clips** (Frontend).
+
+Everything closed in passes 2–3 applies to all chapters.
