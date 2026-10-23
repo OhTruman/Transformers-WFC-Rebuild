@@ -3563,3 +3563,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 01:05 MERGED 0d8e3c06 #15 switch anims (presentation) + #18 (B) nav-limited bot dodges as the original (1 -> 0 floating cases; EXPECTED
   SIM CHANGE, bot dodges: second sim-only diff for the final gate's base). #18 (A) waits on the hull audit; #17 World side
   passes; bot-accuracy table next.
+2026-10-23 01:06 Systems FX log (CARD FREE 01:03): #5 = the jet death row plays Smoke_Trail_Jet_Fast_FX which LOOPS FOREVER as authored and we
+  spawn it fire-and-forget (101 s instance) -> keep the handle, follow the body, stop at corpse end (patch to Gameplay);
+  #9 = hover_plane_FX mesh emitter Lifetime 0 + the authored bKillOnDeactivate / bKillOnCompleted flags missing from
+  map_fx_runtime.json -> Rendering exports the flags + WfcMapFx kills on stop / completion. WFC_UDPHOST / UDPJOIN two-process
+  UdpSession match exists (2957 ticks equal; member HostLost crash being fixed). Card -> Rendering 01:05 (7 min) -> Frontend.
