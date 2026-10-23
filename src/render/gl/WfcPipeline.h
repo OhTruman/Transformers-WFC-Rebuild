@@ -611,6 +611,7 @@ private:
     bool r1Map_ = false, r1Built_ = false, r1WorldMrt_ = false, r1Suppress_ = false;
     bool r1GlChecked_ = false, r1StateLogged_ = false;   // (the GL entry-point test runs after the GL load; one log per map)
     float r1Fit_[4] = {0, 1, 1, 0};                    // k, p, tangent_y_sign
+    bool r1Sunless_ = false;                         // (fit.json "sunless": no sun share to swap, the GI calibration still valid)
     float r1Sun_[3] = {0, 0, 0};                       // the sun's linear colour x brightness (fit.json sun_linear)
     float r1SunDir_[3] = {0, 0, 1};                    // towards the sun (world)
     std::string r1Dir_;

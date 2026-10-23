@@ -22,6 +22,10 @@
 // Build (repo root): clang++ -O2 -std=c++17 -Isrc tools/systems/vbake/vbake_trace.cpp -o work/vbake/vbake_trace.exe
 // Usage: vbake_trace --world <world.glb> --bsp <bsp.glb> --render <render map dir> --out <dir> [--cone 0.27] [--ss 4]
 //        [--threads 2] [--bias 0.02] [--lights 4] [--sky-rays 64] [--light-range 1.5]
+// Campaign chapters (Rendering): one unit's receivers with the whole chapter around them - --occluder <another unit's
+// world.glb / bsp.glb> (repeatable; its components are not in this unit's lightmap table, so they only block), --bsp
+// optional (most units have none), --sun-from <lighting.json> (the chapter's sun when this unit's table has none),
+// --lights-from <lighting.json> (repeatable: the other units' point / spot lights for --lights - one bake lit them all).
 #include "assets/Json.h"
 
 #include <algorithm>
@@ -251,7 +255,7 @@ bool pngSize(const std::string& p, int& w, int& h) {
     return true;
 }
 
-struct Args { std::string world, bsp, render, out; float coneDeg = 0.27f, bias = 0.02f, lightRange = 1.5f; int ss = 4, threads = 2, lights = 0, skyRays = 64, lightShadows = 1; };
+struct Args { std::string world, bsp, render, out, sunFrom; std::vector<std::string> occluders, lightsFrom; float coneDeg = 0.27f, bias = 0.02f, lightRange = 1.5f; int ss = 4, threads = 2, lights = 0, skyRays = 64, lightShadows = 1; };
 
 inline uint32_t hash32(uint32_t x) { x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x846ca68bU; x ^= x >> 16; return x; }
 inline float rnd01(uint32_t& s) { s = hash32(s + 0x9e3779b9U); return (s >> 8) * (1.0f / 16777216.0f); }
@@ -269,8 +273,10 @@ int main(int argc, char** argv) {
         else if (k == "--threads") A.threads = std::max(1, std::atoi(v.c_str())); else if (k == "--bias") A.bias = (float)std::atof(v.c_str());
         else if (k == "--lights") A.lights = std::max(0, std::atoi(v.c_str())); else if (k == "--sky-rays") A.skyRays = std::max(4, std::atoi(v.c_str()));
         else if (k == "--light-range") A.lightRange = (float)std::atof(v.c_str()); else if (k == "--light-shadows") A.lightShadows = std::atoi(v.c_str());
+        else if (k == "--occluder") A.occluders.push_back(v); else if (k == "--sun-from") A.sunFrom = v;
+        else if (k == "--lights-from") A.lightsFrom.push_back(v);
     }
-    if (A.world.empty() || A.bsp.empty() || A.render.empty() || A.out.empty()) {
+    if (A.world.empty() || A.render.empty() || A.out.empty()) {
         std::printf("usage: vbake_trace --world <world.glb> --bsp <bsp.glb> --render <render map dir> --out <dir> [--cone 0.27] [--ss 4] [--threads 2]\n");
         return 2;
     }
@@ -281,8 +287,14 @@ int main(int argc, char** argv) {
     if (!readFile(A.render + "/lighting.json", lj) || !Json::parse(lj, L)) { std::printf("lighting.json unreadable\n"); return 1; }
     lj.clear(); lj.shrink_to_fit();
     const Json* sun = nullptr;
-    for (size_t i = 0; i < L["lights"].size(); ++i) {
-        const Json& l = L["lights"][i];
+    Json SL;   // (--sun-from: another unit's lighting.json carries the chapter's sun)
+    if (!A.sunFrom.empty()) {
+        std::string sj;
+        if (!readFile(A.sunFrom, sj) || !Json::parse(sj, SL)) { std::printf("--sun-from %s unreadable\n", A.sunFrom.c_str()); return 1; }
+    }
+    const Json& LS = A.sunFrom.empty() ? L : SL;
+    for (size_t i = 0; i < LS["lights"].size(); ++i) {
+        const Json& l = LS["lights"][i];
         if (l["class"].asString() != "DirectionalLightComponent" || !l["enabled"].asBool(true) || !l["built_into_lightmap"].asBool(false) ||
             !l["cast_static_shadows"].asBool(true)) continue;
         if (!sun || l["brightness"].asDouble() > (*sun)["brightness"].asDouble()) sun = &l;
@@ -327,7 +339,9 @@ int main(int argc, char** argv) {
             const Json& ex = nd["extras"];
             if (!isBspFile && ex["kind"].asString() == "bsp") continue;            // (bsp.glb carries the BSP with lightmap UVs)
             const std::string comp = ex["component"].asString(), meshName = lower(ex["mesh"].asString());
-            const bool sky = meshName.find("sky") != std::string::npos;
+            // (the runtime TLAS rule, WfcRt.cpp rtBuildWorld: named sky / dome, or over 2 km - D5_OME's 9 km SpaceDome closed the
+            // arena in the trace while the runtime leaves it out: a "sunless" fit for an arena open to the sky)
+            const bool sky = meshName.find("sky") != std::string::npos || meshName.find("dome") != std::string::npos;
             const bool shadow = !noShadow.count(comp) && !(ex.has("actor") && noShadow.count("actor:" + ex["actor"].asString()));
             float M[16]; nodeMatrix(nd, M);
             float sc[2] = {0, 0}, bi[2] = {0, 0};
@@ -350,13 +364,19 @@ int main(int argc, char** argv) {
                     WP[v] = xformP(M, V3{P[v * 3], P[v * 3 + 1], P[v * 3 + 2]});
                     WN[v] = hasN ? xformN(M, V3{N[v * 3], N[v * 3 + 1], N[v * 3 + 2]}) : V3{0, 1, 0};
                 }
+                bool skyPrim = sky;
+                if (!skyPrim && !WP.empty()) {
+                    V3 lo = WP[0], hi = WP[0];
+                    for (const V3& q : WP) { lo = V3{std::min(lo.x, q.x), std::min(lo.y, q.y), std::min(lo.z, q.z)}; hi = V3{std::max(hi.x, q.x), std::max(hi.y, q.y), std::max(hi.z, q.z)}; }
+                    skyPrim = std::max({hi.x - lo.x, hi.y - lo.y, hi.z - lo.z}) > 2000.0f;
+                }
                 for (size_t t = 0; t + 2 < I.size(); t += 3) {
                     const uint32_t i0 = I[t], i1 = I[t + 1], i2 = I[t + 2];
                     if (i0 >= WP.size() || i1 >= WP.size() || i2 >= WP.size()) continue;
                     const V3 a = WP[i0], b = WP[i1], c = WP[i2];
                     if (!opaque) ++skippedBlend;
                     else if (!shadow) ++skippedShadow;
-                    else if (sky) ++skippedSky;
+                    else if (skyPrim) ++skippedSky;
                     else { bvh.tris.push_back(Tri{a, b - a, c - a}); ++occTris; }
                     if (ai < 0 || !opaque) continue;                              // ---- a lightmapped receiver
                     if (!hasU1) { ++skippedNoUv; continue; }
@@ -424,7 +444,9 @@ int main(int argc, char** argv) {
         }
         return true;
     };
-    if (!addFile(A.world, false) || !addFile(A.bsp, true)) return 1;
+    if (!addFile(A.world, false) || (!A.bsp.empty() && !addFile(A.bsp, true))) return 1;
+    for (const std::string& o : A.occluders)                                       // (chapter: the other units, blocking only)
+        if (!addFile(o, o.size() >= 7 && lower(o.substr(o.size() - 7)) == "bsp.glb")) return 1;
     const auto t1 = std::chrono::steady_clock::now();
     bvh.build();
     const auto t2 = std::chrono::steady_clock::now();
@@ -475,8 +497,16 @@ int main(int argc, char** argv) {
     // ---- --lights: the sky and the point / spot lights on every stride-th covered texel (see the header)
     if (A.lights > 0) {
         std::vector<LightSrc> srcs;
-        for (size_t i = 0; i < L["lights"].size(); ++i) {
-            const Json& l = L["lights"][i];
+        std::vector<Json> LF(A.lightsFrom.size());                                 // (--lights-from: the chapter's other units)
+        for (size_t f = 0; f < LF.size(); ++f) {
+            std::string fj;
+            if (!readFile(A.lightsFrom[f], fj) || !Json::parse(fj, LF[f])) { std::printf("--lights-from %s unreadable\n", A.lightsFrom[f].c_str()); return 1; }
+        }
+        std::vector<const Json*> lightList;
+        for (size_t i = 0; i < L["lights"].size(); ++i) lightList.push_back(&L["lights"][i]);
+        for (const Json& J2 : LF) for (size_t i = 0; i < J2["lights"].size(); ++i) lightList.push_back(&J2["lights"][i]);
+        for (const Json* lp : lightList) {
+            const Json& l = *lp;
             const std::string cls = l["class"].asString();
             if ((cls != "PointLightComponent" && cls != "SpotLightComponent") || !l["enabled"].asBool(true)) continue;
             LightSrc ls; ls.name = l["name"].asString(); ls.cls = cls;

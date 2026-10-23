@@ -1658,6 +1658,7 @@ bool Pipeline::load(const std::string& mapArg) {
     if (rtInfra_) {   // R1 sun swap data (Systems' tools/systems/vbake): WFC_RT_VBAKE=<dir> (<dir>/<map>/), else <render data>/vbake/
         const char* vb = std::getenv("WFC_RT_VBAKE");
         r1Dir_ = vb ? std::string(vb) + "/" + mapName : dataDir_ + "/vbake";
+        r1Sunless_ = false;
         assets::Json F;
         const std::string ft = readText(r1Dir_ + "/fit.json");
         if (!ft.empty() && assets::Json::parse(ft, F)) {
@@ -1668,6 +1669,7 @@ bool Pipeline::load(const std::string& mapArg) {
             for (int c = 0; c < 3; ++c) r1Sun_[c] = s.arr.size() > (size_t)c ? s.arr[(size_t)c].asFloat(0.0f) : 0.0f;
             // (the GL entry points are tested later, in r1CheckGl: a direct / package boot runs this before the GL load)
             r1Map_ = r1Fit_[0] > 0.0f; r1GlChecked_ = false; r1StateLogged_ = false;
+            r1Sunless_ = F["sunless"].asBool(false);     // (an enclosed level, e.g. a campaign chapter: k 0, the lights fit still applies)
             LOG_INFO("RT R1 sun swap data: %s (k %.3f, p %.2f, tangent y %+.0f, sun %.3f %.3f %.3f)%s", r1Dir_.c_str(), r1Fit_[0],
                      r1Fit_[1], r1Fit_[2], r1Sun_[0], r1Sun_[1], r1Sun_[2], r1Map_ ? "" : " - unused (k <= 0)");
         } else {
@@ -9610,7 +9612,13 @@ void Pipeline::r1Build() {
         if (nameOf[k].empty()) continue;
         ImageData im;
         // (vbake bakes only fit.json's pages: a page without its file keeps the bake's sun, counted, not logged per page)
-        const std::string vf = r1Dir_ + "/vbake_" + nameOf[k] + ".png";
+        // (a chapter's merged unit: its page key is "<unit dir>|<page>"; its V_bake pages sit in <vbake dir>/<unit>/)
+        std::string vf = r1Dir_ + "/vbake_" + nameOf[k] + ".png";
+        if (const size_t bar = nameOf[k].find('|'); bar != std::string::npos) {
+            const std::string d = nameOf[k].substr(0, bar);
+            const size_t sl = d.find_last_of("/\\");
+            vf = r1Dir_ + "/" + (sl == std::string::npos ? d : d.substr(sl + 1)) + "/vbake_" + nameOf[k].substr(bar + 1) + ".png";
+        }
         if (!std::ifstream(platform::longPath(vf))) { ++vbMissing; continue; }
         if (!platform::decodeImage(vf, im) || !im.valid()) continue;
         std::vector<uint8_t>& rg = rgOf[k];
