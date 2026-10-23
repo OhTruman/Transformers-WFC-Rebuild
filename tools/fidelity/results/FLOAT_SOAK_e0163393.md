@@ -24,3 +24,19 @@ Per map (seed 7 / seed 1234): Berth 1 / 1, Debris 2 / 1, Streets 1 / 0; the othe
 18 to 203 lines per run, almost all vehicle-form (collision.glb lacks surfaces the vehicle collision has); robot-form lines 0 to 8 per run (Debris 8 / 8 the most). Gameplay: offsets of 5 m+ are mostly catwalks missing from collision.glb. Not counted as (B).
 
 After Gameplay's dodge cap: rerun with the same runner + seeds; the 6 cases above are the 'before'.
+
+## Update 2026-10-23 ~01:4x: refreshed detector + the dodge cap (before / after)
+
+Gameplay refreshed the detector (97676327): a stall now also needs the pawn > 0.5 m above the pawn collision under it - the old
+rule flagged every ordinary 0.5 s flat dodge along the floor, so the 6 rows above were mostly normal dodges (all sat at / below
+the probe). (The committed script had a raw line feed inside a JS string; my local copy was repaired, Gameplay told.)
+
+Same runner, 10 maps x seeds 7 / 1234, 300 s, 4 v 5 Smart, headless:
+
+| Arm | Build | Real (B) stall cases | Case |
+|---|---|---|---|
+| before | 4bcfde3d + refreshed detector | **1** | seed 7 Berth p3 Car2 t 203.54 at (-123.79 0.51 -84.68) vel (4.36 0 11.18) |
+| after | 0d8e3c06 (merged nav-limited AI dodge cap) + refreshed detector | **0** in 20 runs | - |
+
+Above-visual (A) lines 2,770 -> 2,763 (unchanged: mostly vehicles over surfaces missing from collision.glb). **#18 (B) fixed on
+0d8e3c06** as far as 20 seeded matches can show. Logs: work/floatsoak/fl2_base/, fl2_after/.
