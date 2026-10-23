@@ -3511,3 +3511,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 00:25 Seed PC adaptation DONE (AssetTools e8c2391: 9745 dropped, 7008 kept, 440 placements per-poly; AssetTools\out\pc_adapt) ->
   build_slim overlay + Gameplay check. Campaign render-data gaps: GO a (height fog trace), b (inline lightmap lists), c (campaign
   material lists), d (per-sublevel split, 1.06 GB), e (proposed Rendering diff, not applied).
+2026-10-23 00:29 MERGED f8a02fc8 #11 weapon spread (square -> the original's disc: ~2x narrower; sample-before-increment; robot-only multipliers;
+  shotgun patterns). EXPECTED SIM CHANGE (the first since af4d0731's base): the final gate's base needs this as a sim-only diff;
+  Classic / Smart bot baselines re-baseline on it.
