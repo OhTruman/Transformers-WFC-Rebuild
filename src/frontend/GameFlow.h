@@ -480,6 +480,7 @@ private:
     void enterMemberLobby(const SessionLobby& lobby);
     void applyMemberLobby();
     void voteBegin(int round, const std::vector<int>& exclude);
+    static int publicMinPlayers();   // 2 (Integration decision); TEST ONLY WFC_PUBLIC_MIN_PLAYERS
     void voteTick();                // host: autostart, tally, None of these re-roll, close at the countdown's 10 s
     void sendOnlineLaunch();        // host: the launch record (url, seed, roster) + Start, as Online.BeginLobbyExitCountdown
     MapVote vote_;
