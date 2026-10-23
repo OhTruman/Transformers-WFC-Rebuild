@@ -3683,3 +3683,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   e2a58726. Overlay decision: collision for all 10 maps, rebuilt nav only on BrokenHope / Remnant (regressions elsewhere ->
   AssetTools). Join in progress: Systems' replay catch-up plan approved (2-3 days). Campaign HD: covered by pack D (1 row
   eye-passed, folded into the next pack D snapshot, not now).
+2026-10-23 02:41 MERGED 29c1ce7d Escalation E2a (Remnant wave 1 spawns; PreGame from level start; power economy + generator actions: pickups,
+  doors / bridges, zones; ESCTEST 25 / 25 + 5 / 5). RE reviews; Experimental reruns the ESC soak. Gameplay -> join-in-progress
+  hooks, then E2b (nav cells on, DBV off, weapon factories, Wall_Crashers). Campaign frontend plan merged (C1-C6).
