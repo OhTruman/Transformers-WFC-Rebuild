@@ -104,6 +104,7 @@ int World::cpSpawnDestructible(const std::string& blueprint, const std::string& 
 // The current states' mesh bounds (the hit box), world space (PROV: the AABB of the rotated mesh box).
 void World::cpDesBounds(int i) {
     CampaignDestructible& d = cp_.destructibles[(size_t)i];
+    if (d.fixedBounds) return;   // a sentry's hit box (set at its spawn)
     bool any = false;
     core::Vec3 lo{0, 0, 0}, hi{0, 0, 0};
     for (CampaignDestructible::Piece& p : d.pieces) {

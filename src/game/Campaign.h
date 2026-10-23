@@ -78,6 +78,7 @@ struct CampaignDestructible {
     std::vector<Piece> pieces;
     int lastHitter = -1;
     std::vector<int> events;   // its Kismet notification events (op indices)
+    bool fixedBounds = false;  // the hit box is set by its owner (a sentry), not from the state meshes
     bool gone = false;         // removed (its factory's Kill All)
     bool off = false;          // SeqAct_TnToggleDestructible Turn Off: not damageable
 };
@@ -103,7 +104,19 @@ struct CampaignFactory {
     std::vector<core::Vec3> points;
     std::vector<std::string> outputs;
     std::vector<int> spawnedDes;   // a destructible factory's spawned actors (Kill All)
+    std::vector<int> live;         // its spawned pawns still alive (Single / All Pawns Killed)
+    std::vector<int> liveSentries; // a sentry factory's living sentries (CampaignState::sentries indices)
     std::vector<int> pool;
+};
+
+// A sentry TURRETDEF (AssetTools spawnables.json) and a spawned sentry (a stationary AI turret on its placed body).
+struct CampaignSentryDef { std::string turretdef, weapon; float range = 80.0f, sight = 100.0f, lagDeg = 90.0f, aimDeg = 3.0f, deathLife = 1.0f, hp = 125.0f; };
+struct CampaignSentry {
+    int def = -1, factory = -1, des = -1, forced = -1;
+    std::string body;                 // the placed turret body actor (hidden after its death)
+    core::Vec3 pos{0, 0, 0};
+    float yaw = 0.0f, cool = 0.0f, deadT = 0.0f;
+    bool dead = false, dormant = false;
 };
 
 // A player interact (TnInteract*) and its TnSeqEvent_Interact events.
@@ -166,6 +179,11 @@ struct CampaignState {
     std::string interactPrompt;                // the local player's interact in reach (its class; empty = none)
     std::vector<uint8_t> interactHeldPrev;
     CampaignOmega omega;
+    size_t factoryKillsSeen = 0;               // the kill history read by the factory death outputs
+    struct SentryFactory { int def = -1, count = 1; std::vector<core::Vec3> points; std::vector<std::string> bodies; };
+    std::vector<CampaignSentryDef> sentryDefs;
+    std::map<std::string, SentryFactory> sentryFactories;   // factory action path -> its TURRETDEF + spawn points
+    std::vector<CampaignSentry> sentries;
     std::vector<std::pair<int, std::vector<int>>> transformOps;   // TnSeqAct_TransformWorldProp waiting for Finished: op, actors
     bool transformMoved = false;               // a matinee moved a transforming actor (nav blocks re-applied at rest)
     std::map<int, std::string> shootAt;        // SeqAct_TnAiShootAtActor: AI player -> its forced fire target

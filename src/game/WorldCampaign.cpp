@@ -173,6 +173,9 @@ bool World::loadCampaignMesh(const std::string& file, render::MeshData& out) {
 // (PROV: the original's AuxilliarySpawnPoints of the checkpoint are not exported yet; CAMPAIGN_SQUAD_AI_RE section 1).
 void World::cpSetStarts(const std::string& checkpointName) {
     const CampaignChapter::Checkpoint* cp = cpChapter_.checkpoint(checkpointName);
+    // the chapter start: the first checkpoint in DisplayOrder (the one the pre-gameplay pass makes active; A2's TnCampaignPlayerStart
+    // sits in the Soundwave arena, a leftover); the player start only for a chapter without checkpoints
+    if (!cp && checkpointName.empty() && !cpChapter_.checkpoints.empty()) cp = &cpChapter_.checkpoints.front();
     const core::Vec3 at = cp ? cp->pos : cpChapter_.playerStart.pos;
     const std::string actor = cp ? cp->actor : cpChapter_.playerStart.actor;
     std::vector<Match::Start> st;
@@ -243,6 +246,7 @@ void World::setupCampaign(const MatchLaunch& l) {
         cpLoadSkeletal();
         cpLoadPawnGroups();
         cpLoadInteracts();
+        cpLoadSentryDefs();
         cpLoadTouches();
         cpLoadPlacedDestructibles();
         cpBindMoverNav();   // (the nav is loaded by addBots above)
@@ -295,6 +299,7 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
     if (cpInteractActivate(vm, op, input)) return true;   // SeqAct_Toggle on interacts
     if (cpToggleDestructible(vm, op, input)) return true;
     if (cpTransformWorldProp(vm, op, input)) return true;   // doors / pods
+    if (cpSentryOpActivate(vm, op, input)) return true;     // sentry force target / dormant
     if (cpOmegaActivate(vm, op, input)) return true;      // SetOmegaStage / CorruptOmegaBattery
     if (c == "SeqAct_TnPawnFactory") return cpPawnFactoryActivate(vm, op, input);
     if (cpInterpActivate(vm, op, input)) return true;   // SeqAct_Interp: Matinee
@@ -475,6 +480,8 @@ void World::tickCampaign(float dt) {
     cpTickInteracts(dt);
     cpTickAiUse();
     cpTickTransformOps();
+    cpTickFactoryKills();
+    if (!cp_.gameOver) cpTickSentries(dt);
     if (!cp_.gameOver) cpTickOmega(dt);
     // TnCampaignGame.Killed: a human killed by anything but DmgType_Suicided -> CampaignGameOver (solo: never downed).
     const auto& kh = match_.killHistory();

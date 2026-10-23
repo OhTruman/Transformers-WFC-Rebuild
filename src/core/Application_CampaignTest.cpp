@@ -51,7 +51,7 @@ void Application::runCampaignTest() {
     run(1.5f);
     check(m.state() == game::Match::State::InProgress && !world_.localPlayerDead(), "PendingMatch -> InProgress; the human spawned");
     check(world_.player().pawn().chassis().id == "Tank" && m.players()[(size_t)me].team == 1, "the human plays Megatron (Tank) on the Decepticon team");
-    check(hdist(world_.player().pawn().position(), C.playerStart.pos) < 3.0f, "the human starts at TnCampaignPlayerStart_16313");
+    check(hdist(world_.player().pawn().position(), C.checkpoints.front().pos) < 3.0f, "the human starts at the chapter's first checkpoint (Stage 1, 4578)");
     bool squadIn = true;
     for (int p : S.squad) squadIn = squadIn && m.players()[(size_t)p].alive && m.players()[(size_t)p].team == 1;
     check(squadIn, "both squad members spawned on the human's team");
