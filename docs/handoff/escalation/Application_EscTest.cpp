@@ -49,6 +49,8 @@ void Application::runEscalationTest() {
         run(15.5f);
         check(world_.match().state() == game::Match::State::InProgress && S.phase == Phase::InWave && S.spawns >= 1,
               "Remnant: PreGame 10 s from level start, so wave 1 begins with the match (15 s countdown) and spawns");
+        check(!world_.localPlayerDead() && world_.match().players()[(size_t)world_.localMatchPlayer()].team == 1,
+              "Remnant: the player (Decepticons) spawned at a team start (the starts carry no team: all serve the players)");
         run(7.0f);   // Remnant FillWaveReCheckTime 3.0 s: spawns at 0, 3, 6 s
         check(S.failedSpawns == 0 && S.spawns >= 3, "Remnant: wave 1 keeps spawning every 3 s recheck (no failed spawn)");
         LOG_INFO("ESCTEST Remnant: %d spawns, %d failed", S.spawns, S.failedSpawns);

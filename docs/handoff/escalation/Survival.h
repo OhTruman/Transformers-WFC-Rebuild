@@ -92,6 +92,7 @@ struct SurvivalState {
     std::vector<float> drainClock;                      // per match player: time toward the next 30 Hz drain tick
     std::vector<int> itemFactory;                       // per generator: the pickup factory it unhides (-1: a door / zone generator)
     std::vector<float> reofferTimer;                    // per generator: > 0 while the 2 s Delay before its volume turns back on runs
+    std::vector<uint8_t> factoryWasAvailable;           // per generator: its factory's available() last step (the Taken edge)
     size_t killsSeen = 0;                               // Match::killHistory() entries already paid out
     int purchases = 0;
     // Round Begin / Round End (TnSeqEvent_SurvivalEvents 1 / 0) for the map's sequence and the announcer: counters + the last one.

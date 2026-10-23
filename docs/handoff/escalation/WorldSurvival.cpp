@@ -147,6 +147,7 @@ void World::setupSurvival() {
     sv_.drainClock.assign(match_.players().size(), 0.0f);
     sv_.itemFactory.assign(svData_.generators.size(), -1);
     sv_.reofferTimer.assign(svData_.generators.size(), 0.0f);
+    sv_.factoryWasAvailable.assign(svData_.generators.size(), 1);
     for (size_t g = 0; g < svData_.generators.size(); ++g)
         for (const SurvivalData::Generator::Action& a : svData_.generators[g].actions)
             if (a.op == "unhide")
@@ -240,7 +241,7 @@ bool World::svInteractHeld(int p) const {
 
 // TnSeqEvent_SurvivalGenerator "New Power Level" -> the actions AssetTools resolved. Kinds not built yet (nav cells, dynamic blocking
 // volumes, weapon pickup factories, path nodes: E2b) are counted per purchase.
-void World::svFireGenerator(int gi) {
+void World::svFireGenerator(int gi, bool levelDrop) {
     const SurvivalData::Generator& g = svData_.generators[(size_t)gi];
     int done = 0, pending = 0;
     bool doors = false;
@@ -268,8 +269,9 @@ void World::svFireGenerator(int gi) {
         ok ? ++done : ++pending;
     }
     if (doors && botNav_.valid()) { transforming_.applyNavBlocks(botNav_); botNav_.recomputePieces(); }   // an opened doorway opens the nav
-    ++sv_.purchases;
-    LOG_INFO("escalation: generator %s (%s, %d) bought: %d actions applied, %d not built yet (E2b)", g.id.c_str(), g.nameKey.c_str(), g.cost, done, pending);
+    if (!levelDrop) ++sv_.purchases;
+    LOG_INFO("escalation: generator %s (%s, %d) %s: %d actions applied, %d not built yet (E2b)", g.id.c_str(), g.nameKey.c_str(), g.cost,
+             levelDrop ? "level drop (Taken)" : "bought", done, pending);
 }
 
 // TnSurvivalZoneVolume.Touch (sign +1) / UnTouch (-1) by a player pawn: UniversalScoreAdjustment -= 999 (OccupiedZoneScore),
@@ -380,15 +382,24 @@ void World::tickSurvival(float dt) {
         sv_.power.resize(P.size(), 0.0f); sv_.nearGenerator.resize(P.size(), -1); sv_.drainFailed.resize(P.size(), 0);
         sv_.allowDrain.resize(P.size(), 0); sv_.prevInteract.resize(P.size(), 0); sv_.drainClock.resize(P.size(), 0.0f);
     }
-    // Item generators recharge (map Kismet per generator): PickupStatusChange Taken -> Hide + ModifySurvivalGeneratorPower(-cost) ->
-    // Delay 2 s -> the volume Turn On; one purchase per charge [RE E2 §1].
+    // Item generators (map Kismet per generator, PickupStatusChange Taken): Hide; ModifySurvivalGeneratorPower(-cost); a level drop
+    // (1 -> 0) fires "New Power Level" again - the event fires on negative changes too - so its actions re-apply (UnHide + the volume
+    // off); Delay 2 s -> the volume Turn On. After the first purchase the item thus stays out as a normal respawning factory [RE E2a
+    // review G1, C]; a take at level 0 only hides it until the generator is bought again.
     for (size_t g = 0; g < svData_.generators.size(); ++g) {
         const int f = sv_.itemFactory[g];
-        if (f >= 0 && sv_.generatorDone[g] && !pickupFactories_[(size_t)f]->hidden() && !pickupFactories_[(size_t)f]->available()) {
-            pickupFactories_[(size_t)f]->setHidden(true);
-            sv_.pool[g] = 0.0f; sv_.generatorDone[g] = 0;
+        if (f < 0) continue;
+        PickupFactory& F = *pickupFactories_[(size_t)f];
+        const bool avail = F.available() && !F.hidden();
+        if (sv_.factoryWasAvailable[g] && !avail && !F.hidden()) {   // Taken
+            F.setHidden(true);
+            const bool drop = sv_.generatorDone[g] != 0;
+            sv_.pool[g] = std::max(0.0f, sv_.pool[g] - (float)svData_.generators[g].cost);
+            sv_.generatorDone[g] = 0;
+            if (drop) svFireGenerator((int)g, true);
             sv_.reofferTimer[g] = 2.0f;
         }
+        sv_.factoryWasAvailable[g] = (F.available() && !F.hidden()) ? 1 : 0;
         if (sv_.reofferTimer[g] > 0.0f && (sv_.reofferTimer[g] -= dt) <= 0.0f) { sv_.reofferTimer[g] = 0.0f; sv_.generatorOff[g] = 0; }
     }
     // Killed: the killer's PRI gains the enemy's PowerReward (players only; clamped 0..9999).
