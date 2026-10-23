@@ -1,0 +1,45 @@
+diff -ru a/tools/render/build_lighting.py b/tools/render/build_lighting.py
+--- a/tools/render/build_lighting.py	2026-10-23 12:04:18.389693900 -0500
++++ b/tools/render/build_lighting.py	2026-10-23 12:04:18.426319500 -0500
+@@ -692,6 +692,7 @@
+     prims = []
+     skipped = 0
+     unplaced = 0
++    malformed = 0
+     import collections
+     stats = collections.Counter()
+     lmk = {k.lower(): k for k in (lm_keys or ())}
+@@ -715,10 +716,15 @@
+         o = 4
+         P_, N_, UV_, I_ = [], [], [], []
+         recv_prims = []                                       # (lightmap key, P, N, UV, SUV, I) per lightmapped receiver
+-        for _ in range(struct.unpack_from('>i', tail, 0)[0]):
++        # (D1_ORB_Crash2_ART: one component's receiver tail reads garbage counts / offsets - such a decal is skipped and
++        # counted [PARTIAL] instead of ending the step)
++        try:
++          for _ in range(struct.unpack_from('>i', tail, 0)[0]):
+             comp, stride, cnt = struct.unpack_from('>iii', tail, o); o += 12
++            if stride < 0 or cnt < 0 or o + stride * cnt > len(tail): raise ValueError('receiver vertices out of range')
+             verts = tail[o:o + stride * cnt]; o += stride * cnt
+             es, ic = struct.unpack_from('>ii', tail, o); o += 8
++            if es < 0 or ic < 0 or o + es * ic > len(tail): raise ValueError('receiver indices out of range')
+             idx = struct.unpack_from('>%dH' % ic, tail, o); o += es * ic + 8
+             M = receiver_matrix(comp) if comp > 0 else None
+             if M is None: skipped += 1; continue
+@@ -760,6 +766,8 @@
+                 P_.append([Pw[q, 0] * 0.01, Pw[q, 2] * 0.01, Pw[q, 1] * 0.01])
+                 N_.append([0.0, 1.0, 0.0]); UV_.append([u[q], v[q]])
+             I_ += [base + x for x in idx]
++        except (struct.error, ValueError, OverflowError, MemoryError):
++            malformed += 1; continue
+         for ek, Pg, NN, UV, SUV, ii in recv_prims:           # used vertices only, re-indexed
+             used = np.unique(ii); remap = np.zeros(len(Pg), 'u4'); remap[used] = np.arange(len(used), dtype='u4')
+             prims.append({'key': p.object_path(i + 1), 'material': mat, 'two_sided': False, 'lightmap_component': ek,
+@@ -771,6 +779,7 @@
+                       'SUV': np.zeros((len(P_), 2), 'f4'), 'I': np.array(I_, 'u4')})
+     write_glb(os.path.join(out, 'decals.glb'), prims, kind='decal')
+     if unplaced: print('decals: %d components without serialized placement skipped (PARTIAL)' % unplaced)
++    if malformed: print('decals: %d components with an unreadable receiver tail skipped (PARTIAL)' % malformed)
+     print('decals: %d (%d tris), %d receivers without transform' %
+           (len(prims), sum(len(q['I']) // 3 for q in prims), skipped))
+     if stats: print('decal receivers: %s; %d lightmapped decal prims' % (dict(stats), sum(1 for q in prims if q.get('lightmap_component'))))
