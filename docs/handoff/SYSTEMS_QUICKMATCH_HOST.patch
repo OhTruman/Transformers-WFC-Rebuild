@@ -1,0 +1,46 @@
+diff -ruN a/src/core/Application_Net.cpp b/src/core/Application_Net.cpp
+--- a/src/core/Application_Net.cpp	2026-10-23 03:57:58.802729200 -0500
++++ b/src/core/Application_Net.cpp	2026-10-23 03:57:58.817279200 -0500
+@@ -812,6 +812,28 @@
+               "LAN discovery: findGames lists the public LAN host with a ping (no service)");
+         pub.leave(); browser.leave();
+     }
++    {   // Quick Match with nothing to join hosts a public lobby: the host must own seat 0 on its own host port, and a launch roster
++        // of its slot + Reserved seats gives exactly that many match seats with the host at 0 (the pt9 two-window failure, 2026-10-23)
++        net::UdpSession::Options qo = o; qo.discoverAddr = "127.0.0.1"; qo.hostPort = 24160;
++        net::UdpSession qh(qo);
++        std::vector<SessionEvent> qe;
++        frontend::SessionMemberInfo qi; qi.displayName = "QuickHost"; qh.setMemberInfo(qi);
++        qh.quickMatch("ReproTDM");
++        const double endq = now() + 6.0;
++        while (now() < endq && !has(qe, T::HostOpened)) { for (auto& e : qh.poll(now())) qe.push_back(e); std::this_thread::sleep_for(std::chrono::milliseconds(2)); }
++        const SessionEvent* qho = find(qe, T::HostOpened);
++        check(qho && qho->address.find(":2416") != std::string::npos, "quick match with nothing to join: hosts on its own host port (not the search port)");
++        frontend::SessionLobby ql;
++        frontend::SessionSlot qs; qs.kind = frontend::SessionSlot::Kind::Human; qs.member = qh.selfId(); qs.team = 0;
++        ql.slots.push_back(qs);
++        for (int i = 0; i < 3; ++i) { frontend::SessionSlot r; r.kind = frontend::SessionSlot::Kind::Reserved; ql.slots.push_back(r); }
++        qh.publishLobby(ql);
++        qh.setLaunch("MP_IAC_Streets?GameModeTag=TDM", 9u, ql);
++        qh.requestStart();
++        check(qh.matchSeats() == 4 && qh.matchSelf() == 0, "quick-match host: 1 human + 3 Reserved = 4 match seats, the host at seat 0");
++        LOG_INFO("UDPSESSIONTEST quick-match host: %s, %d match seats, self %d", qho ? qho->address.c_str() : "-", qh.matchSeats(), qh.matchSelf());
++        qh.leave();
++    }
+     if (const char* svc = std::getenv("WFC_UDPSESSIONTEST_SERVICE")) {   // the lobby service (tools/net/lobby_service.py) on loopback
+         net::UdpSession::Options so = o; so.discoverAddr = "127.0.0.1"; so.hostPort = 14120;
+         net::UdpSession h(so), j(so), q2(so);
+diff -ruN a/src/net/UdpSession.cpp b/src/net/UdpSession.cpp
+--- a/src/net/UdpSession.cpp	2026-10-23 03:57:58.774633000 -0500
++++ b/src/net/UdpSession.cpp	2026-10-23 03:57:58.788681300 -0500
+@@ -272,6 +272,10 @@
+     hostSettings_ = settings;
+     serviceCode_.clear(); registeredAt_ = -1.0; lastRegister_ = -1e9;
+     if (role_ != Role::Offline) leave();
++    // A Quick Match that found nothing hosts from here with the SEARCH transport still open (an ephemeral member port, its own seat
++    // 255 = the Reserved placeholder): the host would then own seat 255, requestStart add it again as seat 0 (11 match seats for 10
++    // slots -> no lockstep driver -> a late joiner never served) and the lobby show the wrong port. Hosting always opens its own.
++    if (t_ && role_ == Role::Offline) t_.reset();
+     std::string err;
+     for (int p = opt_.hostPort; p < opt_.hostPort + 10 && !t_; ++p)
+         t_ = createUdpTransport(0, opt_.bindIp + ":" + std::to_string(p), {}, err);
