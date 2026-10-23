@@ -4062,3 +4062,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   In flight: Frontend's full milestone rerun on it; Experimental's pre stage re-run (base 01-07 vs head); Systems
   re-points refresh.sh; AssetTools chapters (~16:30) + outside list. Then: reboot (user) -> PERF_HOLD timed gate ->
   cut word -> refresh.sh -> verify_slim -> hand-over.
+2026-10-23 11:56 FINAL CANDIDATE 903b2ab7 MILESTONE RERUN PASS (Frontend): 249 / 249 tests, 6 / 6 runs clean (0 errors / bridge gaps /
+  dumps); A1 p60 shows the pod + lit floor (one dark wedge for Rendering's eye pass); esc_p05 unchanged (faithful). Shots
+  Rebuild-Frontend/work/bins/final2/. Remaining before the cut: Experimental pre re-run, AssetTools chapters (~14:30),
+  the user's reboot, then the timed gate.
