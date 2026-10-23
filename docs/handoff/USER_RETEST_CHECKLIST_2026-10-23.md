@@ -32,9 +32,11 @@ no-XP) arrive in the next package. Play Private Match (bots) unless a row says o
 | Lens flares (opt-in) | Settings > Graphics > Lens Flares: Off / Subtle / Original; look at the sun on Rust / Debris |
 | Online private match | Host shows a code; a second PC joins by it (PACKAGE_7_TWO_PC_TEST.md) |
 | Join in progress | Host a match; once it runs, join from the second PC by code: catch-up screen with %, then Choose Character, spawn on the smaller team. Leaving mid-match hands the slot to a bot |
-| Public lobby (Quick Match) | Map vote with preview, autostart once enough players are in; XP only in public games |
+| Public lobby (Quick Match) | Map vote with preview, autostart once enough players are in; teams re-drafted just before the start (by last match's score, else level); XP only in public games |
+| Friends List / invites | Lobby > Friends List shows players you met online ("Online" when they are reachable). Send Invite copies your game code and delivers it if the invite server is up; the other player gets "`p wants to play" with Join |
 | Voice chat | Push to talk (V) by default, team-only in team matches (as the original); Settings > Voice |
-| Escalation | Remnant and the other Escalation maps: waves, horde, weapon factories, generators. No XP (as the original), end screen shows the wave reached |
-| Campaign | Solo Campaign > Decepticon chapter V "The Final Guardian" (D5) plays from the menu: pick Megatron / Soundwave / Breakdown in the map, the other two follow as your squad; checkpoints save. Other chapters stay locked until their data is exported (A1 next). Death shows MISSION FAILED with Restart From Last Checkpoint / Restart Chapter |
+| Escalation | Starts from the menus (Escalation > Remnant / Broken Hope): waves, horde, weapon factories, generators. No XP (as the original); quitting mid-match warns "Your leaderboard progress will be lost"; end screen shows the wave reached |
+| Campaign | Solo Campaign > A1 (Autobot chapter VI, "Defend Iacon": opening shot, lift ride, then control) and D5 (Decepticon chapter V, "The Final Guardian") play from the menu on Normal, Off and Realistic. Pick any of the chapter's three characters in the map; the other two follow as your squad. Checkpoints save: Resume Autobot / Resume Decepticon then appear in the Solo menu. Death shows MISSION FAILED with Restart From Last Checkpoint / Restart Chapter. Loads: A1 ~45 s (Realistic ~60 s), D5 ~40 s (Realistic ~55 s). Other chapters stay locked until their data is exported |
+| Co-op campaign | Cooperative > host a CP game, a second PC joins by code; characters another player took are greyed in the pick (untested with two real players yet) |
 | Mute / Block | In a lobby or the pause player list, A on a player opens Mute / Block; a blocked player stays muted when they come back |
 | Lobby Game Stats | After a public match, Y in the game lobby re-opens the XP you earned |
