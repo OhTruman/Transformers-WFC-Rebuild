@@ -3552,3 +3552,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   spread. #18 float soak running (before count). Next identity row on 4bcfde3d incl. the UdpSession path.
 2026-10-23 00:57 RE campaign: AnimControl slot C + RelativeToInitial; togetherness / buddy decoded; RE -> #3 dialog timing (track position
   formula decompile running in the background).
+2026-10-23 00:58 Float soak before-count: 6 cases / 20 runs, all Scout dodges; replayable (seed 7). Phase 2 identity row building; a two-process
+  UdpSession entry asked of Systems (UDPSESSIONTEST is in-process).
