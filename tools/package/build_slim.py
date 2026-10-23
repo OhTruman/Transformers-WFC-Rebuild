@@ -57,6 +57,11 @@ RENDER_EXTRA = ['materials_pbr.json']
 # ... and shipped when the map has one (newer than slim_files.tsv; the UI dirs have none): verify_slim 2026-10-13 found the
 # game opening every MP map's fog_volumes.json, missing from the package
 RENDER_IF_PRESENT = ['fog_volumes.json', 'render_index_extra.json']   # + the Escalation maps' weapon factory visuals (7f218986)
+# AssetTools map manifests newer than slim_files.tsv, shipped into every packaged manifests/maps/<map>/ that has them in AssetTools:
+# the Escalation nav (WorldSurvival.cpp svManifest: the original NavigationCell mesh + its generator gating; without them a packaged
+# Escalation match silently falls back to the versus nav - Experimental 2026-10-23)
+MANIFEST_IF_PRESENT = ['bot_nav_escalation.json', 'bot_nav_air_escalation.json', 'escalation_nav_blockers.json']
+MANIFEST_MAPS = 'Transformers Rebuild/AssetTools/manifests/maps/'
 
 
 def arg(name, default=None):
@@ -148,6 +153,19 @@ def main():
                 have_dest.add(dst)
             else:
                 problems.append('render data: %s missing beside %s (Rendering: tools/render/matc_pbr.py)' % (src, r['source']))
+    map_dirs = sorted({r['dest'][:r['dest'].index('/', len(MANIFEST_MAPS)) + 1] for r in rows
+                       if r['dest'].startswith(MANIFEST_MAPS) and '/' in r['dest'][len(MANIFEST_MAPS):]})
+    manifest_extra = []
+    for d in map_dirs:
+        for extra in MANIFEST_IF_PRESENT:
+            dst = d + extra
+            src = d[len('Transformers Rebuild/'):] + extra
+            if dst not in have_dest and os.path.isfile(os.path.join(ROOT, src)):
+                rows.append(dict(dest=dst, source=src, bytes=str(os.path.getsize(os.path.join(ROOT, src))), action='keep', reason='manifest extra'))
+                have_dest.add(dst)
+                manifest_extra.append(dst[len(MANIFEST_MAPS):])
+    if manifest_extra:
+        print('manifest extras: %d (%s)' % (len(manifest_extra), ', '.join(manifest_extra)))
     bin_rows = []
     for rel in tsv_bin:
         src = os.path.join(bin_dir, rel)
