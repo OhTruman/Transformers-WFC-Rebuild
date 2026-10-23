@@ -4126,3 +4126,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 14:30 MERGED c72b7638 campaign hides keyed by object path + FINAL_BASE_ITEMS 10 (A1 539 / A2 249, exact). FINAL CODE c72b7638.
   actor_path done for 9 chapters (150,044 nodes). D3B late (~16:20; air queue PAUSED to free CPU; outside list ~16:30).
   Experimental rebuilds arms final5 / c72b7638; the Frontend runs the final hand-over set (handover3 + A2 arm).
+2026-10-23 14:51 FINAL HAND-OVER RERUN PASS on c72b7638 (Frontend handover3/): 249 / 249 tests, 7 / 7 runs clean, hides A1 539 / A2 249 /
+  D5 16 exact, A1 Realistic lift floor fully lit. Experimental arms final5 / c72b7638 built + dry-run clean. Systems
+  pre-pointed. Remaining before the cut: D3B (~16:30) + outside list (~16:45), the user's reboot -> timed gate.
