@@ -1,0 +1,17 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index b9e71ded..37cc981e 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -1832,6 +1832,12 @@ void Application::routeMatchToFrontend(float dt) {
+             ha.id = a.id.empty() ? std::string("None") : a.id;
+             ha.cooldown = a.cooldownLeft;
+             ha.fraction = a.cooldownTime > 0.0f ? std::max(0.0f, std::min(1.0f, 1.0f - a.cooldownLeft / a.cooldownTime)) : 1.0f;
++            // [Frontend] Escalation: the ability meter is the ability resource, not a cooldown (Gameplay M11 svAbilityResource,
++            // 0..1, -1 outside Escalation): full = ready
++            if (h.svAbilityResource >= 0.0f && ha.id != "None") {
++                ha.fraction = std::max(0.0f, std::min(1.0f, h.svAbilityResource));
++                ha.cooldown = 1.0 - ha.fraction;
++            }
+             hf.abilities[i] = ha;
+         }
+         if (o.grenade.ammo >= 0) {
