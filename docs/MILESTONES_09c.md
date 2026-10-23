@@ -4005,3 +4005,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 10:27 MERGED f72b1f21 campaign runtime 14 + 15 (244 player interacts, Omega Supreme boss fight, H5, H3 AI shoot / interact ops,
   M5 ranges, M1 aux spawns) + the interact prompt glue; CAMPAIGNTEST 24 / 24. Gameplay left: M11 + FINAL_BASE_ITEMS; the
   Frontend is done for the build. Chain lanes running (ETA ~16:00-16:30).
+2026-10-23 10:30 MERGED 7f65db0e Escalation M11 (loot pickups + the ability resource; svAbilityResource for the HUD; Shard_FX for
+  Rendering). Gameplay's last item = FINAL_BASE_ITEMS. Pending for the cut: the Frontend's ability meter, Rendering's shard
+  FX, AssetTools' lanes, then the final gate + run + refresh.sh.
