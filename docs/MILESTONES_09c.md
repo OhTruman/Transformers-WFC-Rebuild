@@ -3508,3 +3508,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 00:24 Experimental CARD FREE 00:24: fog fix PASSES (Rust 'dark' lower third 47.8 -> 15.9 Off; Realistic contrast std 22 -> 29);
   views contrast above the package 6 floors; flare views did not capture (relative path; fixed) -> 5 min after Rendering.
   Card -> Rendering x24 (headlight A/B) 00:25.
+2026-10-23 00:25 Seed PC adaptation DONE (AssetTools e8c2391: 9745 dropped, 7008 kept, 440 placements per-poly; AssetTools\out\pc_adapt) ->
+  build_slim overlay + Gameplay check. Campaign render-data gaps: GO a (height fog trace), b (inline lightmap lists), c (campaign
+  material lists), d (per-sublevel split, 1.06 GB), e (proposed Rendering diff, not applied).
