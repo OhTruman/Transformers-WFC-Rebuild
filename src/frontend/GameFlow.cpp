@@ -995,6 +995,11 @@ void GameFlow::gameLobbyBegin() {
     selectorInit_ = true;
     if (prev == -1 || lobby_.mapSelectionMethod == 0) chooseNextMap(prev);
     else setMapId(prev);
+    // A public lobby the host opened (Quick Match found none): the map vote instead of the rotation (4.1); members get it
+    // with the LobbyState. Not the map just played.
+    vote_ = MapVote{};
+    myVote_ = -1;
+    if (!isPrivate && role_ == SessionRole::Host) voteBegin(1, {prev});
     lobbyMapInit_ = false;
     // Private: LobbyStatus 3 ("Waiting for host to start game"); public: 1 ("Finding `p more players").
     lobby_.lobbyStatus = isPrivate ? 3 : 1;

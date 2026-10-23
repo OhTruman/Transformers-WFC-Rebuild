@@ -865,7 +865,7 @@ void GfxPresenter::scrollPlayerList(gfx::Player& p, float& scroll, const platfor
 // Escalation / campaign keep the original menu. mc_subMenu rebuilds on a new buildArray (watch('buildArray')).
 namespace {
 gfx::avm1::Object* findScriptWith(gfx::avm1::VM& vm, gfx::MovieClip* c, const char* prop, int depth = 0) {
-    if (!c || depth > 4) return nullptr;
+    if (!c || depth > 6) return nullptr;
     if (c->script && vm.get(c->script, prop).isObject()) return c->script;
     for (auto& [d, ch] : c->children) {
         if (ch->removed || ch->kind != gfx::DisplayObject::Kind::Clip) continue;
@@ -874,6 +874,22 @@ gfx::avm1::Object* findScriptWith(gfx::avm1::VM& vm, gfx::MovieClip* c, const ch
     return nullptr;
 }
 }
+// PC ADAPTATION (user playtest 2026-10-23 #7): PlayerList.swf (the countdown roster, the Tab scoreboard, the end-of-match
+// list) spaces player rows 25 px, but 104 px in iconic mode unless DisableIconicDisplay [CONFIRMED AS: BuildPlayerList] -
+// the original's Escalation layout, a portrait per player for its 4 co-op players. With the PC Iconic Characters option in
+// a versus match every row took 104 px and the list ran far down the screen. In versus the in-match lists get the
+// original's own switch (PartyLobby_GFX sets playerList_mc.DisableIconicDisplay = true): the 25 px rows; the next 1 s
+// UpdatePlayerListData relays them out. Escalation keeps the portrait rows.
+void GfxPresenter::syncIconicPlayerList(gfx::Player& p, frontend::GameFlow& flow) {
+    const frontend::MatchLaunch& m = flow.currentMatch();
+    if (flow.level() != frontend::LevelKind::Match || !flow.iconicMode() || (m.gameTeamStatus != 1 && m.gameTeamStatus != 3)) return;
+    gfx::avm1::VM& vm = p.vm();
+    gfx::avm1::Object* list = findScriptWith(vm, p.root(), "BuildPlayerList");
+    if (!list || vm.toBool(vm.get(list, "DisableIconicDisplay"))) return;
+    vm.set(list, "DisableIconicDisplay", gfx::avm1::Value(true));
+    frontend::FlowTrace::emit("playerList.iconicDisplay", {{"disabled", "true"}, {"why", "iconic versus: 25 px rows (PC ADAPTATION)"}});
+}
+
 void GfxPresenter::syncPauseChooseCharacter(gfx::Player& p, frontend::GameFlow& flow) {
     const frontend::MatchLaunch& m = flow.currentMatch();
     if (flow.level() != frontend::LevelKind::Match || !flow.iconicMode() || (m.gameTeamStatus != 1 && m.gameTeamStatus != 3)) return;
@@ -1906,6 +1922,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
 #endif
     if (hud_) { hud_->player().setViewport((float)viewW_, (float)viewH_); hud_->advance(dt); hudInterpUpdate(*hud_); if (extendedMatch_) checkKillFeed(dt); syncWorldLabels(); }
     if (scoreboard_ && scoreboardShown_) { scoreboard_->advance(dt); scrollPlayerList(scoreboard_->player(), scoreScroll_, in, dt); } else scoreScroll_ = 0.0f;
+    if (scoreboard_) syncIconicPlayerList(scoreboard_->player(), flow);   // the Tab scoreboard (#7)
     // PlayerList_GFX _global.GivePlayerListInput (RE audit 3): the scoreboard's rows take the pad / keys while it is up, so a
     // row's A (online: Mute / Unmute) works; online only, so versus stays as it was.
     {
@@ -1964,6 +1981,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
         if (op.object.find("PartyLobby_GFX") != std::string::npos) syncHostNowRow(op.movie->player(), flow);   // lobby flow v2
         if (op.object.find("GameLobby_GFX") != std::string::npos) syncGameSettings(op.movie->player(), flow);
         if (op.object.find("PauseMenu_GFX") != std::string::npos) syncPauseChooseCharacter(op.movie->player(), flow);
+        syncIconicPlayerList(op.movie->player(), flow);   // the countdown roster / end-of-match list (#7)
         scrollSettingsSubMenu(op.movie->player(), in);   // any settings page (FrontEnd, pause menu, lobby Voice / Game Settings)
         if (flow.iconicMode() && flow.lobby().gameTeamStatus != 2 && op.object.find("GameLobby_GFX") != std::string::npos &&
             (!flow.lobby().settings || flow.lobby().settings->teamTypeValue == 3))
