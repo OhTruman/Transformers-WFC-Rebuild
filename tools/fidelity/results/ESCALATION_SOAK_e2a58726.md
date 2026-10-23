@@ -53,3 +53,16 @@ buys is expected headless (no human buying). Logs work/stabsoak/esc_29c/, esc_29
 never got a pawn (0 'local player spawned' lines) - Remnant's TnTeamPlayerStarts carry no team and its players are team 1, so no start
 matched; the horde had nobody to hunt. Fix: GAMEPLAY_ESCALATION_E2FIX.patch (agents/gameplay bec7beea). Pass criterion on Remnant:
 'local player spawned at TnTeamPlayerStart_...' then waves begun / cleared.
+
+## Rerun on 309c450c (E2FIX 29f253cd merged) - 2026-10-23 ~03:15
+
+| Run | Exit | Player pawn | Waves begun / cleared | Spawn tries / failures | Player alive | End |
+|---|---|---|---|---|---|---|
+| Remnant seed 7 | 0 | spawned (TnTeamPlayerStart_1675, team 1) | 3 / 2 | 40 / 0 | 300 s (whole run) | 300 s time, wave 3 running |
+| Remnant seed 1234 | 0 | same | 3 / 2 | 41 / 0 | 300 s | same |
+| BrokenHope seed 7 | 0 | spawned (TnTeamPlayerStart_10074, team 0) | 1 / 0 | 9 / 0 | 43 s | game over: Soldier_MachineGun_Decepticon_AICD 4 (AssaultRifle) |
+| BrokenHope seed 1234 | 0 | same | 1 / 0 | 8 / 0 | 41 s | game over: ... 2 (IonBlaster) |
+
+**PASS** on Gameplay's criterion: Remnant's player spawns, waves 1 (100) and 2 (150) clear, wave 3 (budget 200) begins at the same
+point on both seeds; no failed spawn, no crash / assert. BrokenHope as designed (a lone headless player dies to wave 1). 0 generator buys
+(no human). Logs work/stabsoak/esc_309/ (WFC_ESCLOG on).
