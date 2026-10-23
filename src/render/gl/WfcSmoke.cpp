@@ -66,7 +66,7 @@ void main() {
     }
     MatOut w = o; w.DiffuseColor = vec3(1.0); w.SpecularColor = vec3(0.0);
     if (uTLN > 0 || uTLAllN > 0) E += wfcTransientLights(normalize(uCamPos - vPos), w);
-    vec3 c = o.EmissiveColor * min(pow(max(E * uSmokeInvRef, vec3(0.0)), vec3(uSmokeTune.x)), vec3(6.0));   // (contrast: shade darker, light brighter)
+    vec3 c = o.EmissiveColor * min(pow(max(E * uSmokeInvRef, vec3(0.0)), vec3(uSmokeTune.x)), vec3(2.5));   // (contrast: shade darker, light brighter; capped at 2.5 - 6 clipped puffs by the energon fires to white)
     if (uSmokeDebug != 0) { if (o.Opacity < 0.02) discard; oColor = vec4(E * uSmokeInvRef * 0.5, 1.0); return; }
     wfcTranslucentOut(c, o.Opacity);
     c = wfcCanvasOut(wfcFog(c));
