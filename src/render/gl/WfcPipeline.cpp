@@ -1329,6 +1329,7 @@ void Pipeline::release() {
     const bool keepVol = volUser_;                     // (the Volumetric Lighting row)
     const int keepLf = lensFlareMode_;                 // (the Lens Flares row)
     const int keepSmoke = smokeMode_;                  // (the Smoke row)
+    const int keepWater = waterMode_;                  // (the Water row)
     for (LensFlareRT& lf : lensFlares_) if (lf.query) DeleteQueries(1, &lf.query);
     if (lfBoxProg_) DeleteProgram(lfBoxProg_);
     if (lfBoxVbo_) DeleteBuffers(1, &lfBoxVbo_);
@@ -1337,6 +1338,7 @@ void Pipeline::release() {
     volUser_ = keepVol;
     lensFlareMode_ = keepLf;
     smokeMode_ = keepSmoke;
+    waterMode_ = keepWater;
     loadYield_ = std::move(keepYield);
     displayGamma_ = keepGamma;
     fsrScale_ = keepFsrScale; fsrSharpness_ = keepFsrSharp;
@@ -1359,14 +1361,16 @@ void Pipeline::runSettingsSelfTest() {
     const bool vo = volUser_;
     const int lf = lensFlareMode_;
     const int sm = smokeMode_;
+    const int wm = waterMode_;
     displayGamma_ = 2.0f; fsrScale_ = 0.5f; fsrSharpness_ = 0.3f; anisotropy_ = 8; hdTextures_ = true; fsr3On_ = true; modern_ = true;
-    rtMode_ = 2; volUser_ = false; lensFlareMode_ = 1; smokeMode_ = 1;
+    rtMode_ = 2; volUser_ = false; lensFlareMode_ = 1; smokeMode_ = 1; waterMode_ = 1;
     release();
     check(rtMode_ == 2, "Ray Tracing mode");
     check(!volUser_, "Volumetric Lighting");
     check(lensFlareMode_ == 1, "Lens Flares");
     check(smokeMode_ == 1, "Smoke");
-    rtMode_ = rm; volUser_ = vo; lensFlareMode_ = lf; smokeMode_ = sm;
+    check(waterMode_ == 1, "Water");
+    rtMode_ = rm; volUser_ = vo; lensFlareMode_ = lf; smokeMode_ = sm; waterMode_ = wm;
     check(displayGamma_ == 2.0f, "display gamma"); check(fsrScale_ == 0.5f && fsrSharpness_ == 0.3f, "FSR scale / sharpness");
     check(anisotropy_ == 8, "anisotropy"); check(hdTextures_, "HD textures"); check(fsr3On_, "FSR 3.1"); check(modern_, "Modern materials");
     displayGamma_ = g; fsrScale_ = fs; fsrSharpness_ = fsh; anisotropy_ = an; hdTextures_ = hd; fsr3On_ = f3; modern_ = mo;

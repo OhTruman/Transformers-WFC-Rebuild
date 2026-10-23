@@ -230,6 +230,10 @@ public:
     // moving; Realistic: volumetric plumes); restart-free; WFC_SMOKE=0|1 overrides
     void setSmokeMode(int m) { smokeMode_ = std::min(std::max(m, 0), 1); }
     int smokeMode() const;
+    // the Water row (playtest 2026-10-23 #14): 0 Original (the authored water materials, byte-identical), 1 Enhanced; restart-free;
+    // WFC_WATER=0|1 overrides
+    void setWaterMode(int m) { waterMode_ = std::min(std::max(m, 0), 1); }
+    int waterMode() const;
     // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
     void flushPendingDraws() { flushWeaponQueue(); }
     void setDisplayGamma(float g) { displayGamma_ = g > 0.5f && g < 5.0f ? g : 2.2f; }
@@ -983,6 +987,7 @@ private:
     GLuint lfBoxProg_ = 0, lfBoxVao_ = 0, lfBoxVbo_ = 0;
     float lensFlareU_[4] = {0, 0, 0, 1}, lensFlareI_ = 1.0f;
     int smokeMode_ = 0;                              // the Smoke row: 0 Original, 1 Enhanced (WFC_SMOKE overrides)
+    int waterMode_ = 0;                              // the Water row: 0 Original, 1 Enhanced (WFC_WATER overrides)
     // (Smoke row, Enhanced; WfcSmoke.cpp) the smoke sprite variants per material, the build flag programFor / buildProgram read,
     // the drawn group's centre (its light environment) and the map's reference irradiance the authored colours stand for
     std::unordered_map<std::string, int> spriteSmokeProg_;

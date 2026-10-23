@@ -203,6 +203,10 @@ public:
     // the Smoke row: 0 Original (default, the authored sprites), 1 Enhanced (lit by its surroundings, moving; Realistic: volumetric)
     virtual void setSmokeMode(int mode) { (void)mode; }
     virtual int smokeMode() const { return 0; }
+    // the Water row: 0 Original (default, the authored water materials), 1 Enhanced (animated normals, screen-space reflections,
+    // refraction depth tint; user playtest 2026-10-23 #14, approved by Integration)
+    virtual void setWaterMode(int mode) { (void)mode; }
+    virtual int waterMode() const { return 0; }
     virtual bool volumetricLightingAvailable() const { return false; }
     // True when the current map loaded with the ray-tracing scene (switches are live); false = Faithful / Realistic take
     // effect from the next map load (the row shows "(next map)").
