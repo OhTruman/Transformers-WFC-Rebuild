@@ -3695,3 +3695,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 02:46 MERGED campaign frontend C1 / C4 (Solo -> Mission Select -> SOLO campaign lobby; difficulty profile 12; [Campaign] progress
   section) + C3 (CampaignSelect from the shipped TransLevels.ini: 84 checkpoint thumbs, trios, 10 chapters; ?Checkpoint on the
   URL; chapters unavailable until runtime data exists). Frontend -> C2, C5.
+2026-10-23 02:46 REGRESSION (Rendering): private menu launches now start the NetMatchDriver with 1 seat -> matchSteps never advances (SHOTMATCH
+  0 shots) and same-seed arms differ: every lockstep match-frame runner is broken. DECISION: no net driver without a remote
+  seat (Systems, top priority). JIP RE doc + overlay soak (20 / 20 clean; 18 fall-through candidates to AssetTools) merged.
