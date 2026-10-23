@@ -3708,3 +3708,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   seed 1234 base -> d: neutral to better (Gorge off-mesh 12.96 -> 2.36 %, BrokenHope 11.58 -> 9.03, Complex stucks 2.57 -> 0.93);
   single-seed outliers Streets stucks 0.98 -> 2.54, Molten failed 0.52 -> 5.53 -> third seed on those two before the package.
   BOTTEST 48 / 48 on d. Staged for the next build: E2FIX, first visits, PPV fog, Systems JIP. Card: Rendering relay in progress.
+2026-10-23 03:11 MERGED 29f253cd E2FIX (Remnant player pawn: team-less player starts; G1 faithful), 5bf88581 first visits (party lobby
+  341 -> 249 ms, game lobby 184 -> 107 ms), c03d0357 PPV height fog runtime (Remnant data + eye pair next relay), 309c450c
+  Systems join in progress (4 peers equal at 5101 ticks with 2 late joiners; TooFarAlong at 300 s). All harnesses pass on the
+  head. OPEN (Systems, top): frontend-booted arms that differ only in render env reach different SIMHASH 1400 -> match-frame
+  A/Bs not same-moment. Card: Frontend campaign-menu shots, then Rendering x34gi + x35remnant (PPV fog + Enhanced water).
