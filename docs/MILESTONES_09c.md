@@ -4157,3 +4157,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   BUILD. Waiting only on the user's reboot -> timed gate -> cut.
 2026-10-23 17:57 Render verdict on handover5: SHIP (A1's p30 / p60 fell inside the intro FMV because pressuntil enters earlier; A1 in-game
   render covered by handover4 on the same render code). HAND-OVER SET = handover5 (+ handover4 for A1 in-game frames).
+2026-10-23 18:03 BLOCKER (Frontend, from the handover logs): A1's intro movie FMV_a1intro plays twice (the level Kismet replays it right
+  after the first play ends; a player must skip twice). Gameplay compares with the original's gating and fixes (play once);
+  the cut waits for it.
