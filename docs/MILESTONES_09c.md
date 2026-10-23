@@ -3586,3 +3586,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 01:23 MERGED 221e7b83 lobby re-delivery fix (a real bug: a stale empty LobbyState after a late JOIN_OK; UDPSESSIONTEST 3 / 3 + flow
   test PASS). rttjump verdict: the stall metric over-reports (sub-frame arrival waits); real hitches ~3 per jump; judge by step
   gaps > 50 ms. #5 stale-handle concern answered (monotonic ids).
+2026-10-23 01:23 CAMPAIGN RE END-STATE merged: the campaign's RE is complete except 7 listed H / UNKNOWN rows with build assumptions. Throttle
+  catch-up: native passes the full time but pre-ages spawned particles (the burst = our missing pre-age; Systems fixes that way).
