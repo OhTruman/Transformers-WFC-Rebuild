@@ -1160,8 +1160,10 @@ void GameFlow::sendOnlineLaunch() {
         FlowTrace::emit("online.hostTeam", {{"team", std::to_string(lobby_.localTeam)}, {"members", std::to_string(n[0]) + "/" + std::to_string(n[1])}});
     }
     // the launch record first, then Start (the session sends both)
-    std::random_device rd;
-    launchSeed_ = rd() | 1u;
+    // [Systems] WFC_SEED (harness determinism: same-seed match A/Bs, x33) fixes the match seed; real play draws a new one per match.
+    // (A random seed per run made frontend-booted lockstep arms differ from the first spawn: bot classes / hp, SIMHASH 601 on.)
+    if (const char* fs = std::getenv("WFC_SEED")) launchSeed_ = (uint32_t)std::strtoul(fs, nullptr, 10) | 1u;
+    else { std::random_device rd; launchSeed_ = rd() | 1u; }
     launchLobby_ = hostLobbySnapshot();
     if (vote_.round > 0) {   // a public game: seats kept for joiners of the running match (Systems' join in progress)
         const GameSettings* gs = lobby_.settings;
