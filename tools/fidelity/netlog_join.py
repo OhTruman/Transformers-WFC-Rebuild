@@ -32,8 +32,9 @@ for n in names:
     rows = peers[n]; st = [float(rows[t].get("stall_ms") or 0) for t in common]
     # bytes_in / bytes_out are cumulative counters in Systems' net.csv: the run's traffic = last - first
     bi_ = [float(rows[t].get("bytes_in") or 0) for t in common]; bo_ = [float(rows[t].get("bytes_out") or 0) for t in common]
-    cum = all(x <= y for x, y in zip(bi_, bi_[1:]))
-    bi = (bi_[-1] - bi_[0]) if cum else sum(bi_); bo = (bo_[-1] - bo_[0]) if cum else sum(bo_)
+    # cumulative unless it often falls (UdpSession logs a final all-zero row at shutdown: one drop is still a cumulative counter)
+    cum = sum(1 for x, y in zip(bi_, bi_[1:]) if y < x) <= 2
+    bi = (max(bi_) - bi_[0]) if cum else sum(bi_); bo = (max(bo_) - bo_[0]) if cum else sum(bo_)
     secs = len(common) / 60.0
     # visible hitches (net.csv wall_ms, 7ee650c7+): consecutive steps more than 50 ms apart - the smoothness measure (stall_ms also counts arrival-gated sub-frame waits)
     wl = [float(rows[t]["wall_ms"]) for t in common if rows[t].get("wall_ms") not in (None, "")]
