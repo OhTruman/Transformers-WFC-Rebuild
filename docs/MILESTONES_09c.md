@@ -3648,3 +3648,4 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 01:59 Frontend CARD FREE: #7 PASS (25 px rows, 9 listed) and #2 PASS at runtime (qa:die -> respawn -> timer gone; death under
   pause -> Quit with no movie). Vote rows show live tallies with 3 layout / text defects (fixing). Card -> Rendering 02:00
   (smoke match arms + #1 menu run) -> Frontend exit retest on 2528df5e.
+2026-10-23 02:00 Stability soak PASS on 5ca8fe3a (80 + 80 headless runs, 4 modes x 10 maps: 0 crashes / errors / stuck matches, WARNs equal).
