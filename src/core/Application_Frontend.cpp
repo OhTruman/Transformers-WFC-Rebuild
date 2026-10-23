@@ -119,6 +119,13 @@ template <class P> void fillRemote(const P& mp, frontend::MatchValues::Player& p
 void fillOnlineLaunch(game::MatchLaunch& gl, const frontend::MatchLaunch& m) {
     // Every human in the host's seat order, this machine's included (game::MatchLaunch::humans + localSeat): one numbering on every peer.
     for (const frontend::SessionSlot& sl : m.onlineSlots) {
+        if (sl.kind == frontend::SessionSlot::Kind::Reserved) {   // [Systems] a seat kept for a joiner: dormant until it wakes
+            game::RemoteSeat d;
+            d.dormant = true;
+            d.team = 255;
+            gl.humans.push_back(d);
+            continue;
+        }
         if (sl.kind != frontend::SessionSlot::Kind::Human) continue;
         game::RemoteSeat h;
         h.team = sl.team;
@@ -128,6 +135,7 @@ void fillOnlineLaunch(game::MatchLaunch& gl, const frontend::MatchLaunch& m) {
         if (sl.member == m.self) gl.localSeat = (int)gl.humans.size();
         gl.humans.push_back(h);
     }
+    if (m.lateSeat >= 0 && m.lateSeat < (int)gl.humans.size()) gl.localSeat = m.lateSeat;   // a late joiner: its own Reserved slot
     // [Systems] No remote human (a private match hosted alone): the pre-phase-2 local path - no seat order, no lockstep driver (a
     // 1-seat driver stepped nothing through Application's local loop: matchSteps froze, WFC_SHOTMATCH took no shots, same-seed
     // arms diverged; Rendering 2026-10-23). The driver runs only when another human holds a seat.
@@ -683,6 +691,11 @@ void Application::attachPresenter() {
         appliedLensFlare_ = d.lensFlares;
         frontend::FlowTrace::emit("display.lensFlares", {{"mode", std::to_string(d.lensFlares)}, {"by", applyLensFlare(renderer_, d.lensFlares)},
                                                          {"when", "boot"}, {"provenance", "PC EXTENSION"}});
+        if (renderer_) {   // Rendering 760257b9: the Smoke / Water rows (0 Original, 1 Enhanced), restart-free
+            renderer_->setSmokeMode(d.smoke);
+            renderer_->setWaterMode(d.water);
+            frontend::FlowTrace::emit("display.smokeWater", {{"smoke", std::to_string(d.smoke)}, {"water", std::to_string(d.water)}, {"when", "boot"}});
+        }
     }
     // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
@@ -739,6 +752,11 @@ void Application::attachPresenter() {
             frontend::FlowTrace::emit("display.volumetricLighting", {{"on", frontend::FlowTrace::boolean(p.display.volumetricLighting)},
                                                                      {"by", applyVolumetric(renderer_, p.display.volumetricLighting)},
                                                                      {"when", "apply"}, {"provenance", "PC ADAPTATION"}});
+        }
+        if (renderer_ && (p.display.smoke != renderer_->smokeMode() || p.display.water != renderer_->waterMode())) {
+            renderer_->setSmokeMode(p.display.smoke);
+            renderer_->setWaterMode(p.display.water);
+            frontend::FlowTrace::emit("display.smokeWater", {{"smoke", std::to_string(p.display.smoke)}, {"water", std::to_string(p.display.water)}, {"when", "apply"}});
         }
         if (p.display.lensFlares != appliedLensFlare_) {   // restart-free (Rendering): next frame
             appliedLensFlare_ = p.display.lensFlares;
