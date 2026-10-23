@@ -4096,3 +4096,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 13:33 GO (AssetTools): ~890 skeletal world actors drawn nowhere (set dressing: neither transforming nor matinee-driven; D5 3,
   A1 62, A2 106, A3 203, A4 126, D1 258, D2 48, D3A 81) become bind-pose nodes via extra_skeletal_actors.json, minus the
   sentry spawn bodies (Gameplay draws those). Light, ~1 min per chapter.
+2026-10-23 13:34 GO (Gameplay, small, render-only): SeqAct_ToggleHidden + SeqAct_Destroy on world actors (unimplemented: scripted hides /
+  destroys of set dressing never happened) -> setActorHidden (+ collision off for Destroy on movers / destructibles);
+  authored bHidden honoured at load. Sentry bodies = world nodes toggled by Gameplay (AssetTools includes them).
