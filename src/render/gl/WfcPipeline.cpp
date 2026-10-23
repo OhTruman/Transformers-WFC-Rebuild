@@ -152,7 +152,7 @@ vec4 heightFog(vec3 p) {
     float d = length(p - uCamPos) * 100.0;
     float ld = max(d - uFogStart, 0.0) * frac;
     float sc = exp2(uFogScale * ld);
-    if (ld > uFogExt) sc = 0.0;
+    if (ld >= uFogExt) sc = 0.0;   // (shipped VS: SETGT(Ext, L) - equality extinguishes)
     vec4 r = vec4(uFogIn * (1.0 - sc), sc);
     // layers 2-4 (UE3 renders up to four height fog layers; one-layer maps never enter the loop): each scatters what is
     // already there and adds its own in-scattering - rgb = rgb x s + in x (1 - s), a *= s
@@ -162,7 +162,7 @@ vec4 heightFog(vec3 p) {
         if (abs(dz) < 1e-3) fr2 = (camZ > mn && camZ < mx) ? 1.0 : 0.0;
         else fr2 = abs(clamp((mx - camZ) / dz, 0.0, 1.0) - clamp((mn - camZ) / dz, 0.0, 1.0));
         float ld2 = max(d - uFogL[i].z, 0.0) * fr2;
-        float s2 = ld2 > uFogL[i].w ? 0.0 : exp2(uFogL[i].y * ld2);
+        float s2 = ld2 >= uFogL[i].w ? 0.0 : exp2(uFogL[i].y * ld2);
         r = vec4(r.rgb * s2 + uFogC[i] * (1.0 - s2), r.a * s2);
     }
     return r;
@@ -248,7 +248,7 @@ vec4 wfcHeightFogPx(vec3 p) {
     float d = length(p - uCamPos) * 100.0;
     float ld = max(d - uFogStart, 0.0) * frac;
     float sc = exp2(uFogScale * ld);
-    if (ld > uFogExt) sc = 0.0;
+    if (ld >= uFogExt) sc = 0.0;   // (shipped VS: SETGT(Ext, L) - equality extinguishes)
     vec4 r = vec4(uFogIn * (1.0 - sc), sc);
     // layers 2-4 (UE3 renders up to four height fog layers; one-layer maps never enter the loop): each scatters what is
     // already there and adds its own in-scattering - rgb = rgb x s + in x (1 - s), a *= s
@@ -258,7 +258,7 @@ vec4 wfcHeightFogPx(vec3 p) {
         if (abs(dz) < 1e-3) fr2 = (camZ > mn && camZ < mx) ? 1.0 : 0.0;
         else fr2 = abs(clamp((mx - camZ) / dz, 0.0, 1.0) - clamp((mn - camZ) / dz, 0.0, 1.0));
         float ld2 = max(d - uFogL[i].z, 0.0) * fr2;
-        float s2 = ld2 > uFogL[i].w ? 0.0 : exp2(uFogL[i].y * ld2);
+        float s2 = ld2 >= uFogL[i].w ? 0.0 : exp2(uFogL[i].y * ld2);
         r = vec4(r.rgb * s2 + uFogC[i] * (1.0 - s2), r.a * s2);
     }
     return r;
