@@ -889,8 +889,10 @@ void Pipeline::tickMapFx(float frameDt) {
             const float etime = rt.time;
             int spawn = 0;
             float rate[1]; L.spawnRate.eval(etime, in.rng, rate);
+            const float oldLeftover = rt.spawnFrac;   // [Systems] the per-particle SpawnTime below (RE: emitter Spawn 0x83045280)
             rt.spawnFrac += std::max(rate[0], 0.0f) * dt;
             spawn += (int)std::floor(rt.spawnFrac);
+            const int rateSpawns = spawn;            // the rate-driven ones come first; bursts / forced spawns get SpawnTime 0
             rt.spawnFrac -= std::floor(rt.spawnFrac);
             spawn += rt.forceSpawn;
             rt.forceSpawn = 0;
@@ -1178,6 +1180,21 @@ void Pipeline::tickMapFx(float frameDt) {
                         if (ia == m.dists.end()) ia = m.dists.find("AlphaScaleOverLife");
                         if (ic != m.dists.end()) { ic->second.eval(0.0f, in.rng, cs); for (int c = 0; c < 3; ++c) q.color[c] *= cs[c]; }
                         if (ia != m.dists.end()) { ia->second.eval(0.0f, in.rng, as); q.color[3] *= as[0]; }
+                    }
+                }
+                // [Systems, RE emitter Spawn 0x83045280 + PostSpawn, CONFIRMED] each rate spawn is born SpawnTime before the end of
+                // this tick: SpawnTime = dt - (1 - leftover) x Increment, then - Increment per particle (>= 0), Increment = 1 / rate; the
+                // particle is pre-aged by it (RelativeTime = SpawnTime / MaxLifetime; Location += Velocity x SpawnTime). Without it a
+                // long step - the throttle's catch-up after an unrendered stretch (up to 1 s, a camera cut) - stacked the whole burst at
+                // the emitter at age 0 (Gorge waterfall 1: a grey steam veil). Sprites / meshes only (trail / beam chains link by spawn
+                // order and position). WFC_FXPREAGE=0: off (A/B).
+                static const bool preAge = !(std::getenv("WFC_FXPREAGE") && std::getenv("WFC_FXPREAGE")[0] == '0');
+                if (preAge && s < rateSpawns && rate[0] > 0.0f && (L.typeData == 0 || L.typeData == 1)) {
+                    const float inc = 1.0f / rate[0];
+                    const float spawnTime = std::max(0.0f, dt - (1.0f - oldLeftover) * inc - (float)s * inc);
+                    if (spawnTime > 0.0f) {
+                        if (q.oneOverLife > 0.0f) q.relTime = std::min(0.999f, q.relTime + spawnTime * q.oneOverLife);
+                        for (int c = 0; c < 3; ++c) q.pos[c] += q.vel[c] * spawnTime;
                     }
                 }
                 rt.parts.push_back(q);
