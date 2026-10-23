@@ -2081,7 +2081,11 @@ static void testLobbyFlowV2() {
         const GameFlow::MapVote& v = h.f().mapVote();
         const bool opened = v.open && v.round == 1 && v.maps.size() == 3 && v.counts.size() == 4 && h.f().lobby().mapId == v.maps[0];
         const std::vector<int> round1 = v.maps;
-        auto voter = [&](const char* fp, int vote) { SessionEvent e = memberEv(fp, "Voter", true); e.info.mapVote = vote; return e; };
+        auto voter = [&](const char* fp, int vote) {
+            SessionEvent e = memberEv(fp, "Voter", true); e.info.mapVote = vote;
+            e.info.level = fp[4] == 'A' ? 30 : fp[4] == 'B' ? 20 : 10;   // the snake draft's order: A 30, B 20, C 10, the host 0
+            return e;
+        };
         h.f().castMapVote(1);
         h.fake->inject(voter("WFC-AAAA-AAAA-1", 1));
         h.fake->inject(voter("WFC-BBBB-BBBB-2", 2));
@@ -2105,6 +2109,9 @@ static void testLobbyFlowV2() {
                             h.f().mapVote().winner == h.f().lobby().mapId &&
                             std::find(v.maps.begin(), v.maps.end(), h.f().mapVote().winner) != v.maps.end() && h.fake->count("setLaunch") == 1 &&
                             h.fake->last("setLateJoinLimit") && h.fake->last("setLateJoinLimit")->arg == "300";
+        // the re-draft at the final countdown (PublicSnakeDraft by level): A -> 0, B -> 1, C -> 1, the host -> 0
+        auto teamOf = [&](const char* fp) { for (const auto& m : h.f().onlineMembers()) if (m.info.id.fingerprint == fp) return m.team; return -1; };
+        const bool drafted = teamOf("WFC-AAAA-AAAA-1") == 0 && teamOf("WFC-BBBB-BBBB-2") == 1 && teamOf("WFC-CCCC-CCCC-3") == 1 && h.f().selfTeam() == 0;
         // member: the vote arrives with the LobbyState; a cast goes to the host in the member info
         SessionLobby l; l.gameModeTag = "TDM"; l.mapId = 508; l.voteMaps = {508, 501, 503}; l.voteCounts = {1, 0, 0, 0}; l.voteRound = 1; l.voteOpen = true;
         SessionEvent j = ev(T::Joined); j.lobby = l; j.member.fingerprint = "WFC-SELF-SELF-9";
@@ -2116,7 +2123,7 @@ static void testLobbyFlowV2() {
         m.frames(3);
         const bool cast = m.f().mapVote().round == 1 && m.f().castMapVote(2) && m.fake->last("setMemberInfo") && m.fake->last("setMemberInfo")->info.mapVote == 2;
         const bool memberStart = m.f().call("Online.BeginLobbyExitCountdown", {}).s.empty() && m.fake->count("requestStart") == 0;
-        check(h.ok && hosted && opened && tallied && published && rerolled && closed && m.ok && memberIn && cast && memberStart, "lobby.LV6_map_vote",
+        check(h.ok && hosted && opened && tallied && published && rerolled && closed && drafted && m.ok && memberIn && cast && memberStart, "lobby.LV6_map_vote",
               std::to_string(hosted) + std::to_string(opened) + std::to_string(tallied) + std::to_string(published) + std::to_string(rerolled) +
               std::to_string(closed) + std::to_string(memberIn) + std::to_string(cast) + std::to_string(memberStart));
     }

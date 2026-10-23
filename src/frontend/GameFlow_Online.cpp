@@ -136,6 +136,23 @@ void GameFlow::setPushToTalkHeld(bool held) {
     session_->setPushToTalk(held);
 }
 
+void GameFlow::publicSnakeDraft() {
+    // RE ONLINE_POSTMATCH_PARTY_VOICE_RE: at a public lobby's final countdown the teams are re-drafted (PublicSnakeDraft) by
+    // score if anyone scored, else by level. PARTIAL: by level (the previous match's scores are not carried to the lobby yet).
+    if (role_ != SessionRole::Host || lobby_.gameTeamStatus != 3) return;
+    struct Pick { int level; std::string fp; OnlineMember* m; };
+    std::vector<Pick> picks{{progression::playerLevel(profile_.progression), selfId_.fingerprint, nullptr}};
+    for (OnlineMember& m : onlineMembers_) if (!m.connecting) picks.push_back({m.info.level, m.info.id.fingerprint, &m});
+    std::stable_sort(picks.begin(), picks.end(), [](const Pick& a, const Pick& b) { return a.level != b.level ? a.level > b.level : a.fp < b.fp; });
+    std::string order;
+    for (size_t i = 0; i < picks.size(); ++i) {
+        const int team = (i % 4 == 0 || i % 4 == 3) ? 0 : 1;   // the snake: A B B A A B B A ...
+        if (picks[i].m) picks[i].m->team = team; else lobby_.localTeam = team;
+        order += (order.empty() ? "" : ",") + std::to_string(picks[i].level) + ":" + std::to_string(team);
+    }
+    FlowTrace::emit("lobby.snakeDraft", {{"by", "level"}, {"order", order}});
+}
+
 std::vector<std::string> GameFlow::claimedIconicCharacters() const {
     std::vector<std::string> out;
     // iconic mode, and campaign co-op: a trio member another human holds is greyed in CharacterSelect (Gameplay refuses it)
