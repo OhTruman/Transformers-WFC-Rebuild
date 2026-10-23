@@ -32,3 +32,18 @@ Stable (no crash, assert, hang or non-zero exit), but two suspected E1 bugs, bot
   reached / no crash, not on game-over time.
 - Remnant stuck wave 1 = a real E1 issue (every active zone scores 0 for ShortRange, the zone sort's tie order puts zero-point zones in
   the top 3, all 5 tries fail every recheck); RE asked for the original order; fix with E2 -> rerun on that sha.
+
+## Rerun on the merged E2a head 29c1ce7d (2026-10-23 ~02:50)
+
+| Run | Exit | Waves begun / cleared | Spawn-finder failures | Generators | End |
+|---|---|---|---|---|---|
+| Remnant seed 7 | 0 | 1 / 0 | 0 (was 97) | 35, 10 pickup factories hidden; 0 bought | 300 s, no death |
+| Remnant seed 1234 | 0 | 1 / 0 | 0 | same | 300 s, no death |
+| BrokenHope seed 7 | 0 | 1 / 0 | 0 | 35, 6 hidden; 0 bought | game over at 43 s: 'last player death: Player by Soldier_MachineGun_Decepticon_AICD 4 (AssaultRifle)' |
+| BrokenHope seed 1234 | 0 | 1 / 0 | 0 | same | game over at 41 s (IonBlaster) |
+
+Stable; the 97 'Failed to find a place' lines are gone. But on **Remnant the horde never spawns at all**: with WFC_ESCLOG=1 (seed 7,
+plain ?GameModeTag=ESC, idle local player) there is not one 'ESCLOG try' line in 300 s - svSpawn is never called after 'wave 1 begins
+(row 0: budget 100, alive 50, deficit 30)'; no death, no clear. (Gameplay's ESCTEST Remnant 5 / 5 spawns at 5771: the harness boot
+differs - zone activation / PreGame from level start / the player's position?) BrokenHope spawns and kills as expected. 0 generator
+buys is expected headless (no human buying). Logs work/stabsoak/esc_29c/, esc_29c_log/.
