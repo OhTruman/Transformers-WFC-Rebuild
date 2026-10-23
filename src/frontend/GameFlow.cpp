@@ -398,6 +398,13 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     // The Solo menu's Resume Autobot / Resume Decepticon rows: a checkpoint save of that faction (index 0 / 1). The saves are
     // Gameplay's (C6); until they exist there is none, so the menu offers Mission Select only.
     if (fn == "Game.GetCheckpointFileStatus") return false;
+    // CampaignSelect's checkpoint stage: GRI.SelectedCheckpoint (host only; ModifyURL adds ?Checkpoint= when not empty).
+    if (fn == "Online.SetSelectedCheckpoint") {
+        if (role_ == SessionRole::Member) return {};
+        lobby_.checkpoint = arg(0);
+        FlowTrace::emit("campaign.checkpoint", {{"path", lobby_.checkpoint.empty() ? "(chapter start)" : lobby_.checkpoint}});
+        return {};
+    }
     if (fn == "Game.LoadSavedCheckpoint") {
         FlowTrace::emit("campaign.loadSavedCheckpoint", {{"faction", arg(0)}, {"result", "no checkpoint saves yet (C6)"}});
         return {};
@@ -1070,6 +1077,7 @@ void GameFlow::setMapId(int id) {
     }
     const bool changed = id != lobby_.mapId;
     lobby_.mapId = id;
+    if (changed) lobby_.checkpoint.clear();   // a checkpoint belongs to its chapter (CampaignSelect sets the new one after)
     // UpdatePrestreaming(): GameEngine.UpdateMapPrestreaming(ConvertMapIdToMapFilename(id)), bHighPriorityLoading.
     lobby_.prestreamMap = mi ? mi->mapFilename : "";
     // Map-aware Extended counts: a map change applies the recommendation, unless the counts were edited since the
@@ -1247,6 +1255,8 @@ std::string GameFlow::buildLaunchUrl() const {
     if (!gs || !mi) return {};
     // GameSettings.BuildURL(MapURL); LobbyGRI.ModifyURL(MapURL): GetMapFilename() $ MapURL $ "?MapId=" $ GetMapID().
     std::string url = mi->mapFilename + buildMatchUrl(*gs) + "?MapId=" + std::to_string(mi->mapId);
+    // TnGameLobbyGameCampaign.ModifyURL: ?Checkpoint=<path> when one is selected [RE CAMPAIGN_FRONTEND_FLOW_RE 2]
+    if (isCampaignTag(gs->tag) && !lobby_.checkpoint.empty()) url += "?Checkpoint=" + lobby_.checkpoint;
     {   // Private Match bots (PC ADAPTATION; Gameplay's MatchLaunch::fromURL reads them): only when any are configured.
         // Team modes send the faction counts (?BotsAutobot ?BotsDecepticon) and, for parsers that predate them, the
         // human-relative ?BotsFriendly ?BotsEnemy; ?ExtendedPlayers is the Custom Game player limit.

@@ -111,6 +111,7 @@ struct LobbyState {
     int gameTeamStatus = 0;
     int playlistId = -1;                     // SelectedPlaylistID (-1 private)
     int mapId = -1;                          // SelectedMapID
+    std::string checkpoint;                  // SelectedCheckpoint (campaign: a CheckpointPath; "" = the chapter start)
     int mapSelectionMethod = 0;              // 0 Rotate, 1 Host's Choice
     bool allowMapVeto = false;
     bool autostartCountdown = false;
@@ -334,6 +335,7 @@ public:
     // Public matches (ONLINE_LOBBY_FLOW_V2 4, user: no server list): Quick Match = the original Find Match playlist choice;
     // online it searches the mode's best-ping match (a gathering lobby or a match with open seats), else hosts one.
     bool quickMatch(int playlistId);
+    std::string buildLaunchUrl() const;   // the full match URL (StartLevel's): map, BuildURL options, bot rows, online options
     // GRI.CanGainXp for the next match (the launch URL's ?WfcCanGainXp: Gameplay's MVP award and the frontend's progression).
     bool canGainXp() const;
     // The public lobby's map vote (ONLINE_LOBBY_FLOW_V2 4.1, PC ADAPTATION of the original veto; the user chose Halo Reach's
@@ -403,7 +405,6 @@ private:
     const GameSettings* settingsByConfigName(const std::string& name, bool privateMatch) const;
     std::string buildLobbyUrl(const GameSettings& gs) const;
     std::string buildMatchUrl(const GameSettings& gs) const;
-    std::string buildLaunchUrl() const;   // the full match URL (StartLevel's): map, BuildURL options, bot rows, online options
     bool idleKickOn() const;              // the "Kick Idle Players" host row (online; a member: the host's published row)
     std::string memberLaunchUrl_;         // member: the host's launch record (CountdownStarted), used verbatim at StartLevel
     uint32_t launchSeed_ = 0;
