@@ -3556,3 +3556,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   UdpSession entry asked of Systems (UDPSESSIONTEST is in-process).
 2026-10-23 00:59 Rendering CARD FREE: #16 drive arms ran (sheet pending); the 6 waterfall arms did not launch (runner regex) -> 4 min after
   Systems. Card -> Systems 00:59 (#5 / #9 FX live-instance log).
+2026-10-23 01:02 MERGED 0d956825 #6 settings pages scroll past 10 rows; f14cad06 #17 the PC pause menu keeps Choose Transformer / Switch Teams
+  in iconic versus (escalationArray was used whenever IconicMode was set); f0a280ed select-result log. Frontend tests pass,
+  SIMHASH identical. Frontend's 6-min verify slot (#6, #17, #2 + #7 with 4v4 bots) queued after Systems + Rendering.
