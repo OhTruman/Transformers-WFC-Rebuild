@@ -3479,3 +3479,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 00:14 Escalation horde packaging DONE (AssetTools): 14 characters + 7 weapons in AssetTools\out\escalation_characters (136 MB, 161
   slim rows staged); data facts: CQCDec vehicle has no anim set (authored), BruteDec / TitanDec vehicles 2 clips; the boss tank's
   robot clips depend on out\campaign_anims (8 files, shipped by decision); 2 CeremonialStaffHolo cues without WAV (tracing).
+2026-10-23 00:15 USER_PLAYTEST_2026-10-23.md on integration (1ed57919; 18 items + the user's priority list: respawn timer, spread / aim, class
+  switch, boost trails, headlight flicker, bots floating, Seed collision, load times, smoke lifetime, HD row, video settings,
+  scoreboard, health bars, switch anims, water, TTK; "do not wait for me between straightforward fixes"; a retest checklist
+  when the batch is ready). Lobby v2 step 5a merged (1e9b7a73). RE §9 horde AI merged -> Gameplay. Escalation spec COMPLETE.
