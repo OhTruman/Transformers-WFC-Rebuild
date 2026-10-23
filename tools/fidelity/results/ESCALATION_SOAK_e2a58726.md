@@ -92,3 +92,23 @@ Gameplay expects headless (no Interact). VOICETEST on bfee6521: PASS. Logs work/
 | BrokenHope seed 1234 | 1 / 0 | 5 / 0 | 0 | 3 | game over 46 s |
 
 **As expected**: 0 suicides, every kill a weapon kill, substitutions 2-12 (expected about 8 on Remnant); Remnant's horde now reaches and kills the lone player (the earlier 300 s survival was the strand suicides). Exits 0, no crash.
+
+## Rerun on 4f4b68f9 (E2b part 3: the original's cell nav + blockers; AssetTools Escalation nav v2) - 2026-10-23 06:23
+
+Nav loaded: 'escalation: nav bot_nav_escalation.json: 625 cells, 28 blocked at start, 8 generators open cells' (Remnant) / 469 cells,
+32 blocked (BrokenHope) - read from F:/Transformers Rebuild/AssetTools/manifests/maps/<map>/ (svManifest's default; WFC_MANIFESTS
+overrides; **not in git - the package needs these files or WFC_MANIFESTS**).
+
+| Run | Off-nav spawn points | Waves | Kills (weapon) | Strand lines (no way found) | End |
+|---|---|---|---|---|---|
+| Remnant seed 7 | 0 of 61 | 1 / 0 | **0** | 37 (8) | 300 s, **no combat at all** |
+| Remnant seed 1234 | 0 of 61 | 1 / 0 | **0** | 38 (16) | 300 s, no combat |
+| BrokenHope seed 7 | 6 active at start (substitutions 8) | 1 / 0 | 2 (2) | - | game over 38 s |
+| BrokenHope seed 1234 | same | 1 / 0 | 2 (2) | - | game over 44 s |
+
+**Regression on Remnant vs 7272c4ac** (6-7 weapon kills, the player killed at 50-69 s): with nav v2 every spawn point is on the nav,
+5 horde members spawn, but nobody fights in 300 s. The strand lines are mostly the PLAYERS' team bots (seed 7: p1 x18, p2 x12, p3 x2;
+the horde p10 / p11 / p17 once or a few times): 'stranded off the mesh ... walking to the mesh' / 'no way found' at (-16.0 5.8 -21.9),
+(-15.5 6.1 -7.8), (88-104, 17-18, -11..-31) - the Escalation nav seems not to cover where the players' team spawns / moves (or the
+28 blocked cells cut the horde off from the players until generators open). BrokenHope: still 6 spawn points off the nav at start
+(8 substitutions; expected near 0). Exits 0, no crash. Logs work/stabsoak/esc_4f4b/.
