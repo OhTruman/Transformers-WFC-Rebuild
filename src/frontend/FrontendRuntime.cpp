@@ -564,6 +564,15 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
     const CharacterPreset* c = iconic ? roster_.findIconic(arg(0)) : nullptr;
     if (!c) c = roster_.find(arg(0));
     if (fn == "Customize.CheckCustomCharacterDataLoaded") return {};
+    if (iconic && fn == "Customize.GetPlayableCharacters" && GameFlow::isCampaignTag(flow_.lobby().gameModeTag)) {
+        // Campaign: GetPlayableIconicCharacterNames = the chapter's CampaignCharacters (every iconic when the list is empty)
+        // [RE CAMPAIGN_FRONTEND_FLOW_RE 5]; a campaign character is never locked.
+        const MapInfo* mi = catalog_.mapById(flow_.lobby().mapId);
+        std::vector<std::string> names;
+        for (const CharacterPreset& p : roster_.iconicCharacters())
+            if (!mi || mi->campaignCharacters.empty() || GameFlow::inCampaignTrio(*mi, p.name)) names.push_back(p.name);
+        return BridgeValue(join(names));
+    }
     if (iconic && fn == "Customize.GetPlayableCharacters") {   // GetPlayableIconicCharacterNames + FilterLockedIconicCharacters
         std::vector<std::string> names;
         for (const CharacterPreset& p : roster_.iconicCharacters()) if (iconicUnlocked(p)) names.push_back(p.name);

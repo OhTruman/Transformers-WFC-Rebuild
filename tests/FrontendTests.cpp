@@ -1811,6 +1811,41 @@ static void testCampaignC3() {
     std::remove("wfc_profile.ini");
 }
 
+static void testCampaignC2C5() {
+    // C2 / C5 + the profile's CompleteMission / ReachedCheckpoint (RE): the next chapter in the faction's order unlocks (A5
+    // wraps to A1), the best difficulty only rises, a checkpoint clears the resume slot; in a campaign lobby the character
+    // list is the chapter's trio, a chapter change clears a pick outside it, and the host can start.
+    LocalProfile::Campaign c;
+    c.completeMission(101, 1);
+    c.completeMission(101, 0);
+    const bool unlock = c.complete[5] && c.bestDifficulty[5] == 1 && c.available[6] && c.resumeMap[1] == 102 && !c.available[7];
+    c.completeMission(100, 2);
+    const bool wrap = c.available[0] && c.resumeMap[0] == 96 && c.nextAvailableChapter(101) == 102 && c.nextAvailableChapter(102) == 102;
+    c.reachedCheckpoint(102, 4); c.reachedCheckpoint(102, 2);
+    const bool cp = c.checkpoint[6] == 4 && c.resumeMap[1] == -1;
+    std::remove("wfc_profile.ini");
+    FrontendRuntime rt;
+    if (!rt.init()) { check(false, "campaign.C2_C5", "init"); return; }
+    GameFlow& f = rt.flow();
+    runUntil(rt, [&] { return f.frontEndStarted(); });
+    f.call("Online.OpenCampaignGameLobby", {});
+    runUntil(rt, [&] { return f.level() == LevelKind::GameLobby && !f.loading().active; });
+    f.call("Online.SetSelectedMapID", {"101"});
+    f.call("Online.SetSelectedMapID", {"101"});
+    const std::string trio = rt.bridge("UI_GFxCharacterSelect_p.CharacterSelect_GFX_1", "Customize.GetPlayableCharacters", {}).s;
+    const bool trioOk = trio.find("Megatron") != std::string::npos && trio.find("Brawl") != std::string::npos &&
+                        trio.find("Barricade") != std::string::npos && trio.find("Starscream") == std::string::npos;
+    rt.bridge("UI_GFxCharacterSelect_p.CharacterSelect_GFX_1", "Customize.SelectCharacter", {"Brawl", "1"});
+    const bool picked = f.selectedCharacter().valid;
+    f.call("Online.SetSelectedMapID", {"102"});   // D2: Starscream / Skywarp / Thundercracker
+    const bool cleared = !f.selectedCharacter().valid;
+    const bool canStart = rt.dataStores().call("ReadBoolValue", {"<CurrentGame:CanHostRequestGameStart>"}).b;
+    check(unlock && wrap && cp && trioOk && picked && cleared && canStart, "campaign.C2_C5",
+          std::to_string(unlock) + std::to_string(wrap) + std::to_string(cp) + std::to_string(trioOk) + std::to_string(picked) +
+          std::to_string(cleared) + std::to_string(canStart) + " trio=" + trio);
+    std::remove("wfc_profile.ini");
+}
+
 static void testLobbyFlowV2() {
     // LV1: Private Match hosts at once (offline: the same lobby with bots), with the profile's last mode (new profile: TDM)
     {
@@ -2117,6 +2152,7 @@ int main() {
     testRespawnUiLifetime();
     testCampaignC1C4();
     testCampaignC3();
+    testCampaignC2C5();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);

@@ -97,6 +97,14 @@ public:
         int resumeMap[2] = {-1, -1};            // 55 Autobot / 56 Decepticon: the faction's resume chapter
         static const char* key(int i) { static const char* k[] = {"A1", "A2", "A3", "A4", "A5", "D1", "D2", "D3", "D4", "D5"}; return i >= 0 && i < kChapters ? k[i] : ""; }
         bool isDefault() const;
+        static int index(int mapId) { return mapId >= kFirstMapId && mapId < kFirstMapId + kChapters ? mapId - kFirstMapId : -1; }
+        // TnProfileSettings.CompleteMission(MapId, Difficulty): the map's bool, its best difficulty (raised only), the next map
+        // in the faction's order Available (wrapping, so A5 / D5 re-flag A1 / D1), the faction's resume map [RE DefaultSettings]
+        void completeMission(int mapId, int difficulty);
+        // ReachedCheckpoint(MapId, Index): the highest checkpoint reached on the map; clears the faction's resume slot
+        void reachedCheckpoint(int mapId, int index);
+        // GetNextAvailableCampaignMap after a chapter: the next one in the faction's order if Available, else the same chapter
+        int nextAvailableChapter(int mapId) const;
     };
     Campaign campaign;
     // [Online] FirstRunShown: the one-time "Online Play" prompt was answered (ONLINE_MP_FIRST_RUN.md step 2); written only
