@@ -1,0 +1,82 @@
+diff --git a/src/game/WorldSurvival.cpp b/src/game/WorldSurvival.cpp
+index 0f0253c8..48940ac0 100644
+--- a/src/game/WorldSurvival.cpp
++++ b/src/game/WorldSurvival.cpp
+@@ -340,6 +340,11 @@ bool World::svTakeWeapon(Character& c, int player, const Weapon& got) {
+     return true;
+ }
+ 
++static void svTakeLog(const char* weapon, const char* from, size_t player) {   // DEV (WFC_ESCLOG): soak counts, log only
++    static const bool tl = std::getenv("WFC_ESCLOG") != nullptr;
++    if (tl) LOG_INFO("ESCLOG take %s from %s by p%zu", weapon, from, player);
++}
++
+ void World::svTickWeaponPickups(float dt) {
+     const std::vector<MatchPlayer>& P = match_.players();
+     for (SurvivalState::WeaponPick& w : sv_.weaponPicks)   // RespawnTime 2 s
+@@ -368,7 +373,7 @@ void World::svTickWeaponPickups(float dt) {
+             bool owned = false;
+             for (int i = 0; i < c->weaponCount(); ++i) owned = owned || (c->weaponAt(i).def && std::string(c->weaponAt(i).def->id) == def->id);
+             if (owned) {   // PickupWhenTouched: an owned weapon is ammo
+-                if (svTakeWeapon(*c, (int)q, svPickupWeapon(*def))) { w.available = false; w.respawn = svData_.weaponPickups[k].respawn; }
++                if (svTakeWeapon(*c, (int)q, svPickupWeapon(*def))) { w.available = false; w.respawn = svData_.weaponPickups[k].respawn; svTakeLog(def->id, "factory (owned: ammo)", q); }
+                 continue;
+             }
+             const float d = core::length(svData_.weaponPickups[k].pos - c->position());
+@@ -384,11 +389,11 @@ void World::svTickWeaponPickups(float dt) {
+         if (!press) continue;   // TnPickupManager: the press takes the closest valid touching pickup
+         if (bestF >= 0) {
+             const WeaponDef* def = findWeaponDef(svData_.weaponPickups[(size_t)bestF].weapon.c_str());
+-            if (def && svTakeWeapon(*c, (int)q, svPickupWeapon(*def))) { sv_.weaponPicks[(size_t)bestF].available = false; sv_.weaponPicks[(size_t)bestF].respawn = svData_.weaponPickups[(size_t)bestF].respawn; }
++            if (def && svTakeWeapon(*c, (int)q, svPickupWeapon(*def))) { sv_.weaponPicks[(size_t)bestF].available = false; sv_.weaponPicks[(size_t)bestF].respawn = svData_.weaponPickups[(size_t)bestF].respawn; svTakeLog(def->id, "factory", q); }
+         } else if (bestD >= 0) {
+             const Weapon w = sv_.drops[(size_t)bestD].w;
+             sv_.drops.erase(sv_.drops.begin() + bestD);
+-            svTakeWeapon(*c, (int)q, w);
++            if (svTakeWeapon(*c, (int)q, w)) svTakeLog(w.def ? w.def->id : "?", "drop", q);
+         }
+     }
+ }
+@@ -663,6 +668,12 @@ void World::tickSurvival(float dt) {
+     // Killed: the killer's PRI gains the enemy's PowerReward (players only; clamped 0..9999).
+     for (const auto& k = match_.killHistory(); sv_.killsSeen < k.size(); ++sv_.killsSeen) {
+         const KillFeedEntry& e = k[sv_.killsSeen];
++        static const bool klog = std::getenv("WFC_ESCLOG") != nullptr;   // DEV: every kill (soak counts), log only
++        if (klog) {
++            std::string victim = e.victim >= 0 && (size_t)e.victim < P.size() ? P[(size_t)e.victim].name : std::string("?");
++            for (const SurvivalState::Slot& s : sv_.slots) if (s.player == e.victim) victim = svData_.enemies[(size_t)s.enemy].type;
++            LOG_INFO("ESCLOG kill %s by p%d %s t %.1f", victim.c_str(), e.killer, e.damageType.c_str(), match_.matchTime());
++        }
+         if (e.killer < 0 || (size_t)e.killer >= P.size() || P[(size_t)e.killer].kind == ParticipantKind::Bot) continue;
+         for (const SurvivalState::Slot& s : sv_.slots)
+             if (s.player == e.victim) sv_.power[(size_t)e.killer] = std::min(9999.0f, sv_.power[(size_t)e.killer] + svData_.enemies[(size_t)s.enemy].power);
+@@ -697,7 +708,12 @@ void World::tickSurvival(float dt) {
+             const float amt = std::min({std::floor(std::max(1.0f, kSvDrainTick * rate)), need, std::floor(sv_.power[q])});
+             if (amt <= 0.0f) { sv_.drainFailed[q] = 1; break; }   // DrainingFailedSound, beam off
+             sv_.power[q] -= amt; sv_.pool[(size_t)g] += amt;
+-            if (sv_.pool[(size_t)g] >= (float)G.cost) { sv_.generatorDone[(size_t)g] = 1; svFireGenerator(g); }
++            if (sv_.pool[(size_t)g] >= (float)G.cost) {
++                sv_.generatorDone[(size_t)g] = 1;
++                static const bool blog = std::getenv("WFC_ESCLOG") != nullptr;
++                if (blog) LOG_INFO("ESCLOG buy %s (%s) by p%zu cost %d t %.1f", G.id.c_str(), G.nameKey.c_str(), q, G.cost, match_.matchTime());
++                svFireGenerator(g);
++            }
+         }
+     }
+     // Zone touches by player pawns (TnPlayerPawn only; a dead pawn untouches).
+@@ -733,6 +749,7 @@ void World::tickSurvival(float dt) {
+         sv_.phaseTime = 0.0f;
+         sv_.filling = true; sv_.fillTimer = svData_.fillWaveReCheckTime;   // FillOutWave: the first enemy at once
+         ++sv_.roundBegins;   // TnSeqEvent_SurvivalEvents "Round Begin" (ActivateSequenceEvent 1) [RE E1 review F3]
++        levelAudioEvent("Game:TnSeqEvent_SurvivalEvents:Round Begin");   // the map sequence (announcer / dialog / mixer: LevelAudioScript)
+         LOG_INFO("escalation: wave %d begins (row %d: budget %d, alive %d, deficit %d)", sv_.displayWave + 1, sv_.currentWave,
+                  svData_.waves[(size_t)sv_.currentWave].budget, svData_.waves[(size_t)sv_.currentWave].budgetAlive, svData_.waves[(size_t)sv_.currentWave].deficit);
+     };
+@@ -764,6 +781,7 @@ void World::tickSurvival(float dt) {
+             if (sv_.usedThisWave >= w.budget && alive == 0) {   // the budget is spent and the horde is dead -> BetweenWaves
+                 sv_.phase = SurvivalState::Phase::BetweenWaves;
+                 ++sv_.roundEnds;   // "Round End" (ActivateSequenceEvent 0)
++                levelAudioEvent("Game:TnSeqEvent_SurvivalEvents:Round End");
+                 sv_.phaseTime = 0.0f; sv_.filling = false;
+                 // RoundEnded: the respawn helper respawns every dead player (revive of the living: E4).
+                 for (size_t q = 0; q < P.size(); ++q)
