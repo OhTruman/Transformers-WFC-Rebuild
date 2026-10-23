@@ -689,6 +689,7 @@ void World::botPathUpkeep(BotBody o, BotBrain& b, float dt) {
     const bool vehicle = pc.moveForm() == Form::Vehicle;
     const bool jetForm = vehicle && pc.vehicleParams().form == VehicleFormType::Jet;
     BotNav::Agent ag; ag.radius = pc.cylinderRadius(Form::Robot); ag.vehicle = vehicle && !jetForm;
+    ag.originalOnly = match_.players()[(size_t)b.player].directorSpawned;   // the horde keeps to the original NavigationCells
     b.repathTimer -= dt;
     const bool chasing = b.goal.kind == BotGoalKind::Attack;
     const bool trapped = match_.matchTime() < b.trappedUntil;   // Smart dither escape off the mesh (botSteer)
@@ -755,6 +756,18 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
             const BotNav::Waypoint& w = b.path[b.wp];
             core::Vec3 d = w.pos - pos; d.y = 0;
             const float dl = core::length(d);
+            if (w.action == 4) {   // a leap down (R_JUMP off a perch) [H: UE3 SuggestJumpVelocity]: at the foot, jump with the horizontal
+                                    // speed that lands on the spec's end (x1.1 for the falling air-control drag), then steer to it
+                const core::Vec3 foot = b.wp > 0 ? b.path[b.wp - 1].pos : pos;
+                if (pc.onGround() && hdist(pos, foot) < 3.0f && dl > 1e-3f) {
+                    const float vy = pc.robotParams().jumpSpeed(), g = core::config::kGravity, dy = w.pos.y - pos.y;
+                    const float t = (vy + std::sqrt(std::max(0.0f, vy * vy - 2.0f * g * dy))) / g;
+                    const float vh = t > 1e-3f ? dl / t * 1.1f : 0.0f;
+                    pc.velocity().x = d.x / dl * vh; pc.velocity().z = d.z / dl * vh;
+                    jump = true; ++b.jumps;
+                }
+                if (dl < 2.0f || (pc.onGround() && pos.y < w.pos.y + 2.0f && dl < 8.0f)) { ++b.wp; b.bestDist = 1e9f; }
+            }
             if (w.action == 1 || w.action == 3) {   // jump link: jump at its foot, keep pushing toward the top
                 if (dl < 6.0f && pc.onGround()) { jump = true; ++b.jumps; }
                 // double jump: the second press near the apex of the first (rising slower than 1 m/s) [TnAiActionNavigatePathSection]

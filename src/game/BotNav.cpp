@@ -34,6 +34,7 @@ bool BotNav::load(const std::string& path) {
         o.clearance = c["clearance_m"].asFloat();
         o.headroom = c["headroom_m"].asFloat();
         o.vehicle = c["flags"]["vehicle_capable"].asBool();
+        o.versusOnly = c["flags"]["versus_only"].asBool(false);
         o.bmin = o.bmax = o.poly.empty() ? o.centroid : o.poly[0];
         for (const core::Vec3& p : o.poly) {
             o.bmin = {std::min(o.bmin.x, p.x), std::min(o.bmin.y, p.y), std::min(o.bmin.z, p.z)};
@@ -74,14 +75,19 @@ bool BotNav::load(const std::string& path) {
         const std::string kind = l["kind"].asString();
         // double_jump_up (AssetTools: JumpHeight + DoubleJumpHeight; the MP robot double jump is CONFIRMED, RE addendum 10). Unknown
         // kinds are skipped (never mistaken for a drop).
-        if (kind != "jump_up" && kind != "drop_down" && kind != "double_jump_up") continue;
+        if (kind != "jump_up" && kind != "drop_down" && kind != "double_jump_up" && kind != "walk") continue;
         L.jump = kind == "jump_up" || kind == "double_jump_up";
         L.doubleJump = kind == "double_jump_up";
+        L.walk = kind == "walk";
         L.robot = L.vehicle = false;
         const assets::Json& fm = l["forms"];
         for (size_t k = 0; k < fm.size(); ++k) { L.robot |= fm[k].asString() == "robot"; L.vehicle |= fm[k].asString() == "vehicle"; }
         if (fm.size() == 0) L.robot = true;
         L.fromPos = v3(l["from_gltf"]); L.toPos = v3(l["to_gltf"]);
+        {   // a long jump down off a perch (AssetTools v3: an authored R_JUMP with a negative rise)
+            const float dx = L.toPos.x - L.fromPos.x, dz = L.toPos.z - L.fromPos.z;
+            L.leap = L.jump && !L.doubleJump && L.toPos.y < L.fromPos.y - 1.0f && dx * dx + dz * dz > 36.0f;
+        }
         cells_[(size_t)L.from].links.push_back((int)links_.size());
         links_.push_back(L);
     }
@@ -257,6 +263,7 @@ int BotNav::stepSearch(int maxExpansions) const {
             const core::Vec3 mid = (p.a + p.b) * 0.5f;
             float tight = (!a.vehicle && cells_[(size_t)p.to].clearance < a.radius) ? 1.3f : 1.0f;   // prefer roomy cells [PROV]
             if (a.avoid && std::find(a.avoid->begin(), a.avoid->end(), p.to) != a.avoid->end()) tight *= 10.0f;
+            if (a.originalOnly && cells_[(size_t)p.to].versusOnly) tight *= 10.0f;
             if (a.cost && (size_t)p.to < a.cost->size()) tight *= 1.0f + a.costW * (*a.cost)[(size_t)p.to];
             if (a.noiseSeed) tight *= 1.0f + a.noiseW * (float)(hashU((unsigned)p.to ^ a.noiseSeed) & 0xffffU) * (1.0f / 65535.0f);
             const float ng = gsAt(c) + (core::length(mid - cc.centroid) + core::length(cells_[(size_t)p.to].centroid - mid)) * tight;
@@ -269,6 +276,7 @@ int BotNav::stepSearch(int maxExpansions) const {
             float ng = gsAt(c) + core::length(l.fromPos - cc.centroid) + core::length(l.toPos - l.fromPos) * 1.5f + 3.0f +
                        core::length(cells_[(size_t)l.to].centroid - l.toPos);
             if (a.cost && (size_t)l.to < a.cost->size()) ng += (ng - gsAt(c)) * a.costW * (*a.cost)[(size_t)l.to];
+            if (a.originalOnly && cells_[(size_t)l.to].versusOnly) ng += (ng - gsAt(c)) * 9.0f;
             if (ng < gsAt(l.to)) { setNode(l.to, ng, c, li); push(ng + kSearchWeight * core::length(cells_[(size_t)l.to].centroid - S.goalC), l.to); }
         }
     }
@@ -339,7 +347,7 @@ bool BotNav::buildPath(int s, int g, const core::Vec3& from, const core::Vec3& e
         if (li >= 0) {
             const Link& l = links_[(size_t)li];
             flush(l.fromPos, c0);
-            out.push_back({l.toPos, l.doubleJump ? 3 : (l.jump ? 1 : 2), c1});
+            out.push_back({l.toPos, l.leap ? 4 : l.doubleJump ? 3 : l.jump ? 1 : l.walk ? 0 : 2, c1});
             apex = l.toPos; portals.push_back({apex, apex}); portalCell.push_back(c1);
             continue;
         }

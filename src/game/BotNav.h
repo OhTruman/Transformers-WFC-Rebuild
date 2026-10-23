@@ -14,12 +14,14 @@ namespace game {
 class BotNav {
 public:
     struct Portal { int to; core::Vec3 a, b; float width; core::Vec3 n; };   // shared edge segment toward cell `to`; n = outward edge normal
-    struct Link { int from, to; bool jump; bool robot, vehicle; core::Vec3 fromPos, toPos; bool doubleJump = false; };
+    // walk: an R_WALK reach spec (a plain move); leap: a long R_JUMP down (span > 6 m, landing below), launched ballistically at the foot
+    struct Link { int from, to; bool jump; bool robot, vehicle; core::Vec3 fromPos, toPos; bool doubleJump = false; bool walk = false, leap = false; };
     struct Cell {
         std::vector<core::Vec3> poly;                                   // convex polygon (glTF metres, Y up)
         core::Vec3 centroid, bmin, bmax;
         float clearance = 0.0f, headroom = 0.0f;
         bool vehicle = false;
+        bool versusOnly = false;   // Escalation nav: a versus cell merged where the original has no NavigationCell
         std::vector<Portal> portals;
         std::vector<int> links;                                          // indices into links_ starting here
     };
@@ -27,7 +29,8 @@ public:
     // One step of a path: move to `pos`; `action` 1 = jump (up link) before / while going to pos, 2 = drop (walk off the edge),
     // 3 = double jump (jump at the foot, second press near the apex).
     struct Waypoint { core::Vec3 pos; int action = 0; int cell = -1; };
-    struct Agent { float radius = 1.75f; bool vehicle = false; const std::vector<int>* avoid = nullptr;   // avoid: cells costed x10 (a bot's blocked spots)
+    struct Agent { float radius = 1.75f; bool vehicle = false; bool originalOnly = false;   // originalOnly: versus-only cells cost x10 (the horde)
+                   const std::vector<int>* avoid = nullptr;   // avoid: cells costed x10 (a bot's blocked spots)
                    // Smart AI only (null / 0 for Classic): cell cost x (1 + costW * cost[cell]) (threat exposure), and a per-agent
                    // seeded noise x (1 + 0.25 * hash(cell, noiseSeed)) so bots do not all take one corridor.
                    const std::vector<float>* cost = nullptr; float costW = 0.0f; unsigned noiseSeed = 0; float noiseW = 0.25f; };
