@@ -1,0 +1,26 @@
+diff -ruN a/src/core/Application_Net.cpp b/src/core/Application_Net.cpp
+--- a/src/core/Application_Net.cpp	2026-10-23 01:21:03.381838700 -0500
++++ b/src/core/Application_Net.cpp	2026-10-23 01:21:03.401908100 -0500
+@@ -609,7 +609,7 @@
+     frontend::SessionSlot b; b.kind = frontend::SessionSlot::Kind::Bot; b.team = 0;
+     lobby.slots = {s0, b, s1};
+     hostS.publishLobby(lobby);
+-    pump(3.0, [&] { return has(memEv, T::LobbyState); });
++    pump(3.0, [&] { const SessionEvent* e = find(memEv, T::LobbyState); return e && e->lobby.slots.size() == 3; });   // the published one
+     { const SessionEvent* e = find(memEv, T::LobbyState);
+       check(e && e->lobby.slots.size() == 3 && e->lobby.settings.count("PointsToWin") && e->lobby.mapId == 3, "member: LobbyState with the slots and settings"); }
+ 
+diff -ruN a/src/net/UdpTransport.cpp b/src/net/UdpTransport.cpp
+--- a/src/net/UdpTransport.cpp	2026-10-23 01:21:03.340199000 -0500
++++ b/src/net/UdpTransport.cpp	2026-10-23 01:21:03.360771300 -0500
+@@ -166,7 +166,9 @@
+         sockaddr_in a{};
+         if (seat < 0 || seat > 254 || !parseAddr(hostPort, a)) return false;
+         auto it = peers_.find(seat);
+-        if (it == peers_.end() || addrString(it->second) != hostPort) ch_.reset(seat);
++        // only a re-seat at another address starts the channel afresh: a new peer keeps what already arrived from it (a member seated
++        // after the host's first reliable message must not re-deliver its retransmission)
++        if (it != peers_.end() && addrString(it->second) != hostPort) ch_.reset(seat);
+         peers_[seat] = a;
+         return true;
+     }
