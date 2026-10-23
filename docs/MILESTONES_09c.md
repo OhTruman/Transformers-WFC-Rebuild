@@ -3590,3 +3590,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   catch-up: native passes the full time but pre-ages spawned particles (the burst = our missing pre-age; Systems fixes that way).
 2026-10-23 01:23 #18 (B) after-soak PASS: 1 -> 0 floating cases in 20 runs on 0d8e3c06. Experimental builds 221e7b83 for the UdpSession identity rows.
 2026-10-23 01:25 MERGED fa37a75f FX spawn pre-age (the catch-up burst's real cause; native semantics per RE); Rendering proves it on Gorge in x28.
+2026-10-23 01:27 map_fx_runtime.json REGENERATED + INSTALLED on all 10 MP maps (kill flags; gate: the only non-flag "diff" was NaN != NaN on
+  Exp_Death_Sm_FX StartSize values[4], present in both = identical; backups in the session scratchpad mapfx_backup_pre_kf).
+  #9 render side complete (code 8d6f0c4b + data). Pre-age v2 merged d788870b (expected sub-frame change in all modes for the
+  gate). RE: AnimControl evaluator C. Card: Frontend two-window test 01:30 -> Rendering x28 + x29 (12 min) -> Systems (8 min).
