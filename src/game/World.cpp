@@ -4820,6 +4820,7 @@ void World::draw(render::IRenderer& r) const {
     // fallbacks, drawn immediately too). One flush per frame: nothing is queued after it.
     r.flushQueuedCharacters();
     if (cp_.active) cpDrawDestructibles(r);   // campaign destructibles
+    if (cp_.active) cpDrawSkeletal(r);        // campaign matinee skeletal actors
     for (const BarrierState& bs : barriers_) if (bs.alive && !bs.mesh.positions.empty()) r.drawDynamicMesh(bs.mesh, bs.world, core::Vec3{1, 1, 1});   // TnBarrierSpawnable mesh
     for (const Sentry& se : sentries_)
         if (se.alive && !se.mesh.positions.empty())

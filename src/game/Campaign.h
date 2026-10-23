@@ -8,6 +8,7 @@
 #include "core/Math.h"
 #include "game/Kismet.h"
 #include "render/Mesh.h"
+#include "assets/SkinnedModel.h"
 
 #include <map>
 #include <set>
@@ -41,7 +42,8 @@ struct CampaignChapter {
 // A matinee (InterpData) of the chapter: the tracks the runtime plays (movement, event keys, director cuts, fade, FOVAngle).
 struct CampaignMatinee {
     struct Key { float t = 0.0f; float v[3] = {0, 0, 0}, ai[3] = {0, 0, 0}, lo[3] = {0, 0, 0}; int mode = 0; };   // 0 linear 1 constant 2 curve
-    struct Track { int kind = 0; bool relative = false; std::vector<Key> pos, euler, curve; std::vector<std::pair<float, std::string>> events; };
+    struct Track { int kind = 0; bool relative = false; std::vector<Key> pos, euler, curve; std::vector<std::pair<float, std::string>> events;
+                   std::vector<float> animOffset, animRate; std::vector<uint8_t> animLoop; };   // kind 5 AnimControl: events = (t, clip)
     // kind 0 move, 1 event keys, 2 director cuts (camera group names), 3 fade, 4 FOVAngle
     struct Group { std::string name; bool director = false; std::map<std::string, std::vector<std::string>> actors; std::vector<Track> tracks; };
     float length = 0.0f;
@@ -69,6 +71,18 @@ struct CampaignDestructible {
     std::vector<int> events;   // its Kismet notification events (op indices)
 };
 struct CampaignMeshAsset { bool ok = false; render::MeshData mesh; render::MeshHandle handle = -1; };
+
+// A matinee-animated skeletal actor (AnimControl): its mesh / anim files, placement, the clip and time the matinee sets.
+struct CampaignSkel {
+    std::string mesh, clip;
+    std::vector<std::string> animFiles;
+    core::Vec3 pos{0, 0, 0};
+    float yawDeg = 0.0f, time = 0.0f;
+    bool loop = false, active = false, tried = false, ok = false;
+    assets::SkinnedModel model;
+    render::MeshData skinned;
+    std::vector<core::Mat4> scratch;
+};
 
 struct CampaignFactory {
     std::string action, cls, aicd, chassis, spawnedVar, note;

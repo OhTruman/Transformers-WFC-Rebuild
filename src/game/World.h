@@ -1468,6 +1468,9 @@ private:
     void cpMatineeApply(CampaignState::Interp& in, float from, float to);
     void cpMatineeEnd(CampaignState::Interp& in);
     void cpFlushCinematicView();
+    void cpLoadSkeletal();
+    void cpDrawSkeletal(render::IRenderer& r) const;
+    mutable std::map<std::string, CampaignSkel> cpSkel_;   // matinee skeletal actors (lazily loaded at their first draw)
     std::vector<CampaignMover> cpMovers_;         // the chapter's InterpActors (kept across launches: loaded with the map)
     void cpLoadActors();
     bool cpActorPos(const std::string& path, core::Vec3& out) const;

@@ -4,6 +4,8 @@
 // the CameraActor groups, FOVAngle, the fade) into the local view + Rendering's CinematicView. See Campaign.h.
 #include "game/World.h"
 #include "assets/Json.h"
+#include "assets/SkinnedModel.h"
+#include "render/Renderer.h"
 #include "core/Log.h"
 
 #include <algorithm>
@@ -171,6 +173,15 @@ void World::cpLoadMatinees() {
                 else if (c == "InterpTrackDirector") { tr.kind = 2; for (size_t k = 0; k < T["cuts"].size(); ++k) tr.events.push_back({T["cuts"][k]["t"].asFloat(), T["cuts"][k]["camera_group"].asString()}); }
                 else if (c == "InterpTrackFade") { tr.kind = 3; tr.curve = keysOf(T["curve"]); }
                 else if (c == "InterpTrackFloatProp" && T["property"].asString() == "FOVAngle") { tr.kind = 4; tr.curve = keysOf(T["curve"]); }
+                else if (c == "InterpTrackAnimControl") {   // kind 5: (t, AnimSeqName, StartOffset, AnimPlayRate, bLooping) keys
+                    tr.kind = 5;
+                    for (size_t k = 0; k < T["keys"].size(); ++k) {
+                        const assets::Json& K = T["keys"][k];
+                        tr.events.push_back({K["t"].asFloat(), K["anim"].asString()});
+                        tr.animOffset.push_back(K["start_offset"].asFloat(0.0f)); tr.animRate.push_back(K["rate"].asFloat(1.0f));
+                        tr.animLoop.push_back(K["looping"].asBool(false) ? 1 : 0);
+                    }
+                }
                 else continue;
                 grp.tracks.push_back(tr);
             }
@@ -266,6 +277,19 @@ void World::cpMatineeApply(CampaignState::Interp& in, float from, float to) {
             } else if (t.kind == 2) {
                 for (const auto& e : t.events) if (e.first <= to) camGroup = e.second;
             } else if (t.kind == 3) { float v[3]; evalKeys(t.curve, to, v); fade = v[0]; haveFade = true; }
+            else if (t.kind == 5 && act != g.actors.end()) {   // AnimControl: the clip of the last key at or before `to`
+                int k = -1;
+                for (size_t e = 0; e < t.events.size(); ++e) if (t.events[e].first <= to) k = (int)e;
+                if (k >= 0)
+                    for (const std::string& a : act->second) {
+                        auto sk = cpSkel_.find(a);
+                        if (sk == cpSkel_.end()) continue;
+                        sk->second.clip = t.events[(size_t)k].second;
+                        sk->second.time = (to - t.events[(size_t)k].first) * t.animRate[(size_t)k] + t.animOffset[(size_t)k];
+                        sk->second.loop = t.animLoop[(size_t)k] != 0;
+                        sk->second.active = true;
+                    }
+            }
             else if (t.kind == 0 && act != g.actors.end()) {
                 float p[3], r[3];
                 evalKeys(t.pos, to, p); evalKeys(t.euler, to, r);
@@ -337,6 +361,49 @@ void World::cpMatineeEnd(CampaignState::Interp& in) {
         player_.controller().clearSpectatorView();
         if (renderer_) renderer_->notifyCameraCut("matinee end");
         cp_.cineOp = -1; cp_.cineCamGroup.clear();
+    }
+}
+
+} // namespace game
+
+namespace game {
+
+// The matinee-animated skeletal actors (AssetTools <chapter>/matinee_skeletal.json: actor, mesh_gltf, anim_files, placement).
+void World::cpLoadSkeletal() {
+    cpSkel_.clear();
+    assets::Json j;
+    if (!readJ(cpChapter_.dir + "matinee_skeletal.json", j)) return;
+    const assets::Json& rows = j["rows"];
+    for (size_t i = 0; i < rows.size(); ++i) {
+        const assets::Json& r = rows[i];
+        CampaignSkel k;
+        k.mesh = r["mesh_gltf"].asString();
+        for (size_t f = 0; f < r["anim_files"].size(); ++f) k.animFiles.push_back(r["anim_files"][f].asString());
+        const assets::Json& L = r["location_gltf"];
+        if (L.size() >= 3) k.pos = core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
+        k.yawDeg = r["rotation_deg"]["yaw"].asFloat(0.0f);
+        if (!k.mesh.empty()) cpSkel_[shortName(r["actor"].asString())] = k;
+    }
+    LOG_INFO("campaign: %zu matinee skeletal actors", cpSkel_.size());
+}
+
+// Draw the active ones: the clip sampled at its matinee time, CPU-skinned (a handful of cinematic actors).
+void World::cpDrawSkeletal(render::IRenderer& r) const {
+    const std::string root = "F:/Transformers Rebuild/ExtractedAssets/";
+    for (auto& kv : cpSkel_) {
+        CampaignSkel& k = kv.second;
+        if (!k.active || k.clip.empty()) continue;
+        if (!k.tried) {
+            k.tried = true;
+            k.ok = assets::loadSkinnedGlb(root + k.mesh, k.model);
+            if (k.ok) for (const std::string& f : k.animFiles) assets::loadAnimationsByName(root + f, k.model);
+            if (!k.ok) LOG_WARN("campaign: skeletal actor %s: no mesh %s", kv.first.c_str(), k.mesh.c_str());
+        }
+        if (!k.ok) continue;
+        const int clip = k.model.clipByName(k.clip);
+        if (clip < 0) continue;
+        assets::evaluatePose(k.model, clip, k.time, k.scratch, k.skinned, k.loop);
+        r.drawDynamicMesh(k.skinned, core::Mat4::translate(k.pos) * core::Mat4::rotateY(-k.yawDeg * 3.14159265f / 180.0f), core::Vec3{1, 1, 1});
     }
 }
 

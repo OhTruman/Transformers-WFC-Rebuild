@@ -239,6 +239,7 @@ void World::setupCampaign(const MatchLaunch& l) {
         cpLoadFactories();
         cpLoadActors();
         cpLoadMatinees();
+        cpLoadSkeletal();
         cpLoadTouches();
         cpLoadPlacedDestructibles();
         cpBindMoverNav();   // (the nav is loaded by addBots above)
