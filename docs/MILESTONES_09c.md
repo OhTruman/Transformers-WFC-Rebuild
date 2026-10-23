@@ -4105,3 +4105,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 14:01 HAND-OVER RERUN PASS on 59cb3162 (Frontend handover2/): 249 / 249 tests, 6 / 6 clean, authored hides applied. FINAL_BASE_
   ITEMS 01-08 on the head (49dd49aa); the timed gate is staged (base final3 vs head fast_59cb316). Waiting: AssetTools
   (A5 / D3B / skeletal passes / outside list), Gameplay D3B check, the user's reboot.
+2026-10-23 14:02 Render verdict on handover2: SHIP (identical to handover within noise; TDM brighter = a lit-plaza spawn). Plan: once
+  AssetTools' skeletal set-dressing passes finish, one Frontend look at A1 + A2 (+60 s shots, current exe) to confirm the
+  new nodes + authored hides (data only).
