@@ -3650,3 +3650,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (smoke match arms + #1 menu run) -> Frontend exit retest on 2528df5e.
 2026-10-23 02:00 Stability soak PASS on 5ca8fe3a (80 + 80 headless runs, 4 modes x 10 maps: 0 crashes / errors / stuck matches, WARNs equal).
 2026-10-23 02:00 CAMPAIGN_FRONTEND_FLOW_RE merged (modes, lobby, select, loading, fail / complete). RE -> ONLINE_PC_DEVIATIONS.md.
+2026-10-23 02:01 Campaign HD / AV coverage (AssetTools): 937 gap textures (~1.8 GB HD output), all audio / FMV / FaceFX present (1 A3 line
+  silent) -> GO on the campaign HD pass as the one long GPU job (chunked, resumable). Escalation spawn points exported.
