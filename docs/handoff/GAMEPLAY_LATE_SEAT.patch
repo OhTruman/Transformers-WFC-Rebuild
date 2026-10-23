@@ -1,0 +1,351 @@
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index b4ed8a21..04f79f65 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -214,6 +214,7 @@ bool Application::init() {
+     }
+     if (std::getenv("WFC_CHAOS")) { runChaosTest(); return false; }            // measurements only
+     if (std::getenv("WFC_TDMTEST")) { runTdmSessionTest(); return false; }     // measurements only
++    if (std::getenv("WFC_LATESEATTEST")) { runLateSeatTest(); return false; }   // join in progress (dormant seats)
+     if (std::getenv("WFC_ESCTEST")) { runEscalationTest(); return false; }     // Escalation E1 director (WFC_MAP=MP_ESC_BrokenHope)
+     if (std::getenv("WFC_CAMSYNC")) { runCameraSyncTest(); return false; }     // measurements only
+     if (std::getenv("WFC_MODEPLAYTEST")) { runModePlayTest(); return false; }  // measurements only
+diff --git a/src/core/Application.h b/src/core/Application.h
+index 8bf5fd38..0cf72f3f 100644
+--- a/src/core/Application.h
++++ b/src/core/Application.h
+@@ -105,6 +105,7 @@ private:
+     void runCameraTest();
+     void runChaosTest();
+     void runTdmSessionTest();
++    void runLateSeatTest();     // WFC_LATESEATTEST (Application_LateSeatTest.cpp)
+     void runEscalationTest();   // WFC_ESCTEST (Application_EscTest.cpp)
+     void runCameraSyncTest();
+     void runModePlayTest();
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index f47b40a7..0b38f97d 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -611,7 +611,7 @@ bool Application::wantsFrontendBoot() {
+     for (const char* v : {"WFC_SMOKE_FRAMES", "WFC_AIDUEL", "WFC_SHOTLIST", "WFC_GAMEMODE", "WFC_MAP", "WFC_PICKUPTEST", "WFC_TRAVERSE",
+                           "WFC_MAPTRAVERSE", "WFC_LOCKSTEP", "WFC_DEBUGCAM", "WFC_STARTVEHICLE",
+                           // [integration M05] Gameplay / Rendering harnesses written against the direct boot
+-                          "WFC_XFORMTEST", "WFC_MATCHTEST", "WFC_CAMTEST", "WFC_CHAOS", "WFC_TDMTEST", "WFC_ESCTEST", "WFC_MATCH",
++                          "WFC_XFORMTEST", "WFC_MATCHTEST", "WFC_CAMTEST", "WFC_CHAOS", "WFC_TDMTEST", "WFC_ESCTEST", "WFC_LATESEATTEST", "WFC_MATCH",
+                           "WFC_MATCH_URL", "WFC_RELOADTEST", "WFC_CAMSYNC", "WFC_MODEPLAYTEST", "WFC_FRONTENDSCENE",
+                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
+                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
+diff --git a/src/core/Application_LateSeatTest.cpp b/src/core/Application_LateSeatTest.cpp
+new file mode 100644
+index 00000000..44d5658a
+--- /dev/null
++++ b/src/core/Application_LateSeatTest.cpp
+@@ -0,0 +1,71 @@
++// WFC_LATESEATTEST (headless with WFC_NULLRENDER): join in progress through dormant reserved seats (World::queueLateSeat). Scenario A,
++// this machine at seat 0: a 5 v 5 Streets TDM (the player + 4 + 5 bots) with seat 1 reserved; the seat is invisible until it wakes on
++// the smaller (humans) team, a full team's last bot leaves for it, it spawns at once after its pick. Scenario B, this machine is the
++// joiner (its launch seat dormant): no spawn, spectating, then the wake + pick spawn the local pawn. One SUMMARY line.
++#include "core/Application.h"
++#include "core/Log.h"
++#include "game/World.h"
++
++namespace core {
++
++void Application::runLateSeatTest() {
++    const float dt = (float)clock_.stepSeconds();
++    int checks = 0, fails = 0;
++    auto check = [&](bool ok, const char* what) { ++checks; if (!ok) ++fails; LOG_INFO("LATESEAT %s %s", ok ? "PASS" : "FAIL", what); };
++    auto run = [&](float secs) { for (int k = 0; k < (int)(secs / dt); ++k) { platform::InputFrame none; world_.handleInput(none, dt); world_.tick(dt); } };
++    game::Match& m = world_.match();
++    auto launch = [&](int localSeat) {
++        game::MatchLaunch L;
++        game::MatchLaunch::fromURL("MP_IAC_Streets?GameModeTag=TDM?BotsFriendly=4?BotsEnemy=5", L);
++        game::RemoteSeat host; host.name = "Host"; host.team = 0; host.member = "HOST";
++        game::RemoteSeat reserved; reserved.dormant = true;
++        L.humans = {host, reserved};
++        L.localSeat = localSeat;
++        return world_.launchMatch(L);
++    };
++    auto count = [&](int team, bool bots) { int n = 0; for (const auto& p : m.players()) n += !p.dormant && p.team == team && (!bots || p.kind == game::ParticipantKind::Bot); return n; };
++    auto rows = [&] { return world_.hudState().scoreboard.size(); };
++
++    // ---- A: this machine at seat 0, seat 1 reserved
++    check(launch(0), "A: launch with a reserved seat (seat 1 dormant)");
++    check(m.players().size() == 11 && m.players()[1].dormant && m.players()[1].team == 255, "A: 11 participants, seat 1 dormant with no team");
++    check(rows() == 10 && count(0, false) == 5 && count(1, false) == 5, "A: the reserved seat is not listed or counted (5 v 5)");
++    check(world_.seatPlayer(1) == 1 && world_.seatPlayer(2) == -1, "A: seatPlayer: launch seats only");
++    run(11.0f);
++    check(m.state() == game::Match::State::InProgress && !m.players()[1].alive && m.players()[1].timeToRespawn < 0.0f, "A: the match started; the dormant seat never spawns");
++    check(world_.smallerTeam() == 1, "A: smallerTeam: both teams full -> the one with fewer humans (Decepticons)");
++    game::RemoteSeat joiner; joiner.name = "Joiner"; joiner.team = world_.smallerTeam(); joiner.member = "JOIN";
++    const uint32_t E = (uint32_t)world_.simTick() + 10;
++    world_.queueLateSeat(1, joiner, E);
++    run(0.5f);
++    check(!m.players()[1].dormant && m.players()[1].team == 1 && m.players()[1].name == "Joiner" && !m.players()[1].alive,
++          "A: at tick E the seat wakes on team 1 (no character yet: Choose Character)");
++    check(count(1, false) == 5 && count(1, true) == 4 && rows() == 10, "A: the full team's last bot left for the joiner (still 5 v 5, 10 listed)");
++    world_.queueSeatSelection(1, m.players()[0].selection, (uint32_t)world_.simTick() + 2);
++    run(0.5f);
++    bool spawned = false;
++    for (const game::MatchOpponent* o : world_.matchOpponents()) if (o->matchPlayer() == 1) spawned = o->spawned();
++    check(m.players()[1].alive && spawned, "A: the joiner spawns at once after its pick (no respawn wait)");
++    run(5.0f);
++    int retired = -1;
++    for (size_t i = 0; i < m.players().size(); ++i) if (m.players()[i].dormant) retired = (int)i;
++    check(retired >= 0 && !m.players()[(size_t)retired].alive, "A: the retired bot stays out (no respawn)");
++
++    // ---- B: this machine is the joiner
++    check(launch(1), "B: launch as the joiner (this machine's seat dormant)");
++    const int me = world_.localMatchPlayer();
++    check(me == 1 && m.players()[(size_t)me].dormant, "B: the local participant is the dormant seat 1");
++    run(11.0f);
++    check(world_.localPlayerDead() && !m.players()[(size_t)me].alive && m.spectating(me), "B: no local spawn; spectating before the wake");
++    check(rows() == 10, "B: the scoreboard lists the 10 real participants");
++    game::RemoteSeat self; self.name = "Me"; self.team = world_.smallerTeam(); self.member = "ME";
++    world_.queueLateSeat(1, self, (uint32_t)world_.simTick() + 5);
++    run(0.25f);
++    world_.queueSeatSelection(1, m.players()[0].selection, (uint32_t)world_.simTick() + 2);
++    run(0.5f);
++    check(!world_.localPlayerDead() && m.players()[(size_t)me].alive && m.players()[(size_t)me].team == self.team, "B: woken and picked: the local pawn spawns on its team");
++    LOG_INFO("LATESEAT SUMMARY: %d/%d checks passed", checks - fails, checks);
++    exitCode_ = fails ? 1 : 0;
++}
++
++} // namespace core
+diff --git a/src/game/Match.cpp b/src/game/Match.cpp
+index 244403d9..c685a69a 100644
+--- a/src/game/Match.cpp
++++ b/src/game/Match.cpp
+@@ -351,6 +351,7 @@ std::vector<KillFeedEntry> Match::killFeed() const {
+ }
+ 
+ bool Match::spectating(int p) const {
++    if (p >= 0 && (size_t)p < players_.size() && players_[(size_t)p].dormant) return true;   // a joiner before its wake
+     if (p < 0 || (size_t)p >= players_.size() || players_[(size_t)p].alive || deathTime_[(size_t)p] < 0.0f) return false;
+     return matchTime_ - deathTime_[(size_t)p] >= kMinRespawnDelay;
+ }
+@@ -500,6 +501,7 @@ void Match::endGame(int winnerPlayer, const std::string& reason) {
+ 
+ void Match::restartPlayer(int p) {
+     MatchPlayer& P = players_[(size_t)p];
++    if (P.dormant) { P.alive = false; P.timeToRespawn = -1.0f; return; }   // a reserved seat: nobody to spawn
+     if (!P.hasSelectedCharacter) { P.timeToRespawn = 0.1f; return; }   // CheckReadySpawn: no selection, no spawn (retry)
+     P.chassis = resolveChassis(P.selection, faction(p));
+     // CustomCharacterOptions.FindChassis: the chassis must resolve to a buildable body; no substitute exists.
+@@ -528,6 +530,24 @@ void Match::restartPlayer(int p) {
+     emit(MatchEvent::Type::PlayerSpawned, p, st, st >= 0 ? starts_[(size_t)st].actor : std::string());
+ }
+ 
++void Match::wakePlayer(int p, const std::string& name, const std::string& member, int team) {
++    if (p < 0 || (size_t)p >= players_.size()) return;
++    MatchPlayer& P = players_[(size_t)p];
++    P.dormant = false; P.name = name; P.sessionMember = member; P.team = team; P.alive = false;
++    P.hasSelectedCharacter = false;   // Choose Character first
++    // The joiner spawns at once (TnRespawnHelperWave TimeToAllowInstantInitialSpawns -1); Escalation (TnRespawnHelperRoundEnd): at once
++    // only within the first 30 s of the match, else at the end of the current wave; MatchOver / pending: no spawn here [RE join-in-progress].
++    P.timeToRespawn = state_ == State::InProgress && (!s_.survival || matchTime_ <= 30.0f) ? 0.0f : -1.0f;
++    LOG_INFO("MATCH join player=%d name=%s team=%d t=%.2f", p, name.c_str(), team, matchTime_);   // audit line
++}
++
++void Match::retirePlayer(int p) {
++    if (p < 0 || (size_t)p >= players_.size()) return;
++    MatchPlayer& P = players_[(size_t)p];
++    LOG_INFO("MATCH leave player=%d name=%s team=%d t=%.2f (a bot makes room for a joiner)", p, P.name.c_str(), P.team, matchTime_);
++    P.alive = false; P.dormant = true; P.team = 255; P.timeToRespawn = -1.0f;
++}
++
+ void Match::restartPlayerAt(int p, const core::Vec3& pos, float yaw) {
+     if (p < 0 || (size_t)p >= players_.size()) return;
+     if (directorStart_.size() < players_.size()) directorStart_.resize(players_.size(), -1);
+diff --git a/src/game/Match.h b/src/game/Match.h
+index 00643121..21dd3163 100644
+--- a/src/game/Match.h
++++ b/src/game/Match.h
+@@ -121,6 +121,7 @@ struct MatchPlayer {
+     // Killstreaks: PRI._CurrentKillStreak (+kills, reset by AddDeaths -> KillStreakEnded) and the controller's
+     // AcquiredKillstreaks stack (UpdateKillstreakRewards: FindKillstreak(Specialty, count); cleared at ClientGameEnded).
+     int currentKillStreak = 0;
++    bool dormant = false;              // online: a reserved seat no one holds yet (join in progress): no team, no spawn, not counted
+     bool directorSpawned = false;      // Escalation horde: spawned only by the director (never at the match start, never respawned)
+     std::vector<std::string> acquiredKillstreaks;
+ };
+@@ -223,6 +224,10 @@ public:
+     void endSurvival(const std::string& reason) { endGame(-1, reason); }
+     int drawInt(int n) { return randomInt(n); }
+     float drawFloat() { rng_ = rng_ * 1664525u + 1013904223u; return (float)((rng_ >> 8) & 0xFFFFFFu) / 16777216.0f; }
++    // Join in progress: a dormant seat wakes (name, member, team; no character: Choose Character, then an immediate spawn while
++    // InProgress) / a bot leaves for a joiner (despawned by the host first; dormant from here on).
++    void wakePlayer(int p, const std::string& name, const std::string& member, int team);
++    void retirePlayer(int p);
+     void requireCharacterSelection(int p) { if (p >= 0 && (size_t)p < players_.size()) players_[(size_t)p].hasSelectedCharacter = false; }
+     void tick(float dt);
+     // Rounds (CTF) and the attacking team (CTF: SingleFlagCTF; EXT: the bomb holder's team, set by the objective layer).
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index bfdae9ff..6eec0b82 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -2150,6 +2150,7 @@ void World::tickPrefix(float dt) {
+     joinStep();
+     applyQueuedRemoteCommands(dt);   // the Remote seats' commands for this step (main thread, after the background part joined)
+     tickSlotSwaps(dt);   // session slot handovers at their agreed tick (main thread, before any bot / pawn work)
++    applyPendingLateSeats();    // join in progress: dormant seats waking this tick (before their picks)
+     applyPendingSelections();   // online Choose Character picks due this tick (before spawns)
+     tickSeatMissiles(dt);   // the seats' guided missiles (every peer, by match player index)
+     static const bool secLog = std::getenv("WFC_ASYNCLOG") != nullptr;
+@@ -3149,11 +3150,12 @@ bool World::launchMatch(const MatchLaunch& l) {
+             me.name = l.humans[(size_t)ls].name; me.sessionMember = l.humans[(size_t)ls].member;
+             if (l.humans[(size_t)ls].selected) match_.selectCharacter(localPlayer_, l.humans[(size_t)ls].selection);   // as the remote seats
+             if (match_.settings().teamGame) me.team = svTeam >= 0 ? svTeam : l.humans[(size_t)ls].team;
++            if (l.humans[(size_t)ls].dormant) { me.dormant = true; me.team = 255; }   // the joiner: spectates until its seat wakes
+         }
+         std::vector<int> order(l.humans.size(), -1);
+         order[(size_t)ls] = localPlayer_;
+         for (size_t i = 0; i < l.humans.size(); ++i)
+-            if ((int)i != ls) { RemoteSeat h = l.humans[i]; if (svTeam >= 0) h.team = svTeam; order[i] = addRemoteParticipant(h, true); }
++            if ((int)i != ls) { RemoteSeat h = l.humans[i]; if (svTeam >= 0 && !h.dormant) h.team = svTeam; order[i] = addRemoteParticipant(h, true); }
+         match_.reorderPlayers(order);
+         std::vector<int> newOf(order.size());
+         for (size_t i = 0; i < order.size(); ++i) newOf[(size_t)order[i]] = (int)i;
+@@ -3161,6 +3163,7 @@ bool World::launchMatch(const MatchLaunch& l) {
+         for (MatchOpponent* o : opponents_) o->setMatchPlayer(newOf[(size_t)o->matchPlayer()]);
+         rebuildOppIndex();
+         remoteIdle_.assign(match_.players().size(), 0.0f);
++        launchHumans_ = (int)l.humans.size();
+         LOG_INFO("session: %zu humans in the host's seat order, this machine at seat %d", l.humans.size(), ls);
+     } else
+         for (const RemoteSeat& r : l.remotes) { RemoteSeat h = r; if (svTeam >= 0) h.team = svTeam; addRemoteParticipant(h, svTeam >= 0); }   // online: the other peers' humans (before the bot fill counts them)
+@@ -3354,7 +3357,7 @@ int World::addBots(const BotLaunch& launch) {
+     const MatchSettings& s = match_.settings();
+     std::vector<std::string> taken;
+     int humans = 0;
+-    for (const MatchPlayer& p : match_.players()) { taken.push_back(p.name); humans += p.kind != ParticipantKind::Bot; }
++    for (const MatchPlayer& p : match_.players()) { taken.push_back(p.name); humans += p.kind != ParticipantKind::Bot && !p.dormant; }
+     const int humanTeam = refPlayer >= 0 ? match_.players()[(size_t)refPlayer].team : 0;
+     static unsigned matchSeed = 0x5eed;
+     // WFC_SEED (DEV / TEST only): offsets every bot / spawn random source so two runs can be compared or varied; unset = unchanged.
+@@ -3407,6 +3410,7 @@ int World::addRemoteParticipant(const RemoteSeat& r, bool exactTeam) {
+         MatchPlayer& mp = match_.playerMutable(p);
+         mp.kind = ParticipantKind::Remote;
+         mp.sessionMember = r.member;
++        if (r.dormant) { mp.dormant = true; mp.team = 255; }
+     }
+     if (r.selected) match_.selectCharacter(p, r.selection);
+     const MatchPlayer& mp = match_.players()[(size_t)p];
+@@ -3883,6 +3887,53 @@ void World::tickSeatMissiles(float dt) {
+     }
+ }
+ 
++void World::queueLateSeat(int seat, const RemoteSeat& r, uint32_t atTick) {
++    if ((int64_t)atTick <= (int64_t)simTick_) LOG_WARN("session: seat %d join for tick %u arrived at tick %lld: applied at the next step", seat, atTick, (long long)simTick_);
++    PendingLateSeat p{seat, atTick, r};
++    auto it = std::upper_bound(pendingLateSeats_.begin(), pendingLateSeats_.end(), p, [](const PendingLateSeat& a, const PendingLateSeat& b) {
++        return a.tick != b.tick ? a.tick < b.tick : a.seat < b.seat; });
++    pendingLateSeats_.insert(it, p);
++}
++
++void World::applyPendingLateSeats() {
++    size_t n = 0;
++    for (; n < pendingLateSeats_.size() && (int64_t)pendingLateSeats_[n].tick <= (int64_t)simTick_; ++n) {
++        const PendingLateSeat& q = pendingLateSeats_[n];
++        if (!matchActive_ || seatPlayer(q.seat) < 0 || !match_.players()[(size_t)q.seat].dormant) { LOG_WARN("session: seat %d join refused (not a dormant seat)", q.seat); continue; }
++        const int team = match_.settings().teamGame ? q.r.team : 255;
++        if (team == 0 || team == 1) {   // a team full with bot fill: its last bot leaves (despawned, dormant) so the joiner takes its place
++            int count = 0, lastBot = -1;
++            for (size_t i = 0; i < match_.players().size(); ++i) {
++                const MatchPlayer& mp = match_.players()[i];
++                if (mp.dormant || mp.team != team) continue;
++                ++count;
++                if (mp.kind == ParticipantKind::Bot && !mp.directorSpawned) lastBot = (int)i;
++            }
++            if (count >= match_.settings().maxPerTeam && lastBot >= 0) {
++                for (MatchOpponent* o : opponents_) if (o->matchPlayer() == lastBot && o->spawned()) o->despawn();
++                match_.retirePlayer(lastBot);
++            }
++        }
++        match_.wakePlayer(q.seat, q.r.name, q.r.member, team);
++        if (remoteIdle_.size() > (size_t)q.seat) remoteIdle_[(size_t)q.seat] = 0.0f;
++        LOG_INFO("session: seat %d (%s) joined at tick %lld on team %d%s", q.seat, q.r.name.c_str(), (long long)simTick_, team, q.seat == localPlayer_ ? " (this machine)" : "");
++    }
++    if (n) pendingLateSeats_.erase(pendingLateSeats_.begin(), pendingLateSeats_.begin() + (long)n);
++}
++
++int World::smallerTeam() const {
++    int n[2] = {0, 0}, h[2] = {0, 0};
++    for (const MatchPlayer& mp : match_.players()) {
++        if (mp.dormant || (mp.team != 0 && mp.team != 1)) continue;
++        ++n[mp.team];
++        h[mp.team] += mp.kind != ParticipantKind::Bot;
++    }
++    const int cap = match_.settings().maxPerTeam;
++    if (n[0] != n[1] && !(n[0] >= cap && n[1] >= cap)) return n[0] < n[1] ? 0 : 1;
++    if (h[0] != h[1]) return h[0] < h[1] ? 0 : 1;
++    return 0;
++}
++
+ void World::queueSeatSelection(int seat, const CharacterSelection& sel, uint32_t atTick) {
+     if ((int64_t)atTick <= (int64_t)simTick_) LOG_WARN("session: p%d pick for tick %u arrived at tick %lld: applied at the next step", seat, atTick, (long long)simTick_);
+     PendingSelection p{seat, atTick, sel};
+@@ -3947,7 +3998,7 @@ void World::clearAllParticipants() {
+     for (size_t i = 0; i < actors_.size();) { if (!actors_[i]->alive()) { actors_[i] = std::move(actors_.back()); actors_.pop_back(); } else ++i; }
+     match_.truncatePlayers(0);
+     localPlayer_ = -1;
+-    bots_.clear(); smart_.clear(); anySmart_ = false; remoteIdle_.clear(); seatLocks_.clear(); pendingSelections_.clear();
++    bots_.clear(); smart_.clear(); anySmart_ = false; remoteIdle_.clear(); seatLocks_.clear(); pendingSelections_.clear(); pendingLateSeats_.clear(); launchHumans_ = 0;
+ }
+ 
+ uint64_t World::simStateHash() const {
+@@ -4160,6 +4211,7 @@ HudGameState World::hudState() const {
+     h.killFeed = match_.killFeed();
+     for (size_t i = 0; i < match_.players().size(); ++i) {
+         const MatchPlayer& p = match_.players()[i];
++        if (p.dormant) continue;   // a reserved seat is nobody yet
+         h.scoreboard.push_back({(int)i, p.name, p.team, p.score, p.kills, p.deaths, p.assists, p.alive, (int)i == localPlayer_});
+     }
+     h.modeTag = match_.settings().modeTag;
+@@ -8605,6 +8657,7 @@ void World::gibCorpse(Corpse& c) {
+ bool World::specValid(int p) const {
+     if (p < 0 || p == localPlayer_ || (size_t)p >= match_.players().size() || !match_.players()[(size_t)p].alive) return false;
+     if (!participantPawn(p)) return false;
++    if (match_.players()[(size_t)localPlayer_].dormant) return true;   // a joiner before its wake follows anyone
+     return match_.sameTeam(p, localPlayer_) || (specKillerOk_ && p == specKiller_);
+ }
+ 
+diff --git a/src/game/World.h b/src/game/World.h
+index dcc43450..4796f91f 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -61,7 +61,8 @@ namespace game {
+ // "MP_IAC_Streets_Base_m?Game=TransContent.TnVersusGame?GameModeTag=TDM?PointsToWin=40?TimeLimit=900.00..."
+ // [CONF RE MILESTONE05_FRONTEND_MATCH_BOOTSTRAP §3.1 / §5.1]. Missing keys keep the TnOnlineGameSettings defaults.
+ // Online (Frontend's session layer, PC EXTENSION): another peer's human in this match -> a ParticipantKind::Remote participant.
+-struct RemoteSeat { std::string name; int team = 255; std::string member; CharacterSelection selection; bool selected = false; };
++struct RemoteSeat { std::string name; int team = 255; std::string member; CharacterSelection selection; bool selected = false;
++                    bool dormant = false; };   // dormant: a reserved seat for join in progress (no team / spawn until queueLateSeat)
+ // A slot handover the session agreed (frontend::SessionSlotSwap in game terms). matchPlayer < 0: found by member (sessionMember).
+ // toBot: Remote -> Bot; else Bot -> Remote (late join, member = who takes it). atTick: World::simTick() to apply at (<= 0: next tick).
+ struct SlotSwap { int matchPlayer = -1; bool toBot = true; std::string member; int64_t atTick = 0; };
+@@ -1259,6 +1260,10 @@ private:
+     std::vector<SeatLock> seatLocks_;   // per seat (match player index): the homing lock
+     void tickSeatLock(int p, const Character& pc, const core::Vec3& eye, const core::Vec3& fwd, float dt);
+     struct PendingSelection { int seat; uint32_t tick; CharacterSelection sel; };
++    struct PendingLateSeat { int seat; uint32_t tick; RemoteSeat r; };
++    std::vector<PendingLateSeat> pendingLateSeats_;   // by (tick, seat)
++    int launchHumans_ = 0;                            // the launch's humans (dormant seats included)
++    void applyPendingLateSeats();
+     std::vector<PendingSelection> pendingSelections_;   // by (tick, seat); applied in the step prefix
+     void applyPendingSelections();
+     bool pbSandbox_ = false;            // online: the player bot's brain is running (input only: its actions become presses)
+@@ -1593,6 +1598,13 @@ public:
+     int seatLockTarget(int p) const { return p >= 0 && (size_t)p < seatLocks_.size() && seatLocks_[(size_t)p].locked ? seatLocks_[(size_t)p].target : -1; }
+     // Online Choose Character: apply seat's pick at sim tick atTick (every peer the same tick; the net driver delivers it before).
+     void queueSeatSelection(int seat, const CharacterSelection& sel, uint32_t atTick);
++    // Join in progress (Systems' driver, every peer, before the step of atTick): the dormant seat wakes as r (name, member, the host's
++    // team); a team full with bot fill retires its last bot at the same tick. seatPlayer: the match player of a launch seat (seat i =
++    // player i; -1 past the launch's humans). smallerTeam (host): fewer non-dormant participants (bots included); a tie or both full:
++    // fewer humans; then team 0. No RNG.
++    void queueLateSeat(int seat, const RemoteSeat& r, uint32_t atTick);
++    int seatPlayer(int seat) const { return seat >= 0 && seat < launchHumans_ ? seat : -1; }
++    int smallerTeam() const;
+     const SeatMissile* seatMissile(int p) const { return p >= 0 && (size_t)p < seatMissiles_.size() ? &seatMissiles_[(size_t)p] : nullptr; }
+     const RollerMine& rollerMine() const;   // the local player's (HUD / tests)
+     const std::vector<KamikazeMine>& kamikazeMines() const { return mines_; }
