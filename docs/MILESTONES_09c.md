@@ -4142,3 +4142,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the world at 12 s: the intro start stands over a void (the original holds / teleports the players during IntroCine).
   Campaign-wide gap: SeqAct_Teleport unimplemented (A1 60 ... D3B 39 refs). GO: Teleport + the D3B intro hold (RE asked;
   PROV cinematic hold), one CAMPAIGNTEST + one D3B run, FINAL_BASE_ITEMS 11.
+2026-10-23 17:14 MERGED 8a60a840 build_slim '_' folder rule (Systems; guard dry-run PASS for 10 chapters; base ~17.7 GB + HD pack ~21.7 GB).
+  Post-build item: ~2.1 GB duplicate campaign PNGs (shared texture pool). PACKAGE HEAD 8a60a840 pending Gameplay's
+  Teleport patch.
