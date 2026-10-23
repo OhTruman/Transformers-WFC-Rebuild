@@ -3891,3 +3891,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   with 34 mover-attached lift cells + 3,531 campaign_fill cells + the 92.6 m airborne_drop link; 27 / 27 starts on the nav;
   no air nav: over the 6 GB cap). The remaining 8 chapters run as one background chain in play order. D5 calibration =
   Rendering's corrected sun fit.
+2026-10-23 07:50 MERGED c428f6f9 campaign Resume (per-faction checkpoint saves + Resume rows), c51ff8c7 campaign runtime 3 (pawn
+  factories: 26 TnActorFactoryAI pooled, All Pawns Spawned, TF_Vehicle override; the in-map pick swaps the squad member;
+  CAMPAIGNTEST 24 / 24; OmegaSupreme + the 4 battery destructibles held latent -> AssetTools exports), the CO1 co-op lobby
+  test (passes without frontend changes). Gameplay next: mover nav + A1 boot, AI ops, Matinee, conversations, movies, forms,
+  restore, co-op humans.
