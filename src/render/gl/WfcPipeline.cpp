@@ -3076,7 +3076,17 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         }
     }
     if (pbrBuild_) fs += kFSPbrHelpers;                    // (M6 Modern: the pbr body's globals / mapping)
+    // (the translated material graphs' Power: UE3 compiles it to ClampedPow, pow(max(abs(X), 1e-6), Y). GLSL leaves pow(0, Y < 0)
+    // undefined - inf / NaN on AMD: WEP_Barrier_Defrag_MATINST's Fresnel pow((1 - N.V) x 3, -0.3) drew a flat saturated cyan sheet in
+    // Escalation. RE (shipped microcode, ENV_ForceField_Defrag_MAT PS 31c1c988): every pow is MAX(abs(x), 1e-6) -> LOG -> MUL -> EXP,
+    // so all exponents take the clamp; the translator's own max(x, 0) still hides the abs for negative bases - a matc follow-up)
+    fs += "float wfcPowM(float x, float y) { return pow(max(abs(x), 1e-6), y); }\n"
+          "vec2 wfcPowM(vec2 x, vec2 y) { return vec2(wfcPowM(x.x, y.x), wfcPowM(x.y, y.y)); }\n"
+          "vec3 wfcPowM(vec3 x, vec3 y) { return vec3(wfcPowM(x.xy, y.xy), wfcPowM(x.z, y.z)); }\n"
+          "vec4 wfcPowM(vec4 x, vec4 y) { return vec4(wfcPowM(x.xyz, y.xyz), wfcPowM(x.w, y.w)); }\n"
+          "#define pow wfcPowM\n";
     fs += "void wfcMaterial(in MatIn m, out MatOut o) {\n" + code + "\n}\n";
+    fs += "#undef pow\n";
     fs += kFSPrologue;
     // Directional lightmap specular (TBasePassPixelShader<FDirectional(Interpolated)TextureLightMapPolicy> microcode, Rust /
     // Streets / Gorge shader caches, emulated per material against the translation: work/re/lmspec_verify.py):
