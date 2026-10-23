@@ -34,6 +34,7 @@ uniform vec3 uSmokeDirL[3];   // its direct lights: towards the light
 uniform vec3 uSmokeDirC[3];   // colour x attenuation x visibility
 uniform vec3 uSmokeInvRef;    // 1 / E_ref per channel
 uniform vec4 uSmokeFlow;      // x amplitude (UV), y spatial frequency (1/m), z speed, w = 1 on
+uniform int uSmokeDebug;      // WFC_SMOKEDEBUG=1: the smoke pixels show E / E_ref x 0.5 (opaque), the lighting response itself
 float wfcSmokePhase(vec3 L) { // Henyey-Greenstein, g = 0.3, x 4 pi (isotropic = 1): forward scattering towards the eye
     const float g = 0.3;
     float c = dot(-L, normalize(uCamPos - vPos));
@@ -58,6 +59,7 @@ void main() {
     MatOut w = o; w.DiffuseColor = vec3(1.0); w.SpecularColor = vec3(0.0);
     if (uTLN > 0 || uTLAllN > 0) E += wfcTransientLights(normalize(uCamPos - vPos), w);
     vec3 c = o.EmissiveColor * (E * uSmokeInvRef);
+    if (uSmokeDebug != 0) { if (o.Opacity < 0.02) discard; oColor = vec4(E * uSmokeInvRef * 0.5, 1.0); return; }
     wfcTranslucentOut(c, o.Opacity);
     c = wfcCanvasOut(wfcFog(c));
     oColor = vec4(c, clamp(o.Opacity, 0.0, 1.0));
@@ -164,6 +166,8 @@ void Pipeline::bindSmoke(const Program& P) {
     Uniform3f(cachedUniformLocation(P.id, "uSmokeInvRef"), inv.x, inv.y, inv.z);
     static const float flowAmp = std::getenv("WFC_SMOKEFLOW") ? (float)std::atof(std::getenv("WFC_SMOKEFLOW")) : 0.035f;
     Uniform4f(cachedUniformLocation(P.id, "uSmokeFlow"), flowAmp, 0.45f, 0.6f, P.smokeFlow && flowAmp > 0.0f ? 1.0f : 0.0f);
+    static const int debug = std::getenv("WFC_SMOKEDEBUG") ? 1 : 0;
+    Uniform1i(cachedUniformLocation(P.id, "uSmokeDebug"), debug);
 }
 
 // the Smoke row; WFC_SMOKE=0|1 overrides it (harness runs)
