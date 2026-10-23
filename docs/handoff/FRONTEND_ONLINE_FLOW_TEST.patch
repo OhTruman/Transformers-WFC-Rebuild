@@ -1,0 +1,132 @@
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index c8b5f7d..07bdcb5 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -242,6 +242,7 @@ bool Application::init() {
+     if (std::getenv("WFC_SESSIONTEST")) { runSessionTest(); return false; }          // online session match side (Remote / swaps)
+     if (std::getenv("WFC_VOICEFRAMETEST")) { runVoiceFrameTest(); return false; }   // [Systems] voice framer + codec, synthetic, no device
+     if (std::getenv("WFC_UDPSESSIONTEST")) { runUdpSessionTest(); return false; }   // [Systems] the real online session on loopback UDP
++    if (std::getenv("WFC_ONLINEFLOWTEST")) { runOnlineFlowTest(); return false; }   // [Frontend] two frontend flows on real UdpSessions
+     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
+     if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
+     if (std::getenv("WFC_BOTTEST")) { runBotTest(); return false; }                 // offline bots: TDM human + bots, then 7 v 8
+diff --git a/src/core/Application.h b/src/core/Application.h
+index 1f6c261..ee53a97 100644
+--- a/src/core/Application.h
++++ b/src/core/Application.h
+@@ -37,6 +37,7 @@ private:
+     static bool netMatchRequested();
+     void runVoiceFrameTest();   // [Systems] WFC_VOICEFRAMETEST: the voice framer on synthetic input (no device)
+     void runUdpSessionTest();   // [Systems] WFC_UDPSESSIONTEST: two UdpSessions in this process over loopback UDP (host / join / lobby / start / load gate / leave)
++    void runOnlineFlowTest();   // [Frontend] WFC_ONLINEFLOWTEST: two frontend flows, each on a real UdpSession, over loopback UDP
+     int exitCode_ = -1;        // [Systems] set by the headless / net runs (main returns it when init stops); -1 = the default
+ public:
+     int exitCode() const { return exitCode_; }
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 6e2a76d..9724c8a 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -3,6 +3,7 @@
+ // process loop: frontend frames, loading the match world the flow launches, and releasing it on return.
+ #include "core/Application.h"
+ #include "net/NetMatchDriver.h"
++#include "net/UdpSession.h"
+ #include "core/FrameProfile.h"
+ #include "core/FrontendSceneGL.h"
+ #include "core/LoadYield.h"
+@@ -587,7 +588,7 @@ bool Application::wantsFrontendBoot() {
+                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
+                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
+                           "WFC_VEHTEST", "WFC_FOVTEST", "WFC_SCREENTEST", "WFC_TILETEST", "WFC_MODETEST", "WFC_CHASSISTEST",
+-                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
++                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_ONLINEFLOWTEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
+                           "WFC_SPAWNFILLTEST", "WFC_EXTRABODYTEST", "WFC_DOUBLEJUMPTEST",
+                           "WFC_DETERMINISMTEST", "WFC_WEAPONAUDIT", "WFC_VEHFRAMETEST", "WFC_VEHICLEAUDIT", "WFC_QABOTTEST", "WFC_MARKERSTEST", "WFC_STUCKSPOT_BOT", "WFC_ASYNCSTEPTEST", "WFC_ENGAGETEST", "WFC_EVICTTEST", "WFC_BARRIERWALKTEST"})   // [integration 09c] Gameplay 26d / 26h / 26k harnesses
+         if (std::getenv(v)) return false;
+@@ -1868,3 +1869,86 @@ static_assert(core::HasQaApi<game::World>::value, "World QA API");
+ static_assert(core::HasQaSwap<game::World>::value, "World::qaCharacterChoices / qaSetCharacter");
+ static_assert(core::HasAwardFeed<game::World>::value, "World::drainXpAwards / drainStatAwards");
+ 
++
++// WFC_ONLINEFLOWTEST [Frontend] (no window, no device, loopback only: 127.0.0.1 binds, no firewall prompt, no UPnP / STUN): two
++// FrontendRuntimes in this process, each with a real net::UdpSession - the GameFlow paths the menus drive, end to end over UDP.
++// Host: Private Match (Online.HostPrivateNow) -> the hosted game lobby with a LAN code; member: Online.JoinGame(code) -> the
++// member's game lobby; both see both members; the host picks the map and starts (Online.BeginLobbyExitCountdown) -> both
++// travel to the same match URL with the same seed and the host's slots; the member quits -> the host sees it leave. One
++// SUMMARY line. Run it from a scratch folder (both flows write wfc_profile.ini there).
++void core::Application::runOnlineFlowTest() {
++    int fails = 0;
++    auto check = [&fails](bool ok, const std::string& what) { LOG_INFO("ONLINEFLOWTEST %s: %s", ok ? "PASS" : "FAIL", what.c_str()); if (!ok) ++fails; };
++    net::UdpSession::Options o;
++    o.bindIp = "127.0.0.1"; o.hostPort = 14140; o.joinTimeoutS = 3.0;
++    o.internet = false;
++    frontend::FrontendRuntime A, B;
++    const bool initA = A.init(), initB = B.init();
++    check(initA && initB, "both frontend runtimes initialise");
++    if (!initA || !initB) { LOG_INFO("ONLINEFLOWTEST SUMMARY: %d failure(s)", fails + 1); return; }
++    for (frontend::FrontendRuntime* r : {&A, &B}) r->flow().profile().onlineFirstRunShown = true;   // the one-time prompt is not under test
++    A.flow().setSession(std::make_unique<net::UdpSession>(o));
++    B.flow().setSession(std::make_unique<net::UdpSession>(o));
++    frontend::GameFlow& a = A.flow();
++    frontend::GameFlow& b = B.flow();
++    auto last = std::chrono::steady_clock::now();
++    auto pump = [&](double forS, const std::function<bool()>& until) {
++        const auto end = std::chrono::steady_clock::now() + std::chrono::duration<double>(forS);
++        platform::InputFrame none;
++        while (std::chrono::steady_clock::now() < end) {
++            const auto t = std::chrono::steady_clock::now();
++            const float dt = std::clamp((float)std::chrono::duration<double>(t - last).count(), 0.001f, 0.05f);
++            last = t;
++            A.update(none, dt);
++            B.update(none, dt);
++            if (until && until()) return true;
++            std::this_thread::sleep_for(std::chrono::milliseconds(2));
++        }
++        return false;
++    };
++    using L = frontend::LevelKind;
++    using Role = frontend::GameFlow::SessionRole;
++    const bool started = pump(20.0, [&] { return a.frontEndStarted() && b.frontEndStarted(); });
++    check(started, "both reach the main menu");
++    a.call("Online.OpenPartyLobby", {"GTS_TeamGame"});
++    b.call("Online.OpenPartyLobby", {"GTS_TeamGame"});
++    check(pump(10.0, [&] { return a.level() == L::PartyLobby && b.level() == L::PartyLobby && !a.loading().active && !b.loading().active; }),
++          "both in the party lobby");
++    a.call("Online.HostPrivateNow", {});
++    const bool hosted = pump(10.0, [&] { return a.level() == L::GameLobby && !a.loading().active && a.sessionRole() == Role::Host && !a.joinCode().empty(); });
++    check(hosted, "host: Private Match -> the hosted game lobby with a join code (" + a.joinCode() + ")");
++    // The LAN code carries the PC's LAN address; the test binds loopback only, so the member types the host's address (the
++    // Join Game prompt takes a code or an address; the code's own round trip is WFC_UDPSESSIONTEST's).
++    b.call("Online.JoinGame", {"127.0.0.1:" + std::to_string(o.hostPort)});
++    const bool joined = pump(10.0, [&] { return b.level() == L::GameLobby && !b.loading().active && b.sessionRole() == Role::Member; });
++    check(joined, "member: Join Game with the host's address -> the member's game lobby");
++    check(pump(5.0, [&] { return a.onlineMembers().size() == 1 && b.onlineMembers().size() == 1; }),   // onlineMembers: the others
++          "each lists the other (host " + std::to_string(a.onlineMembers().size()) + ", member " + std::to_string(b.onlineMembers().size()) + ")");
++    pump(2.5, nullptr);   // the lobby's Select Map selector sends its own first SetSelectedMapID when its list fills
++    a.call("Online.SetSelectedMapID", {"508"});
++    a.call("Online.BeginLobbyExitCountdown", {});
++    // Both start loading the match map (no world loads in this test, so the flows stay on the map's loading screen).
++    auto loadingMap = [](frontend::GameFlow& g) { return g.loading().active && g.loading().kind == "Map" && !g.currentMatch().url.map().empty(); };
++    const bool launched = pump(30.0, [&] { return loadingMap(a) && loadingMap(b); });
++    check(launched, "the host's start takes both flows to the match map's loading screen");
++    if (launched) {
++        const frontend::MatchLaunch& ma = a.currentMatch();
++        const frontend::MatchLaunch& mb = b.currentMatch();
++        check(ma.mapId == 508 && mb.mapId == 508 && ma.modeTag == mb.modeTag, "same map and mode on both (" + ma.modeTag + " " + std::to_string(mb.mapId) + ")");
++        check(ma.seed != 0 && ma.seed == mb.seed, "the host's seed on both (" + std::to_string(ma.seed) + " / " + std::to_string(mb.seed) + ")");
++        check(ma.onlineSlots.size() == mb.onlineSlots.size() && !ma.onlineSlots.empty(), "the host's slots on both (" + std::to_string(mb.onlineSlots.size()) + ")");
++        // The load gate, as the Application drives it: matchLoaded() once the world is in. The host loads first and waits
++        // (its loading screen stays up) until the member has loaded too; then both enter the match.
++        a.matchLoaded();
++        pump(1.0, nullptr);
++        check(a.level() == L::Match && a.loading().active, "load gate: the host waits on its loading screen for the member");
++        b.matchLoaded();
++        check(pump(5.0, [&] { return !a.loading().active && !b.loading().active && b.level() == L::Match; }),
++              "load gate: both released into the match once both have loaded");
++    }
++    b.call("Game.QuitToMainMenu", {});
++    b.popupButton('A');
++    const bool left = pump(10.0, [&] { return b.sessionRole() == Role::Offline && a.onlineMembers().empty(); });
++    check(left, "member quits: offline again, the host lists nobody else");
++    LOG_INFO("ONLINEFLOWTEST SUMMARY: %d failure(s)", fails);
++}
