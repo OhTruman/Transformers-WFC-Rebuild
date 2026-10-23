@@ -581,6 +581,9 @@ void Application::runUdpSessionMatch() {
     if (hostPort) o.hostPort = std::atoi(hostPort);
     o.memberPort = (int)env("WFC_UDPBIND", 0);
     net::UdpSession s(o);
+    // WFC_UDPSERVICE=<ip:port>: the lobby service (tools/net/lobby_service.py) - the host registers (its code is logged), a member joins by
+    // the 6-letter code (WFC_UDPJOIN=<code>); with WFC_NET_DIRECT_DROP=1 the two reach each other only through its relay.
+    if (const char* svc = std::getenv("WFC_UDPSERVICE")) s.setLobbyService(svc);
     frontend::SessionMemberInfo mi;
     mi.displayName = hostPort ? "UdpHost" : "UdpMember";
     mi.hasCharacter = true; mi.characterSlot = "Soldier";
@@ -624,6 +627,7 @@ void Application::runUdpSessionMatch() {
         s.setLaunch(url, seed, lobby);
         s.requestStart();
     } else if (joinAddr) {
+        if (std::getenv("WFC_UDPSERVICE")) pump(1.0, nullptr);   // the service address resolves (a code join needs it)
         s.join(joinAddr);
         if (std::getenv("WFC_UDPLATEJOIN")) {   // join in progress: the lobby says the match runs -> ask for a Reserved seat
             if (!pump(60.0, [&] { return has(T::MatchInProgress) || has(T::Joined) || has(T::JoinFailed); }) || !has(T::MatchInProgress)) {

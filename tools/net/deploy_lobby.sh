@@ -20,4 +20,4 @@ systemctl restart wfc-lobby
 sleep 1
 systemctl --no-pager --lines=5 status wfc-lobby
 EOF
-echo "deployed to $TARGET: UDP 14010"
+echo "deployed to $TARGET: UDP 14010 (lobby) + 14011 (relay) - open both in the VPS firewall"

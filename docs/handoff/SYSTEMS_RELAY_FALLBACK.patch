@@ -1,0 +1,360 @@
+diff -ruN a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+--- a/src/core/Application_Frontend.cpp	2026-10-23 06:16:13.594438400 -0500
++++ b/src/core/Application_Frontend.cpp	2026-10-23 06:16:13.623537800 -0500
+@@ -629,7 +629,7 @@
+                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
+                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
+                           "WFC_VEHTEST", "WFC_FOVTEST", "WFC_SCREENTEST", "WFC_TILETEST", "WFC_MODETEST", "WFC_CHASSISTEST",
+-                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_CAMPAIGNAUDIOTEST", "WFC_UDPHOST", "WFC_UDPJOIN", "WFC_UDPLEAVE_AT", "WFC_LOADDELAY_MS", "WFC_ONLINEFLOWTEST", "WFC_SOLOLAUNCHTEST", "WFC_VOICETEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
++                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_CAMPAIGNAUDIOTEST", "WFC_UDPHOST", "WFC_UDPJOIN", "WFC_UDPLEAVE_AT", "WFC_UDPSERVICE", "WFC_LOADDELAY_MS", "WFC_ONLINEFLOWTEST", "WFC_SOLOLAUNCHTEST", "WFC_VOICETEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
+                           "WFC_SPAWNFILLTEST", "WFC_EXTRABODYTEST", "WFC_DOUBLEJUMPTEST",
+                           "WFC_DETERMINISMTEST", "WFC_WEAPONAUDIT", "WFC_VEHFRAMETEST", "WFC_VEHICLEAUDIT", "WFC_QABOTTEST", "WFC_MARKERSTEST", "WFC_STUCKSPOT_BOT", "WFC_ASYNCSTEPTEST", "WFC_ENGAGETEST", "WFC_EVICTTEST", "WFC_BARRIERWALKTEST"})   // [integration 09c] Gameplay 26d / 26h / 26k harnesses
+         if (std::getenv(v)) return false;
+diff -ruN a/src/core/Application_Net.cpp b/src/core/Application_Net.cpp
+--- a/src/core/Application_Net.cpp	2026-10-23 06:16:13.593435100 -0500
++++ b/src/core/Application_Net.cpp	2026-10-23 06:16:13.622535000 -0500
+@@ -581,6 +581,9 @@
+     if (hostPort) o.hostPort = std::atoi(hostPort);
+     o.memberPort = (int)env("WFC_UDPBIND", 0);
+     net::UdpSession s(o);
++    // WFC_UDPSERVICE=<ip:port>: the lobby service (tools/net/lobby_service.py) - the host registers (its code is logged), a member joins by
++    // the 6-letter code (WFC_UDPJOIN=<code>); with WFC_NET_DIRECT_DROP=1 the two reach each other only through its relay.
++    if (const char* svc = std::getenv("WFC_UDPSERVICE")) s.setLobbyService(svc);
+     frontend::SessionMemberInfo mi;
+     mi.displayName = hostPort ? "UdpHost" : "UdpMember";
+     mi.hasCharacter = true; mi.characterSlot = "Soldier";
+@@ -624,6 +627,7 @@
+         s.setLaunch(url, seed, lobby);
+         s.requestStart();
+     } else if (joinAddr) {
++        if (std::getenv("WFC_UDPSERVICE")) pump(1.0, nullptr);   // the service address resolves (a code join needs it)
+         s.join(joinAddr);
+         if (std::getenv("WFC_UDPLATEJOIN")) {   // join in progress: the lobby says the match runs -> ask for a Reserved seat
+             if (!pump(60.0, [&] { return has(T::MatchInProgress) || has(T::Joined) || has(T::JoinFailed); }) || !has(T::MatchInProgress)) {
+diff -ruN a/src/net/NetTransport.h b/src/net/NetTransport.h
+--- a/src/net/NetTransport.h	2026-10-23 06:16:13.590424600 -0500
++++ b/src/net/NetTransport.h	2026-10-23 06:16:13.615510900 -0500
+@@ -43,6 +43,14 @@
+     // Out-of-band datagrams to / from addresses that have no seat yet (JOIN before the host seats the member; LAN discovery):
+     // sent unframed (kind 3), delivered with the sender's address instead of a seat.
+     virtual bool sendTo(const std::string& /*hostPort*/, const uint8_t* /*p*/, size_t /*n*/) { return false; }
++    // [Systems] The relay fallback (SYSTEMS_RELAY.md): through the lobby service's relay, addresses "relay:<id>" are peers like any
++    // other (a send wraps the datagram for the relay; what arrives through it is presented as from "relay:<src>"). relayHostPort =
++    // the service's IP + its relay port; room = the lobby's token; selfId = this client's id (1 = the room's host). addInfra: an
++    // endpoint that is not a peer (the lobby service) - WFC_NET_DIRECT_DROP=1 (TEST ONLY: two symmetric NATs on loopback) drops every
++    // datagram that is neither through the relay nor to / from an infra endpoint.
++    virtual void setRelay(const std::string& /*relayHostPort*/, uint64_t /*room*/, uint32_t /*selfId*/) {}
++    virtual uint32_t relayId() const { return 0; }
++    virtual void addInfra(const std::string& /*hostPort*/) {}
+     virtual bool pollStranger(std::string& /*fromHostPort*/, std::vector<uint8_t>& /*data*/) { return false; }
+     // A datagram exactly as given (no framing byte): the STUN query from this socket (its reply comes back via pollStranger).
+     virtual bool sendRaw(const std::string& /*hostPort*/, const uint8_t* /*p*/, size_t /*n*/) { return false; }
+diff -ruN a/src/net/UdpSession.cpp b/src/net/UdpSession.cpp
+--- a/src/net/UdpSession.cpp	2026-10-23 06:16:13.591428600 -0500
++++ b/src/net/UdpSession.cpp	2026-10-23 06:16:13.616012300 -0500
+@@ -43,6 +43,7 @@
+     kDiscover = 0x53, kAnnounce = 0x54, kPing = 0x55, kPong = 0x56,   // out of band: LAN discovery, candidate pings
+ };
+ constexpr double kSearchCollectS = 1.0, kPingRoundS = 0.3;
++constexpr double kRelayAfterS = 3.0;   // a joiner falls back to the relay after this long without a direct answer
+ constexpr double kLateLoadS = 120.0;   // a late joiner's map load (a cold first load of a map can take 30-60 s) before it is dropped
+ constexpr int kNoSession = 255;   // a Reserved match seat nobody holds yet (the match seat table's placeholder)
+ constexpr int kPingRounds = 3, kMaxPingMs = 250;
+@@ -316,6 +317,7 @@
+ 
+ // ---- join ----
+ void UdpSession::join(const std::string& target) {
++    relayHostAlias_.clear();
+     if (role_ != Role::Offline) leave();
+     std::vector<std::string> cands;
+     std::string letters;
+@@ -368,6 +370,7 @@
+ }
+ 
+ void UdpSession::endSession() {
++    relayHostAlias_.clear();
+     unseated_.clear();
+     if (disc_ && disc_->result.mapped) {
+         const PortMapResult m = disc_->result;
+@@ -900,6 +903,11 @@
+ std::vector<SessionEvent> UdpSession::poll(double now) {
+     now_ = now;
+     if (joining_ && t_) {
++        if (!relayHostAlias_.empty() && now_ - joinStart_ >= kRelayAfterS &&
++            std::find(joinCandidates_.begin(), joinCandidates_.end(), relayHostAlias_) == joinCandidates_.end()) {
++            joinCandidates_.push_back(relayHostAlias_);   // no direct answer: try the host through the lobby service's relay
++            LOG_INFO("session: no direct answer from the host after %.0f s - trying it through the relay", kRelayAfterS);
++        }
+         if (now_ - lastJoinSend_ >= 1.0 && t_->self() == 255) {   // JOIN until seated (out of band: no seat yet)
+             lastJoinSend_ = now_;
+             W w(kJoin); w.u32(kProtocol); w.info(self_);
+@@ -973,8 +981,19 @@
+     return t_ != nullptr;
+ }
+ 
++// The relay: the service's IP (the client already reaches it) + the relay port; the host is id 1 of the room, a joiner a random id.
++void UdpSession::enableRelay(uint64_t room, int relayPort, bool asHost) {
++    if (!t_ || room == 0 || relayPort <= 0 || serviceAddr_.empty() || t_->relayId() != 0) return;
++    const std::string ip = serviceAddr_.substr(0, serviceAddr_.rfind(':'));
++    std::random_device rd;
++    const uint32_t id = asHost ? 1u : 2u + (rd() % 0x7ffffff0u);
++    t_->setRelay(ip + ":" + std::to_string(relayPort), room, id);
++    if (!asHost) relayHostAlias_ = "relay:1";
++}
++
+ void UdpSession::sendService(const std::string& json) {
+     if (serviceAddr_.empty() || !t_) return;
++    t_->addInfra(serviceAddr_);   // not a peer: reachable with WFC_NET_DIRECT_DROP (the relay test)
+     std::vector<uint8_t> b = {'W', 'F', 'C', 'L'};
+     b.insert(b.end(), json.begin(), json.end());
+     t_->sendRaw(serviceAddr_, b.data(), b.size());
+@@ -1018,6 +1037,8 @@
+         const bool first = serviceCode_.empty();
+         serviceCode_ = m["code"].asString();
+         if (first) LOG_INFO("session: lobby service code %s (the service sees this host as %s)", serviceCode_.c_str(), m["seen"].asString().c_str());
++        if (role_ == Role::Host && m.has("room"))   // the relay for joiners that cannot reach us directly
++            enableRelay(std::strtoull(m["room"].asString().c_str(), nullptr, 16), m["relay_port"].asInt(0), true);
+         if (publicEp_.empty() && !m["seen"].asString().empty()) publicEp_ = m["seen"].asString();
+     } else if (op == "punch" && t_) {   // a joiner looked us up: send to it so our router lets its packets in
+         W w(kPing); w.u32(0);
+@@ -1027,6 +1048,7 @@
+         joinCandidates_.clear();
+         for (const char* k : {"host_lan", "host_public"}) { const std::string a = m[k].asString(); if (!a.empty()) joinCandidates_.push_back(a); }
+         joinTarget_ = joinCandidates_.empty() ? std::string() : joinCandidates_[0];
++        if (m.has("room")) enableRelay(std::strtoull(m["room"].asString().c_str(), nullptr, 16), m["relay_port"].asInt(0), false);
+     } else if ((op == "games" || op == "quick") && search_ != Search::None) {
+         const assets::Json& list = op == "games" ? m["games"] : m["candidates"];
+         for (size_t i = 0; i < list.size(); ++i) {
+@@ -1036,6 +1058,7 @@
+             c.entry.playlist = g["playlist"].asString(); c.entry.mapId = g["map"].asInt(-1); c.entry.players = g["players"].asInt();
+             c.entry.maxPlayers = g["max"].asInt(); c.state = g["state"].asString();
+             for (const char* k : {"host_lan", "host_public"}) { const std::string a = g[k].asString(); if (!a.empty()) c.endpoints.push_back(a); }
++            if (g.has("room")) { c.room = std::strtoull(g["room"].asString().c_str(), nullptr, 16); c.relayPort = g["relay_port"].asInt(0); }
+             addCandidate(c);
+         }
+     }
+@@ -1129,9 +1152,11 @@
+     std::string list;
+     for (const std::string& ep : c.endpoints) list += (list.empty() ? "" : ",") + ep;
+     const std::vector<std::string> eps = c.endpoints;
++    const uint64_t room = c.room; const int rport = c.relayPort;
+     search_ = Search::None;   // join() resets the socket; the search state survives in the members
+     join(eps.empty() ? c.entry.code : eps[0]);
+     joinCandidates_ = eps;    // every endpoint of the candidate
++    enableRelay(room, rport, false);
+     search_ = keep;
+ }
+ 
+diff -ruN a/src/net/UdpSession.h b/src/net/UdpSession.h
+--- a/src/net/UdpSession.h	2026-10-23 06:16:13.590926300 -0500
++++ b/src/net/UdpSession.h	2026-10-23 06:16:13.614506900 -0500
+@@ -146,7 +146,12 @@
+         std::string state;                    // "pregame" / "inprogress" (service)
+         double pingSentAt = 0.0;
+         int bestPing = -1;
++        uint64_t room = 0; int relayPort = 0;   // the service's relay for this lobby (SYSTEMS_RELAY.md), 0 = none
+     };
++    // The relay fallback (SYSTEMS_RELAY.md): the host is relay id 1 of its lobby's room; a joiner by service code / Quick Match
++    // enables the relay with a random id and adds the host's alias "relay:1" as its last join candidate after kRelayAfterS.
++    std::string relayHostAlias_;
++    void enableRelay(uint64_t room, int relayPort, bool asHost);
+     enum class Search { None, Find, Quick };
+     bool ensureSocket();                      // a socket for browsing (bound to any port) when not hosting / joining
+     void sendService(const std::string& json);
+diff -ruN a/src/net/UdpTransport.cpp b/src/net/UdpTransport.cpp
+--- a/src/net/UdpTransport.cpp	2026-10-23 06:16:13.592431800 -0500
++++ b/src/net/UdpTransport.cpp	2026-10-23 06:16:13.614005600 -0500
+@@ -6,6 +6,7 @@
+ // receiver acks every reliable packet (also duplicates: the first ack may have been lost), delivers in sequence order and buffers
+ // out-of-order ones. Unreliable packets are delivered as they come (the lockstep layer tolerates loss, reorder and duplicates).
+ #include "net/NetTransport.h"
++#include "core/Log.h"
+ 
+ #include <algorithm>
+ #include <chrono>
+@@ -145,7 +146,11 @@
+ 
+ class UdpTransport final : public INetTransport {
+ public:
+-    UdpTransport(int self, Socket s, std::map<int, sockaddr_in> peers) : self_(self), sock_(s), peers_(std::move(peers)), ch_(self) {}
++    UdpTransport(int self, Socket s, std::map<int, sockaddr_in> peers) : self_(self), sock_(s), peers_(std::move(peers)), ch_(self) {
++        const char* dd = std::getenv("WFC_NET_DIRECT_DROP");
++        directDrop_ = dd && *dd && dd[0] != '0';
++        if (directDrop_) LOG_WARN("NET transport: WFC_NET_DIRECT_DROP - only the relay and the lobby service are reachable (TEST ONLY)");
++    }
+     ~UdpTransport() override { if (sock_ != kBad) closeSock(sock_); }
+     int self() const override { return self_; }
+     void sendUnreliable(int peer, const uint8_t* p, size_t n) override { raw(peer, ch_.wrap(peer, false, p, n)); }
+@@ -159,22 +164,40 @@
+     }
+     void service() override {
+         drainSocket();
++        if (haveRelay_ && nowMs() - relayKeepMs_ >= 5000.0) relayKeepalive();   // keeps our NAT mapping to the relay open
+         ch_.resendDue([this](int peer, const std::vector<uint8_t>& d) { raw(peer, d); });
+     }
+     NetStats stats() const override { NetStats s = stats_; s.rttMs = ch_.rttMs(); s.resends = ch_.resends(); return s; }
+     bool addPeer(int seat, const std::string& hostPort) override {
++        if (seat < 0 || seat > 254) return false;
+         sockaddr_in a{};
+-        if (seat < 0 || seat > 254 || !parseAddr(hostPort, a)) return false;
+-        auto it = peers_.find(seat);
++        uint32_t rid = 0;
++        if (!relayAlias(hostPort, rid) && !parseAddr(hostPort, a)) return false;
++        if (rid && !haveRelay_) return false;   // a relay alias without a relay
+         // only a re-seat at another address starts the channel afresh: a new peer keeps what already arrived from it (a member seated
+-        // after the host's first reliable message must not re-deliver its retransmission)
+-        if (it != peers_.end() && addrString(it->second) != hostPort) ch_.reset(seat);
+-        peers_[seat] = a;
++        // after the host's first reliable message must not re-deliver its retransmission). A switch to the relay keeps the channel
++        // (the same peer, another path: the unacked datagrams resend through it).
++        auto it = peers_.find(seat);
++        const std::string before = peerAddress(seat);
++        if (it != peers_.end() && before != hostPort && !rid) ch_.reset(seat);
++        if (rid) { peerRelay_[seat] = rid; peers_[seat] = relay_; }
++        else { peerRelay_.erase(seat); peers_[seat] = a; }
+         return true;
+     }
+-    void removePeer(int seat) override { peers_.erase(seat); ch_.reset(seat); }
++    void removePeer(int seat) override { peers_.erase(seat); peerRelay_.erase(seat); ch_.reset(seat); }
++    void setRelay(const std::string& relayHostPort, uint64_t room, uint32_t selfId) override {
++        sockaddr_in r{};
++        if (!parseAddr(relayHostPort, r) || room == 0 || selfId == 0) return;
++        relay_ = r; room_ = room; rid_ = selfId; haveRelay_ = true;
++        relayKeepalive();
++        LOG_INFO("NET transport: relay %s, room %016llx, id %u", relayHostPort.c_str(), (unsigned long long)room, selfId);
++    }
++    uint32_t relayId() const override { return haveRelay_ ? rid_ : 0; }
++    void addInfra(const std::string& hostPort) override { sockaddr_in a{}; if (parseAddr(hostPort, a)) infra_.push_back(a); }
+     void setSelf(int seat) override { self_ = seat; ch_.setSelf(seat); }
+     std::string peerAddress(int seat) const override {
++        auto r = peerRelay_.find(seat);
++        if (r != peerRelay_.end()) return "relay:" + std::to_string(r->second);
+         auto it = peers_.find(seat);
+         return it == peers_.end() ? std::string() : addrString(it->second);
+     }
+@@ -206,19 +229,18 @@
+         return ip + ":" + std::to_string(ntohs(me.sin_port));
+     }
+     bool sendTo(const std::string& hostPort, const uint8_t* p, size_t n) override {
+-        sockaddr_in a{};
+-        if (!parseAddr(hostPort, a)) return false;
+         std::vector<uint8_t> d;
+         d.reserve(n + 1);
+         d.push_back(kStranger);
+         d.insert(d.end(), p, p + n);
+-        sendto(sock_, (const char*)d.data(), (int)d.size(), 0, (const sockaddr*)&a, sizeof a);
+-        stats_.bytesSent += d.size(); ++stats_.packetsSent;
+-        return true;
++        return sendRaw(hostPort, d.data(), d.size());
+     }
+     bool sendRaw(const std::string& hostPort, const uint8_t* p, size_t n) override {
++        uint32_t rid = 0;
++        if (relayAlias(hostPort, rid)) { if (!haveRelay_) return false; sendRelayed(rid, p, n); return true; }
+         sockaddr_in a{};
+         if (!parseAddr(hostPort, a)) return false;
++        if (directDrop_ && !isInfra(a)) return true;   // TEST ONLY: the direct path does not exist
+         sendto(sock_, (const char*)p, (int)n, 0, (const sockaddr*)&a, sizeof a);
+         stats_.bytesSent += n; ++stats_.packetsSent;
+         return true;
+@@ -234,11 +256,36 @@
+ 
+ private:
+     void raw(int peer, const std::vector<uint8_t>& d) {
++        auto r = peerRelay_.find(peer);
++        if (r != peerRelay_.end()) { sendRelayed(r->second, d.data(), d.size()); return; }
+         auto it = peers_.find(peer);
+         if (it == peers_.end()) return;
++        if (directDrop_ && !isInfra(it->second)) return;   // TEST ONLY
+         sendto(sock_, (const char*)d.data(), (int)d.size(), 0, (const sockaddr*)&it->second, sizeof it->second);
+         stats_.bytesSent += d.size(); ++stats_.packetsSent;
+     }
++    static constexpr size_t kRelayHdr = 18;   // "WR" | room u64 | src u32 | dst u32
++    void sendRelayed(uint32_t dst, const uint8_t* p, size_t n) {
++        std::vector<uint8_t> b(kRelayHdr + n);
++        b[0] = 'W'; b[1] = 'R';
++        for (int i = 0; i < 8; ++i) b[2 + i] = (uint8_t)(room_ >> (8 * i));
++        for (int i = 0; i < 4; ++i) { b[10 + i] = (uint8_t)(rid_ >> (8 * i)); b[14 + i] = (uint8_t)(dst >> (8 * i)); }
++        if (n) std::memcpy(b.data() + kRelayHdr, p, n);
++        sendto(sock_, (const char*)b.data(), (int)b.size(), 0, (const sockaddr*)&relay_, sizeof relay_);
++        stats_.bytesSent += b.size(); ++stats_.packetsSent;
++    }
++    void relayKeepalive() { relayKeepMs_ = nowMs(); sendRelayed(0, nullptr, 0); }
++    static bool relayAlias(const std::string& a, uint32_t& id) {
++        if (a.compare(0, 6, "relay:") != 0) return false;
++        id = (uint32_t)std::strtoul(a.c_str() + 6, nullptr, 10);
++        return id != 0;
++    }
++    static bool sameAddr(const sockaddr_in& x, const sockaddr_in& y) { return x.sin_addr.s_addr == y.sin_addr.s_addr && x.sin_port == y.sin_port; }
++    bool isInfra(const sockaddr_in& a) const {
++        if (haveRelay_ && sameAddr(a, relay_)) return true;
++        for (const sockaddr_in& i : infra_) if (sameAddr(a, i)) return true;
++        return false;
++    }
+     void drainSocket() {
+         uint8_t buf[2048];
+         for (;;) {
+@@ -248,30 +295,54 @@
+ #else
+             socklen_t fl = sizeof from;
+ #endif
+-            const int n = (int)recvfrom(sock_, (char*)buf, sizeof buf, 0, (sockaddr*)&from, &fl);
+-            if (n <= 0) break;
+-            stats_.bytesReceived += (uint64_t)n; ++stats_.packetsReceived;
+-            if (buf[0] == kStranger) {   // out of band: keep the sender's address
+-                if (strangers_.size() < 256) strangers_.push_back({addrString(from), std::vector<uint8_t>(buf + 1, buf + n)});
++            const int n0 = (int)recvfrom(sock_, (char*)buf, sizeof buf, 0, (sockaddr*)&from, &fl);
++            if (n0 <= 0) break;
++            stats_.bytesReceived += (uint64_t)n0; ++stats_.packetsReceived;
++            // Through the relay: unwrap, the sender is "relay:<src>" (a datagram of another room / not ours is dropped).
++            const uint8_t* bp = buf;
++            int n = n0;
++            std::string fromStr;
++            if (haveRelay_ && sameAddr(from, relay_)) {
++                if (n < (int)kRelayHdr || buf[0] != 'W' || buf[1] != 'R') continue;
++                uint64_t room = 0; uint32_t src = 0, dst = 0;
++                for (int i = 0; i < 8; ++i) room |= (uint64_t)buf[2 + i] << (8 * i);
++                for (int i = 0; i < 4; ++i) { src |= (uint32_t)buf[10 + i] << (8 * i); dst |= (uint32_t)buf[14 + i] << (8 * i); }
++                if (room != room_ || dst != rid_ || src == 0) continue;
++                bp = buf + kRelayHdr; n -= (int)kRelayHdr;
++                fromStr = "relay:" + std::to_string(src);
++                if (n <= 0) continue;
++            } else {
++                if (directDrop_ && !isInfra(from)) continue;   // TEST ONLY: the direct path does not exist
++                fromStr = addrString(from);
++            }
++            if (bp[0] == kStranger) {   // out of band: keep the sender's address
++                if (strangers_.size() < 256) strangers_.push_back({fromStr, std::vector<uint8_t>(bp + 1, bp + n)});
+                 continue;
+             }
+             // the lobby service's replies (b"WFCL" + JSON) and a STUN reply: handed up whole as stranger datagrams
+-            if (n >= 4 && buf[0] == 'W' && buf[1] == 'F' && buf[2] == 'C' && buf[3] == 'L') {
+-                if (strangers_.size() < 256) strangers_.push_back({addrString(from), std::vector<uint8_t>(buf, buf + n)});
++            if (n >= 4 && bp[0] == 'W' && bp[1] == 'F' && bp[2] == 'C' && bp[3] == 'L') {
++                if (strangers_.size() < 256) strangers_.push_back({fromStr, std::vector<uint8_t>(bp, bp + n)});
+                 continue;
+             }
+-            if (n >= 20 && (buf[0] & 0xC0) == 0 && buf[4] == 0x21 && buf[5] == 0x12 && buf[6] == 0xA4 && buf[7] == 0x42) {
+-                if (strangers_.size() < 256) strangers_.push_back({addrString(from), std::vector<uint8_t>(buf, buf + n)});
++            if (n >= 20 && (bp[0] & 0xC0) == 0 && bp[4] == 0x21 && bp[5] == 0x12 && bp[6] == 0xA4 && bp[7] == 0x42) {
++                if (strangers_.size() < 256) strangers_.push_back({fromStr, std::vector<uint8_t>(bp, bp + n)});
+                 continue;
+             }
+             std::vector<uint8_t> ack; int ackTo = -1;
+-            ch_.receive(buf, (size_t)n, inbox_, ack, ackTo);
++            ch_.receive(bp, (size_t)n, inbox_, ack, ackTo);
+             if (!ack.empty()) raw(ackTo, ack);
+         }
+     }
+     int self_;
+     Socket sock_;
+     std::map<int, sockaddr_in> peers_;
++    std::map<int, uint32_t> peerRelay_;   // seat -> its relay id (reached through the relay)
++    bool haveRelay_ = false, directDrop_ = false;
++    sockaddr_in relay_{};
++    uint64_t room_ = 0;
++    uint32_t rid_ = 0;
++    double relayKeepMs_ = 0.0;
++    std::vector<sockaddr_in> infra_;
+     ChannelSet ch_;
+     std::deque<NetPacket> inbox_;
+     std::deque<std::pair<std::string, std::vector<uint8_t>>> strangers_;

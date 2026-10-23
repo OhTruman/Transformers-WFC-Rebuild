@@ -6,6 +6,7 @@
 // receiver acks every reliable packet (also duplicates: the first ack may have been lost), delivers in sequence order and buffers
 // out-of-order ones. Unreliable packets are delivered as they come (the lockstep layer tolerates loss, reorder and duplicates).
 #include "net/NetTransport.h"
+#include "core/Log.h"
 
 #include <algorithm>
 #include <chrono>
@@ -145,7 +146,11 @@ bool parseAddr(const std::string& hp, sockaddr_in& out) {
 
 class UdpTransport final : public INetTransport {
 public:
-    UdpTransport(int self, Socket s, std::map<int, sockaddr_in> peers) : self_(self), sock_(s), peers_(std::move(peers)), ch_(self) {}
+    UdpTransport(int self, Socket s, std::map<int, sockaddr_in> peers) : self_(self), sock_(s), peers_(std::move(peers)), ch_(self) {
+        const char* dd = std::getenv("WFC_NET_DIRECT_DROP");
+        directDrop_ = dd && *dd && dd[0] != '0';
+        if (directDrop_) LOG_WARN("NET transport: WFC_NET_DIRECT_DROP - only the relay and the lobby service are reachable (TEST ONLY)");
+    }
     ~UdpTransport() override { if (sock_ != kBad) closeSock(sock_); }
     int self() const override { return self_; }
     void sendUnreliable(int peer, const uint8_t* p, size_t n) override { raw(peer, ch_.wrap(peer, false, p, n)); }
@@ -159,22 +164,40 @@ public:
     }
     void service() override {
         drainSocket();
+        if (haveRelay_ && nowMs() - relayKeepMs_ >= 5000.0) relayKeepalive();   // keeps our NAT mapping to the relay open
         ch_.resendDue([this](int peer, const std::vector<uint8_t>& d) { raw(peer, d); });
     }
     NetStats stats() const override { NetStats s = stats_; s.rttMs = ch_.rttMs(); s.resends = ch_.resends(); return s; }
     bool addPeer(int seat, const std::string& hostPort) override {
+        if (seat < 0 || seat > 254) return false;
         sockaddr_in a{};
-        if (seat < 0 || seat > 254 || !parseAddr(hostPort, a)) return false;
-        auto it = peers_.find(seat);
+        uint32_t rid = 0;
+        if (!relayAlias(hostPort, rid) && !parseAddr(hostPort, a)) return false;
+        if (rid && !haveRelay_) return false;   // a relay alias without a relay
         // only a re-seat at another address starts the channel afresh: a new peer keeps what already arrived from it (a member seated
-        // after the host's first reliable message must not re-deliver its retransmission)
-        if (it != peers_.end() && addrString(it->second) != hostPort) ch_.reset(seat);
-        peers_[seat] = a;
+        // after the host's first reliable message must not re-deliver its retransmission). A switch to the relay keeps the channel
+        // (the same peer, another path: the unacked datagrams resend through it).
+        auto it = peers_.find(seat);
+        const std::string before = peerAddress(seat);
+        if (it != peers_.end() && before != hostPort && !rid) ch_.reset(seat);
+        if (rid) { peerRelay_[seat] = rid; peers_[seat] = relay_; }
+        else { peerRelay_.erase(seat); peers_[seat] = a; }
         return true;
     }
-    void removePeer(int seat) override { peers_.erase(seat); ch_.reset(seat); }
+    void removePeer(int seat) override { peers_.erase(seat); peerRelay_.erase(seat); ch_.reset(seat); }
+    void setRelay(const std::string& relayHostPort, uint64_t room, uint32_t selfId) override {
+        sockaddr_in r{};
+        if (!parseAddr(relayHostPort, r) || room == 0 || selfId == 0) return;
+        relay_ = r; room_ = room; rid_ = selfId; haveRelay_ = true;
+        relayKeepalive();
+        LOG_INFO("NET transport: relay %s, room %016llx, id %u", relayHostPort.c_str(), (unsigned long long)room, selfId);
+    }
+    uint32_t relayId() const override { return haveRelay_ ? rid_ : 0; }
+    void addInfra(const std::string& hostPort) override { sockaddr_in a{}; if (parseAddr(hostPort, a)) infra_.push_back(a); }
     void setSelf(int seat) override { self_ = seat; ch_.setSelf(seat); }
     std::string peerAddress(int seat) const override {
+        auto r = peerRelay_.find(seat);
+        if (r != peerRelay_.end()) return "relay:" + std::to_string(r->second);
         auto it = peers_.find(seat);
         return it == peers_.end() ? std::string() : addrString(it->second);
     }
@@ -206,19 +229,18 @@ public:
         return ip + ":" + std::to_string(ntohs(me.sin_port));
     }
     bool sendTo(const std::string& hostPort, const uint8_t* p, size_t n) override {
-        sockaddr_in a{};
-        if (!parseAddr(hostPort, a)) return false;
         std::vector<uint8_t> d;
         d.reserve(n + 1);
         d.push_back(kStranger);
         d.insert(d.end(), p, p + n);
-        sendto(sock_, (const char*)d.data(), (int)d.size(), 0, (const sockaddr*)&a, sizeof a);
-        stats_.bytesSent += d.size(); ++stats_.packetsSent;
-        return true;
+        return sendRaw(hostPort, d.data(), d.size());
     }
     bool sendRaw(const std::string& hostPort, const uint8_t* p, size_t n) override {
+        uint32_t rid = 0;
+        if (relayAlias(hostPort, rid)) { if (!haveRelay_) return false; sendRelayed(rid, p, n); return true; }
         sockaddr_in a{};
         if (!parseAddr(hostPort, a)) return false;
+        if (directDrop_ && !isInfra(a)) return true;   // TEST ONLY: the direct path does not exist
         sendto(sock_, (const char*)p, (int)n, 0, (const sockaddr*)&a, sizeof a);
         stats_.bytesSent += n; ++stats_.packetsSent;
         return true;
@@ -234,10 +256,35 @@ public:
 
 private:
     void raw(int peer, const std::vector<uint8_t>& d) {
+        auto r = peerRelay_.find(peer);
+        if (r != peerRelay_.end()) { sendRelayed(r->second, d.data(), d.size()); return; }
         auto it = peers_.find(peer);
         if (it == peers_.end()) return;
+        if (directDrop_ && !isInfra(it->second)) return;   // TEST ONLY
         sendto(sock_, (const char*)d.data(), (int)d.size(), 0, (const sockaddr*)&it->second, sizeof it->second);
         stats_.bytesSent += d.size(); ++stats_.packetsSent;
+    }
+    static constexpr size_t kRelayHdr = 18;   // "WR" | room u64 | src u32 | dst u32
+    void sendRelayed(uint32_t dst, const uint8_t* p, size_t n) {
+        std::vector<uint8_t> b(kRelayHdr + n);
+        b[0] = 'W'; b[1] = 'R';
+        for (int i = 0; i < 8; ++i) b[2 + i] = (uint8_t)(room_ >> (8 * i));
+        for (int i = 0; i < 4; ++i) { b[10 + i] = (uint8_t)(rid_ >> (8 * i)); b[14 + i] = (uint8_t)(dst >> (8 * i)); }
+        if (n) std::memcpy(b.data() + kRelayHdr, p, n);
+        sendto(sock_, (const char*)b.data(), (int)b.size(), 0, (const sockaddr*)&relay_, sizeof relay_);
+        stats_.bytesSent += b.size(); ++stats_.packetsSent;
+    }
+    void relayKeepalive() { relayKeepMs_ = nowMs(); sendRelayed(0, nullptr, 0); }
+    static bool relayAlias(const std::string& a, uint32_t& id) {
+        if (a.compare(0, 6, "relay:") != 0) return false;
+        id = (uint32_t)std::strtoul(a.c_str() + 6, nullptr, 10);
+        return id != 0;
+    }
+    static bool sameAddr(const sockaddr_in& x, const sockaddr_in& y) { return x.sin_addr.s_addr == y.sin_addr.s_addr && x.sin_port == y.sin_port; }
+    bool isInfra(const sockaddr_in& a) const {
+        if (haveRelay_ && sameAddr(a, relay_)) return true;
+        for (const sockaddr_in& i : infra_) if (sameAddr(a, i)) return true;
+        return false;
     }
     void drainSocket() {
         uint8_t buf[2048];
@@ -248,30 +295,54 @@ private:
 #else
             socklen_t fl = sizeof from;
 #endif
-            const int n = (int)recvfrom(sock_, (char*)buf, sizeof buf, 0, (sockaddr*)&from, &fl);
-            if (n <= 0) break;
-            stats_.bytesReceived += (uint64_t)n; ++stats_.packetsReceived;
-            if (buf[0] == kStranger) {   // out of band: keep the sender's address
-                if (strangers_.size() < 256) strangers_.push_back({addrString(from), std::vector<uint8_t>(buf + 1, buf + n)});
+            const int n0 = (int)recvfrom(sock_, (char*)buf, sizeof buf, 0, (sockaddr*)&from, &fl);
+            if (n0 <= 0) break;
+            stats_.bytesReceived += (uint64_t)n0; ++stats_.packetsReceived;
+            // Through the relay: unwrap, the sender is "relay:<src>" (a datagram of another room / not ours is dropped).
+            const uint8_t* bp = buf;
+            int n = n0;
+            std::string fromStr;
+            if (haveRelay_ && sameAddr(from, relay_)) {
+                if (n < (int)kRelayHdr || buf[0] != 'W' || buf[1] != 'R') continue;
+                uint64_t room = 0; uint32_t src = 0, dst = 0;
+                for (int i = 0; i < 8; ++i) room |= (uint64_t)buf[2 + i] << (8 * i);
+                for (int i = 0; i < 4; ++i) { src |= (uint32_t)buf[10 + i] << (8 * i); dst |= (uint32_t)buf[14 + i] << (8 * i); }
+                if (room != room_ || dst != rid_ || src == 0) continue;
+                bp = buf + kRelayHdr; n -= (int)kRelayHdr;
+                fromStr = "relay:" + std::to_string(src);
+                if (n <= 0) continue;
+            } else {
+                if (directDrop_ && !isInfra(from)) continue;   // TEST ONLY: the direct path does not exist
+                fromStr = addrString(from);
+            }
+            if (bp[0] == kStranger) {   // out of band: keep the sender's address
+                if (strangers_.size() < 256) strangers_.push_back({fromStr, std::vector<uint8_t>(bp + 1, bp + n)});
                 continue;
             }
             // the lobby service's replies (b"WFCL" + JSON) and a STUN reply: handed up whole as stranger datagrams
-            if (n >= 4 && buf[0] == 'W' && buf[1] == 'F' && buf[2] == 'C' && buf[3] == 'L') {
-                if (strangers_.size() < 256) strangers_.push_back({addrString(from), std::vector<uint8_t>(buf, buf + n)});
+            if (n >= 4 && bp[0] == 'W' && bp[1] == 'F' && bp[2] == 'C' && bp[3] == 'L') {
+                if (strangers_.size() < 256) strangers_.push_back({fromStr, std::vector<uint8_t>(bp, bp + n)});
                 continue;
             }
-            if (n >= 20 && (buf[0] & 0xC0) == 0 && buf[4] == 0x21 && buf[5] == 0x12 && buf[6] == 0xA4 && buf[7] == 0x42) {
-                if (strangers_.size() < 256) strangers_.push_back({addrString(from), std::vector<uint8_t>(buf, buf + n)});
+            if (n >= 20 && (bp[0] & 0xC0) == 0 && bp[4] == 0x21 && bp[5] == 0x12 && bp[6] == 0xA4 && bp[7] == 0x42) {
+                if (strangers_.size() < 256) strangers_.push_back({fromStr, std::vector<uint8_t>(bp, bp + n)});
                 continue;
             }
             std::vector<uint8_t> ack; int ackTo = -1;
-            ch_.receive(buf, (size_t)n, inbox_, ack, ackTo);
+            ch_.receive(bp, (size_t)n, inbox_, ack, ackTo);
             if (!ack.empty()) raw(ackTo, ack);
         }
     }
     int self_;
     Socket sock_;
     std::map<int, sockaddr_in> peers_;
+    std::map<int, uint32_t> peerRelay_;   // seat -> its relay id (reached through the relay)
+    bool haveRelay_ = false, directDrop_ = false;
+    sockaddr_in relay_{};
+    uint64_t room_ = 0;
+    uint32_t rid_ = 0;
+    double relayKeepMs_ = 0.0;
+    std::vector<sockaddr_in> infra_;
     ChannelSet ch_;
     std::deque<NetPacket> inbox_;
     std::deque<std::pair<std::string, std::vector<uint8_t>>> strangers_;

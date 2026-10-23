@@ -146,7 +146,12 @@ private:
         std::string state;                    // "pregame" / "inprogress" (service)
         double pingSentAt = 0.0;
         int bestPing = -1;
+        uint64_t room = 0; int relayPort = 0;   // the service's relay for this lobby (SYSTEMS_RELAY.md), 0 = none
     };
+    // The relay fallback (SYSTEMS_RELAY.md): the host is relay id 1 of its lobby's room; a joiner by service code / Quick Match
+    // enables the relay with a random id and adds the host's alias "relay:1" as its last join candidate after kRelayAfterS.
+    std::string relayHostAlias_;
+    void enableRelay(uint64_t room, int relayPort, bool asHost);
     enum class Search { None, Find, Quick };
     bool ensureSocket();                      // a socket for browsing (bound to any port) when not hosting / joining
     void sendService(const std::string& json);

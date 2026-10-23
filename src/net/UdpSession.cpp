@@ -43,6 +43,7 @@ enum : uint8_t {
     kDiscover = 0x53, kAnnounce = 0x54, kPing = 0x55, kPong = 0x56,   // out of band: LAN discovery, candidate pings
 };
 constexpr double kSearchCollectS = 1.0, kPingRoundS = 0.3;
+constexpr double kRelayAfterS = 3.0;   // a joiner falls back to the relay after this long without a direct answer
 constexpr double kLateLoadS = 120.0;   // a late joiner's map load (a cold first load of a map can take 30-60 s) before it is dropped
 constexpr int kNoSession = 255;   // a Reserved match seat nobody holds yet (the match seat table's placeholder)
 constexpr int kPingRounds = 3, kMaxPingMs = 250;
@@ -316,6 +317,7 @@ void UdpSession::finishHostOpened() {
 
 // ---- join ----
 void UdpSession::join(const std::string& target) {
+    relayHostAlias_.clear();
     if (role_ != Role::Offline) leave();
     std::vector<std::string> cands;
     std::string letters;
@@ -368,6 +370,7 @@ void UdpSession::leave() {
 }
 
 void UdpSession::endSession() {
+    relayHostAlias_.clear();
     unseated_.clear();
     if (disc_ && disc_->result.mapped) {
         const PortMapResult m = disc_->result;
@@ -900,6 +903,11 @@ void UdpSession::pump() {
 std::vector<SessionEvent> UdpSession::poll(double now) {
     now_ = now;
     if (joining_ && t_) {
+        if (!relayHostAlias_.empty() && now_ - joinStart_ >= kRelayAfterS &&
+            std::find(joinCandidates_.begin(), joinCandidates_.end(), relayHostAlias_) == joinCandidates_.end()) {
+            joinCandidates_.push_back(relayHostAlias_);   // no direct answer: try the host through the lobby service's relay
+            LOG_INFO("session: no direct answer from the host after %.0f s - trying it through the relay", kRelayAfterS);
+        }
         if (now_ - lastJoinSend_ >= 1.0 && t_->self() == 255) {   // JOIN until seated (out of band: no seat yet)
             lastJoinSend_ = now_;
             W w(kJoin); w.u32(kProtocol); w.info(self_);
@@ -977,8 +985,19 @@ bool UdpSession::ensureSocket() {
     return t_ != nullptr;
 }
 
+// The relay: the service's IP (the client already reaches it) + the relay port; the host is id 1 of the room, a joiner a random id.
+void UdpSession::enableRelay(uint64_t room, int relayPort, bool asHost) {
+    if (!t_ || room == 0 || relayPort <= 0 || serviceAddr_.empty() || t_->relayId() != 0) return;
+    const std::string ip = serviceAddr_.substr(0, serviceAddr_.rfind(':'));
+    std::random_device rd;
+    const uint32_t id = asHost ? 1u : 2u + (rd() % 0x7ffffff0u);
+    t_->setRelay(ip + ":" + std::to_string(relayPort), room, id);
+    if (!asHost) relayHostAlias_ = "relay:1";
+}
+
 void UdpSession::sendService(const std::string& json) {
     if (serviceAddr_.empty() || !t_) return;
+    t_->addInfra(serviceAddr_);   // not a peer: reachable with WFC_NET_DIRECT_DROP (the relay test)
     std::vector<uint8_t> b = {'W', 'F', 'C', 'L'};
     b.insert(b.end(), json.begin(), json.end());
     t_->sendRaw(serviceAddr_, b.data(), b.size());
@@ -1022,6 +1041,8 @@ void UdpSession::handleService(const std::string& from, const std::vector<uint8_
         const bool first = serviceCode_.empty();
         serviceCode_ = m["code"].asString();
         if (first) LOG_INFO("session: lobby service code %s (the service sees this host as %s)", serviceCode_.c_str(), m["seen"].asString().c_str());
+        if (role_ == Role::Host && m.has("room"))   // the relay for joiners that cannot reach us directly
+            enableRelay(std::strtoull(m["room"].asString().c_str(), nullptr, 16), m["relay_port"].asInt(0), true);
         if (publicEp_.empty() && !m["seen"].asString().empty()) publicEp_ = m["seen"].asString();
     } else if (op == "punch" && t_) {   // a joiner looked us up: send to it so our router lets its packets in
         W w(kPing); w.u32(0);
@@ -1031,6 +1052,7 @@ void UdpSession::handleService(const std::string& from, const std::vector<uint8_
         joinCandidates_.clear();
         for (const char* k : {"host_lan", "host_public"}) { const std::string a = m[k].asString(); if (!a.empty()) joinCandidates_.push_back(a); }
         joinTarget_ = joinCandidates_.empty() ? std::string() : joinCandidates_[0];
+        if (m.has("room")) enableRelay(std::strtoull(m["room"].asString().c_str(), nullptr, 16), m["relay_port"].asInt(0), false);
     } else if ((op == "games" || op == "quick") && search_ != Search::None) {
         const assets::Json& list = op == "games" ? m["games"] : m["candidates"];
         for (size_t i = 0; i < list.size(); ++i) {
@@ -1040,6 +1062,7 @@ void UdpSession::handleService(const std::string& from, const std::vector<uint8_
             c.entry.playlist = g["playlist"].asString(); c.entry.mapId = g["map"].asInt(-1); c.entry.players = g["players"].asInt();
             c.entry.maxPlayers = g["max"].asInt(); c.state = g["state"].asString();
             for (const char* k : {"host_lan", "host_public"}) { const std::string a = g[k].asString(); if (!a.empty()) c.endpoints.push_back(a); }
+            if (g.has("room")) { c.room = std::strtoull(g["room"].asString().c_str(), nullptr, 16); c.relayPort = g["relay_port"].asInt(0); }
             addCandidate(c);
         }
     }
@@ -1133,9 +1156,11 @@ void UdpSession::tryNextCandidate() {
     std::string list;
     for (const std::string& ep : c.endpoints) list += (list.empty() ? "" : ",") + ep;
     const std::vector<std::string> eps = c.endpoints;
+    const uint64_t room = c.room; const int rport = c.relayPort;
     search_ = Search::None;   // join() resets the socket; the search state survives in the members
     join(eps.empty() ? c.entry.code : eps[0]);
     joinCandidates_ = eps;    // every endpoint of the candidate
+    enableRelay(room, rport, false);
     search_ = keep;
 }
 

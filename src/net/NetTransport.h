@@ -43,6 +43,14 @@ public:
     // Out-of-band datagrams to / from addresses that have no seat yet (JOIN before the host seats the member; LAN discovery):
     // sent unframed (kind 3), delivered with the sender's address instead of a seat.
     virtual bool sendTo(const std::string& /*hostPort*/, const uint8_t* /*p*/, size_t /*n*/) { return false; }
+    // [Systems] The relay fallback (SYSTEMS_RELAY.md): through the lobby service's relay, addresses "relay:<id>" are peers like any
+    // other (a send wraps the datagram for the relay; what arrives through it is presented as from "relay:<src>"). relayHostPort =
+    // the service's IP + its relay port; room = the lobby's token; selfId = this client's id (1 = the room's host). addInfra: an
+    // endpoint that is not a peer (the lobby service) - WFC_NET_DIRECT_DROP=1 (TEST ONLY: two symmetric NATs on loopback) drops every
+    // datagram that is neither through the relay nor to / from an infra endpoint.
+    virtual void setRelay(const std::string& /*relayHostPort*/, uint64_t /*room*/, uint32_t /*selfId*/) {}
+    virtual uint32_t relayId() const { return 0; }
+    virtual void addInfra(const std::string& /*hostPort*/) {}
     virtual bool pollStranger(std::string& /*fromHostPort*/, std::vector<uint8_t>& /*data*/) { return false; }
     // A datagram exactly as given (no framing byte): the STUN query from this socket (its reply comes back via pollStranger).
     virtual bool sendRaw(const std::string& /*hostPort*/, const uint8_t* /*p*/, size_t /*n*/) { return false; }
