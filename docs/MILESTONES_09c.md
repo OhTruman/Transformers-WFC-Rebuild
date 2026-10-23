@@ -3864,3 +3864,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   free). NOT the user build (campaign / E3 / plumes still in progress). MERGED 80d69bf3 E3b1 Brute backpack (ESCTEST Remnant
   13 / 13). Findings routed: ESC chassis energon_default exports (AssetTools), D5 collision_weapon.glb (AssetTools), the
   campaign AI squad hit by the strand-suicide rule (Gameplay), Remnant light-card collision (AssetTools, blocks ESCNAV flip).
+2026-10-23 07:30 FIRST FRONTEND-LAUNCHED CAMPAIGN CHAPTER: D5 from the menus (lobby -> Normal -> 31.8 s load -> in-map select -> InGame ->
+  checkpoint 1 written; the squad visible). One Frontend bug: a stale versus selection picked Scout before the trio pick
+  (fix in progress). Data notes: D5_OME_BASE world.glb no triangles (expected: persistent level), gameplay.json +
+  collision_weapon.glb missing (AssetTools). MERGED 3ab79529 campaign squad strand exemption, 47a03c29 chapter RT stage 2a
+  (RT GI 22 pages / 1432 subs over the whole chapter). Card: Rendering x48plumetune next.
