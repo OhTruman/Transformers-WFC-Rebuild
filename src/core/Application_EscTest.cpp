@@ -96,6 +96,13 @@ void Application::runEscalationTest() {
             check(!m.players()[(size_t)b].alive && byPack && S.bpExplosions == 1,
                   "Brute: the backpack explodes 3 s after critical and kills it (TnDamageTypeBruteBackpack, credited to the last hitter)");
             LOG_INFO("ESCTEST backpack: %d hits, %d refused (front), %d explosions", S.bpHits, S.bpRefused, S.bpExplosions);
+            check(S.lootDropped >= 8, "Loot: the Brute's row (BruteAut) drops 7 + 1 TnAbilityResourcePickups");
+            if (!S.loot.empty()) {
+                const core::Vec3 at = S.loot.front().pos;
+                pin = &at; run(0.3f); pin = nullptr;
+            }
+            check(S.lootTaken >= 1 && (size_t)me < S.abilityResource.size() && S.abilityResource[(size_t)me] >= 3.0f,
+                  "Loot: touching a pickup gives the player +3 ability resource");
         }
         LOG_INFO("ESCTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
         exitCode_ = fails ? 1 : 0;

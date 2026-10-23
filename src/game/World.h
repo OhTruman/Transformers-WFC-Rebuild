@@ -1427,6 +1427,7 @@ private:
     bool svSpawn(int slot);
     bool svBackpackHit(int victim, int instigator, float amount, const std::string& damageType);   // E3b: the Brute backpack took it
     void svBackpackExplode(SurvivalState::Slot& s);
+    void svDropLoot(const KillFeedEntry& e);   // E3b part 2: the loot table on a horde death
     bool svRadiusHit_ = false;     // inside radiusDamage (the backpack's radius x0.25)
     bool svKillingBrute_ = false;  // TnKillAttachedPawn in progress (bypasses the backpack test)
     void svSetZoneActive(int zone, bool on);
