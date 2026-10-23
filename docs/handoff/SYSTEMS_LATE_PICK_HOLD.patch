@@ -1,0 +1,69 @@
+diff -ruN a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+--- a/src/core/Application_Frontend.cpp	2026-10-23 06:28:58.232238700 -0500
++++ b/src/core/Application_Frontend.cpp	2026-10-23 06:28:58.259331800 -0500
+@@ -629,7 +629,7 @@
+                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
+                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
+                           "WFC_VEHTEST", "WFC_FOVTEST", "WFC_SCREENTEST", "WFC_TILETEST", "WFC_MODETEST", "WFC_CHASSISTEST",
+-                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_CAMPAIGNAUDIOTEST", "WFC_UDPHOST", "WFC_UDPJOIN", "WFC_UDPLEAVE_AT", "WFC_UDPSERVICE", "WFC_LOADDELAY_MS", "WFC_ONLINEFLOWTEST", "WFC_SOLOLAUNCHTEST", "WFC_VOICETEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
++                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_CAMPAIGNAUDIOTEST", "WFC_UDPHOST", "WFC_UDPJOIN", "WFC_UDPLEAVE_AT", "WFC_UDPPICK_EARLY", "WFC_UDPSERVICE", "WFC_LOADDELAY_MS", "WFC_ONLINEFLOWTEST", "WFC_SOLOLAUNCHTEST", "WFC_VOICETEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
+                           "WFC_SPAWNFILLTEST", "WFC_EXTRABODYTEST", "WFC_DOUBLEJUMPTEST",
+                           "WFC_DETERMINISMTEST", "WFC_WEAPONAUDIT", "WFC_VEHFRAMETEST", "WFC_VEHICLEAUDIT", "WFC_QABOTTEST", "WFC_MARKERSTEST", "WFC_STUCKSPOT_BOT", "WFC_ASYNCSTEPTEST", "WFC_ENGAGETEST", "WFC_EVICTTEST", "WFC_BARRIERWALKTEST"})   // [integration 09c] Gameplay 26d / 26h / 26k harnesses
+         if (std::getenv(v)) return false;
+diff -ruN a/src/core/Application_Net.cpp b/src/core/Application_Net.cpp
+--- a/src/core/Application_Net.cpp	2026-10-23 06:28:58.231235400 -0500
++++ b/src/core/Application_Net.cpp	2026-10-23 06:28:58.258328400 -0500
+@@ -697,6 +697,9 @@
+         if (local) pickAfterWake = true;   // the woken joiner goes through Choose Character (an event, as in the game)
+     };
+     net::NetMatchDriver drv(world_, *s.matchTransport(), nullptr, c);
++    // WFC_UDPPICK_EARLY=1 (a late joiner): pick at once, while still catching up, as the frontend does (pt9); the driver holds it
++    const bool pickEarly = std::getenv("WFC_UDPPICK_EARLY") != nullptr;
++    if (pickEarly && drv.catchingUp()) { drv.chooseCharacter(cs); LOG_INFO("UDPMATCH: the joiner picks its character early (catching up)"); }
+     long catchUpEvents = 0;
+     const float matchSeconds = (float)std::atof(std::getenv("WFC_MATCH_SECONDS") ? std::getenv("WFC_MATCH_SECONDS") : "60");
+     auto last = std::chrono::steady_clock::now();
+@@ -708,6 +711,7 @@
+         const double dt = std::chrono::duration<double>(t - last).count();
+         last = t;
+         steps += drv.frame(dt);
++        if (pickAfterWake && pickEarly) pickAfterWake = false;
+         if (pickAfterWake && !drv.catchingUp()) { pickAfterWake = false; drv.chooseCharacter(cs); LOG_INFO("UDPMATCH: the joiner picks its character"); }
+         if (self == 0) { s.noteMatchTick((uint32_t)world_.simTick()); for (int ms : s.takeDroppedMatchSeats()) drv.dropSeat(ms); }
+         // WFC_UDPLEAVE_AT=<match s> (a member): the pause menu's Leave Match - ISession::leave() (the session's LEAVE to the host),
+diff -ruN a/src/net/NetMatchDriver.cpp b/src/net/NetMatchDriver.cpp
+--- a/src/net/NetMatchDriver.cpp	2026-10-23 06:28:58.230232000 -0500
++++ b/src/net/NetMatchDriver.cpp	2026-10-23 06:28:58.257324700 -0500
+@@ -81,6 +81,8 @@
+     bool stalled = false, held = false, ended = false, talking = false;
+     uint32_t startTick = 1;
+     bool live = true;                     // a late joiner: false until it steps its activeTick
++    bool pickHeld = false;                // a late joiner's Choose Character before its seat is live: sent when it goes live
++    std::vector<uint8_t> heldPick;
+     FILE* rec = nullptr;
+     int player(int seat) const { return cfg.seatPlayer ? cfg.seatPlayer(seat) : seat; }
+     Impl(game::World& w, INetTransport& tr, const Config& c) : world(w), t(tr), cfg(c) {}
+@@ -214,6 +216,11 @@
+         if (!m.live && ls.activeFrom(m.cfg.self) != 0 && n >= ls.activeFrom(m.cfg.self)) {
+             m.live = true; m.accum = 0.0;
+             LOG_INFO("NET driver: live at tick %u (caught up; host at %u)", n, ls.hostLive());
++            if (m.pickHeld) {   // the pick made while catching up: stamped now, after the seat's activation (pt9: it hit the dormant seat)
++                m.pickHeld = false;
++                const uint32_t at = ls.submitEvent(kEventSelection, m.heldPick);
++                LOG_INFO("NET driver: Choose Character (held while catching up) -> event at tick %u", at);
++            }
+             break;
+         }
+     }
+@@ -239,6 +246,11 @@
+ void NetMatchDriver::dropSeat(int seat) { impl_->ls->dropSeat(seat); }
+ 
+ void NetMatchDriver::chooseCharacter(const game::CharacterSelection& sel) {
++    if (!impl_->live) {   // a late joiner still catching up: its seat is dormant until activation, a pick now would be lost
++        impl_->pickHeld = true; impl_->heldPick = encodeSelection(sel);
++        LOG_INFO("NET driver: Choose Character held until the seat is live (catching up)");
++        return;
++    }
+     const uint32_t at = impl_->ls->submitEvent(kEventSelection, encodeSelection(sel));
+     LOG_INFO("NET driver: Choose Character -> event at tick %u", at);
+ }

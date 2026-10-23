@@ -697,6 +697,9 @@ void Application::runUdpSessionMatch() {
         if (local) pickAfterWake = true;   // the woken joiner goes through Choose Character (an event, as in the game)
     };
     net::NetMatchDriver drv(world_, *s.matchTransport(), nullptr, c);
+    // WFC_UDPPICK_EARLY=1 (a late joiner): pick at once, while still catching up, as the frontend does (pt9); the driver holds it
+    const bool pickEarly = std::getenv("WFC_UDPPICK_EARLY") != nullptr;
+    if (pickEarly && drv.catchingUp()) { drv.chooseCharacter(cs); LOG_INFO("UDPMATCH: the joiner picks its character early (catching up)"); }
     long catchUpEvents = 0;
     const float matchSeconds = (float)std::atof(std::getenv("WFC_MATCH_SECONDS") ? std::getenv("WFC_MATCH_SECONDS") : "60");
     auto last = std::chrono::steady_clock::now();
@@ -708,6 +711,7 @@ void Application::runUdpSessionMatch() {
         const double dt = std::chrono::duration<double>(t - last).count();
         last = t;
         steps += drv.frame(dt);
+        if (pickAfterWake && pickEarly) pickAfterWake = false;
         if (pickAfterWake && !drv.catchingUp()) { pickAfterWake = false; drv.chooseCharacter(cs); LOG_INFO("UDPMATCH: the joiner picks its character"); }
         if (self == 0) { s.noteMatchTick((uint32_t)world_.simTick()); for (int ms : s.takeDroppedMatchSeats()) drv.dropSeat(ms); }
         // WFC_UDPLEAVE_AT=<match s> (a member): the pause menu's Leave Match - ISession::leave() (the session's LEAVE to the host),

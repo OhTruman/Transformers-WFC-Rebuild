@@ -81,6 +81,8 @@ struct NetMatchDriver::Impl {
     bool stalled = false, held = false, ended = false, talking = false;
     uint32_t startTick = 1;
     bool live = true;                     // a late joiner: false until it steps its activeTick
+    bool pickHeld = false;                // a late joiner's Choose Character before its seat is live: sent when it goes live
+    std::vector<uint8_t> heldPick;
     FILE* rec = nullptr;
     int player(int seat) const { return cfg.seatPlayer ? cfg.seatPlayer(seat) : seat; }
     Impl(game::World& w, INetTransport& tr, const Config& c) : world(w), t(tr), cfg(c) {}
@@ -214,6 +216,11 @@ int NetMatchDriver::frame(double dtSeconds) {
         if (!m.live && ls.activeFrom(m.cfg.self) != 0 && n >= ls.activeFrom(m.cfg.self)) {
             m.live = true; m.accum = 0.0;
             LOG_INFO("NET driver: live at tick %u (caught up; host at %u)", n, ls.hostLive());
+            if (m.pickHeld) {   // the pick made while catching up: stamped now, after the seat's activation (pt9: it hit the dormant seat)
+                m.pickHeld = false;
+                const uint32_t at = ls.submitEvent(kEventSelection, m.heldPick);
+                LOG_INFO("NET driver: Choose Character (held while catching up) -> event at tick %u", at);
+            }
             break;
         }
     }
@@ -239,6 +246,11 @@ void NetMatchDriver::setTalking(bool talking) { impl_->talking = talking; }
 void NetMatchDriver::dropSeat(int seat) { impl_->ls->dropSeat(seat); }
 
 void NetMatchDriver::chooseCharacter(const game::CharacterSelection& sel) {
+    if (!impl_->live) {   // a late joiner still catching up: its seat is dormant until activation, a pick now would be lost
+        impl_->pickHeld = true; impl_->heldPick = encodeSelection(sel);
+        LOG_INFO("NET driver: Choose Character held until the seat is live (catching up)");
+        return;
+    }
     const uint32_t at = impl_->ls->submitEvent(kEventSelection, encodeSelection(sel));
     LOG_INFO("NET driver: Choose Character -> event at tick %u", at);
 }
