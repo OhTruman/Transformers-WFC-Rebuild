@@ -3518,3 +3518,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   by hand in cf02694d. The 20-s headless runner cannot see shot-direction changes (no shots land in its window): sim-change claims
   rest on Gameplay's 300-s check; identity claims stay valid. RE queue done (water PS, X7, Rust tessellation: the original is
   as coarse and per-vertex -> Rendering re-checks the ExtinctionDistance branch; per-pixel stays meanwhile). RE -> campaign list.
+2026-10-23 00:33 RE campaign residual list approved (Matinee native -> buddy / togetherness -> dialog timing -> streaming notifies -> save body
+  serializer -> ActorFactory -> FaceFX clamping -> small items); RE on #1.
