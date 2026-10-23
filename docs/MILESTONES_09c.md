@@ -4076,3 +4076,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Frontend now reruns the full milestone script on e4549909 (hand-over run). D1 complete (6 / 10 chapters).
 2026-10-23 12:10 MERGED c3c9c157 build_lighting decodes LightMap1D decal receivers (tool only; D1 Crash2 rerun). PACKAGE HEAD c3c9c157
   (code dffcf31f). Frontend hand-over rerun in flight on it.
+2026-10-23 12:13 FINAL GATE PRE STAGE PASS (Experimental 04b0d538, tools/fidelity/results/FINAL_GATE_PRE_c3c9c157.md): same match base
+  (af4d0731 + 01-07) vs head on Streets TDM / Remnant ESC / BrokenHope ESC, negative control differs; stability: TDM 20 / 20,
+  ESC clean, A1 2 x 300 s, CAMPAIGNTEST 24 / 24, KISMETTEST 10 / 10, VOICETEST, net rows identical. D5 headless now ends at
+  40 s by design (Omega grabs the idle PlayerBot player). The timed-gate head dffcf31f is built ahead of the hold. Remaining:
+  the Frontend hand-over rerun, chapters D2 / D3A / D3B / A5, the user's reboot -> PERF_HOLD gate (~90 min) -> cut.
