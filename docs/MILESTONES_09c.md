@@ -4110,3 +4110,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   new nodes + authored hides (data only).
 2026-10-23 14:05 AssetTools: skeletal set dressing added for the 8 shipped chapters (749 nodes drawn; 137 author no mesh: runtime-set or
   empty; sentry bodies included; extras.hidden = authored bHidden). Frontend set-dressing look (A1 + A2 Off) running.
+2026-10-23 14:11 Set-dressing look (Frontend): A1 OK (nodes draw, 2 authored hidden sent); A2 sent 0 authored hidden vs 55 hidden nodes in
+  the data -> Gameplay + AssetTools check the actors.json bHidden key (data or tiny reader fix). A5 shipped (9 / 10);
+  D3B last, then the outside list. Air-nav queue started.
