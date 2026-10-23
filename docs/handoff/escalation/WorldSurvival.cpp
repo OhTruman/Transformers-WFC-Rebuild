@@ -733,6 +733,7 @@ void World::tickSurvival(float dt) {
         sv_.phaseTime = 0.0f;
         sv_.filling = true; sv_.fillTimer = svData_.fillWaveReCheckTime;   // FillOutWave: the first enemy at once
         ++sv_.roundBegins;   // TnSeqEvent_SurvivalEvents "Round Begin" (ActivateSequenceEvent 1) [RE E1 review F3]
+        levelAudioEvent("Game:TnSeqEvent_SurvivalEvents:Round Begin");   // the map sequence (announcer / dialog / mixer: LevelAudioScript)
         LOG_INFO("escalation: wave %d begins (row %d: budget %d, alive %d, deficit %d)", sv_.displayWave + 1, sv_.currentWave,
                  svData_.waves[(size_t)sv_.currentWave].budget, svData_.waves[(size_t)sv_.currentWave].budgetAlive, svData_.waves[(size_t)sv_.currentWave].deficit);
     };
@@ -764,6 +765,7 @@ void World::tickSurvival(float dt) {
             if (sv_.usedThisWave >= w.budget && alive == 0) {   // the budget is spent and the horde is dead -> BetweenWaves
                 sv_.phase = SurvivalState::Phase::BetweenWaves;
                 ++sv_.roundEnds;   // "Round End" (ActivateSequenceEvent 0)
+                levelAudioEvent("Game:TnSeqEvent_SurvivalEvents:Round End");
                 sv_.phaseTime = 0.0f; sv_.filling = false;
                 // RoundEnded: the respawn helper respawns every dead player (revive of the living: E4).
                 for (size_t q = 0; q < P.size(); ++q)
