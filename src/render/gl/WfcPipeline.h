@@ -228,6 +228,8 @@ public:
     // particle fallback draws immediately with depth writes off; characters drawn after it would cover the smoke)
     void flushQueuedCharacters() { flushDynQueue(); }
     void setDisplayGamma(float g) { displayGamma_ = g > 0.5f && g < 5.0f ? g : 2.2f; }
+    // (playtest 2026-10-23 #1) mark the loaded map as a frontend scene: at release its textures stay uploaded in a pool for revisits
+    void setFrontendScene(bool on) { frontendScene_ = on; }
     // per-frame draw counters (always on, cheap) and resource counts for IRenderer::renderDiagnostics
     struct FrameCounts {
         int draws = 0, worldDraws = 0, bspDraws = 0, dynamicDraws = 0, fxDraws = 0;
@@ -1048,6 +1050,8 @@ private:
     // light environment instead of each particle tracing its own.
     struct CellEnv { LightEnv env; int frame = -100000; };
     std::unordered_map<uint64_t, CellEnv> cellEnv_;
+    bool frontendScene_ = false;                     // (playtest #1) this pipeline holds a frontend scene: its textures go to the pool at release
+    int texPoolHits_ = 0;                            // (textures taken from the pool by this pipeline)
     int frameNo_ = 0;
 public:
     // WFC_LOCKSTEP (deterministic captures): mark the match map load; the lockstep time base and output-affecting frame cadences

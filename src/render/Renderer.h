@@ -319,6 +319,10 @@ public:
     virtual void preparePreviewBody(const std::string& robotGltf, const std::vector<std::string>& animSets) {
         (void)robotGltf; (void)animSets;
     }
+    // (playtest 2026-10-23 #1) start parsing AnimSets ("Package.Set") on worker threads now - from a frontend scene load, for the
+    // class list's chassis - so preparePreviewBody / loadPreviewBody find them parsed instead of parsing on a frame (party lobby:
+    // 190-270 ms, 601 ms cold, per body). Sets already parsed or in flight are skipped.
+    virtual void prefetchAnimSets(const std::vector<std::string>& animSets) { (void)animSets; }
     virtual int loadPreviewBody(const std::string& robotGltf, const std::vector<std::string>& animSets, const std::string& anim) {
         (void)robotGltf; (void)animSets; (void)anim; return -1;
     }

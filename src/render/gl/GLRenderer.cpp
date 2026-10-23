@@ -11,6 +11,8 @@
 #include <fstream>
 #include <random>
 #include <thread>
+#include <future>
+#include <list>
 #include <array>
 #include <windows.h>
 #endif
@@ -711,6 +713,8 @@ public:
 
     // ---- frontend scenes ----
     MeshHandle sceneMesh_ = kInvalidMesh;
+    static constexpr size_t kFrontendGlbKeep = 3;          // (playtest 2026-10-23 #1) parsed frontend world.glb kept, by scene
+    std::list<std::pair<std::string, MeshData>> frontendGlb_;
     std::string sceneDir_;
     bool loadFrontendScene(const std::vector<std::string>& levels) override {
         unloadFrontendScene();
@@ -737,11 +741,26 @@ public:
             LOG_ERROR("frontend scene: NO RENDER DATA (legacy presentation) for any of %zu levels", levels.size());
             return false;
         }
-        MeshData world;
+        // (playtest 2026-10-23 #1) the last kFrontendGlbKeep scenes' parsed world.glb stay in memory: returning to a screen skips
+        // the read (main menu: one 408k-vertex mesh, 524 ms cold); most recent first
         auto tw = std::chrono::steady_clock::now();
-        bool okWorld = assets::loadGlb(assets + "/Maps/" + dir + "/world.glb", world);
-        LOG_INFO("frontend scene %s: world.glb read %.0f ms", dir.c_str(),
+        bool okWorld = false, cachedWorld = false;
+        auto hit = std::find_if(frontendGlb_.begin(), frontendGlb_.end(), [&](const auto& e) { return e.first == dir; });
+        if (hit != frontendGlb_.end()) {
+            frontendGlb_.splice(frontendGlb_.begin(), frontendGlb_, hit);
+            okWorld = cachedWorld = true;
+        } else {
+            MeshData w;
+            okWorld = assets::loadGlb(assets + "/Maps/" + dir + "/world.glb", w);
+            if (okWorld) {
+                frontendGlb_.emplace_front(dir, std::move(w));
+                while (frontendGlb_.size() > kFrontendGlbKeep) frontendGlb_.pop_back();
+            }
+        }
+        LOG_INFO("frontend scene %s: world.glb %s %.0f ms", dir.c_str(), cachedWorld ? "kept" : "read",
                  std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tw).count());
+        static const MeshData kNoWorld;
+        const MeshData& world = okWorld ? frontendGlb_.front().second : kNoWorld;
         wfc_.yieldLoad();
         if (!okWorld) {
             LOG_WARN("frontend scene %s: world.glb missing", dir.c_str());
@@ -756,6 +775,7 @@ public:
         sceneMesh_ = uploadMesh(world);
         uploadingFrontendWorld_ = false;
         wfc_.prewarmPlacedFx();              // M58: its emitters' programs / textures / meshes, under the loading screen
+        wfc_.setFrontendScene(true);         // (playtest 2026-10-23 #1) its textures stay pooled for a revisit
         sceneDir_ = dir;
         LOG_INFO("frontend scene %s loaded (%zu submeshes)", dir.c_str(), world.subs.size());
         return sceneMesh_ != kInvalidMesh;
@@ -782,14 +802,42 @@ public:
     bool loadingFrontendScene_ = false;
     bool matchMap_ = false;                  // a match map's render data is loaded (not a menu scene)
     bool uploadingFrontendWorld_ = false;
+    // (playtest 2026-10-23 #1) AnimSets parsing on worker threads (prefetchAnimSets); a null result = the parse failed
+    std::map<std::string, std::future<std::unique_ptr<assets::AnimFile>>> animPending_;
     const assets::AnimFile* animFile(const std::string& path) {   // M69 parsed AnimSet, cached by path
         auto cached = animFileCache_.find(path);
         if (cached == animFileCache_.end()) {
-            assets::AnimFile f;
-            if (!assets::loadAnimationFile(path, f)) return nullptr;
-            cached = animFileCache_.emplace(path, std::move(f)).first;
+            auto pend = animPending_.find(path);
+            if (pend != animPending_.end()) {             // in flight: wait for it, the loading screen still presenting
+                const auto t0 = std::chrono::steady_clock::now();
+                while (pend->second.wait_for(std::chrono::milliseconds(4)) != std::future_status::ready) wfc_.yieldLoad();
+                std::unique_ptr<assets::AnimFile> f = pend->second.get();
+                animPending_.erase(pend);
+                const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+                if (ms > 1.0) LOG_INFO("anim prefetch: waited %.1f ms for %s", ms, path.c_str());
+                if (!f) return nullptr;
+                cached = animFileCache_.emplace(path, std::move(*f)).first;
+            } else {
+                assets::AnimFile f;
+                if (!assets::loadAnimationFile(path, f)) return nullptr;
+                cached = animFileCache_.emplace(path, std::move(f)).first;
+            }
         }
         return &cached->second;
+    }
+    void prefetchAnimSets(const std::vector<std::string>& sets) override {
+        int started = 0;
+        for (const std::string& s : sets) {
+            const std::string p = animSetPath(s);
+            if (p.empty() || animFileCache_.count(p) || animPending_.count(p)) continue;
+            animPending_.emplace(p, std::async(std::launch::async, [p] {
+                auto f = std::make_unique<assets::AnimFile>();
+                if (!assets::loadAnimationFile(p, *f)) f.reset();
+                return f;
+            }));
+            ++started;
+        }
+        if (started) LOG_INFO("anim prefetch: %d AnimSet(s) parsing on worker threads", started);
     }
     std::string animSetPath(const std::string& s) const {          // "Package.Set" -> content/Package/Set.anim.gltf
         size_t dot = s.find('.');
@@ -797,6 +845,7 @@ public:
     }
     void preparePreviewBody(const std::string& gl, const std::vector<std::string>& sets) override {
         const auto t0 = std::chrono::steady_clock::now();
+        prefetchAnimSets(sets);                   // (all of this body's sets in parallel; already prefetched ones are skipped)
         for (const std::string& s : sets) { std::string p = animSetPath(s); if (!p.empty()) animFile(p); wfc_.yieldLoad(); }
         if (wfc_.active()) {
             std::string rel = gl.rfind("content/", 0) == 0 ? gl.substr(8) : gl;
@@ -1174,6 +1223,8 @@ public:
         matchMap_ = ok && !loadingFrontendScene_;
         if (ok) glDisable(GL_FOG);   // fog is evaluated per vertex in the shader path (UE3 height fog)
         if (ok && !loadingFrontendScene_) {
+            for (auto& kv : animPending_) kv.second.wait();   // (prefetches still parsing finish first: they own their data)
+            animPending_.clear();
             animFileCache_.clear();          // M69: menu-only data, not held during a match
             wfc_.requestMaterialPrewarm();   // M54: after the world upload, yielding
             for (const MeshData& r : prewarmRequests_) wfc_.prewarmDynamic(r);   // M59: replayed per map load
