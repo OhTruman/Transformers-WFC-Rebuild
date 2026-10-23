@@ -3787,3 +3787,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Round Begin -> Zeta; ESC-only LevelAudio.inc change), 7272c4ac horde never suicides + PROV on-nav substitution (Remnant
   300 s: 7 weapon kills, 0 suicides) + KISMET_VM_CORE_RE (VM core C). Experimental on bfee6521: voice / profiles / late join /
   20 s-load late join all PASS. Gameplay -> E2b part 3 (ESC nav + blockers) -> TnCampaignGameSolo.
+2026-10-23 06:17 MERGED 4f4b68f9 Escalation E2b part 3 (the original's NavigationCell nav in ESC + blocked-at-start cells + generator
+  unlocks; ESCTEST 37 / 37 + 6 / 6), d0d5a3c7 late-join diagnostics. pt9 on bfee6521 FAILED again at the 8 s drop: Systems
+  says the merged logic can't (stale exe suspected; diag lines now name the window). AssetTools: horde roster (14), INT
+  subtitles for 10 chapters, escalation_weapons.json, ESC nav v2 (reach specs -> links, both maps one piece), Streets stuck
+  candidates revertA / revertB for Gameplay's A/B; A1 lighting + materials rerun running. Card: Rendering x41 + x42 -> Frontend
+  pt9 on d0d5a3c7 (fresh build verified by the diag string).
