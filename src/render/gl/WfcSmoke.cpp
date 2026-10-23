@@ -124,26 +124,26 @@ void Pipeline::smokeLight(const core::Vec3& p, core::Vec3& amb, int& n, core::Ve
 
 // per drawn smoke group (drawSubs, after bindCommon): its light environment, E_ref and the flow
 void Pipeline::bindSmoke(const Program& P) {
-    if (smokeRef_.x < 0.0f || smokeRefMode_ != rtMode_) {   // E_ref: once per map and RT mode, over the Beast probe grid
+    if (smokeRef_.x < 0.0f || smokeRefMode_ != rtMode_) {   // E_ref: once per map and RT mode
+        // over the level itself: up to 128 world sub-mesh centres (floors, walls, corridors), 1 m up - the places smoke
+        // drifts through, on every map (Streets' Beast probe file has no volumes); the same light the smoke main sees
+        std::vector<core::Vec3> pts;
+        for (const GpuMesh& g : meshes_)
+            if (g.world)
+                for (const Sub& s : g.subs) pts.push_back((s.bmin + s.bmax) * 0.5f + core::Vec3{0, 1, 0});
+        const size_t step = std::max<size_t>(1, pts.size() / 128);
         core::Vec3 sum{0, 0, 0};
         int cnt = 0;
-        for (const BeastVolume& v : beast_)
-            for (int ix = 0; ix < 4; ++ix)
-                for (int iy = 0; iy < 4; ++iy)
-                    for (int iz = 0; iz < 2; ++iz) {
-                        const float ue[3] = {v.loc[0] + v.scale[0] * (-0.75f + 0.5f * (float)ix),
-                                             v.loc[1] + v.scale[1] * (-0.75f + 0.5f * (float)iy),
-                                             v.loc[2] + v.scale[2] * (-0.6f + 0.4f * (float)iz)};   // (the lower half: where players are)
-                        const core::Vec3 p{ue[0] * 0.01f, ue[2] * 0.01f, ue[1] * 0.01f};
-                        core::Vec3 amb, dl[3], dc[3]; int n = 0;
-                        smokeLight(p, amb, n, dl, dc);
-                        core::Vec3 e = amb;
-                        for (int i = 0; i < n; ++i) e = e + dc[i] * 0.5f;   // (the phase's mean is 1)
-                        sum = sum + e; ++cnt;
-                    }
+        for (size_t k = 0; k < pts.size(); k += step) {
+            core::Vec3 amb, dl[3], dc[3]; int n = 0;
+            smokeLight(pts[k], amb, n, dl, dc);
+            core::Vec3 e = amb;
+            for (int i = 0; i < n; ++i) e = e + dc[i] * 0.5f;   // (the phase's mean is 1)
+            sum = sum + e; ++cnt;
+        }
         smokeRef_ = cnt > 0 ? sum * (1.0f / (float)cnt) : core::Vec3{0, 0, 0};
         smokeRefMode_ = rtMode_;
-        LOG_INFO("smoke (Enhanced): reference irradiance (%.3f %.3f %.3f) over %d probe-grid points (RT mode %d)", smokeRef_.x,
+        LOG_INFO("smoke (Enhanced): reference irradiance (%.3f %.3f %.3f) over %d level points (RT mode %d)", smokeRef_.x,
                  smokeRef_.y, smokeRef_.z, cnt, rtMode_);
     }
     core::Vec3 amb, dl[3], dc[3]; int n = 0;
