@@ -4148,3 +4148,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 17:25 HAND-OVER RERUN PASS on 454d7bff (Frontend handover4/): 249 / 249, 6 / 6 clean, held weapons shaded in Realistic. D3B
   fall: the ledge collision IS exported (AssetTools); runtime cause with Gameplay (spawn before unit collision load /
   prop_simple hulls / slope). Gameplay's Teleport patch pending.
+2026-10-23 17:37 MERGED 6d30fff2 SeqAct_Teleport + TnSeqVar_Character + headless movie end + unit-scoped hazard volumes (D3B intro plays;
+  no KillZ; mines / sentries run) + FINAL_BASE_ITEMS 11 (stray empty file removed 20608326). FINAL CODE 6d30fff2, PACKAGE
+  HEAD 20608326. Experimental rebuilds arms final6 / 6d30fff2; Frontend runs handover5; Systems re-pointed. Then: the
+  user's reboot -> PERF_HOLD timed gate -> cut word -> refresh.sh -> verify -> hand-over.
