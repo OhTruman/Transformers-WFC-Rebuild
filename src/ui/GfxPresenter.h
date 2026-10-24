@@ -140,7 +140,9 @@ private:
     // Graphics -> Recommended Settings: re-apply the auto-detect preset, then leave and re-enter the page (queued
     // Escape / Enter, frames from now) so the original rows re-read their values.
     void recommendedSettingsPressed();
-    void syncSettingsCommit();   // Commit Changes' confirmation (requestSettingsCommit) -> the original commit + apply + the result
+    void syncSettingsCommit();
+    void syncFirstLaunchBrightness(gfx::Player& p, frontend::GameFlow& flow);   // the calibration at the first main menu (#34)
+    bool firstBrightnessShown_ = false;   // Commit Changes' confirmation (requestSettingsCommit) -> the original commit + apply + the result
     gfx::Player* commitPlayer_ = nullptr;
     gfx::avm1::Value commitFn_, commitSelf_;   // the original writeGraphicsSettings and the button it ran on
     struct QueuedKey { int frames; int code; bool down; };

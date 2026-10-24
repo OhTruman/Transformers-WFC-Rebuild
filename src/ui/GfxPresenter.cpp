@@ -1700,6 +1700,28 @@ void GfxPresenter::syncSettingsCommit() {
     rt_.flow().settingsCommitted(restart, nextMap);
 }
 
+// PC ADAPTATION (the user, playtest 2026-10-23b #34): the brightness calibration belongs to the first-launch setup. The original
+// shows it on the first Campaign entry only (the Campaign submenu: !ProfileData.HasAdjustedGamma -> attach
+// mc_brightnessMenuLoader, hide the menu) [RE BASE_GAME_FLOWS_RE 5]. Here the first main menu does the same once: Brightness
+// records _global.currentMenu (the main menu) and on Accept / Cancel sets HasAdjustedGamma, shows that menu again and gives it
+// the input - so Campaign does not ask again.
+void GfxPresenter::syncFirstLaunchBrightness(gfx::Player& p, frontend::GameFlow& flow) {
+    if (firstBrightnessShown_ || flow.level() != frontend::LevelKind::FrontEnd || flow.ui().state() != frontend::UIState::FrontEnd) return;
+    if (flow.profile().getBool("HasAdjustedGamma")) { firstBrightnessShown_ = true; return; }
+    gfx::MovieClip* mainMenu = findClipNamed(p.root(), "menuMain_mc");
+    if (!mainMenu || !mainMenu->script || !mainMenu->visible || !p.root() || !p.root()->script) return;
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    const V cur = vm.get(vm.global, "currentMenu");
+    if (!cur.isObject() || cur.o != mainMenu->script) return;   // the main menu has the input (after the intro / press start)
+    if (findClipNamed(p.root(), "brightnessMenuLoader_mc")) { firstBrightnessShown_ = true; return; }
+    firstBrightnessShown_ = true;
+    const V depth = vm.callMethod(V(p.root()->script), "getNextHighestDepth", {});
+    vm.callMethod(V(p.root()->script), "attachMovie", {V(std::string("mc_brightnessMenuLoader")), V(std::string("brightnessMenuLoader_mc")), depth});
+    vm.set(mainMenu->script, "_visible", V(false));
+    frontend::FlowTrace::emit("brightness.firstLaunch", {{"shown", "true"}, {"provenance", "PC ADAPTATION (user playtest 2026-10-23b #34)"}});
+}
+
 // ONLINE_LOBBY_FLOW_V2 1.1: the party lobby's Private Match row hosts at once (the last-used mode; offline the same lobby
 // with bots) instead of opening the mode list and the options page. Versus only (GTS_TeamGame): the Escalation and Campaign
 // party lobbies keep the original Host Game (mc_menuEscalationHostGame / mc_menuCampaignHostGame, PartyLobby_GFX sprites
@@ -2315,6 +2337,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
         if (flow.online() && op.object.find("PartyLobby_GFX") != std::string::npos) runFirstRunUi(op.movie->player(), flow, op.object);
         if (op.object.find("PartyLobby_GFX") != std::string::npos) syncHostNowRow(op.movie->player(), flow);   // lobby flow v2
         if (op.object.find("GameLobby_GFX") != std::string::npos) syncGameSettings(op.movie->player(), flow);
+        if (op.object.find("FrontEnd_GFX") != std::string::npos) syncFirstLaunchBrightness(op.movie->player(), flow);
         if (op.object.find("GameLobby_GFX") != std::string::npos) syncVoteRows(op.movie->player(), flow);
         if (op.object.find("PauseMenu_GFX") != std::string::npos) syncPauseChooseCharacter(op.movie->player(), flow);
         syncIconicPlayerList(op.movie->player(), flow);   // the countdown roster / end-of-match list (#7)
