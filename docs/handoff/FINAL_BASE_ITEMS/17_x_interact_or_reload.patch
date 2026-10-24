@@ -1,0 +1,1652 @@
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index 66b01a89..2c7c604e 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -673,6 +673,16 @@ Application::MatchExit Application::runMatch() {
+         }
+         if (WFC_ENV("WFC_AUTOBACK")) input.down[(int)platform::Button::Back] = true;
+         if (WFC_ENV("WFC_AUTOFIRE")) input.down[(int)platform::Button::Fire] = true;
++        if (frontend_) {   // [Frontend] the script's buttonhold:<Button>,<s> (DEV / QA gate): down while held, pressed on its first frame
++            static const char* const kNames[] = {"Forward", "Back", "Left", "Right", "Jump", "Transform", "Fire", "Sprint", "Reload", "CameraToggle",
++                                                 "Debug", "Quit", "FineAim", "Dash", "Ascend", "Descend", "NextWeapon", "PrevWeapon", "Melee",
++                                                 "Grenade", "Interact", "Killstreak", "Ability1"};
++            static std::string lastHeld;
++            const std::string& held = frontend_->script().heldGameButton();
++            for (int b = 0; b < (int)(sizeof kNames / sizeof kNames[0]) && b < (int)platform::Button::Count; ++b)
++                if (held == kNames[b]) { input.down[b] = true; if (lastHeld != held) input.pressed[b] = true; }
++            lastHeld = held;
++        }
+         // WFC_LATENCYPROBE=fire|move: input-to-photon of the local action (A/B for WFC_ASYNCSTEP). Every ~1.5 s (after 90 idle frames) it
+         // holds Fire (or Forward) from this frame's input sample until the first frame whose draw shows the effect (a new shot serial /
+         // the pawn moved > 1 mm), then logs the time from the input sample to that frame's present. Not timed against other lanes' runs.
+diff --git a/src/core/Application.h b/src/core/Application.h
+index 39602cdd..890ddca2 100644
+--- a/src/core/Application.h
++++ b/src/core/Application.h
+@@ -60,6 +60,8 @@ private:
+     std::unique_ptr<net::NetMatchDriver> netDriver_;
+     std::unique_ptr<net::VoiceSession> lobbyVoice_;   // [Systems] the lobby voice lane (the match lane is the driver's)
+     void tickLobbyVoice();
++    void bindMicMeter();                       // [Systems] the Mic Test meter <- the running voice lane's microphone level
++    const void* micMeterFor_ = nullptr;        // the session the meter source was bound to
+     void startNetDriver(const std::string& launchUrl, uint32_t seed, int seats, int localSeat);
+     void tickNetDriver(double realDt);
+     bool escWasDown_ = false;
+diff --git a/src/core/Application_CampaignAudio.cpp b/src/core/Application_CampaignAudio.cpp
+index e6a6384c..c4d3ca87 100644
+--- a/src/core/Application_CampaignAudio.cpp
++++ b/src/core/Application_CampaignAudio.cpp
+@@ -40,6 +40,26 @@ void Application::runCampaignAudioTest() {
+     script.load(k);
+     game::CampaignSubtitles subtitles;
+     const int subCues = subtitles.load(doc);
++    bool subtitleTimingBad = false;
++    {   // [Systems QC] the HUD's timing (CampaignSubtitles::lineAt) on this chapter's real lines: each shown line at its time, nothing past the end
++        int checked = 0, bad = 0;
++        for (const std::string& cue : subtitles.cues()) {
++            const auto* l = subtitles.lines(cue, "int");
++            if (!l || l->empty()) continue;
++            const float dur = subtitles.duration(cue);
++            for (const auto& ln : *l) {
++                const std::string got = game::CampaignSubtitles::lineAt(*l, ln.time, dur);
++                bool later = false;   // a later line at the same time wins
++                for (const auto& o : *l) later = later || (&o > &ln && o.time <= ln.time);
++                if (!later && got != (ln.show ? ln.text : std::string())) ++bad;
++                ++checked;
++            }
++            const float end = dur > 0.0f ? dur : l->back().time + 4.0f;
++            if (!game::CampaignSubtitles::lineAt(*l, end + 0.1f, dur).empty()) ++bad;
++        }
++        LOG_INFO("CAMPAIGNAUDIO subtitle timing: %d lines checked, %d wrong", checked, bad);
++        subtitleTimingBad = bad || (subCues > 0 && checked == 0);
++    }
+     int linesStarted = 0, linesWithText = 0;
+     auto listen = [&](const std::string& cue, int) {
+         ++linesStarted;
+@@ -123,6 +143,7 @@ void Application::runCampaignAudioTest() {
+         cues.stopAll();
+     }
+     LOG_INFO("CAMPAIGNAUDIO subtitles: %d cues with text; %d of %d started dialog lines resolved to a subtitle", subCues, linesWithText, linesStarted);
++    if (subtitleTimingBad) ++fail;
+     LOG_INFO("CAMPAIGNAUDIO RESULT %s: %d conversations (%d finished, %d stopped), %d timelines (%d keys), %d failures",
+              fail ? "FAIL" : "PASS", convs, finished, stopped, timelines, keys, fail);
+     std::exit(fail ? 1 : 0);
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index a7c88a5e..a7f4e03d 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -57,6 +57,19 @@ template <class T> FrameGenStartupMissing setFrameGenerationAtStartup(T) { retur
+ constexpr bool kRendererFrameGenStartup =
+     !std::is_same_v<decltype(render::setFrameGenerationAtStartup(true)), render::FrameGenStartupMissing>;
+ 
++namespace {
++// QA gate (Experimental's menu-qa, playtest 2026-10-23b section 43): the local pawn per frame while a match is up, for nav.check.
++// jitter = frames whose pawn movement reverses direction against the previous frame's (both > 1 cm): a pawn fought over by two
++// transforms flips every frame (#16 / #28 'flicker in place'); shots = rounds the local weapon spent (clip decrements).
++struct QaPawnTrack {
++    bool valid = false;
++    core::Vec3 last{}, lastDelta{};
++    int jitter = 0, shots = 0, lastClip = -1;
++    std::string weapon;
++};
++QaPawnTrack g_qaPawn;
++}
++
+ namespace {
+ // [Frontend, split screen] The renderer's view layout follows the seats: split (the profile's Split Layout row, Horizontal
+ // default / Vertical) only in a match with two local seats; menus, loading screens and one seat draw a single view.
+@@ -171,7 +184,7 @@ void fillOnlineLaunch(game::MatchLaunch& gl, const frontend::MatchLaunch& m) {
+         gl.remotes.push_back(r);
+     }
+     gl.seed = m.seed;   // online: the host's match seed (0 offline)
+-    gl.online = !m.onlineSlots.empty();   // a session launch: the wire path for every human (offline: none)
++    gl.online = !gl.remotes.empty();   // the wire path only with REMOTE humans: a solo host (our own slot only) runs the local loop (the frozen-pawn P0: a lone local player became a driverless wire seat)
+     if (!m.onlineSlots.empty()) frontend::FlowTrace::emit("online.launchRemotes", {{"remotes", std::to_string(gl.remotes.size())}});
+ }
+ template <class W> void applySlotSwaps(W& w, frontend::GameFlow& flow) {
+@@ -718,6 +731,8 @@ void Application::attachPresenter() {
+     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
+     // and reported here so the owners can consume LocalProfile when they add the entry points.
+     applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));
++    window_->setPadScheme(frontend_->flow().profile().getBool("UseAlternateControlScheme"),   // [Systems QC] the pad's match actions
++                          frontend_->flow().profile().getBool("SwitchRightThumbstickAndB"));
+ #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
+     // [Systems M08g] HmPlayerController.UpdateLocalCacheOfProfileSettings: SetAudioGroupVolume('Dialog' | 'SFX' |
+     // 'MUSIC', slider / 100). Device-global and immediate: frontend, match and movie audio all follow.
+@@ -736,6 +751,7 @@ void Application::attachPresenter() {
+     }
+     frontend_->flow().profile().onApplied = [this](const frontend::LocalProfile& p) {
+         applyGamma(renderer_, p.getInt("GammaSetting"));
++        window_->setPadScheme(p.getBool("UseAlternateControlScheme"), p.getBool("SwitchRightThumbstickAndB"));
+ #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
+         game::LevelAudioHost::applyProfileVolumes(p.getInt("Music Volume"), p.getInt("FX Volume"), p.getInt("Dialogue Volume"));
+ #endif
+@@ -845,6 +861,26 @@ void Application::attachPresenter() {
+             kv.push_back({"glTextures", live.substr(9, live.find(' ') - 9)});
+         }
+         kv.push_back({"camera", frontend_->scene().view().camera});
++        if (frontend_->flow().level() == frontend::LevelKind::Match) {   // the match fields (QA gate): mode / local pawn / input owner
++            const game::World::PresentedFrame& pf = world_.presented();
++            const int me = pf.localPlayer;
++            const bool has = me >= 0 && (size_t)me < pf.present.size();
++            kv.push_back({"mode", pf.modeTag});
++            kv.push_back({"map", frontend_->flow().currentMatch().map ? frontend_->flow().currentMatch().map->mapFilename : std::to_string(frontend_->flow().currentMatch().mapId)});
++            kv.push_back({"chassis", pf.localChassis});
++            kv.push_back({"alive", has && pf.present[(size_t)me] && pf.hud.alive ? "1" : "0"});
++            kv.push_back({"form", pf.hud.vehicleForm ? "vehicle" : "robot"});
++            if (has && (size_t)me < pf.positions.size()) {
++                const core::Vec3& p = pf.positions[(size_t)me];
++                char b[96]; std::snprintf(b, sizeof b, "%.1f,%.1f,%.1f", p.x, p.y, p.z);
++                kv.push_back({"pos", b});
++            }
++            const std::string ui = frontend::uiStateName(frontend_->flow().ui().state());
++            kv.push_back({"inputOwner", ui == "InGame" && frontend_->flow().ui().openMovie().empty() ? "game" : ui + ":" + frontend_->flow().ui().openMovie()});
++            kv.push_back({"shots", std::to_string(g_qaPawn.shots)});
++            kv.push_back({"jitter", std::to_string(g_qaPawn.jitter)});
++            g_qaPawn.jitter = 0;   // since the last nav.check
++        }
+         std::string line;
+         for (const auto& [k, v] : kv) line += " " + k + "=" + (v.empty() ? std::string("-") : v);
+         LOG_INFO("FLOW nav.check%s", line.c_str());
+@@ -1425,6 +1461,7 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
+     // The loading screen keeps presenting during the synchronous load (core::loadYield): window messages, the
+     // LoadScreen_GFX animation and the TF_LoadingScreen underlay, one frame per yield.
+     core::resetLoadYieldStats();
++    core::beginLoadProgress(m.map->runtimeDir + "|" + m.modeTag);   // (the loading screen's bar: core::loadProgress)
+     core::setLoadYield([this](double dt) {
+         platform::InputFrame in;
+         window_->pump(in);   // a close request stays pending and ends the frontend loop after the load
+@@ -1507,6 +1544,7 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
+     }
+     gameMode_.begin(world_);
+     core::setLoadYield(nullptr);
++    core::endLoadProgress();
+     const core::LoadYieldStats ys = core::loadYieldStats();
+     core::trimHeap("match loaded");   // [Systems] load-time garbage back to the OS, still under the loading screen
+     frontend::FlowTrace::emit("match.loaded", {{"map", m.map->runtimeDir}, {"mode", m.modeTag},
+@@ -1908,6 +1946,27 @@ void Application::routeMatchToFrontend(float dt) {
+         // the key / pad icon via the HUD's prompt translator)
+         if (!h.cpInteract.empty())
+             hf.contextualPrompts->push_back(frontend_->catalog().localize("TransGame", "ContextualCommands", "UseInteract"));
++        // [Frontend] Escalation: the generator in reach (Gameplay svGeneratorName = its SurvivalGeneratorNames key, svGeneratorNeeded =
++        // the power it takes) -> the original TransGame.ContextualCommands AddToGenerator ("Hold ^ADD_TO_GENERATOR `g  [power]`n");
++        // the cost turns red when the seat's power is short; during District's power outage (svPowerOutage: no buying) the
++        // cost reads "Power outage" [PC text: the original data has no outage string]
++        if (!h.svGeneratorName.empty() && h.svGeneratorNeeded >= 0) {
++            const frontend::Catalog& cat = frontend_->catalog();
++            std::string name = cat.localize("TransGame", "SurvivalGeneratorNames", h.svGeneratorName);
++            if (name.empty()) name = cat.localize("TransGame", "SurvivalGeneratorNames", "GenericGenerator");
++            std::string t = cat.localize("TransGame", "ContextualCommands", "AddToGenerator");
++            auto sub = [&](const char* tok, const std::string& v) { const size_t at = t.find(tok); if (at != std::string::npos) t.replace(at, 2, v); };
++            sub("`g", name);
++            sub("`n", std::to_string(h.svGeneratorNeeded));
++            const size_t font = t.find("<font");
++            if (h.svPowerOutage && font != std::string::npos)
++                t = t.substr(0, font) + "<font color='#F03C3C'>" + cat.localizeKey("$WfcPC.Escalation.PowerOutage") + "</font>";
++            else if (h.svPower < h.svGeneratorNeeded) {
++                const size_t c = t.find("#8AF0FF");
++                if (c != std::string::npos) t.replace(c, 7, "#F03C3C");
++            }
++            hf.contextualPrompts->push_back(t);
++        }
+         hf.cantTransformCount = o.cantTransformCount;
+         // scrambled / scoringMultiplier / downedHealth have no source yet: left unset (nothing sent).
+         // Damage direction: the ring turns with the view (-PlayerYaw) and each arrow keeps its world yaw, both in the HUD's
+@@ -1918,6 +1977,24 @@ void Application::routeMatchToFrontend(float dt) {
+         for (size_t i = 0; i < pf.damageCaused.size(); ++i) frontend_->hud().causedDamage();               // hit marker per hit
+     }
+     frontend_->hud().setFrame(hf);
++    {   // QA gate tracking (nav.check match fields)
++        const int qme = pf.localPlayer;
++        if (qme >= 0 && (size_t)qme < pf.positions.size() && (size_t)qme < pf.present.size() && pf.present[(size_t)qme]) {
++            const core::Vec3 p = pf.positions[(size_t)qme];
++            if (g_qaPawn.valid) {
++                const core::Vec3 d{p.x - g_qaPawn.last.x, p.y - g_qaPawn.last.y, p.z - g_qaPawn.last.z};
++                const float len2 = d.x * d.x + d.y * d.y + d.z * d.z, prev2 = g_qaPawn.lastDelta.x * g_qaPawn.lastDelta.x +
++                                   g_qaPawn.lastDelta.y * g_qaPawn.lastDelta.y + g_qaPawn.lastDelta.z * g_qaPawn.lastDelta.z;
++                const float dot = d.x * g_qaPawn.lastDelta.x + d.y * g_qaPawn.lastDelta.y + d.z * g_qaPawn.lastDelta.z;
++                if (len2 > 1.0f && prev2 > 1.0f && dot < 0.0f) ++g_qaPawn.jitter;   // UU: 1 cm
++                if (len2 > 0.0f) g_qaPawn.lastDelta = d;
++            }
++            g_qaPawn.last = p; g_qaPawn.valid = true;
++        } else g_qaPawn.valid = false;
++        if (pf.hud.weaponId != g_qaPawn.weapon) { g_qaPawn.weapon = pf.hud.weaponId; g_qaPawn.lastClip = pf.hud.clipAmmo; }
++        if (g_qaPawn.lastClip >= 0 && pf.hud.clipAmmo < g_qaPawn.lastClip) g_qaPawn.shots += g_qaPawn.lastClip - pf.hud.clipAmmo;
++        g_qaPawn.lastClip = pf.hud.clipAmmo;
++    }
+     {   // [Frontend, split screen] seat 2: into the match once per launch (Gameplay assigns its match player on seat 1's team),
+         // then its own HUD from PresentedFrame::seats[1]. Until seat 2 has its own Choose Character / characters file it plays
+         // the roster's first preset, as the automated pick does.
+@@ -2231,7 +2308,7 @@ void core::Application::runSoloLaunchTest() {
+     };
+     const game::MatchLaunch solo = build(m);
+     check(solo.humans.empty() && solo.localSeat < 0, "alone: no seat order (the pre-phase-2 local path)");
+-    check(!(solo.online && !solo.humans.empty()), "alone: the launch starts no lockstep driver");
++    check(!solo.online && solo.remotes.empty(), "alone: an offline launch (no wire seat, no lockstep driver)");
+     frontend::MatchLaunch two = m;
+     frontend::SessionSlot other; other.kind = frontend::SessionSlot::Kind::Human; other.member.fingerprint = "WFC-SOLO-PEER"; other.team = 1;
+     two.onlineSlots.push_back(other);
+diff --git a/src/core/Application_Net.cpp b/src/core/Application_Net.cpp
+index 8a17e3c7..3ca2bff7 100644
+--- a/src/core/Application_Net.cpp
++++ b/src/core/Application_Net.cpp
+@@ -212,6 +212,7 @@ void Application::runNetMatch() {
+         const int a = seatMp[(size_t)talker], b = seatMp[(size_t)listener];
+         if (a < 0 || b < 0 || (size_t)a >= ps.size() || (size_t)b >= ps.size()) return false;
+         if (net::voiceChannelOpen(world_)) return true;   // FFA / after EndGame: everyone (the original's channels)
++        if ((flags & 1) && (flags & 4)) return true;   // All Radio
+         if ((flags & 1) && ps[(size_t)a].team == ps[(size_t)b].team && ps[(size_t)a].team != 255) return true;   // radio
+         if (!(flags & 2)) return false;
+         const game::Character* x = world_.participantPawn(a);
+@@ -451,7 +452,7 @@ void Application::startNetDriver(const std::string& launchUrl, uint32_t seed, in
+     c.seats = seats; c.self = localSeat; c.launchHash = lh; c.delay = 0; c.hashEvery = 60;
+     if (const char* rp = std::getenv("WFC_NET_RECORD")) c.recordPath = rp;
+     c.voice = true;   // everyone hears; the mode decides whether this player talks (Off = listen only)
+-    c.voiceMic = udpSession_->voiceSettings().mode != frontend::SessionVoiceMode::Off;
++    c.voiceMic = false;   // the microphone comes with voiceCfg.mic (VoiceSession owns it; Off never talks, so voice can be turned on mid-match)
+     c.voiceCfg = voiceConfigFrom(udpSession_->voiceSettings());
+     c.voiceMuted = [this](int seat) { return udpSession_ && udpSession_->isMuted(udpSession_->matchMember(seat)); };
+     c.step = [this](float dt) {
+@@ -483,23 +484,40 @@ void Application::startNetDriver(const std::string& launchUrl, uint32_t seed, in
+     LOG_INFO("online: the lockstep driver runs the match (seat %d of %d, launch hash %016llx)", localSeat, seats, (unsigned long long)lh);
+ }
+ 
+-// The Audio rows -> the voice lane: volume, who hears this player (TeamRadio: the team by radio; AllRadio: everyone by radio - the
+-// host's fan-out treats radio as team only today, so AllRadio maps to radio + proximity until the relay knows it; Proximity; Radio +
+-// Proximity), open mic.
++// The Audio rows -> the voice lane: the voice / proximity volumes, who hears this player (TeamRadio: the team by radio; AllRadio:
++// everyone by radio - the All Radio packet flag; Proximity: anyone in earshot; Radio + Proximity), open mic, the input device. The
++// microphone is attached whenever the player is not a lane / harness run (WFC_NOINTERACT) and opens only while talking (Off never
++// talks) or while the Mic Test meter shows; the caller sets micTest.
+ net::VoiceSession::Config voiceConfigFrom(const frontend::SessionVoiceSettings& v) {
++    static const bool noInteract = [] { const char* e = std::getenv("WFC_NOINTERACT"); return e && *e && e[0] != '0'; }();
+     net::VoiceSession::Config c;
+     c.volume = std::max(0, std::min(100, v.volume)) / 100.0f;
++    c.proximityVolume = std::max(0, std::min(100, v.proximityVolume)) / 100.0f;
+     using A = frontend::SessionVoiceAudience;
+     c.radio = v.audience != A::Proximity;
+-    c.proximity = v.audience != A::TeamRadio;
++    c.allRadio = v.audience == A::AllRadio;
++    c.proximity = v.audience == A::Proximity || v.audience == A::RadioPlusProximity;
+     c.openMic = v.mode == frontend::SessionVoiceMode::OpenMic;
++    c.mic = !noInteract;
++    c.device = v.device;
+     return c;
+ }
+ 
++// The Mic Test meter's level: whichever voice lane runs (the match driver's, else the lobby's).
++void Application::bindMicMeter() {
++    if (!udpSession_ || micMeterFor_ == udpSession_) return;
++    micMeterFor_ = udpSession_;
++    udpSession_->setMicLevelSource([this] {
++        if (netDriver_ && netDriver_->voice()) return netDriver_->voice()->micLevel();
++        return lobbyVoice_ ? lobbyVoice_->micLevel() : 0.0f;
++    });
++}
++
+ // [Systems] The lobby voice lane: in a session with no match driver (the game lobby, between matches), everyone hears everyone
+ // (2D radio at the voice volume), push to talk / open mic as in the match, local mute, the talking indicators for the lobby list.
+ // Created on entering a session, dropped when the match driver takes over or the session ends.
+ void Application::tickLobbyVoice() {
++    bindMicMeter();
+     const bool want = udpSession_ && !netDriver_ && udpSession_->inLobby() && net::voiceCodecAvailable();
+     if (!want) {
+         if (lobbyVoice_) { lobbyVoice_.reset(); LOG_INFO("voice: the lobby lane closed"); }
+@@ -508,13 +526,12 @@ void Application::tickLobbyVoice() {
+     net::UdpSession* s = udpSession_;
+     const frontend::SessionVoiceSettings& v = s->voiceSettings();
+     net::VoiceSession::Config c = voiceConfigFrom(v);
+-    c.radio = true; c.proximity = false;   // the lobby: everyone, 2D
++    c.radio = true; c.proximity = false; c.allRadio = false;   // the lobby: everyone, 2D
++    c.micTest = s->micMeterShown();
+     if (!lobbyVoice_) {
+         net::VoiceSession::Link link{[s] { return s->sessionSeat(); }, [s](const uint8_t* p, size_t n) { s->sendLobbyVoice(p, n); },
+                                      [s](std::function<void(int, const uint8_t*, size_t)> f) { s->setLobbyVoiceSink(std::move(f)); }};
+-        lobbyVoice_ = std::make_unique<net::VoiceSession>(link, audio_, c);
+-        static const bool noInteract = [] { const char* e = std::getenv("WFC_NOINTERACT"); return e && *e && e[0] != '0'; }();
+-        if (v.mode != frontend::SessionVoiceMode::Off && !noInteract) lobbyVoice_->setSource(net::createVoiceCapture());
++        lobbyVoice_ = std::make_unique<net::VoiceSession>(link, audio_, c);   // the microphone: Config::mic (voiceConfigFrom)
+         lobbyVoice_->setMuted([s](int seat) { return s->isMuted(s->memberOfSeat(seat)); });
+         LOG_INFO("voice: the lobby lane opened (seat %d)", s->sessionSeat());
+     }
+@@ -531,8 +548,11 @@ void Application::tickNetDriver(double realDt) {
+         const frontend::SessionVoiceSettings& v = udpSession_->voiceSettings();
+         d.setTalking(v.mode == frontend::SessionVoiceMode::OpenMic || (v.mode == frontend::SessionVoiceMode::PushToTalk && udpSession_->pushToTalk()));
+     }
+-    if (udpSession_ && d.voice()) {   // the Audio rows stay live (volume / audience / open mic changed in the pause menu)
+-        d.voice()->setConfig(voiceConfigFrom(udpSession_->voiceSettings()));
++    bindMicMeter();
++    if (udpSession_ && d.voice()) {   // the Audio rows stay live (volume / audience / open mic / device changed in the pause menu)
++        net::VoiceSession::Config vc = voiceConfigFrom(udpSession_->voiceSettings());
++        vc.micTest = udpSession_->micMeterShown();
++        d.voice()->setConfig(vc);
+     }
+     d.frame(realDt);
+     if (udpSession_ && d.voice()) {   // the talking indicators: every match seat with a member (this player too)
+@@ -1042,6 +1062,43 @@ void Application::runVoiceTest() {
+     check(clean.state == 2, "the talking indicator: speaking (2) while the tone plays");
+     check(muted.frames == 0 && muted.muted > 0 && muted.state == 2, "muted talker: nothing played, its indicator still shows");
+ 
++    {   // The audience rows: an ENEMY listener (sameTeam false) hears Team Radio as nothing and All Radio as radio (the packet flag).
++        auto heardAsRadio = [&](bool allRadio, long& unheard) {
++            auto group = net::createLoopbackGroup(2);
++            net::Lockstep::Config ca; ca.seats = 2; ca.self = 0; ca.delay = 2;
++            net::Lockstep::Config cb = ca; cb.self = 1;
++            net::Lockstep la(*group[0], ca), lb(*group[1], cb);
++            net::VoiceSession::Config tc; tc.radio = true; tc.proximity = false; tc.allRadio = allRadio;
++            net::VoiceSession va(la, nullptr, tc), vb(lb, nullptr, net::VoiceSession::Config{});
++            va.setSyntheticTone(440.0f);
++            auto enemy = [](int) { return false; };
++            const auto t0 = std::chrono::steady_clock::now();
++            auto secs = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
++            while (secs() < 1.4) {
++                la.pump(); lb.pump();
++                va.update(secs() < 1.0, nullptr, enemy, nullptr, nullptr, core::Vec3{0, 0, 0}, core::Vec3{1, 0, 0});
++                vb.update(false, nullptr, enemy, nullptr, nullptr, core::Vec3{0, 0, 0}, core::Vec3{1, 0, 0});
++                std::this_thread::sleep_for(std::chrono::milliseconds(2));
++            }
++            unheard = vb.stats().unheard;
++            return vb.stats().radio;
++        };
++        long uTeam = 0, uAll = 0;
++        const long rTeam = heardAsRadio(false, uTeam), rAll = heardAsRadio(true, uAll);
++        LOG_INFO("VOICETEST audience: enemy listener - Team Radio %ld radio / %ld unheard, All Radio %ld radio / %ld unheard", rTeam, uTeam, rAll, uAll);
++        check(rTeam == 0 && uTeam > 0 && rAll >= 30 && uAll == 0, "audience: Team Radio never reaches an enemy; All Radio reaches every player");
++    }
++    {   // The Mic Test meter: a micLevel() read (the presenter, every frame while the row shows) opens the meter window for 0.5 s.
++        net::UdpSession::Options o; o.bindIp = "127.0.0.1"; o.hostPort = 24171; o.internet = false;
++        net::UdpSession u(o);
++        const bool before = u.micMeterShown();
++        u.setMicLevelSource([] { return 0.5f; });
++        const float lvl = u.micLevel();
++        const bool during = u.micMeterShown();
++        std::this_thread::sleep_for(std::chrono::milliseconds(650));
++        const bool after = u.micMeterShown();
++        check(!before && lvl == 0.5f && during && !after, "Mic Test: the meter reads the lane's level and holds the microphone open only while it shows");
++    }
+     {   // The lobby lane: real UdpSessions on loopback (a host + 2 members); member 1 talks; the host hears it directly, member 2 through
+         // the host's relay (everyone in the lobby hears everyone).
+         using T = frontend::SessionEvent::Type;
+diff --git a/src/core/LoadYield.cpp b/src/core/LoadYield.cpp
+index 35bf7c51..4ff709a3 100644
+--- a/src/core/LoadYield.cpp
++++ b/src/core/LoadYield.cpp
+@@ -3,6 +3,10 @@
+ #include "core/Log.h"
+ 
+ #include <chrono>
++#include <cmath>
++#include <fstream>
++#include <map>
++#include <sstream>
+ 
+ namespace core {
+ 
+@@ -12,6 +16,23 @@ std::chrono::steady_clock::time_point g_last = std::chrono::steady_clock::now();
+ LoadYieldStats g_stats;
+ bool g_inside = false;
+ constexpr double kIntervalMs = 1000.0 / 60.0;
++// loading progress (beginLoadProgress)
++bool g_progOn = false;
++std::string g_progKey;
++long g_steps = 0, g_expected = 0;
++float g_frac = 0.0f;
++const char* g_stage = "";
++const char* kProfileFile = "wfc_loadprofile.ini";   // (next to wfc_profile.ini: key=steps per line)
++std::map<std::string, long> readProfile() {
++    std::map<std::string, long> m;
++    std::ifstream f(kProfileFile);
++    std::string line;
++    while (std::getline(f, line)) {
++        const size_t eq = line.rfind('=');
++        if (eq != std::string::npos && eq > 0) m[line.substr(0, eq)] = std::atol(line.c_str() + eq + 1);
++    }
++    return m;
++}
+ }
+ 
+ void setLoadYield(LoadYieldFn fn) {
+@@ -20,6 +41,13 @@ void setLoadYield(LoadYieldFn fn) {
+ }
+ 
+ void loadYield(const char* where) {
++    if (g_progOn && !g_inside) {                       // (every call is a load step, presented or not)
++        ++g_steps;
++        g_stage = where ? where : "";
++        const float f = g_expected > 0 ? std::min(0.99f, (float)g_steps / (float)g_expected)
++                                       : 0.9f * (1.0f - std::exp(-(float)g_steps / 600.0f));
++        if (f > g_frac) g_frac = f;
++    }
+     if (!g_fn || g_inside) return;
+     auto now = std::chrono::steady_clock::now();
+     double ms = std::chrono::duration<double, std::milli>(now - g_last).count();
+@@ -40,4 +68,28 @@ void resetLoadYieldStats() {
+ 
+ LoadYieldStats loadYieldStats() { return g_stats; }
+ 
++void beginLoadProgress(const std::string& key) {
++    g_progOn = true; g_progKey = key; g_steps = 0; g_frac = 0.0f; g_stage = "";
++    const auto m = readProfile();
++    const auto it = m.find(key);
++    g_expected = it != m.end() ? it->second : 0;
++    LOG_INFO("load progress: %s, %ld steps expected%s", key.c_str(), g_expected, g_expected ? "" : " (first load: no history)");
++}
++
++void endLoadProgress() {
++    if (!g_progOn) return;
++    g_progOn = false; g_frac = 1.0f;
++    auto m = readProfile();
++    m[g_progKey] = g_steps;
++    std::ofstream f(kProfileFile, std::ios::trunc);
++    for (const auto& kv : m) f << kv.first << '=' << kv.second << '\n';
++    LOG_INFO("load progress: %s done in %ld steps (expected %ld)", g_progKey.c_str(), g_steps, g_expected);
++}
++
++LoadProgress loadProgress() {
++    LoadProgress p;
++    p.active = g_progOn; p.fraction = g_frac; p.stage = g_stage; p.steps = g_steps; p.expected = g_expected;
++    return p;
++}
++
+ } // namespace core
+diff --git a/src/core/LoadYield.h b/src/core/LoadYield.h
+index a816da96..2165c655 100644
+--- a/src/core/LoadYield.h
++++ b/src/core/LoadYield.h
+@@ -8,6 +8,7 @@
+ // tick), and it never runs in the middle of a GL upload because callers only yield between whole operations.
+ #pragma once
+ #include <functional>
++#include <string>
+ 
+ namespace core {
+ 
+@@ -21,4 +22,13 @@ struct LoadYieldStats { double maxGapMs = 0.0; const char* maxGapAt = ""; int fr
+ void resetLoadYieldStats();
+ LoadYieldStats loadYieldStats();
+ 
++// Loading progress from the loader's own steps: every loadYield call is one step. beginLoadProgress(key) at a load's start
++// (key = map + mode: the step total of its last load comes from wfc_loadprofile.ini), endLoadProgress() at its end (the
++// total recorded). fraction: steps / the last total (capped at 0.99 until the end), a first load eases toward 0.9;
++// never decreasing. stage: the current step's label ("World: texture", "Render: load step", ...).
++struct LoadProgress { bool active = false; float fraction = 0.0f; const char* stage = ""; long steps = 0, expected = 0; };
++void beginLoadProgress(const std::string& key);
++void endLoadProgress();
++LoadProgress loadProgress();
++
+ } // namespace core
+diff --git a/src/frontend/DataStores.cpp b/src/frontend/DataStores.cpp
+index 0761b74b..e56a83a3 100644
+--- a/src/frontend/DataStores.cpp
++++ b/src/frontend/DataStores.cpp
+@@ -114,6 +114,7 @@ std::string DataStores::read(const std::string& markup, bool* known) {
+     if (markup == "<PCSettings:VoiceAudience>") return std::to_string(flow_.profile().voice.audience);
+     if (markup == "<PCSettings:VoiceDevice>") return flow_.profile().voice.device;
+     if (markup == "<PCSettings:VoicePushToTalkKey>") return flow_.profile().voice.pttKey;
++    if (markup == "<PCSettings:VoiceChannelKey>") return flow_.profile().voice.channelKey;
+     if (markup == "<PCSettings:VoiceVolume>") return std::to_string(flow_.profile().voice.volume);
+     if (markup == "<PCSettings:ProximityVolume>") return std::to_string(flow_.profile().voice.proximityVolume);
+     if (markup == "<PCSettings:VoiceMicTest>") return "0";   // the meter row (its value text is the live level)
+@@ -499,6 +500,7 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
+         if (m == "<PCSettings:VoiceMode>") v.mode = std::clamp(std::atoi(a.c_str()), 0, 2);
+         else if (m == "<PCSettings:VoiceAudience>") v.audience = std::clamp(std::atoi(a.c_str()), 0, 3);
+         else if (m == "<PCSettings:VoiceDevice>") v.device = a;
++        else if (m == "<PCSettings:VoiceChannelKey>") { if (!a.empty()) v.channelKey = a; }
+         else if (m == "<PCSettings:VoicePushToTalkKey>") { if (a == "__custom") flow_.beginPttCapture(); else v.pttKey = a; }
+         else if (m == "<PCSettings:VoiceVolume>") v.volume = std::clamp(std::atoi(a.c_str()), 0, 100);
+         else if (m == "<PCSettings:ProximityVolume>") v.proximityVolume = std::clamp(std::atoi(a.c_str()), 0, 100);
+diff --git a/src/frontend/FrontendRuntime.cpp b/src/frontend/FrontendRuntime.cpp
+index 8aca4449..645cbb6a 100644
+--- a/src/frontend/FrontendRuntime.cpp
++++ b/src/frontend/FrontendRuntime.cpp
+@@ -96,6 +96,15 @@ void ScriptDriver::applySynthetic(platform::InputFrame& in) const {
+ }
+ 
+ void ScriptDriver::update(GameFlow& flow, float dt) {
++    if (!buttonHold_.empty() && (buttonLeft_ -= dt) <= 0.0f) {   // buttonhold expiry
++        FlowTrace::emit("script.buttonHold", {{"button", buttonHold_}, {"state", "released"}});
++        buttonHold_.clear();
++    }
++    if (!padHold_.empty() && (holdLeft_ -= dt) <= 0.0f) {   // padhold expiry: release
++        FlowTrace::emit("script.padHold", {{"button", padHold_}, {"state", "released"}});
++        if (padHook) padHook(padHold_, false);
++        padHold_.clear();
++    }
+     if (!synthQueue_.empty()) { synth_ = synthQueue_.front(); synthQueue_.erase(synthQueue_.begin()); return; }
+     if (keyUp_ >= 0) { if (keyHook) keyHook(keyUp_, false); keyUp_ = -1; return; }
+     if (!padUp_.empty()) { if (padHook) padHook(padUp_, false); padUp_.clear(); return; }
+@@ -178,6 +187,28 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
+             keyUp_ = code;
+             return;
+         }
++        // padhold:<button>,<seconds> (DEV / QA): a pad button or left-stick direction (LStickUp ...: full deflection) held through
++        // the XInput layer for that long while the next steps run (wait:t= to let it play out); a new padhold releases the old one
++        // buttonhold:<Button>,<seconds> (DEV / QA): a gameplay button by its platform::Button name (Forward, Fire, Transform, Jump,
++        // FineAim, Dash, Melee, Grenade, Interact, Ability1, Reload ...) held in the match input for that long, pressed on its first
++        // frame - the keyboard / mouse path a PC player uses (the window maps pad buttons to UI actions only)
++        if (st.rfind("buttonhold:", 0) == 0) {
++            const std::vector<std::string> p = split(st.substr(11), ',');
++            buttonHold_ = p.empty() ? std::string() : p[0];
++            buttonLeft_ = p.size() > 1 ? (float)std::atof(p[1].c_str()) : 1.0f;
++            FlowTrace::emit("script.buttonHold", {{"button", buttonHold_}, {"seconds", std::to_string(buttonLeft_)}});
++            continue;
++        }
++        if (st.rfind("padhold:", 0) == 0) {
++            const std::vector<std::string> p = split(st.substr(8), ',');
++            if (!padHold_.empty() && padHook) padHook(padHold_, false);
++            padHold_ = p.empty() ? std::string() : p[0];
++            holdLeft_ = p.size() > 1 ? (float)std::atof(p[1].c_str()) : 1.0f;
++            FlowTrace::emit("script.padHold", {{"button", padHold_}, {"seconds", std::to_string(holdLeft_)}});
++            if (padHook && !padHold_.empty()) padHook(padHold_, true);
++            else if (!padHook) LOG_WARN("FRONTEND script: padhold: needs the window's injectPad hook");
++            continue;
++        }
+         if (st.rfind("pad:", 0) == 0) {   // a pad button (binding name), held for one frame through the XInput layer
+             FlowTrace::emit("script.pad", {{"button", st.substr(4)}});
+             if (padHook) padHook(st.substr(4), true);
+@@ -613,6 +644,18 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
+             if (!mi || mi->campaignCharacters.empty() || GameFlow::inCampaignTrio(*mi, p.name)) names.push_back(p.name);
+         return BridgeValue(join(names));
+     }
++    if (iconic && fn == "Customize.GetPlayableCharacters" && flow_.lobby().gameModeTag == "SV") {
++        // Escalation: the map's CampaignCharacters (TransLevels.ini) in their authored order - never the chassis roster (which
++        // lists both factions and Truck7 'Optimus' beside 'Optimus Prime') [RE BASE_GAME_FLOWS_RE 1.4; playtest 2026-10-23b #11 / #12]
++        const MapInfo* mi = catalog_.mapById(flow_.lobby().mapId);
++        auto lower = [](std::string v) { for (char& ch : v) ch = (char)std::tolower((unsigned char)ch); return v; };
++        std::vector<std::string> names;
++        if (mi)
++            for (const std::string& t : mi->campaignCharacters)
++                for (const CharacterPreset& p : roster_.iconicCharacters())
++                    if (lower(p.name) == lower(t)) { names.push_back(p.name); break; }
++        if (!names.empty()) return BridgeValue(join(names));
++    }
+     if (iconic && fn == "Customize.GetPlayableCharacters") {   // GetPlayableIconicCharacterNames + FilterLockedIconicCharacters
+         std::vector<std::string> names;
+         for (const CharacterPreset& p : roster_.iconicCharacters()) if (iconicUnlocked(p)) names.push_back(p.name);
+@@ -1423,6 +1466,7 @@ void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
+ 
+ void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt) {
+     updateOnlineVoice();   // push-to-talk in the match too
++    updateVoiceChannelKey(input);
+     platform::InputFrame in = input;
+     hideRealPointer(in);
+     script_.applySynthetic(in);
+@@ -1608,6 +1652,21 @@ void FrontendRuntime::setCinematicMode(bool on, bool hideHud) {
+                                                {"hudHidden", FlowTrace::boolean(cinematicHudHidden_)}});
+ }
+ 
++void FrontendRuntime::updateVoiceChannelKey(const platform::InputFrame& input) {
++    // Only while the player plays: a menu (pause, settings: D-pad Right moves its selection) or the scoreboard has the input.
++    const bool online = flow_.online() && flow_.sessionRole() != GameFlow::SessionRole::Offline;
++    const bool gameplay = flow_.ui().state() == UIState::InGame && !scoreboard_;
++    const int vk = platform::virtualKeyForName(flow_.profile().voice.channelKey);
++    const bool down = online && gameplay && ((vk && platform::isKeyHeld(vk)) || (input.padButtons & platform::kPadDPadRight));
++    if (down && !voiceChannelWas_) {
++        static const char* const kNames[] = {"$WfcPC.Voice.VoiceTeamRadio", "$WfcPC.Voice.VoiceAllRadio", "$WfcPC.Voice.VoiceProximity",
++                                             "$WfcPC.Voice.VoiceRadioProximity"};
++        const int a = flow_.cycleVoiceAudience();
++        hud_.announce(catalog_.localizeKey("$WfcPC.Voice.VoiceChannel") + ": " + catalog_.localizeKey(kNames[a]));
++    }
++    voiceChannelWas_ = down;
++}
++
+ void FrontendRuntime::updateOnlineVoice() {
+     if (flow_.pttCaptureActive()) {
+         const uint16_t vk = keyProbe ? keyProbe() : platform::firstKeyDown();
+diff --git a/src/frontend/FrontendRuntime.h b/src/frontend/FrontendRuntime.h
+index dd632755..5211ee7e 100644
+--- a/src/frontend/FrontendRuntime.h
++++ b/src/frontend/FrontendRuntime.h
+@@ -106,6 +106,7 @@ public:
+     bool active() const { return pos_ < steps_.size(); }
+     bool finished() const { return !steps_.empty() && pos_ >= steps_.size(); }
+     void update(GameFlow& flow, float dt);
++    const std::string& heldGameButton() const { return buttonHold_; }   // buttonhold: (the match loop applies it)
+     std::function<void(int code, bool down)> keyHook;          // key:<code>
+     std::function<void(const std::string& button, bool down)> padHook;   // pad:<button> (IWindow::injectPad)
+     std::function<void(const std::string& fn, const std::vector<std::string>& args)> hudCallHook;   // hudcall:<fn>,<args>
+@@ -140,6 +141,10 @@ private:
+     int pressCount_ = 0;        // pressuntil: presses so far (at most 20)
+     int keyUp_ = -1;
+     std::string padUp_;
++    std::string padHold_;          // padhold:<button>,<seconds>: held until holdLeft_ runs out (later steps keep running)
++    float holdLeft_ = 0.0f;
++    std::string buttonHold_;       // buttonhold:<Button>,<seconds>: a gameplay button (Fire, Transform, Forward ...) held in the match input
++    float buttonLeft_ = 0.0f;
+ };
+ 
+ class FrontendRuntime {
+@@ -303,6 +308,8 @@ private:
+     bool cinematicHudHidden_ = false, cinematicShowPending_ = false;
+     void updateCinematicHud();
+     void updateOnlineVoice();
++    void updateVoiceChannelKey(const platform::InputFrame& input);   // [Systems] the Voice Channel key / D-pad Right in a match
++    bool voiceChannelWas_ = false;
+     bool voiceUiOverride_ = false;
+     bool pttCaptureArmed_ = false;   // the capture waits for every key to be released first (the key that chose "Custom...")
+     std::string spectateSent_;            // SetSpectateTarget: the name last sent to the respawn movie
+diff --git a/src/frontend/GameFlow.cpp b/src/frontend/GameFlow.cpp
+index c1ff8cad..0e7b3993 100644
+--- a/src/frontend/GameFlow.cpp
++++ b/src/frontend/GameFlow.cpp
+@@ -1552,12 +1552,15 @@ void GameFlow::matchLoaded() {
+     // controller with UseInGameLobby = !PRI.HasSelectedCharacter() = true [CONFIRMED script]. WaitingOnGameStart then
+     // ignores OnBeginGame (Choose Character stays up until a character is chosen) and the UI enters InGame when the
+     // player's pawn spawns (OnRespawn, event 5).
+-    selected_ = SelectedCharacter{};
++    // Escalation: the Survival GRI has RetainSelectedCharacterOnTransition = True - the lobby pick carries into the map and the
++    // player goes straight to the countdown; versus (False) picks again [RE BASE_GAME_FLOWS_RE 1.5; playtest 2026-10-23b #15]
++    const bool survival = match_.modeTag == "SV";
++    if (!survival) selected_ = SelectedCharacter{};
+     // a late joiner enters a running match: GRI.bMatchHasBegun is already true, so its pick spawns it at once (no pre-game
+     // countdown screen) [RE ONLINE_JOIN_IN_PROGRESS_RE]
+     matchHasBegun_ = match_.lateSeat >= 0;
+     // TnCampaignGame -> TnUIControllerCoop (in-map trio select, MISSION FAILED); versus -> TnUIControllerMultiplayer
+-    setUIController(campaign() ? UIControllerClass::Coop : UIControllerClass::Multiplayer, !selected_.valid);
++    setUIController(campaign() ? UIControllerClass::Coop : survival ? UIControllerClass::Survival : UIControllerClass::Multiplayer, !selected_.valid);
+     ui_.setGRIAvailable(true);
+     // PlayerController.CanCloseLoadingMovie: the world is fully loaded before gameplay [HIGH].
+     if (session_ && role_ != SessionRole::Offline) {   // online: the load gate holds the loading screen until all have loaded
+diff --git a/src/frontend/GameFlow.h b/src/frontend/GameFlow.h
+index dcb0e420..61bac30f 100644
+--- a/src/frontend/GameFlow.h
++++ b/src/frontend/GameFlow.h
+@@ -326,6 +326,7 @@ public:
+     enum class SessionRole { Offline, Host, Member };
+     bool online() const { return session_ != nullptr; }
+     SessionRole sessionRole() const { return role_; }
++    int partyTeamStatus() const { return gameTeamStatus_; }   // the party lobby's GTS (3 versus, 2 Escalation, 1 Campaign co-op)
+     static const char* sessionRoleName(SessionRole r) { return r == SessionRole::Host ? "Host" : r == SessionRole::Member ? "Member" : "Offline"; }
+     double onlineTime() const { return clock_; }   // the frontend-update time the session's timeouts count
+     const std::string& joinCode() const { return joinCode_; }        // host: shown in the lobby's join panel
+@@ -402,6 +403,7 @@ public:
+     void setPushToTalkHeld(bool held);                 // the runtime samples the key; sent on change
+     float micLevel() const { return session_ ? session_->micLevel() : 0.0f; }
+     bool simHeld() const { return session_ && session_->simHeld(); }   // the online load gate holds the World (ARCHITECTURE 10.4)
++    int cycleVoiceAudience();                          // the Voice Channel key / D-pad Right: the next audience (saved); returns it
+     static std::string micMeterText(float level);      // the Mic Test row's value: ten marks, "|||||....." at 0.5
+     // Push-to-Talk Key "Custom..." (PC EXTENSION): a prompt; the runtime captures the next key (Esc / Cancel: unchanged).
+     void beginPttCapture();
+diff --git a/src/frontend/GameFlow_Online.cpp b/src/frontend/GameFlow_Online.cpp
+index 659ba9d6..b6b8986f 100644
+--- a/src/frontend/GameFlow_Online.cpp
++++ b/src/frontend/GameFlow_Online.cpp
+@@ -271,9 +271,17 @@ void GameFlow::fillOnlineLaunch() {   // the match's participants (WFC_SESSIONTE
+                                            {"self", match_.self.fingerprint}, {"team", std::to_string(match_.teamIndex)}});
+ }
+ 
++int GameFlow::cycleVoiceAudience() {
++    profile_.voice.audience = (std::clamp(profile_.voice.audience, 0, 3) + 1) % 4;
++    profile_.save();   // the session follows on the next syncVoiceSettings (the key changed)
++    FlowTrace::emit("online.voiceChannel", {{"audience", std::to_string(profile_.voice.audience)}});
++    return profile_.voice.audience;
++}
++
+ void GameFlow::syncVoiceSettings() {   // the Audio rows to the session, whenever they change (and when the session starts)
+     const LocalProfile::Voice& v = profile_.voice;
+-    const std::string key = std::to_string(v.mode) + "|" + std::to_string(v.audience) + "|" + v.device + "|" + std::to_string(v.volume);
++    const std::string key = std::to_string(v.mode) + "|" + std::to_string(v.audience) + "|" + v.device + "|" + std::to_string(v.volume) +
++                            "|" + std::to_string(v.proximityVolume);
+     if (key == voiceSent_) return;
+     voiceSent_ = key;
+     SessionVoiceSettings s;
+@@ -281,6 +289,7 @@ void GameFlow::syncVoiceSettings() {   // the Audio rows to the session, wheneve
+     s.audience = (SessionVoiceAudience)std::clamp(v.audience, 0, 3);
+     s.device = v.device;
+     s.volume = v.volume;
++    s.proximityVolume = v.proximityVolume;
+     session_->setVoiceSettings(s);
+     FlowTrace::emit("online.voiceSettings", {{"mode", std::to_string(v.mode)}, {"audience", std::to_string(v.audience)}});
+ }
+diff --git a/src/frontend/Profile.cpp b/src/frontend/Profile.cpp
+index 6697869d..2e86177a 100644
+--- a/src/frontend/Profile.cpp
++++ b/src/frontend/Profile.cpp
+@@ -123,6 +123,7 @@ bool LocalProfile::loadFrom(std::istream& f) {
+             else if (k == "Audience") voice.audience = std::clamp(std::atoi(v.c_str()), 0, 3);
+             else if (k == "Device") voice.device = v;
+             else if (k == "PushToTalkKey") voice.pttKey = v;
++            else if (k == "VoiceChannelKey" && !v.empty()) voice.channelKey = v;
+             else if (k == "Volume") voice.volume = std::clamp(std::atoi(v.c_str()), 0, 100);
+             else if (k == "ProximityVolume") voice.proximityVolume = std::clamp(std::atoi(v.c_str()), 0, 100);
+             else if (k == "Muted" || k == "Blocked") {
+@@ -237,7 +238,7 @@ void LocalProfile::save() const {
+     for (const auto& [id, v] : progression.stats) if (v != 0) f << "Stat." << id << "=" << v << "\n";
+     if (!voice.isDefault()) {   // voice chat settings / mutes: only when changed (offline profiles unchanged)
+         f << "\n[Voice]\nMode=" << voice.mode << "\nAudience=" << voice.audience << "\nDevice=" << voice.device
+-          << "\nPushToTalkKey=" << voice.pttKey << "\nVolume=" << voice.volume << "\nProximityVolume=" << voice.proximityVolume << "\nMuted=";
++          << "\nPushToTalkKey=" << voice.pttKey << "\nVoiceChannelKey=" << voice.channelKey << "\nVolume=" << voice.volume << "\nProximityVolume=" << voice.proximityVolume << "\nMuted=";
+         for (size_t i = 0; i < voice.muted.size(); ++i) f << (i ? "," : "") << voice.muted[i];
+         f << "\n";
+         if (!voice.blocked.empty()) {
+diff --git a/src/frontend/Profile.h b/src/frontend/Profile.h
+index c1ce18a0..99dbbe3b 100644
+--- a/src/frontend/Profile.h
++++ b/src/frontend/Profile.h
+@@ -133,11 +133,12 @@ public:
+         int audience = 0;             // 0 Team Radio (the original: team-only voice, RE TnVoiceMuteHandler), 1 All Radio, 2 Proximity, 3 Radio + Proximity
+         std::string device;           // "" = System Default
+         std::string pttKey = "V";
++        std::string channelKey = "N";   // PC EXTENSION (user playtest 2026-10-23b): cycles the Voice Channel in a match; pad: D-pad Right
+         int volume = 70, proximityVolume = 70;
+         std::vector<std::string> muted;
+         std::vector<std::string> blocked;   // PC addition: the player card's Block (always muted; a local list, no server report)
+         bool isDefault() const {
+-            return mode == 1 && audience == 0 && device.empty() && pttKey == "V" && volume == 70 && proximityVolume == 70 && muted.empty() &&
++            return mode == 1 && audience == 0 && device.empty() && pttKey == "V" && channelKey == "N" && volume == 70 && proximityVolume == 70 && muted.empty() &&
+                    blocked.empty();
+         }
+     };
+diff --git a/src/frontend/Session.h b/src/frontend/Session.h
+index df62ed47..c76818ae 100644
+--- a/src/frontend/Session.h
++++ b/src/frontend/Session.h
+@@ -119,6 +119,7 @@ struct SessionVoiceSettings {
+     SessionVoiceAudience audience = SessionVoiceAudience::TeamRadio;   // the original: team-only voice (RE TnVoiceMuteHandler); proximity opt-in
+     std::string device;                     // capture device name; "" = the system default
+     int volume = 70;                        // playback 0-100
++    int proximityVolume = 70;               // proximity voice playback 0-100 (the Proximity Volume row)
+ };
+ enum class SessionLeaveReason { Left, Timeout, Kicked, LoadTimeout };
+ enum class SessionKickReason { Idle, Host };                             // D5: the original 180 s idle kick
+diff --git a/src/frontend/UIController.cpp b/src/frontend/UIController.cpp
+index fa23e1d6..47936172 100644
+--- a/src/frontend/UIController.cpp
++++ b/src/frontend/UIController.cpp
+@@ -37,6 +37,7 @@ const char* uiControllerClassName(UIControllerClass c) {
+     case UIControllerClass::GameLobby: return "TnUIControllerGameLobby";
+     case UIControllerClass::Multiplayer: return "TnUIControllerMultiplayer";
+     case UIControllerClass::Coop: return "TnUIControllerCoop";
++    case UIControllerClass::Survival: return "TnUIControllerSurvival";
+     }
+     return "?";
+ }
+@@ -50,15 +51,15 @@ std::string UIController::lobbyUI() const {
+ // TnUIControllerCoop (campaign): InGameLobbyUI = CharacterSelect_GFX (the chapter's iconic trio), no pre-game countdown screen,
+ // the pause menu, EndGameStats (CCP after a mission), CampaignGameOverUI = CampaignGameOver_GFX [RE CAMPAIGN_RUNTIME_EVENTS_RE].
+ std::string UIController::inGameLobbyUI() const {
+-    if (cls_ == UIControllerClass::Coop) return "UI_GFxCharacterSelect_p.CharacterSelect_GFX_1";
++    if (cls_ == UIControllerClass::Coop || cls_ == UIControllerClass::Survival) return "UI_GFxCharacterSelect_p.CharacterSelect_GFX_1";
+     return cls_ == UIControllerClass::Multiplayer ? "UI_GFxCustomize_p.CustomTransformers_GFX_1" : "";
+ }
+ std::string UIController::campaignGameOverUI() const { return cls_ == UIControllerClass::Coop ? "UI_GFxGameOver_p.CampaignGameOver_GFX_1" : ""; }
+-std::string UIController::gameStartUI() const { return cls_ == UIControllerClass::Multiplayer ? "UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1" : ""; }
+-std::string UIController::pauseUI() const { return cls_ == UIControllerClass::Multiplayer || cls_ == UIControllerClass::Coop ? "UI_GFxPause_p.PauseMenu_GFX_1" : ""; }
+-std::string UIController::spectatingUI() const { return cls_ == UIControllerClass::Multiplayer ? "UI_GFxRespawn_p.MultiplayerRespawn_GFX_1" : ""; }
++std::string UIController::gameStartUI() const { return mp() ? "UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1" : ""; }
++std::string UIController::pauseUI() const { return mp() || cls_ == UIControllerClass::Coop ? "UI_GFxPause_p.PauseMenu_GFX_1" : ""; }
++std::string UIController::spectatingUI() const { return mp() ? "UI_GFxRespawn_p.MultiplayerRespawn_GFX_1" : ""; }
+ std::string UIController::endGameUI() const {
+-    return cls_ == UIControllerClass::Multiplayer || cls_ == UIControllerClass::Coop ? "UI_GFxEndGameStats_p.EndGameStats_GFX_1" : "";
++    return mp() || cls_ == UIControllerClass::Coop ? "UI_GFxEndGameStats_p.EndGameStats_GFX_1" : "";
+ }
+ 
+ void UIController::initialize(UIControllerClass cls, OpenFn open, CloseFn close, HudFn hud, StateFn onState, bool inGameLobby) {
+@@ -70,7 +71,7 @@ void UIController::initialize(UIControllerClass cls, OpenFn open, CloseFn close,
+     LOG_INFO("FLOW uicontroller Initialize %s", uiControllerClassName(cls));
+     // StartingState: NotInGame (base); InLobby (party/game lobby); WaitingOnGameStart (multiplayer).
+     if (cls == UIControllerClass::PartyLobby || cls == UIControllerClass::GameLobby) gotoState(UIState::InLobby);
+-    else if (cls == UIControllerClass::Multiplayer || cls == UIControllerClass::Coop) gotoState(UIState::WaitingOnGameStart);
++    else if ((cls == UIControllerClass::Multiplayer || cls == UIControllerClass::Survival) || cls == UIControllerClass::Coop) gotoState(UIState::WaitingOnGameStart);
+ }
+ 
+ void UIController::openUI(const std::string& movie) {
+diff --git a/src/frontend/UIController.h b/src/frontend/UIController.h
+index c87b2f42..80597e32 100644
+--- a/src/frontend/UIController.h
++++ b/src/frontend/UIController.h
+@@ -22,7 +22,9 @@ enum class UIState {
+ };
+ const char* uiStateName(UIState s);
+ 
+-enum class UIControllerClass { Base, FrontEnd, PartyLobby, GameLobby, Multiplayer, Coop };   // Coop: campaign SOLO / CP / CCP
++// Coop: campaign SOLO / CP / CCP. Survival: Escalation (TnSurvivalGame.UIControllerClass): the multiplayer controller with the
++// iconic CharacterSelect_GFX as its in-game lobby (a player without a lobby pick) [RE BASE_GAME_FLOWS_RE 1.5].
++enum class UIControllerClass { Base, FrontEnd, PartyLobby, GameLobby, Multiplayer, Coop, Survival };
+ const char* uiControllerClassName(UIControllerClass c);
+ 
+ class UIController {
+@@ -43,6 +45,7 @@ public:
+     void setGRIAvailable(bool v);
+ 
+     UIState state() const { return state_; }
++    bool mp() const { return cls_ == UIControllerClass::Multiplayer || cls_ == UIControllerClass::Survival; }   // the versus-derived controllers
+     UIControllerClass cls() const { return cls_; }
+     const std::string& openMovie() const { return openMovie_; }
+     bool hudVisible() const { return hudVisible_; }
+diff --git a/src/game/AmbientAudio.cpp b/src/game/AmbientAudio.cpp
+index 597ebf3f..c4d71b45 100644
+--- a/src/game/AmbientAudio.cpp
++++ b/src/game/AmbientAudio.cpp
+@@ -214,6 +214,8 @@ bool AmbientAudio::load(const std::string& path, const std::string& contentRoot,
+ 
+     // Kismet audio ops (Systems manifest; an AssetTools manifest may carry the same section).
+     const int ns = script_.load(root.has("kismet") ? root["kismet"] : sys["kismet"]);
++    if (root.has("subtitles") && subtitles_.load(root) > 0)   // a campaign chapter's dialogue text
++        script_.setDialogListener([this](const std::string& cue, int) { subCue_ = cue; subStart_ = subClock_; });
+     // A generated Kismet graph with the map's touch volumes runs the zones itself (Out:<touch> -> zone -> reverb /
+     // pools / mixer...); the AssetTools manifest's flattened zones are then not used (no double zone logic).
+     if (script_.hasTouchZones()) {
+@@ -243,6 +245,8 @@ void AmbientAudio::unload(SoundCues& cues) {
+     cues.unloadMapCues();                                // also stops pool one-shots still sounding
+     cues.mixer().removeMapPresets();
+     script_.unload();
++    script_.setDialogListener(nullptr);
++    subtitles_.clear(); subCue_.clear();
+     level_.clear();
+     announcer_.clear();
+     emitters_.clear();
+@@ -322,8 +326,17 @@ core::Vec3 AmbientAudio::placeFor(const Emitter& e, const core::Vec3& l) const {
+     return out;
+ }
+ 
++std::string AmbientAudio::currentSubtitle() const {
++    if (subCue_.empty()) return std::string();
++    std::string lang = SoundCues::language();
++    for (char& ch : lang) ch = (char)std::tolower((unsigned char)ch);
++    const std::vector<CampaignSubtitles::Line>* l = subtitles_.lines(subCue_, lang);
++    return l ? CampaignSubtitles::lineAt(*l, subClock_ - subStart_, subtitles_.duration(subCue_)) : std::string();
++}
++
+ void AmbientAudio::tick(float dt, const core::Vec3& listener, const core::Vec3& pawn, SoundCues& cues, bool pawnAlive) {
+     if (!loaded_) return;
++    subClock_ += dt;
+ 
+     // Zones: SeqEvent_Touch (local player pawn, client side, camera ignored) fires on the frame the pawn
+     // starts overlapping a trigger volume; UnTouched is unlinked. Several Touches in one frame run in zone
+diff --git a/src/game/AmbientAudio.h b/src/game/AmbientAudio.h
+index ae2a2793..1522be3c 100644
+--- a/src/game/AmbientAudio.h
++++ b/src/game/AmbientAudio.h
+@@ -45,6 +45,7 @@
+ #include <vector>
+ #include "audio/Audio.h"
+ #include "core/Math.h"
++#include "game/CampaignSubtitles.h"
+ #include "game/LevelAudioScript.h"
+ 
+ namespace game {
+@@ -75,6 +76,9 @@ public:
+     int fireEvent(const std::string& trigger, SoundCues& cues, const core::Vec3& listener);
+     const LevelAudioScript& script() const { return script_; }
+     LevelAudioScript& hostedScript() { return script_; }   // the campaign VM's audio ops (LevelAudioScript hosted mode)
++    // [Systems QC] The subtitle on screen now (the chapter audio's "subtitles", in the dialogue language, INT fallback): the line of
++    // the conversation line playing, "" for none. Display - and the profile's Subtitles option (default off) - is the HUD's.
++    std::string currentSubtitle() const;
+     const std::string& levelName() const { return level_; }
+     // The compiled-in Systems level manifests.
+     static bool hasLevelManifest(const std::string& level);
+@@ -137,6 +141,9 @@ private:
+     bool preferManifestZones_ = false;
+     std::map<std::string, std::string> announcer_;
+     LevelAudioScript script_;
++    CampaignSubtitles subtitles_;
++    std::string subCue_;                 // the conversation line's cue the subtitle follows ("" = none)
++    float subClock_ = 0.0f, subStart_ = 0.0f;
+     MusicPlayer* music_ = nullptr;
+     audio::IAudio* audio_ = nullptr;
+     std::vector<Emitter> emitters_;
+diff --git a/src/game/CampaignSubtitles.cpp b/src/game/CampaignSubtitles.cpp
+index 0c20f1be..efe8295f 100644
+--- a/src/game/CampaignSubtitles.cpp
++++ b/src/game/CampaignSubtitles.cpp
+@@ -59,6 +59,21 @@ const std::vector<CampaignSubtitles::Line>* CampaignSubtitles::lines(const std::
+     return l == w->byLang.end() ? nullptr : &l->second;
+ }
+ 
++std::vector<std::string> CampaignSubtitles::cues() const {
++    std::vector<std::string> out;
++    for (const auto& kv : cueWaves_) out.push_back(kv.first);
++    return out;
++}
++
++std::string CampaignSubtitles::lineAt(const std::vector<Line>& lines, float t, float duration) {
++    if (lines.empty() || t < 0.0f) return std::string();
++    const float end = duration > 0.0f ? duration : lines.back().time + 4.0f;
++    if (t > end) return std::string();
++    const Line* at = nullptr;
++    for (const Line& l : lines) if (l.time <= t) at = &l;
++    return at && at->show ? at->text : std::string();
++}
++
+ float CampaignSubtitles::duration(const std::string& cue) const {
+     const Wave* w = waveFor(cue, "int");
+     return w ? w->duration : 0.0f;
+diff --git a/src/game/CampaignSubtitles.h b/src/game/CampaignSubtitles.h
+index 3a6b1239..43be4529 100644
+--- a/src/game/CampaignSubtitles.h
++++ b/src/game/CampaignSubtitles.h
+@@ -21,6 +21,10 @@ public:
+     // The lines for a dialog cue in a language ("int", "fra"; another / missing language falls back to "int"); null = none.
+     const std::vector<Line>* lines(const std::string& cue, const std::string& lang = "int") const;
+     float duration(const std::string& cue) const;   // the wave's authored Duration (s), 0 = unknown
++    std::vector<std::string> cues() const;           // every cue with localized waves (tests)
++    // The text on screen t seconds after a line's cue started: the last line with time <= t that the original shows (show), until
++    // the wave's Duration (unknown: the last line's time + 4 s); "" before the first line, after the end, or for a hidden line.
++    static std::string lineAt(const std::vector<Line>& lines, float t, float duration);
+ private:
+     struct Wave { float duration = 0.0f; std::unordered_map<std::string, std::vector<Line>> byLang; };
+     std::unordered_map<std::string, Wave> byWave_;
+diff --git a/src/game/LevelAudio.inc b/src/game/LevelAudio.inc
+index aff89d66..e595b23f 100644
+--- a/src/game/LevelAudio.inc
++++ b/src/game/LevelAudio.inc
+@@ -109,7 +109,9 @@ const LevelAudioManifest kLevelAudioManifests[] = {
+      R"WFCJSON(ant_AUDIO_m|TRIGGER_FARM.SeqEvent_Touch_2118:Touched","to":"MP_ESC_Remnant_AUDIO_m|TRIGGER_FARM.SeqAct_AmbientAudioZone_6477","input":0},{"from":"Out:MP_ESC_Remnant_AUDIO_m|TRIGGER_FARM.SeqEvent_Touch_472:Touched","to":"MP_ESC_Remnant_AUDIO_m|TRIGGER_FARM.SeqAct_AmbientAudioZone_6477","input":0},{"from":"Out:MP_ESC_Remnant_AUDIO_m|TRIGGER_FARM.SeqEvent_Touch_8704:Touched","to":"MP_ESC_Remnant_AUDIO_m|TRIGGER_FARM.SeqAct_AmbientAudioZone_6477","input":0},{"from":"Out:MP_ESC_Remnant_AUDIO_m|TRIGGER_FARM.SeqEvent_Touch_9474:Touched","to":"MP_ESC_Remnant_AUDIO_m|TRIGGER_FARM.SeqAct_AmbientAudioZone_6477","input":0},{"from":"Out:MP_ESC_Remnant_AUDIO_m|TRIGGER_FARM.SeqEvent_Touch_15339:Touched","to":"MP_ESC_Remnant_AUDIO_m|TRIGGER_FARM.SeqAct_AmbientAudioZone_6703","input":0},{"from":"Out:MP_ESC_Remnant_AUDIO_m|TRIGGER_FARM.SeqEvent_Touch_14335:Touched","to":"MP_ESC_Remnant_AUDIO_m|TRIGGER_FARM.SeqAct_Reverb_14094","input":0},{"from":"Out:MP_ESC_Remnant_AUDIO_m|TRIGGER_FARM.SeqEvent_Touch_14335:UnTouched","to":"MP_ESC_Remnant_AUDIO_m|TRIGGER_FARM.SeqAct_Reverb_4218","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 10","to":"MP_ESC_Remnant_BASE_m|SeqAct_Conversation_1943","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 11","to":"MP_ESC_Remnant_BASE_m|SeqAct_Conversation_1943","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 5","to":"MP_ESC_Remnant_BASE_m|SeqAct_Conversation_2373","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 6","to":"MP_ESC_Remnant_BASE_m|SeqAct_Conversation_2373","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 19","to":"MP_ESC_Remnant_BASE_m|SeqAct_Conversation_3292","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 20","to":"MP_ESC_Remnant_BASE_m|SeqAct_Conversation_3292","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 15","to":"MP_ESC_Remnant_BASE_m|SeqAct_Conversation_5627","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 16","to":"MP_ESC_Remnant_BASE_m|SeqAct_Conversation_5627","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 1","to":"MP_ESC_Remnant_BASE_m|SeqAct_Conversation_8736","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 2","to":"MP_ESC_Remnant_BASE_m|SeqAct_Conversation_8736","input":0},{"from":"Game:TnSeqEvent_SurvivalEvents:Round Begin","to":"MP_ESC_Remnant_BASE_m|SeqAct_Delay_5140","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_Delay_5140:Finished","to":"MP_ESC_Remnant_BASE_m|SeqAct_Gate_14417","input":0},{"from":"GameplayStarted","to":"MP_ESC_Remnant_BASE_m|SeqAct_Gate_14417","input":2},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 1","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 2","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 5","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 6","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 10","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 11","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 15","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 16","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 19","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953:Link 20","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":0},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_Conversation_1943:Stopped","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":1},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_Conversation_1943:Finished","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":1},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_Conversation_2373:Stopped","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":1},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_Conversation_2373:Finished","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":1},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_Conversation_3292:Stopped","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":1},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_Conversation_3292:Finished","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":1},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_Conversation_5627:Stopped","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":1},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_Conversation_5627:Finished","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":1},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_Conversation_8736:Stopped","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":1},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_Conversation_8736:Finished","to":"MP_ESC_Remnant_BASE_m|SeqAct_Mixer_14958","input":1},{"from":"Out:MP_ESC_Remnant_BASE_m|SeqAct_Gate_14417:Out","to":"MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953","input":0},{"from":"Game:SeqEvent_Console:Out","to":"MP_ESC_Remnant_BASE_m|SeqAct_RandomSwitch_11953","input":0}],"replaces_manifest_zones":true},"announcer":{"event_set":"SoundEvents_Dialog.Announcer.CHR_ANNOUNCER_DIALOG"}})WFCJSON"
+     },
+     {"MP_ESC_Tranquillity",
+-     R"WFCJSON({"map":"MP_ESC_Tranquillity","source":"Systems tools/systems/gen_level_audio.py from AssetTools authored.db (MP_ESC_Tranquillity_AUDIO_m, MP_ESC_Tranquillity_Art2_m, MP_ESC_Tranquillity_Art_m, MP_ESC_Tranquillity_BASE_m Kismet)","cues":{},"cue_limits":{"BL_LVL_MP_ESC_TRANQUILLITY.AMB_CAVERN_TUNNEL":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.AMB_ENERGON_LAKE":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.AMB_LARGE_CHAMBER":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.AMB_MACHINE_ROOM":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.AMB_SPOOKY_CREAKY_TUNNEL":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_COMPUTER_MONITOR_01":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_COMPUTER_MONITOR_02":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_COOLANT_GENERATORS_ENERGY_LOW_LP":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_COOLANT_GENERATORS_ENERGY_LP":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_GENERATOR":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_VENDOR":{"MaxConcurrentPlayCount":2,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_LARGE_01":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MED_01":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MIST_01":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_MECHANICAL_SPARK_WALL":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_MECHANICAL_SPINNING_OBJECT":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_SPAWN_DOOR_HOLOGRAM":{"MaxConcurrentPlayCount":3,"InstanceLimiting":"kKillFarthest"}},"reverb_presets":{},"kismet":{"actors":{},"ops":[],"links":[],"replaces_manifest_zones":false},"announcer":{"event_set":"SoundEvents_Dialog.Announcer.CHR_ANNOUNCER_DIALOG"}})WFCJSON"
++     R"WFCJSON({"map":"MP_ESC_Tranquillity","source":"Systems tools/systems/gen_level_audio.py from AssetTools authored.db (MP_ESC_Tranquillity_AUDIO_m, MP_ESC_Tranquillity_Art2_m, MP_ESC_Tranquillity_Art_m, MP_ESC_Tranquillity_BASE_m Kismet)","cues":{"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_DRIPS":{"cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_DRIPS","class":"SoundCue","tree":{"node":"SoundNodeRoot_8125","class":"SoundNodeRoot","params":{"Volume":-3.0,"Pitch":-1.0,"DistanceMin":7500.0,"DistanceMax":12000.0,"RolloffFactor":2.0,"Priority":80.0,"Category":"SFX_WET_AMB_3D"},"children":[{"node":"SoundNodeWaveEvent_12243","class":"SoundNodeWaveEvent","params":{"Time":0.6238497495651245,"Volume":-2.0,"Envelope":{"VolumeCurve":[{"X":0.3073512315750122,"Y":0.10000000894069672},{"X":1.5584661960601807,"Y":1.0},{"X":3.044240951538086,"Y":0.8000000715255737},{"X":5.459141731262207,"Y":0.0}],"PitchCurve":[{"X":1.2654272317886353,"Y":0.0},{"X":3.0969202518463135,"Y":-4.799999237060547}]}},"children":[{"node":"WL_LIQUID.LIQ_ENERGON_SPRAY_LP","class":"SoundNodeWaveEx","wav":"content/WL_LIQUID/LIQ_ENERGON_SPRAY_LP.wav"}]},{"node":"SoundNodeWaveEvent_8591","class":"SoundNodeWaveEvent","params":{"Time":2.7304203510284424,"DelayMax":0.07000000029802322,"Envelope":{"VolumeCurve":[{"X":4.011468887329102,"Y":1.0},{"X":7.1056904792785645,"Y":0.0}],"PitchCurve":[{"X":3.834798812866211,"Y":0.0},{"X":5.3244099617004395,"Y":-4.799999237060547}]}},"children":[{"node":"WL_LIQUID.LIQ_ENERGON_RAIN_LP","class":"SoundNodeWaveEx","wav":"content/WL_LIQUID/LIQ_ENERGON_RAIN_LP.wav"}]},{"node":"SoundNodeWaveEvent_2851","class":"SoundNodeWaveEvent","params":{"Pitch":1.0,"Envelope":{"VolumeCurve":[{"X":0.0,"Y":0.5666667222976685},{"X":1.119670033454895,"Y":1.0},{"X":2.802750587463379,"Y":1.0},{"X":4.271816730499268,"Y":0.0}]}},"children":[{"node":"WL_LIQUID.LIQ_ENERGON_WATERFALL_MED_LP","class":"SoundNodeWaveEx","wav":"content/WL_LIQUID/LIQ_ENERGON_WATERFALL_MED_LP.wav"}]}]},"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_LARGE_02":{"cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_LARGE_02","class":"SoundCue","tree":{"node":"SoundNodeRoot_8125","class":"SoundNodeRoot","params":{"DistanceMin":2000.0,"DistanceMax":9500.0,"RolloffFactor":2.0,"RearAttenuation":-1.0,"Priority":80.0,"Category":"SFX_WET_AMB_EXTERIOR"},"children":[{"node":"SoundNodeWaveEvent_12243","class":"SoundNodeWaveEvent","params":{"bLooping":true},"children":[{"node":"WL_LIQUID.LIQ_ENERGON_WATERFALL_LARGE_LP","class":"SoundNodeWaveEx","wav":"content/WL_LIQUID/LIQ_ENERGON_WATERFALL_LARGE_LP.wav"}]}]},"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_LARGE_03":{"cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_LARGE_03","class":"SoundCue","tree":{"node":"SoundNodeRoot_8125","class":"SoundNodeRoot","params":{"DistanceMin":2000.0,"DistanceMax":9500.0,"RolloffFactor":2.0,"RearAttenuation":-1.0,"Priority":80.0,"Category":"SFX_WET_AMB_EXTERIOR"},"children":[{"node":"SoundNodeWaveEvent_12243","class":"SoundNodeWaveEvent","params":{"bLooping":true},"children":[{"node":"WL_LIQUID.LIQ_ENERGON_WATERFALL_LARGE_LP","class":"SoundNodeWaveEx","wav":"content/WL_LIQUID/LIQ_ENERGON_WATERFALL_LARGE_LP.wav"}]}]},"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MED_02":{"cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MED_02","class":"SoundCue","tree":{"node":"SoundNodeRoot_8125","class":"SoundNodeRoot","params":{"DistanceMin":4000.0,"DistanceMax":15000.0,"RolloffFactor":3.0,"RearAttenuation":-2.0,"Priority":80.0,"Category":"SFX_WET_AMB_EXTERIOR"},"children":[{"node":"SoundNodeWaveEvent_12243","class":"SoundNodeWaveEvent","params":{"bLooping":true},"children":[{"node":"WL_LIQUID.LIQ_ENERGON_WATERFALL_MED_LP","class":"SoundNodeWaveEx","wav":"content/WL_LIQUID/LIQ_ENERGON_WATERFALL_MED_LP.wav"}]}]},"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MED_03":{"cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MED_03","class":"SoundCue","tree":{"node":"SoundNodeRoot_8125","class":"SoundNodeRoot","params":{"DistanceMin":4000.0,"DistanceMax":15000.0,"RolloffFactor":3.0,"RearAttenuation":-2.0,"Priority":80.0,"Category":"SFX_WET_AMB_EXTERIOR"},"children":[{"node":"SoundNodeWaveEvent_12243","class":"SoundNodeWaveEvent","params":{"bLooping":true},"children":[{"node":"WL_LIQUID.LIQ_ENERGON_WATERFALL_MED_LP","class":"SoundNodeWaveEx","wav":"content/WL_LIQUID/LIQ_ENERGON_WATERFALL_MED_LP.wav"}]}]},"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MIST_02":{"cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MIST_02","class":"SoundCue","tree":{"node":"SoundNodeRoot_8125","class":"SoundNodeRoot","params":{"DistanceMin":6000.0,"DistanceMax":10000.0,"RolloffFactor":5.0,"RearAttenuation":-3.0,"Priority":80.0,"Category":"SFX_WET_AMB_EXTERIOR"},"children":[{"node":"SoundNodeWaveEvent_12243","class":"SoundNodeWaveEvent","params":{"bLooping":true},"children":[{"node":"WL_LIQUID.LIQ_ENERGON_WATERFALL_MIST_LP","class":"SoundNodeWaveEx","wav":"content/WL_LIQUID/LIQ_ENERGON_WATERFALL_MIST_LP.wav"}]}]},"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MIST_03":{"cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MIST_03","class":"SoundCue","tree":{"node":"SoundNodeRoot_8125","class":"SoundNodeRoot","params":{"DistanceMin":6000.0,"DistanceMax":10000.0,"RolloffFactor":5.0,"RearAttenuation":-3.0,"Priority":80.0,"Category":"SFX_WET_AMB_EXTERIOR"},"children":[{"node":"SoundNodeWaveEvent_12243","class":"SoundNodeWaveEvent","params":{"bLooping":true},"children":[{"node":"WL_LIQUID.LIQ_ENERGON_WATERFALL_MIST_LP","class":"SoundNodeWaveEx","wav":"content/WL_LIQUID/LIQ_ENERGON_WATERFALL_MIST_LP.wav"}]}]},"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"}},"cue_limits":{"BL_LVL_MP_ESC_TRANQUILLITY.AMB_CAVERN_TUNNEL":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.AMB_ENERGON_LAKE":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.AMB_LARGE_CHAMBER":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.AMB_MACHINE_ROOM":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.AMB_SPOOKY_CREAKY_TUNNEL":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_COMPUTER_MONITOR_01":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_COMPUTER_MONITOR_02":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_COOLANT_GENERATORS_ENERGY_LOW_LP":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_COOLANT_GENERATORS_ENERGY_LP":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_GENERATOR":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_VENDOR":{"MaxConcurrentPlayCount":2,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_DRIPS":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_LARGE_01":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_LARGE_02":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_LARGE_03":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MED_01":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ES)WFCJSON"
++     R"WFCJSON(C_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MED_02":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MED_03":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MIST_01":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MIST_02":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MIST_03":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_MECHANICAL_SPARK_WALL":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_MECHANICAL_SPINNING_OBJECT":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_SPAWN_DOOR_HOLOGRAM":{"MaxConcurrentPlayCount":3,"InstanceLimiting":"kKillFarthest"}},"reverb_presets":{"REVERB_TRANS_MP_TRANQUILLITY_COMPOUND_MED":{"mixer_preset":{"Name":"REVERB_TRANS_MP_TRANQUILLITY_COMPOUND_MED","Priority":227.0,"FadeInTime":0.25,"FadeOutTime":0.3499999940395355,"Duration":-1.0,"IsPlayerPOV":false},"dsp_by_category":{"MASTER_WET":{"Name":"REVERB_TRANS_MP_TRANQUILLITY_COMPOUND_MED","Volume":{"Volume":1.0},"Pitch":{"Pitch":1.0},"HighPass":{"Frequency":10.0,"Resonance":1.0},"LowPass":{"Frequency":22000.0,"Resonance":1.0},"FastLowPass":{"Frequency":22000.0},"Flange":{"Depth":1.0,"Rate":0.10000000149011612,"WetMix":0.0,"DryMix":1.0},"Distortion":{"Level":0.0,"Volume":1.0},"Compressor":{"Threshold":0.0,"Attack":50.0,"Release":50.0,"GainMakeup":0.0},"FastEQ":{"Frequency":8000.0,"Bandwidth":1.0,"Volume":1.0},"EQ":{"Frequency":[8000.0,8000.0,8000.0],"Bandwidth":[1.0,1.0,1.0],"Volume":[1.0,1.0,1.0]},"Echo":{"Delay":84.0,"DecayRatio":0.08999999612569809,"WetMix":0.14092886447906494,"DryMix":1.0},"Reverb":{"DryLevel":0.0,"Room":-700.0,"RoomHF":-900.0,"RoomRolloffFactor":4.089999675750732,"DecayTime":3.429999828338623,"DecayHFRatio":0.7699999809265137,"ReflectionsLevel":-670.0,"ReflectionsDelay":0.0650000050663948,"Level":-700.0,"Delay":0.03100000135600567,"Diffusion":44.0,"Density":56.0,"HFReference":6319.0}}}},"REVERB_TRANS_MP_TRANQUILLITY_COMPOUND_SM":{"mixer_preset":{"Name":"REVERB_TRANS_MP_TRANQUILLITY_COMPOUND_SM","Priority":228.0,"FadeInTime":0.25,"FadeOutTime":0.25,"Duration":-1.0,"IsPlayerPOV":false},"dsp_by_category":{"MASTER_WET":{"Name":"REVERB_TRANS_MP_TRANQUILLITY_COMPOUND_SM","Volume":{"Volume":1.0},"Pitch":{"Pitch":1.0},"HighPass":{"Frequency":10.0,"Resonance":1.0},"LowPass":{"Frequency":22000.0,"Resonance":1.0},"FastLowPass":{"Frequency":22000.0},"Flange":{"Depth":1.0,"Rate":0.10000000149011612,"WetMix":0.0,"DryMix":1.0},"Distortion":{"Level":0.0,"Volume":1.0},"Compressor":{"Threshold":0.0,"Attack":50.0,"Release":50.0,"GainMakeup":0.0},"FastEQ":{"Frequency":8000.0,"Bandwidth":1.0,"Volume":1.0},"EQ":{"Frequency":[8000.0,8000.0,8000.0],"Bandwidth":[1.0,1.0,1.0],"Volume":[1.0,1.0,1.0]},"Echo":{"Delay":35.0,"DecayRatio":0.10999999940395355,"WetMix":0.2857590317726135,"DryMix":1.0},"Reverb":{"DryLevel":0.0,"Room":-600.0,"RoomHF":-750.0,"RoomRolloffFactor":5.670000076293945,"DecayTime":1.3700000047683716,"DecayHFRatio":1.0,"ReflectionsLevel":-700.0,"ReflectionsDelay":0.013000000268220901,"Level":-600.0,"Delay":0.02500000037252903,"Diffusion":81.0,"Density":63.0,"HFReference":7500.0}}}},"REVERB_TRANS_MP_TRANQUILLITY_GORGE":{"mixer_preset":{"Name":"REVERB_TRANS_MP_TRANQUILLITY_GORGE","Priority":225.0,"FadeInTime":0.25,"FadeOutTime":1.0,"Duration":-1.0,"IsPlayerPOV":false},"dsp_by_category":{"MASTER_WET":{"Name":"REVERB_TRANS_MP_TRANQUILLITY_GORGE","Volume":{"Volume":1.0},"Pitch":{"Pitch":1.0},"HighPass":{"Frequency":10.0,"Resonance":1.0},"LowPass":{"Frequency":22000.0,"Resonance":1.0},"FastLowPass":{"Frequency":22000.0},"Flange":{"Depth":1.0,"Rate":0.10000000149011612,"WetMix":0.0,"DryMix":1.0},"Distortion":{"Level":0.0,"Volume":1.0},"Compressor":{"Threshold":0.0,"Attack":50.0,"Release":50.0,"GainMakeup":0.0},"FastEQ":{"Frequency":8000.0,"Bandwidth":1.0,"Volume":1.0},"EQ":{"Frequency":[8000.0,8000.0,8000.0],"Bandwidth":[1.0,1.0,1.0],"Volume":[1.0,1.0,1.0]},"Echo":{"Delay":207.0,"DecayRatio":0.12999999523162842,"WetMix":0.15703627467155457,"DryMix":1.0},"Reverb":{"DryLevel":0.0,"Room":-600.0,"RoomHF":-750.0,"RoomRolloffFactor":8.279999732971191,"DecayTime":3.239999771118164,"DecayHFRatio":0.6700000166893005,"ReflectionsLevel":-600.0,"ReflectionsDelay":0.1600000113248825,"Level":-650.0,"Delay":0.03500000014901161,"Diffusion":16.0,"Density":39.0,"HFReference":4154.0}}}},"REVERB_TRANS_MP_TRANQUILLITY_COMPOUND_LRG":{"mixer_preset":{"Name":"REVERB_TRANS_MP_TRANQUILLITY_COMPOUND_LRG","Priority":226.0,"FadeInTime":0.25,"FadeOutTime":0.25,"Duration":-1.0,"IsPlayerPOV":false},"dsp_by_category":{"MASTER_WET":{"Name":"REVERB_TRANS_MP_TRANQUILLITY_COMPOUND_LRG","Volume":{"Volume":1.0},"Pitch":{"Pitch":1.0},"HighPass":{"Frequency":10.0,"Resonance":1.0},"LowPass":{"Frequency":22000.0,"Resonance":1.0},"FastLowPass":{"Frequency":22000.0},"Flange":{"Depth":1.0,"Rate":0.10000000149011612,"WetMix":0.0,"DryMix":1.0},"Distortion":{"Level":0.0,"Volume":1.0},"Compressor":{"Threshold":0.0,"Attack":50.0,"Release":50.0,"GainMakeup":0.0},"FastEQ":{"Frequency":8000.0,"Bandwidth":1.0,"Volume":1.0},"EQ":{"Frequency":[8000.0,8000.0,8000.0],"Bandwidth":[1.0,1.0,1.0],"Volume":[1.0,1.0,1.0]},"Echo":{"Delay":231.0,"DecayRatio":0.12999999523162842,"WetMix":0.21777097880840302,"DryMix":1.0},"Reverb":{"DryLevel":0.0,"Room":-640.0,"RoomHF":-750.0,"RoomRolloffFactor":5.569999694824219,"DecayTime":3.239999771118164,"DecayHFRatio":0.7100000381469727,"ReflectionsLevel":-800.0,"ReflectionsDelay":0.0650000050663948,"Level":-719.0,"Delay":0.03200000151991844,"Diffusion":11.0,"Density":56.0,"HFReference":5925.0}}}},"REVERB_TRANS_MP_TRANQUILLITY_LABYRINTH":{"mixer_preset":{"Name":"REVERB_TRANS_MP_TRANQUILLITY_LABYRINTH","Priority":224.0,"FadeInTime":0.25,"FadeOutTime":0.5,"Duration":-1.0,"IsPlayerPOV":false},"dsp_by_category":{"MASTER_WET":{"Name":"REVERB_TRANS_MP_TRANQUILLITY_LABYRINTH","Volume":{"Volume":1.0},"Pitch":{"Pitch":1.0},"HighPass":{"Frequency":10.0,"Resonance":1.0},"LowPass":{"Frequency":22000.0,"Resonance":1.0},"FastLowPass":{"Frequency":22000.0},"Flange":{"Depth":1.0,"Rate":0.10000000149011612,"WetMix":0.0,"DryMix":1.0},"Distortion":{"Level":0.0,"Volume":1.0},"Compressor":{"Threshold":0.0,"Attack":50.0,"Release":50.0,"GainMakeup":0.0},"FastEQ":{"Frequency":8000.0,"Bandwidth":1.0,"Volume":1.0},"EQ":{"Frequency":[8000.0,8000.0,8000.0],"Bandwidth":[1.0,1.0,1.0],"Volume":[1.0,1.0,1.0]},"Echo":{"Delay":256.0,"DecayRatio":0.07999999821186066,"WetMix":0.14092886447906494,"DryMix":1.0},"Reverb":{"DryLevel":0.0,"Room":-890.0,"RoomHF":-900.0,"RoomRolloffFactor":1.2300000190734863,"DecayTime":4.119999885559082,"DecayHFRatio":0.8600000143051147,"ReflectionsLevel":-450.0,"ReflectionsDelay":0.049000002443790436,"Level":-600.0,"Delay":0.049000002443790436,"Diffusion":46.0,"Density":61.0,"HFReference":6713.0}}}}},"kismet":{"actors":{"HmAmbientSoundVolumeEmitter_11622":[573.0919,283.4561,128.5489],"HmAmbientSoundVolumeEmitter_5066":[584.3129,268.2078,3.3432],"HmAmbientSoundVolumeEmitter_6470":[666.6382,366.5159,58.3322],"HmAmbientSoundVolumeEmitter_4405":[573.0919,313.0526,128.5489],"HmAmbientSoundVolumeEmitter_398":[581.4143,281.0828,56.5582],"HmAmbientSoundVolumeEmitter_12610":[853.2086,281.0828,37.9663],"HmAmbientSoundVolumeEmitter_8319":[649.8262,328.3228,25.0662],"HmAmbientSoundVolumeEmitter_8798":[569.9524,328.3228,16.0118],"HmAmbientSoundVolumeEmitter_5152":[649.8262,282.7373,25.0662],"HmAmbientSoundVolumeEmitter_8048":[649.8262,373.4753,25.0662],"HmAmbientSoundVolumeEmitter_6531":[569.9524,282.7373,16.0118],"HmAmbientSoundVolumeEmitter_2393":[569.9524,373.4753,16.0118],"HmAmbientSoundVolumeEmitter_3392":[573.0919,342.5928,128.5489]},"ops":[{"id":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_11091","type":"pl)WFCJSON"
++     R"WFCJSON(ay_sound","cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_LARGE_02","fade_in":0.0,"fade_out":3.0,"volume":1.0,"pitch":1.0,"suppress_spatialization":false,"targets":["HmAmbientSoundVolumeEmitter_11622"]},{"id":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_12345","type":"play_sound","cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MED_02","fade_in":0.0,"fade_out":0.6000000238418579,"volume":1.0,"pitch":1.0,"suppress_spatialization":false,"targets":["HmAmbientSoundVolumeEmitter_4405"]},{"id":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_12580","type":"play_sound","cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_DRIPS","fade_in":0.25,"fade_out":0.0,"volume":1.0,"pitch":1.0,"suppress_spatialization":false,"targets":["HmAmbientSoundVolumeEmitter_11622"]},{"id":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_15537","type":"play_sound","cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MED_03","fade_in":0.0,"fade_out":0.6000000238418579,"volume":1.0,"pitch":1.0,"suppress_spatialization":false,"targets":["HmAmbientSoundVolumeEmitter_8319"]},{"id":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_16098","type":"play_sound","cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MED_01","fade_in":0.0,"fade_out":0.6000000238418579,"volume":1.0,"pitch":1.0,"suppress_spatialization":false,"targets":["HmAmbientSoundVolumeEmitter_8798"]},{"id":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_3810","type":"play_sound","cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_DRIPS","fade_in":0.25,"fade_out":0.0,"volume":1.0,"pitch":1.0,"suppress_spatialization":false,"targets":["HmAmbientSoundVolumeEmitter_5152"]},{"id":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_4246","type":"play_sound","cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_LARGE_03","fade_in":0.0,"fade_out":3.0,"volume":1.0,"pitch":1.0,"suppress_spatialization":false,"targets":["HmAmbientSoundVolumeEmitter_5152"]},{"id":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_8697","type":"play_sound","cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MIST_03","fade_in":0.0,"fade_out":1.0,"volume":1.0,"pitch":1.0,"suppress_spatialization":false,"targets":["HmAmbientSoundVolumeEmitter_8048"]},{"id":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_9248","type":"play_sound","cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_DRIPS","fade_in":0.25,"fade_out":0.0,"volume":1.0,"pitch":1.0,"suppress_spatialization":false,"targets":["HmAmbientSoundVolumeEmitter_6531"]},{"id":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_9310","type":"play_sound","cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MIST_01","fade_in":0.0,"fade_out":1.0,"volume":1.0,"pitch":1.0,"suppress_spatialization":false,"targets":["HmAmbientSoundVolumeEmitter_2393"]},{"id":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_9590","type":"play_sound","cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_MIST_02","fade_in":0.0,"fade_out":1.0,"volume":1.0,"pitch":1.0,"suppress_spatialization":false,"targets":["HmAmbientSoundVolumeEmitter_3392"]},{"id":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_9719","type":"play_sound","cue":"BL_LVL_MP_ESC_TRANQUILLITY.EMIT_ENERGON_WATERFALL_LARGE_01","fade_in":0.0,"fade_out":3.0,"volume":1.0,"pitch":1.0,"suppress_spatialization":false,"targets":["HmAmbientSoundVolumeEmitter_6531"]}],"links":[{"from":"Game:TnSeqEvent_SurvivalGenerator:New Power Level","to":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_11091","input":1},{"from":"Game:TnSeqEvent_SurvivalGenerator:New Power Level","to":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_12345","input":1},{"from":"Game:TnSeqEvent_SurvivalGenerator:New Power Level","to":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_12580","input":0},{"from":"Game:TnSeqEvent_SurvivalGenerator:New Power Level","to":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_15537","input":1},{"from":"Game:TnSeqEvent_SurvivalGenerator:New Power Level","to":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_16098","input":1},{"from":"Game:TnSeqEvent_SurvivalGenerator:New Power Level","to":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_3810","input":0},{"from":"Game:TnSeqEvent_SurvivalGenerator:New Power Level","to":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_4246","input":1},{"from":"Game:TnSeqEvent_SurvivalGenerator:New Power Level","to":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_8697","input":1},{"from":"Game:TnSeqEvent_SurvivalGenerator:New Power Level","to":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_9248","input":0},{"from":"Game:TnSeqEvent_SurvivalGenerator:New Power Level","to":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_9310","input":1},{"from":"Game:TnSeqEvent_SurvivalGenerator:New Power Level","to":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_9590","input":1},{"from":"Game:TnSeqEvent_SurvivalGenerator:New Power Level","to":"MP_ESC_Tranquillity_AUDIO_m|SeqAct_PlaySound_9719","input":1}],"replaces_manifest_zones":false},"announcer":{"event_set":"SoundEvents_Dialog.Announcer.CHR_ANNOUNCER_DIALOG"}})WFCJSON"
+     },
+     {"MP_IAC_Berth",
+      R"WFCJSON({"map":"MP_IAC_Berth","source":"Systems tools/systems/gen_level_audio.py from AssetTools authored.db (GLB_Audio_m, MP_IAC_Berth_ART_m, MP_IAC_Berth_AUDIO_m, MP_IAC_Berth_BASE_m Kismet)","cues":{"BL_LVL_MP_IAC_BERTH.AMB_AUTOBOT_FLAG_ROOM":{"cue":"BL_LVL_MP_IAC_BERTH.AMB_AUTOBOT_FLAG_ROOM","class":"SoundCue","tree":{"node":"SoundNodeRoot_12535","class":"SoundNodeRoot","params":{"Volume":-15.0,"EnableOcclusionVolume":false,"EnableOcclusionPitch":false,"SpatializationType":"kSmartPan","DistanceMax":4500.0,"Priority":80.0,"SmartPanDistance2D":200.0,"SmartPanDistance3D":400.0,"Category":"SFX_WET_AMB_2D"},"children":[{"node":"SoundNodeWaveEvent_9352","class":"SoundNodeWaveEvent","params":{"bLooping":true},"children":[{"node":"WL_AMB_BED.AMB_BEDENERGONSUBSPACE_LR_LP","class":"SoundNodeWaveEx","wav":"content/WL_AMB_BED/AMB_BEDENERGONSUBSPACE_LR_LP.wav"}]},{"node":"SoundNodeWaveEvent_14139","class":"SoundNodeWaveEvent","params":{"bLooping":true,"Volume":-3.0,"PanFrontLeft":-96.0,"PanFrontRight":-96.0,"PanBackLeft":0.0,"PanBackRight":0.0,"Pitch":-1.0},"children":[{"node":"WL_AMB_BED.AMB_BEDENERGONSUBSPACE_LR_LP","class":"SoundNodeWaveEx","wav":"content/WL_AMB_BED/AMB_BEDENERGONSUBSPACE_LR_LP.wav"}]}]},"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.AMB_A_CORRIDOR":{"cue":"BL_LVL_MP_IAC_BERTH.AMB_A_CORRIDOR","class":"SoundCue","tree":{"node":"SoundNodeRoot_12535","class":"SoundNodeRoot","params":{"Volume":-17.0,"EnableOcclusionVolume":false,"EnableOcclusionPitch":false,"SpatializationType":"kSmartPan","DistanceMax":4500.0,"Priority":80.0,"SmartPanDistance2D":200.0,"SmartPanDistance3D":400.0,"Category":"SFX_WET_AMB_2D"},"children":[{"node":"SoundNodeWaveEvent_9352","class":"SoundNodeWaveEvent","params":{"bLooping":true},"children":[{"node":"WL_AMB_BED.AMB_BED_ORB_ELEVATOR_SHAFT_LR","class":"SoundNodeWaveEx","wav":"content/WL_AMB_BED/AMB_BED_ORB_ELEVATOR_SHAFT_LR.wav"}]},{"node":"SoundNodeWaveEvent_14139","class":"SoundNodeWaveEvent","params":{"bLooping":true,"Volume":-2.0,"PanFrontLeft":-96.0,"PanFrontRight":-96.0,"PanBackLeft":0.0,"PanBackRight":0.0,"Pitch":-2.0},"children":[{"node":"WL_AMB_BED.AMB_BED_ORB_ELEVATOR_SHAFT_LR","class":"SoundNodeWaveEx","wav":"content/WL_AMB_BED/AMB_BED_ORB_ELEVATOR_SHAFT_LR.wav"}]}]},"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.AMB_DECEPTICON_FLAG_ROOM":{"cue":"BL_LVL_MP_IAC_BERTH.AMB_DECEPTICON_FLAG_ROOM","class":"SoundCue","tree":{"node":"SoundNodeRoot_12535","class":"SoundNodeRoot","params":{"Volume":-15.0,"EnableOcclusionVolume":false,"EnableOcclusionPitch":false,"SpatializationType":"kSmartPan","DistanceMax":4500.0,"Priority":80.0,"SmartPanDistance2D":200.0,"SmartPanDistance3D":400.0,"Category":"SFX_WET_AMB_2D"},"children":[{"node":"SoundNodeWaveEvent_9352","class":"SoundNodeWaveEvent","params":{"bLooping":true},"children":[{"node":"WL_AMB_BED.AMB_UND_BOWEL_DECEPT_LR","class":"SoundNodeWaveEx","wav":"content/WL_AMB_BED/AMB_UND_BOWEL_DECEPT_LR.wav"}]},{"node":"SoundNodeWaveEvent_14139","class":"SoundNodeWaveEvent","params":{"bLooping":true,"Volume":-3.0,"PanFrontLeft":-96.0,"PanFrontRight":-96.0,"PanBackLeft":0.0,"PanBackRight":0.0,"Pitch":-1.0},"children":[{"node":"WL_AMB_BED.AMB_UND_BOWEL_DECEPT_LR","class":"SoundNodeWaveEx","wav":"content/WL_AMB_BED/AMB_UND_BOWEL_DECEPT_LR.wav"}]}]},"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.AMB_D_CORRIDOR":{"cue":"BL_LVL_MP_IAC_BERTH.AMB_D_CORRIDOR","class":"SoundCue","tree":{"node":"SoundNodeRoot_12535","class":"SoundNodeRoot","params":{"Volume":-13.0,"EnableOcclusionVolume":false,"EnableOcclusionPitch":false,"SpatializationType":"kSmartPan","DistanceMax":4500.0,"Priority":80.0,"SmartPanDistance2D":200.0,"SmartPanDistance3D":400.0,"Category":"SFX_WET_AMB_2D"},"children":[{"node":"SoundNodeWaveEvent_9352","class":"SoundNodeWaveEvent","params":{"bLooping":true},"children":[{"node":"WL_AMB_BED.AMB_UND_BOWEL_MAIN_LR","class":"SoundNodeWaveEx","wav":"content/WL_AMB_BED/AMB_UND_BOWEL_MAIN_LR.wav"}]},{"node":"SoundNodeWaveEvent_14139","class":"SoundNodeWaveEvent","params":{"bLooping":true,"Volume":-3.0,"PanFrontLeft":-96.0,"PanFrontRight":-96.0,"PanBackLeft":0.0,"PanBackRight":0.0,"Pitch":-1.0},"children":[{"node":"WL_AMB_BED.AMB_UND_BOWEL_MAIN_LR","class":"SoundNodeWaveEx","wav":"content/WL_AMB_BED/AMB_UND_BOWEL_MAIN_LR.wav"}]}]},"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"}},"cue_limits":{"BL_LVL_MP_IAC_BERTH.AMB_AUTOBOT_FLAG_ROOM":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.AMB_A_CORRIDOR":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.AMB_BERTH_ALCOVE_AUTOBOT":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.AMB_BERTH_ALCOVE_DECEPTICON":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.AMB_BERTH_ALCOVE_EAST":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.AMB_BERTH_ALCOVE_WEST":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.AMB_BERTH_BASEMENT":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.AMB_BERTH_CENTER":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.AMB_BERTH_FOYER":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.AMB_DECEPTICON_FLAG_ROOM":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.AMB_D_CORRIDOR":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.EMIT_CENTRAL_MECH_FLOOR":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.EMIT_CIRCULAR_LIGHTS_HUM":{"MaxConcurrentPlayCount":3,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.EMIT_CORE_PILLAR_AUTO":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.EMIT_ENERGON_ALCOVE_LIGHTS":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.EMIT_FLOOR_ENERGY":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.EMIT_HOLOGRAM_CROSS_LAMP":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.EMIT_HOLOGRAM_DISC_LAMP":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.EMIT_PISTONS_BERTH":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.EMIT_SPINNING_GENERATORS":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.EMIT_WALL_LANTERN_AUTO":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.EMIT_WALL_LANTERN_DEC":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.PP_JET_SPEEDER_BY":{"MaxConcurrentPlayCount":3,"InstanceLimiting":"kKillNewest"},"BL_LVL_MP_IAC_BERTH.PP_JET_WHSH_BY":{"MaxConcurrentPlayCount":3,"InstanceLimiting":"kKillNewest"},"BL_LVL_MP_IAC_BERTH.PP_ROBOT_NOISE":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.PP_SPACE_DRONE":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.PP_SPACE_GROAN":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.PP_SPACE_SHINE":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"},"BL_LVL_MP_IAC_BERTH.PP_SPACE_WHINE":{"MaxConcurrentPlayCount":5,"InstanceLimiting":"kKillFarthest"}},"reverb_presets":{"TRANS_RADIO":{"mixer_preset":{"Name":"TRANS_RADIO","Priority":476.0,"FadeInTime":0.05000000074505806,"FadeOutTime":0.05000000074505806,"Duration":-1.0,"IsPlayerPOV":false},"dsp_by_category":{"DX_DRY_RADIO":{"Name":"TRANS_RADIO","Volume":{"Volume":0.8912509083747864},"Pitch":{"Pitch":1.0},"HighPass":{"Frequency":441.0,"Resonance":1.0},"LowPass":{"Frequency":22000.0,"Resonance":1.0},"FastLowPass":{"Frequency":22000.0},"Flange":{"Depth":0.230)WFCJSON"
+diff --git a/src/game/LevelAudioHost.h b/src/game/LevelAudioHost.h
+index 49328c02..800a9bbe 100644
+--- a/src/game/LevelAudioHost.h
++++ b/src/game/LevelAudioHost.h
+@@ -129,6 +129,7 @@ public:
+ 
+     const std::string& level() const { return level_; }
+     AmbientAudio& ambient() { return ambient_; }
++    std::string currentSubtitle() const { return ambient_.currentSubtitle(); }   // [Systems QC] the HUD's subtitle line
+     const AmbientAudio& ambient() const { return ambient_; }
+     MusicPlayer& music() { return music_; }
+     FrontendAudio& frontend() { return frontend_; }
+diff --git a/src/game/PlayerController.cpp b/src/game/PlayerController.cpp
+index c325fad7..0d32975a 100644
+--- a/src/game/PlayerController.cpp
++++ b/src/game/PlayerController.cpp
+@@ -198,7 +198,8 @@ void PlayerController::handleInput(const platform::InputFrame& inRaw, float dt)
+     // Reload: activates on RELEASE of a tap shorter than 0.3 s [CONF RE]; latched until consumed.
+     bool reloadDown = in.isDown(Button::Reload);
+     if (reloadDown) reloadHeld_ += dt;
+-    if (!reloadDown && prevReloadDown_ && reloadHeld_ < cfg::kReloadTapTime) wantReload_ = true;
++    if (in.wasPressed(Button::Reload)) xInteracted_ = in.wasPressed(Button::Interact) && interactAvailable_;   // pad X: TryInteract first
++    if (!reloadDown && prevReloadDown_ && reloadHeld_ < cfg::kReloadTapTime && !xInteracted_) wantReload_ = true;
+     if (!vehicleForm && in.wasPressed(Button::Dash)) wantAbility_ = 0;      // Ability0
+     if (!vehicleForm && in.wasPressed(Button::Ability1)) wantAbility_ = 1;  // Ability1
+     abilityStickFwd_ = intent_.moveForward; abilityStickRight_ = intent_.moveRight;
+diff --git a/src/game/PlayerController.h b/src/game/PlayerController.h
+index b77f63ee..23ec0a9e 100644
+--- a/src/game/PlayerController.h
++++ b/src/game/PlayerController.h
+@@ -189,6 +189,8 @@ private:
+     float quickTurnRemain_ = 0.0f, quickTurnFrom_ = 0.0f, quickTurnTo_ = 0.0f;   // tank 180 quick turn (TnQuickTurnCameraBehavior)
+     float sinceStep_ = 0.0f, stepFaceYaw_ = 0.0f, stepBodyYaw_ = 0.0f, stepYawRate_ = 0.0f;   // presentation yaw (per render frame)   // Fire pressed since the last simulation step
+     bool wantReload_ = false;     // latched on release of a tap < kReloadTapTime
++    bool interactAvailable_ = false;   // the World: an interactable is offered this frame (TryInteract would succeed)
++    bool xInteracted_ = false;         // the current Reload press came with Interact (pad X) while one was offered: no reload
+     bool wantDashLatched_ = false;
+     bool prevReloadDown_ = false;
+     float reloadHeld_ = 0.0f;
+@@ -259,6 +261,7 @@ public:
+     bool fireHeld() const { return wantFire_ || fireLatch_; }
+     bool consumeGrenadeRequest() { bool b = wantGrenade_; wantGrenade_ = false; return b; }
+     bool consumePickupRequest() { bool b = wantPickup_; wantPickup_ = false; return b; }
++    void setInteractAvailable(bool a) { interactAvailable_ = a; }   // World, each frame before handleInput (pad X: TryInteract else reload)
+     bool interactHeld() const { return interactHeld_; }   // Interact held this frame (Escalation generators: _AllowDraining)
+ private:
+     int wantAbility_ = -1, abilityTriggers_ = 0;
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 94ceca4a..cb6f2d50 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -787,7 +787,28 @@ void World::buildGraybox() {
+     LOG_INFO("Graybox arena built: %zu blocks, %zu actors", blocks_.size(), actors_.size());
+ }
+ 
++// Pad X is TryInteract, else reload: what TryInteract would find for the local player right now.
++bool World::localInteractAvailable() const {
++    if (!matchActive_ || localDead_ || localPlayer_ < 0 || (size_t)localPlayer_ >= match_.players().size()) return false;
++    const Character& pc = player_.pawn();
++    MapState::ObjPawn op{localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true,
++                         pc.form() == Form::Robot && !pc.isTransforming() && !pc.isMeleeing()};
++    if (mapState_.pickupCandidate(op) >= 0) return true;                  // the Code of Power / bomb
++    if (cp_.active && !cp_.interactPrompt.empty()) return true;          // a campaign interact
++    if (sv_.phase != SurvivalState::Phase::Off) {
++        if ((size_t)localPlayer_ < sv_.nearGenerator.size() && sv_.nearGenerator[(size_t)localPlayer_] >= 0) return true;   // a generator
++        const SvMech& M = svData_.mech;
++        const core::Vec3 p = pc.position();
++        for (size_t k = 0; k < M.lasers.size() && k < sv_.mech.lasers.size(); ++k)
++            if (sv_.mech.lasers[k].active && sv_.mech.lasers[k].t >= M.lasers[k].armDelay && core::length(p - M.lasers[k].button) <= M.lasers[k].buttonRange) return true;
++        for (size_t k = 0; k < M.detpacks.size() && k < sv_.mech.detpacks.size(); ++k)
++            if (!sv_.mech.detpacks[k].used && core::length(p - M.detpacks[k].pos) <= M.detpacks[k].range) return true;
++    }
++    return false;
++}
++
+ void World::handleInput(const platform::InputFrame& in, float dt) {
++    player_.controller().setInteractAvailable(localInteractAvailable());
+     struct ProfScope { double t0 = profNowMs(); ~ProfScope() { const double ms = profNowMs() - t0; if (spawnProf() && ms > 8.0) LOG_INFO("SPAWNPROF World::handleInput %.1f ms", ms); } } profScope;
+     player_.controller().handleInput(cp_.active && cp_.cinematicMode ? platform::InputFrame{} : in, dt);
+     seat2HandleInput(dt);   // split screen: the second local seat's controller   // Dash (Shift) is latched by PlayerController; campaign cinematic mode: no input
+diff --git a/src/game/World.h b/src/game/World.h
+index 01d3e09b..886c637d 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -316,6 +316,8 @@ public:
+     // A level Kismet trigger the frontend owns: "FsCommand:<cmd>" (GFx fscommand, e.g. "FsCommand:enterFrontEnd"),
+     // "MovieStopped:<movie>" (e.g. "MovieStopped:FMV_intro"). Returns the op inputs it reached (0: none authored).
+     int levelAudioEvent(const std::string& trigger) { return levelAudio_.event(trigger, listenerPos_); }
++    // [Systems QC] The campaign dialogue subtitle on screen now ("" = none); the HUD draws it when the profile's Subtitles is on.
++    std::string currentSubtitle() const { return levelAudio_.currentSubtitle(); }
+     // GFx Sound.PlaySound(name) / StopSound(name, fade) (TnSoundActionScriptBinding).
+     int playUiSound(const char* name) { return levelAudio_.playUiSound(name); }
+     bool stopUiSound(const char* name, float fade) { return levelAudio_.stopUiSound(name, fade); }
+@@ -1583,6 +1585,7 @@ private:
+     bool svKillingBrute_ = false;  // TnKillAttachedPawn in progress (bypasses the backpack test)
+     void svSetZoneActive(int zone, bool on);
+     bool svInteractHeld(int player) const;
++    bool localInteractAvailable() const;   // an interactable offered to the local player (pad X: TryInteract else reload)
+     void svFireGenerator(int generator, bool levelDrop = false);
+     void svTickKismet();   // Wall_Crashers (map Kismet as data)
+     // The DLC maps' mechanisms (WorldSurvivalMech.cpp / SurvivalMech.h)
+diff --git a/src/net/NetMatchDriver.cpp b/src/net/NetMatchDriver.cpp
+index 459b92b3..cdcad688 100644
+--- a/src/net/NetMatchDriver.cpp
++++ b/src/net/NetMatchDriver.cpp
+@@ -123,6 +123,7 @@ NetMatchDriver::NetMatchDriver(game::World& world, INetTransport& transport, aud
+             const auto& ps = w->match().players();
+             if (talker < 0 || listener < 0 || (size_t)talker >= ps.size() || (size_t)listener >= ps.size()) return false;
+             if (voiceChannelOpen(*w)) return true;
++            if ((flags & 1) && (flags & 4)) return true;   // All Radio
+             if ((flags & 1) && ps[(size_t)talker].team == ps[(size_t)listener].team && ps[(size_t)talker].team != 255) return true;
+             if (!(flags & 2)) return false;
+             const game::Character* x = w->participantPawn(talker);
+diff --git a/src/net/UdpSession.h b/src/net/UdpSession.h
+index 4e044442..78288d4a 100644
+--- a/src/net/UdpSession.h
++++ b/src/net/UdpSession.h
+@@ -21,6 +21,7 @@
+ #include "frontend/Session.h"
+ #include "net/NatPortMap.h"
+ 
++#include <chrono>
+ #include <functional>
+ #include <map>
+ #include <memory>
+@@ -111,6 +112,11 @@ public:
+     std::vector<int> lobbySeats() const;
+     frontend::SessionMemberId memberOfSeat(int seat) const;
+     bool inLobby() const { return role_ != Role::Offline && !view_; }   // in a session, no match running here
++    // The Settings > Audio Mic Test meter: the presenter reads micLevel() every frame while the row is on screen, so a read in the
++    // last 0.5 s = the meter is showing (the voice lane then opens the microphone without sending). The level comes from the lane.
++    float micLevel() const override { micAskedMs_ = steadyMs(); return micLevelFn_ ? micLevelFn_() : 0.0f; }
++    void setMicLevelSource(std::function<float()> f) { micLevelFn_ = std::move(f); }
++    bool micMeterShown() const { return micAskedMs_ > 0.0 && steadyMs() - micAskedMs_ < 500.0; }
+     uint32_t launchSeed() const { return launchSeed_; }
+     const frontend::SessionVoiceSettings& voiceSettings() const { return voice_; }
+     bool pushToTalk() const { return pushToTalk_; }
+@@ -226,6 +232,9 @@ private:
+     double catchUpSentAt_ = -1.0;
+     bool catchUpDone_ = false;
+     frontend::SessionVoiceSettings voice_;
++    static double steadyMs() { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
++    mutable double micAskedMs_ = 0.0;
++    std::function<float()> micLevelFn_;
+     bool pushToTalk_ = false;
+     std::map<std::string, bool> muted_;
+     std::vector<frontend::SessionEvent> out_;
+diff --git a/src/net/VoiceFrames.cpp b/src/net/VoiceFrames.cpp
+index dd9beb9a..5f3d2be1 100644
+--- a/src/net/VoiceFrames.cpp
++++ b/src/net/VoiceFrames.cpp
+@@ -67,7 +67,8 @@ public:
+     float level() const override { return 0.0f; }
+ };
+ }  // namespace
+-std::unique_ptr<IVoiceCapture> createVoiceCapture() { return std::make_unique<NullVoiceCapture>(); }
++std::unique_ptr<IVoiceCapture> createVoiceCapture(const std::string&) { return std::make_unique<NullVoiceCapture>(); }
++std::vector<std::string> voiceCaptureDevices() { return {}; }
+ #endif
+ 
+ }  // namespace net
+diff --git a/src/net/VoiceFrames.h b/src/net/VoiceFrames.h
+index 3d40b8ba..7c568326 100644
+--- a/src/net/VoiceFrames.h
++++ b/src/net/VoiceFrames.h
+@@ -10,6 +10,8 @@
+ #include <deque>
+ #include <memory>
+ #include <mutex>
++#include <string>
++#include <vector>
+ 
+ namespace net {
+ 
+@@ -48,6 +50,8 @@ public:
+     virtual bool pop(VoiceFrame& out) = 0;
+     virtual float level() const = 0;
+ };
+-std::unique_ptr<IVoiceCapture> createVoiceCapture();
++// device = a capture endpoint's friendly name (voiceCaptureDevices); "" or a name no longer present = the system default.
++std::unique_ptr<IVoiceCapture> createVoiceCapture(const std::string& device = std::string());
++std::vector<std::string> voiceCaptureDevices();   // the active capture endpoints' friendly names (the Input Device row)
+ 
+ }  // namespace net
+diff --git a/src/net/VoiceSession.cpp b/src/net/VoiceSession.cpp
+index bf856bf0..5038ff64 100644
+--- a/src/net/VoiceSession.cpp
++++ b/src/net/VoiceSession.cpp
+@@ -16,7 +16,7 @@ namespace {
+ double nowMs() {
+     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
+ }
+-constexpr uint8_t kVoicePacket = 7, kFlagRadio = 1, kFlagProximity = 2;
++constexpr uint8_t kVoicePacket = 7, kFlagRadio = 1, kFlagProximity = 2, kFlagAllRadio = 4;   // 4: radio for every player (All Radio)
+ constexpr double kFrameMs = 20.0;
+ // The original's dialog cue (BL_HUD_INTERFACE.DX_SLIDER_VOLUME, DX_DRY): DistanceMin 400 UU, DistanceMax 6400 UU, the FMOD inverse
+ // (log) rolloff: full within 4 m, -6 dB per doubling, silent beyond 64 m.
+@@ -64,6 +64,12 @@ float VoiceSession::micLevel() const { return mic_ ? mic_->level() : 0.0f; }
+ void VoiceSession::update(bool talking, const SeatPos& seatPos, const SameTeam& sameTeam, const Occluded& occluded, const Room& room,
+                           const core::Vec3& listener, const core::Vec3& listenerRight) {
+     const double now = nowMs();
++    if (cfg_.mic && (!mic_ || !ownMic_ || micDevice_ != cfg_.device)) {   // the owned microphone (Config::mic), on the chosen device
++        mic_ = createVoiceCapture(cfg_.device);
++        ownMic_ = true; micDevice_ = cfg_.device; micRetryMs_ = 0.0;
++    } else if (!cfg_.mic && ownMic_) {
++        mic_.reset(); ownMic_ = false;
++    }
+     // ---- send: this seat's 20 ms frames while talking ----
+     if (voiceCodecAvailable() && (cfg_.radio || cfg_.proximity)) {
+         std::vector<VoiceFrame> frames;
+@@ -82,8 +88,9 @@ void VoiceSession::update(bool talking, const SeatPos& seatPos, const SameTeam&
+                 }
+             }
+         } else if (mic_) {
+-            if (talking && !mic_->running()) mic_->start();
+-            if (!talking && mic_->running()) mic_->stop();
++            const bool open = talking || cfg_.micTest;   // the Mic Test meter reads the live level without sending
++            if (open && !mic_->running() && now >= micRetryMs_ && !mic_->start()) micRetryMs_ = now + 2000.0;
++            if (!open && mic_->running()) mic_->stop();
+             VoiceFrame f;
+             while (mic_->pop(f)) {
+                 if (!talking) continue;
+@@ -102,7 +109,8 @@ void VoiceSession::update(bool talking, const SeatPos& seatPos, const SameTeam&
+             std::vector<uint8_t> opus;
+             if (!enc_.encode(f, opus)) continue;
+             std::vector<uint8_t> pkt = {kVoicePacket, (uint8_t)link_.self(), (uint8_t)seq_, (uint8_t)(seq_ >> 8),
+-                                        (uint8_t)((cfg_.radio ? kFlagRadio : 0) | (cfg_.proximity ? kFlagProximity : 0))};
++                                        (uint8_t)((cfg_.radio ? kFlagRadio : 0) | (cfg_.proximity ? kFlagProximity : 0) |
++                                                  (cfg_.radio && cfg_.allRadio ? kFlagAllRadio : 0))};
+             pkt.insert(pkt.end(), opus.begin(), opus.end());
+             link_.send(pkt.data(), pkt.size());   // to the host (a client) or fanned out (the host)
+             ++seq_; ++stats_.sent;
+@@ -163,7 +171,7 @@ void VoiceSession::playTalker(int seat, Talker& t, const SeatPos& seatPos, const
+     // Who hears it: radio = the talker's team, 2D at the voice volume; proximity (opt-in: the audience row) = anyone in earshot, as a
+     // 3D voice in the cue mix (falloff, pan, the listener's room reverb, occlusion); radio wins for teammates. An open channel (FFA,
+     // after EndGame: setOpenChannel) = everyone, 2D.
+-    const bool radio = open_ || ((t.lastFlags & kFlagRadio) && sameTeam && sameTeam(seat));
++    const bool radio = open_ || ((t.lastFlags & kFlagRadio) && ((t.lastFlags & kFlagAllRadio) || (sameTeam && sameTeam(seat))));
+     if (!radio) {
+         core::Vec3 at;
+         if (!(t.lastFlags & kFlagProximity) || !seatPos || !seatPos(seat, at)) { ++stats_.unheard; return; }   // not for this listener
+@@ -192,7 +200,7 @@ void VoiceSession::playTalker(int seat, Talker& t, const SeatPos& seatPos, const
+         if (!audio_) return;
+         if (t.pstream < 0) t.pstream = audio_->openPositionalStream(kVoiceRate);
+         if (t.pstream < 0) return;
+-        audio_->setPositionalStream(t.pstream, at, cfg_.volume * t.occGain, kProxMin, maxD, true);
++        audio_->setPositionalStream(t.pstream, at, cfg_.proximityVolume * t.occGain, kProxMin, maxD, true);
+         float mono[kVoiceFrameSamples];
+         for (int i = 0; i < kVoiceFrameSamples; ++i) mono[i] = (float)pcm[(size_t)i] / 32768.0f;
+         audio_->pushPositionalStream(t.pstream, mono, kVoiceFrameSamples);
+diff --git a/src/net/VoiceSession.h b/src/net/VoiceSession.h
+index f000fbb8..5a8d6744 100644
+--- a/src/net/VoiceSession.h
++++ b/src/net/VoiceSession.h
+@@ -33,7 +33,14 @@ class VoiceSession {
+ public:
+     struct Config {
+         bool radio = true, proximity = true;   // this seat's audience flags (Radio + Proximity default)
+-        float volume = 1.0f;                   // the voice slider
++        float volume = 1.0f;                   // the voice slider (radio)
++        float proximityVolume = 1.0f;          // the Proximity Volume slider (3D voices in earshot)
++        bool allRadio = false;                 // All Radio: this seat's radio reaches every player, not only its team
++        // The microphone the session owns (the Audio rows): attached whenever this player may talk and opened only while talking or
++        // while the Mic Test meter is on screen (micTest); device = the Input Device row's capture endpoint ("" = the system default).
++        // Off never talks, so switching voice on mid-match works without a new lane. setSource() (the harness) is used when mic is false.
++        bool mic = false, micTest = false;
++        std::string device;
+         int jitterFrames = 3;                  // frames buffered before a talker starts playing (60 ms)
+         // Open mic: frames go out only while the voice gate is open - a frame above gateDb (dBFS RMS) opens it for hangMs (breathing
+         // and room noise do not stream). Push to talk: the key is the gate.
+@@ -99,6 +106,9 @@ private:
+     audio::IAudio* audio_;
+     Config cfg_;
+     std::unique_ptr<IVoiceCapture> mic_;
++    bool ownMic_ = false;            // mic_ came from cfg_.mic (replaced on a device change, dropped when mic goes false)
++    std::string micDevice_;
++    double micRetryMs_ = 0.0;        // a device that failed to open is retried after 2 s, not every frame
+     float toneHz_ = 0.0f;
+     double tonePhase_ = 0.0, toneStartMs_ = -1.0, toneSent_ = 0.0;
+     VoiceEncoder enc_;
+diff --git a/src/platform/Input.h b/src/platform/Input.h
+index 792ae950..5b5c6d57 100644
+--- a/src/platform/Input.h
++++ b/src/platform/Input.h
+@@ -29,6 +29,8 @@ enum class Button {
+ // Menu / UI keys (frontend movies): keyboard keys and gamepad buttons, platform-neutral.
+ enum class UiKey { Up, Down, Left, Right, Accept, Back, X, Y, Start, Select, LB, RB, LT, RT, LThumb, RThumb, Count };
+ 
++constexpr uint32_t kPadDPadUp = 0x0001, kPadDPadDown = 0x0002, kPadDPadLeft = 0x0004, kPadDPadRight = 0x0008;
++
+ struct InputFrame {
+     uint32_t uiDown = 0;          // bit (1 << UiKey) held (keyboard or pad)
+     bool  down[(int)Button::Count]    = {};   // currently held
+@@ -37,6 +39,7 @@ struct InputFrame {
+     float mouseDY = 0.0f;
+     // Gamepad (optional; zeroed if none connected)
+     bool  padConnected = false;
++    uint32_t padButtons = 0;      // the frame's pad buttons (XInput wButtons bit values: kPadDPadRight ...); 0 without a pad
+     float padLX = 0, padLY = 0;   // left stick, -1..1
+     float padRX = 0, padRY = 0;   // right stick, -1..1
+     float padLT = 0;              // left trigger, 0..1
+diff --git a/src/platform/PadActions.h b/src/platform/PadActions.h
+new file mode 100644
+index 00000000..22619bab
+--- /dev/null
++++ b/src/platform/PadActions.h
+@@ -0,0 +1,59 @@
++// [Systems] A controller's buttons -> the match actions (platform::Button), the original's multiplayer pad layout as a pure
++// function (testable without a controller). Source: the authored Engine.PlayerInput bindings (XboxTypeS_*), with the profile's
++// per-pad remaps (TnGameViewportClient.MapInputKeyForController, in game only - RE SPLITSCREEN_RE section 1):
++//   SwitchRightThumbstickAndB: B <-> RightThumbstick;
++//   UseAlternateControlScheme: Y -> LeftThumbstick, LeftThumbstick -> none, DPad_Up -> Y.
++// The sticks, the left trigger's analog FineAim / Boost and Start / Back stay where they are read today (InputFrame pad fields, UiKey).
++#pragma once
++#include <cstdint>
++
++#include "platform/Input.h"
++
++namespace platform {
++
++// XInput wButtons bit values (InputFrame::padButtons).
++constexpr uint32_t kPadStart = 0x0010, kPadBack = 0x0020, kPadLThumb = 0x0040, kPadRThumb = 0x0080, kPadLB = 0x0100, kPadRB = 0x0200,
++                   kPadA = 0x1000, kPadB = 0x2000, kPadX = 0x4000, kPadY = 0x8000;
++
++// The profile's remaps: physical buttons -> the logical keys the bindings name.
++inline uint32_t remapPad(uint32_t phys, bool alternateScheme, bool swapRightStickAndB) {
++    uint32_t out = phys & ~(kPadB | kPadRThumb | kPadY | kPadLThumb | kPadDPadUp);
++    auto key = [&](uint32_t physBit) {
++        if (!(phys & physBit)) return;
++        uint32_t k = physBit;
++        if (swapRightStickAndB && k == kPadB) k = kPadRThumb;
++        else if (swapRightStickAndB && k == kPadRThumb) k = kPadB;
++        if (alternateScheme) {
++            if (k == kPadY) k = kPadLThumb;
++            else if (k == kPadLThumb) k = 0;
++            else if (k == kPadDPadUp) k = kPadY;
++        }
++        out |= k;
++    };
++    for (uint32_t b : {kPadB, kPadRThumb, kPadY, kPadLThumb, kPadDPadUp}) key(b);
++    return out;
++}
++
++// Logical keys (+ the right trigger) -> the actions held, bit (1 << Button). The authored commands:
++//   A PressJump | Ascend; B TossGrenade | InteractCommand1 | Descend; X XButton (Interact + Reload, below);
++//   Y NextWeapon; LeftThumbstick Transform; RightThumbstick Melee; RightTrigger Fire | WeaponMelee;
++//   LeftShoulder Ability1 | SwitchSpectatorTarget 1; RightShoulder Ability0 | VehicleSpecialMove | SwitchSpectatorTarget -1;
++//   DPad_Left TriggerKillstreak. (DPad_Down Focus has no action of its own yet; DPad_Right is the Voice Channel key.)
++inline uint32_t padActions(uint32_t keys, bool rightTrigger) {
++    uint32_t a = 0;
++    auto on = [&a](Button b) { a |= 1u << (int)b; };
++    if (keys & kPadA) { on(Button::Jump); on(Button::Ascend); }
++    if (keys & kPadB) { on(Button::Grenade); on(Button::Descend); }
++    if (keys & kPadX) { on(Button::Interact); on(Button::Reload); }   // XButton: tap = TryInteract, else ReloadWeapon (the Reload tap fires on
++                                                                    // release < 0.3 s); hold 0.3 s = TryRevive / TryPickup (RE, C)
++    if (keys & kPadY) on(Button::NextWeapon);
++    if (keys & kPadLThumb) on(Button::Transform);
++    if (keys & kPadRThumb) on(Button::Melee);
++    if (rightTrigger) on(Button::Fire);
++    if (keys & kPadLB) { on(Button::Ability1); on(Button::SpectateNext); }
++    if (keys & kPadRB) { on(Button::Dash); on(Button::SpectatePrev); }
++    if (keys & kPadDPadLeft) on(Button::Killstreak);
++    return a;
++}
++
++}  // namespace platform
+diff --git a/src/platform/SeatRouting.h b/src/platform/SeatRouting.h
+new file mode 100644
+index 00000000..70377061
+--- /dev/null
++++ b/src/platform/SeatRouting.h
+@@ -0,0 +1,41 @@
++// [Systems] Which controller drives which local seat - the platform window's pad routing as a pure function (testable without
++// controllers). Seat 1 = the keyboard / mouse + ONE pad; seat 2 (split screen) = one other pad, joined by its Start press.
++#pragma once
++
++namespace platform {
++
++constexpr int kMaxPads = 4;
++
++struct PadPoll {   // one poll of every XInput slot
++    bool connected[kMaxPads] = {};
++    bool startDown[kMaxPads] = {};
++    bool startEdge[kMaxPads] = {};   // Start went down this poll
++    int lastActive = -1;             // the last slot with any button / trigger activity (-1: none yet)
++};
++
++struct SeatPads {
++    int seat1 = 0, seat2 = -1;   // pad slots (-1: none - seat 1 then plays on the keyboard / mouse only)
++};
++
++// Outside split screen seat 1 reads the pad in use (any slot: Steam Input / DS4Windows / some adapters put a lone controller on
++// slot 1+). With split screen: while seat 1 has no pad plugged in, the pad in use becomes seat 1's - the player's only controller
++// is never a second player; a Start press on ANOTHER pad joins seat 2, unless seat 1's pad shows Start in the same poll (a mirrored
++// virtual device of the same controller). Returns true when seat 2 joined this poll.
++inline bool routeSeatPads(bool split, const PadPoll& p, SeatPads& s) {
++    auto plugged = [&p](int i) { return i >= 0 && i < kMaxPads && p.connected[i]; };
++    if (!split) {
++        s.seat1 = p.lastActive >= 0 ? p.lastActive : 0;
++        return false;
++    }
++    if (!plugged(s.seat1) && s.seat2 < 0 && plugged(p.lastActive)) s.seat1 = p.lastActive;
++    if (s.seat2 >= 0 || !plugged(s.seat1)) return false;   // seat 2 taken / seat 1 first
++    for (int i = 0; i < kMaxPads; ++i) {
++        if (!p.startEdge[i] || i == s.seat1) continue;
++        if (p.startDown[s.seat1]) continue;   // mirrors seat 1's own Start: the same controller twice
++        s.seat2 = i;
++        return true;
++    }
++    return false;
++}
++
++}  // namespace platform
+diff --git a/src/platform/Window.h b/src/platform/Window.h
+index dab80b5e..5137e82c 100644
+--- a/src/platform/Window.h
++++ b/src/platform/Window.h
+@@ -57,6 +57,9 @@ public:
+     // nobody holds seat 2. seatPad(): the XInput index a seat uses (-1 = none). swapSeatPads(): the seats exchange pads.
+     // releaseSeat2(): seat 2 leaves (its pad is free again). seat2JoinedSerial(): changes each time a pad takes seat 2.
+     virtual void setSplitScreen(bool on) { (void)on; }
++    // [Systems QC] The profile's controller remaps for the match actions (PadActions.h): UseAlternateControlScheme,
++    // SwitchRightThumbstickAndB. Applied on boot and on every Settings Apply.
++    virtual void setPadScheme(bool alternateScheme, bool swapRightStickAndB) { (void)alternateScheme; (void)swapRightStickAndB; }
+     virtual bool splitScreen() const { return false; }
+     virtual bool pumpSeat2(InputFrame& input) { (void)input; return false; }
+     virtual int seatPad(int seat) const { return seat == 0 ? 0 : -1; }
+diff --git a/src/platform/win32/Win32VoiceCapture.cpp b/src/platform/win32/Win32VoiceCapture.cpp
+index ae361e5c..710cad1b 100644
+--- a/src/platform/win32/Win32VoiceCapture.cpp
++++ b/src/platform/win32/Win32VoiceCapture.cpp
+@@ -11,6 +11,7 @@
+ #include <mmdeviceapi.h>
+ 
+ #include <atomic>
++#include <string>
+ #include <thread>
+ #include <vector>
+ 
+@@ -21,8 +22,46 @@ namespace {
+ 
+ template <class T> void release(T*& p) { if (p) { p->Release(); p = nullptr; } }
+ 
++// PKEY_Device_FriendlyName {a45c254e-df1c-4efd-8020-67d146a850e0}, 14 (defined here: no INITGUID / extra import library)
++const PROPERTYKEY kFriendlyName = {{0xa45c254e, 0xdf1c, 0x4efd, {0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0}}, 14};
++
++std::string utf8(const wchar_t* w) {
++    if (!w) return std::string();
++    const int n = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
++    std::string s(n > 0 ? (size_t)n - 1 : 0, '\0');
++    if (n > 1) WideCharToMultiByte(CP_UTF8, 0, w, -1, &s[0], n, nullptr, nullptr);
++    return s;
++}
++
++// Every active capture endpoint: (friendly name, device). The caller releases the devices.
++std::vector<std::pair<std::string, IMMDevice*>> captureEndpoints(IMMDeviceEnumerator* en) {
++    std::vector<std::pair<std::string, IMMDevice*>> out;
++    IMMDeviceCollection* col = nullptr;
++    if (!en || FAILED(en->EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE, &col))) return out;
++    UINT n = 0;
++    col->GetCount(&n);
++    for (UINT i = 0; i < n; ++i) {
++        IMMDevice* d = nullptr;
++        if (FAILED(col->Item(i, &d))) continue;
++        IPropertyStore* ps = nullptr;
++        std::string name;
++        if (SUCCEEDED(d->OpenPropertyStore(STGM_READ, &ps))) {
++            PROPVARIANT v;
++            PropVariantInit(&v);
++            if (SUCCEEDED(ps->GetValue(kFriendlyName, &v)) && v.vt == VT_LPWSTR) name = utf8(v.pwszVal);
++            PropVariantClear(&v);
++            release(ps);
++        }
++        if (name.empty()) { release(d); continue; }
++        out.emplace_back(name, d);
++    }
++    release(col);
++    return out;
++}
++
+ class Win32VoiceCapture final : public IVoiceCapture {
+ public:
++    explicit Win32VoiceCapture(std::string device) : device_(std::move(device)) {}
+     ~Win32VoiceCapture() override { stop(); }
+     bool start() override {
+         if (running_) return true;
+@@ -50,7 +89,14 @@ private:
+         WAVEFORMATEX* wf = nullptr;
+         HANDLE ev = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+         bool ok = SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&en));
+-        if (ok && FAILED(en->GetDefaultAudioEndpoint(eCapture, eCommunications, &dev))) ok = SUCCEEDED(en->GetDefaultAudioEndpoint(eCapture, eConsole, &dev));
++        if (ok && !device_.empty()) {   // the Input Device row's endpoint by name; gone (unplugged) -> the default below
++            for (auto& e : captureEndpoints(en)) {
++                if (!dev && e.first == device_) dev = e.second;
++                else release(e.second);
++            }
++            if (!dev) LOG_WARN("voice capture: input device '%s' not found - using the default", device_.c_str());
++        }
++        if (ok && !dev && FAILED(en->GetDefaultAudioEndpoint(eCapture, eCommunications, &dev))) ok = SUCCEEDED(en->GetDefaultAudioEndpoint(eCapture, eConsole, &dev));
+         ok = ok && dev && SUCCEEDED(dev->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, (void**)&ac));
+         ok = ok && SUCCEEDED(ac->GetMixFormat(&wf));
+         ok = ok && SUCCEEDED(ac->Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, 200000 /* 20 ms */, 0, wf, nullptr));
+@@ -98,6 +144,7 @@ private:
+         if (com) CoUninitialize();
+         if (ok) LOG_INFO("voice capture: stopped");
+     }
++    std::string device_;
+     VoiceFramer framer_;
+     std::thread thread_;
+     std::atomic<bool> stopFlag_{false};
+@@ -107,6 +154,17 @@ private:
+ 
+ }  // namespace
+ 
+-std::unique_ptr<IVoiceCapture> createVoiceCapture() { return std::make_unique<Win32VoiceCapture>(); }
++std::unique_ptr<IVoiceCapture> createVoiceCapture(const std::string& device) { return std::make_unique<Win32VoiceCapture>(device); }
++
++std::vector<std::string> voiceCaptureDevices() {
++    const bool com = SUCCEEDED(CoInitializeEx(nullptr, COINIT_MULTITHREADED));   // S_FALSE / RPC_E_CHANGED_MODE: already initialised
++    std::vector<std::string> names;
++    IMMDeviceEnumerator* en = nullptr;
++    if (SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&en)))
++        for (auto& e : captureEndpoints(en)) { names.push_back(e.first); release(e.second); }
++    release(en);
++    if (com) CoUninitialize();
++    return names;
++}
+ 
+ }  // namespace net
+diff --git a/src/platform/win32/Win32Window.cpp b/src/platform/win32/Win32Window.cpp
+index 7c61afc8..e72170b5 100644
+--- a/src/platform/win32/Win32Window.cpp
++++ b/src/platform/win32/Win32Window.cpp
+@@ -12,6 +12,8 @@
+ #include "platform/PresentHook.h"
+ #include "platform/DisplayMode.h"
+ #include "core/Log.h"
++#include "platform/PadActions.h"
++#include "platform/SeatRouting.h"
+ 
+ #include <cmath>
+ #include <cstdio>
+@@ -212,8 +214,7 @@ public:
+             // Melee is also the middle mouse button (shipped PC bindings: Q / MiddleMouseButton) [CONF Controls card].
+             if ((Button)i == Button::Melee && (GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0) nowDown = true;
+             if (!focused_) nowDown = false;
+-            input.pressed[i] = nowDown && !input.down[i];
+-            input.down[i] = nowDown;
++            kbDown_[i] = nowDown;   // the pad's actions join below, after the pad poll (pressed = the combined edge)
+         }
+ 
+         // Mouse-look via cursor recentering while captured + focused.
+@@ -240,7 +241,15 @@ public:
+         input.uiDown = ui;
+         input.padActive = padBits_ != 0 || std::fabs(input.padRX) > 0.5f || std::fabs(input.padRY) > 0.5f;
+         input.keyActive = keyUi;
+-        for (int i = 0; i < (int)Button::Count && !input.keyActive; ++i) input.keyActive = input.down[i];
++        for (int i = 0; i < (int)Button::Count && !input.keyActive; ++i) input.keyActive = kbDown_[i];
++        {   // the match actions: keyboard / mouse OR seat 1's pad (the original's MP pad layout + the profile's remaps, PadActions.h)
++            const uint32_t pad = focused_ ? padActions(remapPad(padBits_ & 0xFFFFu, padAlt_, padSwapBRS_), (padBits_ & kPadRT) != 0) : 0u;
++            for (int i = 0; i < (int)Button::Count; ++i) {
++                const bool nowDown = kbDown_[i] || ((pad >> i) & 1u) != 0;
++                input.pressed[i] = nowDown && !input.down[i];
++                input.down[i] = nowDown;
++            }
++        }
+         // Absolute pointer for the UI.
+         input.mouseX = input.mouseY = -1;
+         input.mouseLeft = focused_ && (GetAsyncKeyState(VK_LBUTTON) & 0x8000);
+@@ -589,6 +598,8 @@ private:
+     int lastActivePad_ = -1;
+     int seat2Serial_ = 0;
+     uint32_t seat2Prev_ = 0;
++    bool kbDown_[(int)Button::Count] = {};   // this pump's keyboard / mouse part of the match actions
++    bool padAlt_ = false, padSwapBRS_ = false;   // the profile's controller remaps (setPadScheme)
+     std::vector<int> uiVk_[(int)UiKey::Count];
+     std::vector<uint32_t> uiPad_[(int)UiKey::Count];
+     int wheel_ = 0;
+@@ -747,6 +758,11 @@ private:
+     }
+ 
+ public:
++    void setPadScheme(bool alternateScheme, bool swapRightStickAndB) override {
++        if (alternateScheme == padAlt_ && swapRightStickAndB == padSwapBRS_) return;
++        padAlt_ = alternateScheme; padSwapBRS_ = swapRightStickAndB;
++        LOG_INFO("input: controller scheme %s, B / right stick %s", padAlt_ ? "alternate" : "default", padSwapBRS_ ? "swapped" : "default");
++    }
+     void setSplitScreen(bool on) override {
+         if (on == split_) return;
+         split_ = on;
+@@ -774,7 +790,11 @@ public:
+         input.uiDown = ui;
+         input.padActive = bits != 0 || std::fabs(input.padRX) > 0.5f || std::fabs(input.padRY) > 0.5f;
+         input.keyActive = false;
+-        for (int i = 0; i < (int)Button::Count; ++i) { input.pressed[i] = false; input.down[i] = false; }   // keys are seat 1's
++        {   // keys are seat 1's; seat 2's pad drives its match actions (the same layout and remaps), edges against its last poll
++            const uint32_t now = padActions(remapPad(bits & 0xFFFFu, padAlt_, padSwapBRS_), (bits & kPadRT) != 0);
++            const uint32_t was = padActions(remapPad(seat2Prev_ & 0xFFFFu, padAlt_, padSwapBRS_), (seat2Prev_ & kPadRT) != 0);
++            for (int i = 0; i < (int)Button::Count; ++i) { input.down[i] = ((now >> i) & 1u) != 0; input.pressed[i] = input.down[i] && !((was >> i) & 1u); }
++        }
+         input.mouseDX = input.mouseDY = 0.0f; input.mouseX = input.mouseY = -1; input.mouseLeft = input.mouseRight = false;
+         input.mouseWheel = 0.0f; input.text.clear(); input.keyPresses.clear();
+         seat2Prev_ = bits;
+@@ -802,11 +822,11 @@ private:
+         if (input.padLX < -0.5f) bits |= kPadLStickLeft;
+         if (input.padLX > 0.5f) bits |= kPadLStickRight;
+     }
+-    // Every pad's state this pump and the last pad used (seat 1's pad when split screen turns on). With split screen, a Start press
+-    // on a pad no seat holds gives it seat 2 (seat 1 keeps the keyboard and its own pad). An empty slot is probed once a second
+-    // only (XInputGetState on a disconnected index is slow).
++    // Every pad's state this pump and the last pad used; which pad drives which seat = platform::routeSeatPads (SeatRouting.h). An
++    // empty slot is probed once a second only (XInputGetState on a disconnected index is slow).
+     void pollAllPads() {
+         const ULONGLONG nowMs = GetTickCount64();
++        PadPoll poll;
+         for (int i = 0; i < 4; ++i) {
+             PadState& p = pads_[i];
+             const bool wasStart = p.startDown;
+@@ -816,17 +836,21 @@ private:
+             p.startDown = p.connected && (p.st.Gamepad.wButtons & XINPUT_GAMEPAD_START) != 0;
+             if (p.connected && (p.st.Gamepad.wButtons != 0 || p.st.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD ||
+                                 p.st.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)) lastActivePad_ = i;
+-            if (split_ && p.startDown && !wasStart && i != seatPad_[0] && i != seatPad_[1] && seatPad_[1] < 0) {
+-                seatPad_[1] = i; ++seat2Serial_;
+-                LOG_INFO("input: pad %d pressed Start - seat 2 joined", i);
+-            }
++            poll.connected[i] = true; poll.startDown[i] = p.startDown; poll.startEdge[i] = p.startDown && !wasStart;
+         }
++        poll.lastActive = lastActivePad_;
++        SeatPads s{seatPad_[0], seatPad_[1]};
++        const int was1 = s.seat1;
++        const bool joined = routeSeatPads(split_, poll, s);
++        if (split_ && s.seat1 != was1) LOG_INFO("input: seat 1 took pad %d (it had none plugged in)", s.seat1);
++        seatPad_[0] = s.seat1; seatPad_[1] = s.seat2;
++        if (joined) { ++seat2Serial_; LOG_INFO("input: pad %d pressed Start - seat 2 joined", s.seat2); }
+     }
+     void pollGamepad(InputFrame& input) {
+         static const bool noPad = std::getenv("WFC_NOPAD") != nullptr;   // scripted runs: ignore a real controller
+-        if (noPad || noInteract()) { padBits_ = fakePad_; return; }   // (NOINTERACT: the user's controller is theirs)
++        if (noPad || noInteract()) { padBits_ = fakePad_; fakeAxes(input); return; }   // (NOINTERACT: the user's controller is theirs)
+         pollAllPads();
+-        const int seat1Pad = split_ ? seatPad_[0] : 0;   // split screen: seat 1's own pad (or none: the keyboard only)
++        const int seat1Pad = seatPad_[0];   // routeSeatPads: split - seat 1's own pad (-1: the keyboard only); else the pad in use
+         XINPUT_STATE st{};
+         if (seat1Pad >= 0 && pads_[seat1Pad].connected && (st = pads_[seat1Pad].st, true)) {
+             static bool logged = false;
+@@ -856,8 +880,18 @@ private:
+             input.padConnected = false;
+             input.padLX = input.padLY = input.padRX = input.padRY = 0.0f;
+             input.padLT = 0.0f;
++            fakeAxes(input);
+         }
+     }
++    void fakeAxes(InputFrame& input) const {   // scripted pads (injectPad / padhold): stick bits -> full deflection, LT bit -> pulled
++        if (!fakePad_) return;
++        input.padConnected = true;
++        if (fakePad_ & kPadLStickUp) input.padLY = 1.0f;
++        if (fakePad_ & kPadLStickDown) input.padLY = -1.0f;
++        if (fakePad_ & kPadLStickLeft) input.padLX = -1.0f;
++        if (fakePad_ & kPadLStickRight) input.padLX = 1.0f;
++        if (fakePad_ & kPadLT) input.padLT = 1.0f;
++    }
+ 
+     static LRESULT CALLBACK wndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+         Win32Window* self = nullptr;
+diff --git a/src/render/Renderer.h b/src/render/Renderer.h
+index a13d66f4..efa286e2 100644
+--- a/src/render/Renderer.h
++++ b/src/render/Renderer.h
+@@ -181,6 +181,9 @@ public:
+     // (<chapter>/postprocess_volumes.json, tools/render/build_campaign_pp.py); Kismet toggles them by actor name
+     // (SeqAct_Toggle on a (Dynamic)PostProcessVolume: "PostProcessVolume_15759").
+     virtual void setPostProcessVolumeEnabled(const std::string& volume, bool on) { (void)volume; (void)on; }
++    // Settings > Texture Quality: 0 Low / 1 Medium / 2 High (the original's full textures): a mip LOD bias of 2 / 1 / 0 on
++    // material textures (lightmaps, cube maps and UI untouched); live, kept across map changes
++    virtual void setTextureQuality(int level) { (void)level; }
+     // A matinee cutscene's per-frame view (Gameplay's SeqAct_Interp playback): the camera itself goes through the normal
+     // camera and notifyCameraCut("matinee") on director cuts; this carries the rest. Unset fields keep the defaults.
+     struct PostOverride {                 // the CameraActor's CamOverridePostProcess (UE3 FPostProcessSettings fields)
+diff --git a/data/frontend/pc_strings.int b/data/frontend/pc_strings.int
+index 91a79e58..93b9d20f 100644
+--- a/data/frontend/pc_strings.int
++++ b/data/frontend/pc_strings.int
+@@ -67,7 +67,7 @@ VoiceOff=Off
+ VoicePushToTalk=Push to Talk
+ VoiceOpenMic=Open Mic
+ VoiceChannel=Voice Channel
+-VoiceChannelDesc=Radio: heard anywhere. Proximity: players near you.
++VoiceChannelDesc=Team Radio: your team, anywhere. All Radio: everyone. Proximity: players near you.
+ VoiceTeamRadio=Team Radio
+ VoiceAllRadio=All Radio
+ VoiceProximity=Proximity
+@@ -81,6 +81,8 @@ InputDeviceDefault=System Default
+ PushToTalkKey=Push-to-Talk Key
+ PushToTalkKeyDesc=Hold this key to talk.
+ PttCustom=Custom...
++ChannelKey=Voice Channel Key
++ChannelKeyDesc=Switches the voice channel during a match. Controller: D-pad Right.
+ PressKeyPrompt=Press a key for push-to-talk, Esc to cancel.
+ MicTest=Mic Test
+ MicTestDesc=Speak to check your microphone level.
+@@ -102,3 +104,6 @@ LanOnly=Public matches need the lobby service. LAN games only.
+ Player2=Player 2
+ Player2Joined=Player 2 joined
+ Player2Left=Player 2 left
++
++[Escalation]
++PowerOutage=Power outage
