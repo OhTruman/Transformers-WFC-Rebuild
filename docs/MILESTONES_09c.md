@@ -4550,3 +4550,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 12:55 MERGED 3f1d9c3d frontend batch 2a: solo Campaign Back -> main menu (party lobby kept the last GameTeamStatus), Decepticon
   Chassis box (a 180-degree mirror matrix) level with Autobot, first-boot modals queued. Card: Rendering max-settings
   A/B -> Frontend 5-min dump (grey Start, scoreboard rows, pickup prompt). Vignette fade -> Rendering (backdrop matinee).
+2026-10-24 13:00 MERGED c39b7d29 playtest-3 MP gameplay batch: AIM vertical error fixed (the camera pitch step was applied before the
+  shot; 0.000 deg on 204 shots; the 'left' = the drawn crosshair vs the projection centre -> Rendering), XP restored for
+  a solo private host (the online 'private earns nothing' rule hit hosted-alone sessions), Orbital Beacon's enemy markers
+  (the versus marker setup name), Scatter Blaster = authored data (RE asked), Streets cylinder = glass section in the
+  collision (RE asked), ESC solo has no sim gate. New headless baseline (the local shot changed by design); item 29 cut.
