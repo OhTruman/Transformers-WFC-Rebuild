@@ -20,10 +20,10 @@ DB = 'F:/Transformers Rebuild/AssetTools/manifests/authored.db'
 STREETS_AUDIO = 'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps/MP_IAC_Streets/audio.json'
 CONTENT = 'F:/Transformers Rebuild/ExtractedAssets/content/'
 # [Systems] the DLC map packs (Integration's DLC phase): their own authored.db and their maps / content beside the base ones
-# (AssetTools: manifests/dlc/authored.db, work/dlc_maps/VerticalSlice/Maps/<map>, out/dlc_content/content - the DLC-only files,
+# (AssetTools: manifests/dlc/authored.db, out/dlc_content/VerticalSlice/Maps/<map>, out/dlc_content/content - the DLC-only files,
 # merged into the package's content/ by build_slim)
 DLC_DB = 'F:/Transformers Rebuild/AssetTools/manifests/dlc/authored.db'
-DLC_MAPS_DIR = 'F:/Transformers Rebuild/AssetTools/work/dlc_maps/VerticalSlice/Maps/'
+DLC_MAPS_DIR = 'F:/Transformers Rebuild/AssetTools/out/dlc_content/VerticalSlice/Maps/'   # (moved from work/dlc_maps: the base layout)
 DLC_CONTENT = 'F:/Transformers Rebuild/AssetTools/out/dlc_content/content/'
 UI_LEVELS = ['UI_FrontEnd_m', 'UI_PartyLobby_m', 'UI_Lobby_m', 'UI_CampaignLobby_m']
 AUDIO_OPS = {'SeqAct_PlaySound', 'SeqAct_PlayPlayerPositionalSound', 'SeqAct_Reverb', 'SeqAct_PlayMusic',
@@ -130,7 +130,7 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None, campaig
     objs = {}
     for pkg in packages:
         for r in c.execute('select opath, class, props from objects where package=?', (pkg,)):
-            objs[r[0]] = (r[1], json.loads(r[2]))
+            objs[r[0]] = (r[1], json.loads(r[2] or "{}"))   # (a DLC row may carry no props)
     def sid(o):
         s = o.split('Main_Sequence.', 1)[1] if 'Main_Sequence.' in o else o.split('.')[-1]
         return (o.split('.')[0] + '|' + s) if len(packages) > 1 else s     # unique across sublevels

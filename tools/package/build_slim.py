@@ -88,7 +88,7 @@ CAMPAIGN_NEXT_MAP = ['kismet', 'matinee', 'pawn_factories', 'objectives', 'mover
 # package already has is never replaced (the base wins).
 DLC_CONTENT_TSV = 'AssetTools/out/dlc_content/dlc_only_content.tsv'   # path = AssetTools/out/dlc_content/content/<rel>
 DLC_CONTENT_SRC = 'AssetTools/out/dlc_content/content/'
-DLC_MAPS = 'AssetTools/work/dlc_maps/VerticalSlice/Maps'
+DLC_MAPS = 'AssetTools/out/dlc_content/VerticalSlice/Maps'   # (moved from work/dlc_maps: the base layout, base-style URIs)
 DLC_RENDER = 'AssetTools/out/dlc_render'
 # the head's own data folders (this repo): every file ships from the head being packaged, at Rebuild/<dir>/ (slim_files.tsv listed 7
 # of data/frontend's 9 files - iconic_presets.json and bot_skill.json were missing - and sources them from the live Rebuild tree)
