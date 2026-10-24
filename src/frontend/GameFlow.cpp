@@ -1154,6 +1154,10 @@ void GameFlow::gameLobbyBegin() {
     lobby_.autostartCountdown = !isPrivate;
     int msm = settingIndex(gs, "MapSelectionMethod");
     lobby_.mapSelectionMethod = msm >= 0 ? msm : (gs ? gs->mapSelectionMethod : 1);
+    // PC ADAPTATION (user playtest 2026-10-24 ESC 2): the public Escalation playlist rotated a random map behind a veto whose
+    // quorum a lone host cannot reach, so the host was stuck on one map (District). Escalation is hosted with Host's Choice:
+    // Select Map offers every Escalation map (Broken Hope, Remnant + the four DLC maps).
+    if (lobby_.gameModeTag == "SV") lobby_.mapSelectionMethod = 1;
     lobby_.allowMapVeto = lobby_.mapSelectionMethod == 0;
     lobby_.countingDown = lobby_.countdownRubicon = lobby_.finalCountdown = false;
     lobby_.countdown = 0;
