@@ -5,6 +5,8 @@
 //     (BrokenHope / Static: the first Shockwave's mass gib, 900 ms cold in "abilities").
 //  3. The matinee pawn-group clips of every participant's chassis load at the chapter load instead of at their first play
 //     (A1 step 781, A3 step 1887, D5 step 1781: cpPlayPawnClip's loadAnimationsByName).
+//  4. cpCharacterTargets' ROBODEF table (roster_package.json) at the chapter load: the first op with a TnSeqVar_Character target
+//     (TnAiUseInteract / SetMoveToObjective / Teleport) parsed it in its step (4-6 ms: A1 2452, A3 1844, D3B 3703, D5 76).
 // Run from the tree root.
 const fs = require('fs');
 const NL = String.fromCharCode(10), CR = String.fromCharCode(13);
@@ -71,6 +73,7 @@ ed('src/game/WorldCampaignMatinee.cpp', [
      '                if (model.clipByName(cf.first) < 0) { assets::loadAnimationsByName("F:/Transformers Rebuild/ExtractedAssets/" + cf.second, model); ++preloaded; }' + NL +
      '        }' + NL +
      '    }' + NL +
-     '    if (preloaded) LOG_INFO("campaign: %d matinee pawn clip files preloaded", preloaded);' + NL],
+     '    if (preloaded) LOG_INFO("campaign: %d matinee pawn clip files preloaded", preloaded);' + NL +
+     '    cpCharacterTargets("");   // its ROBODEF -> chassis table (roster_package.json) builds now, not in the first Character-targeted op' + NL],
 ]);
 console.log('ok');
