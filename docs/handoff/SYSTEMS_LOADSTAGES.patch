@@ -1,0 +1,113 @@
+diff -ruN a/src/core/Application.cpp b/src/core/Application.cpp
+--- a/src/core/Application.cpp	2026-10-24 01:17:31.284964700 -0500
++++ b/src/core/Application.cpp	2026-10-24 01:17:31.300016400 -0500
+@@ -17,6 +17,7 @@
+ #include "net/NetMatchDriver.h"
+ #include "net/UdpSession.h"
+ #include "core/Config.h"
++#include "core/LoadYield.h"
+ #include "core/Debug.h"
+ #include "core/Log.h"
+ #include "platform/Window.h"
+@@ -553,6 +554,7 @@
+     long iters = 0, steps = 0;
+     const auto t0 = std::chrono::steady_clock::now();
+     LOG_INFO("HEADLESS match: step %.4f s, match seconds %.0f, iteration cap %ld", step, matchSeconds, maxIters);
++    core::logLoadStages("headless match start");   // DIAGNOSTIC (WFC_LOADSTAGES): the boot + map load's stage times
+     for (;; ++iters) {
+         if (maxIters > 0 && iters >= maxIters) { LOG_INFO("HEADLESS end: %ld iterations", iters); break; }
+         if ((float)steps * step > 600.0f) { LOG_INFO("HEADLESS end: 600 s simulated (guard)"); break; }
+diff -ruN a/src/core/Application_CampaignTest.cpp b/src/core/Application_CampaignTest.cpp
+--- a/src/core/Application_CampaignTest.cpp	2026-10-24 01:17:31.363232800 -0500
++++ b/src/core/Application_CampaignTest.cpp	2026-10-24 01:17:31.377783100 -0500
+@@ -4,6 +4,7 @@
+ // launch at a checkpoint. One SUMMARY line.
+ #include "core/Application.h"
+ #include "core/Log.h"
++#include "core/LoadYield.h"
+ #include "game/World.h"
+ 
+ #include <algorithm>
+@@ -13,6 +14,7 @@
+ namespace core {
+ 
+ void Application::runCampaignTest() {
++    core::logLoadStages("campaign test start");   // DIAGNOSTIC (WFC_LOADSTAGES): the chapter load's stage times
+     const float dt = (float)clock_.stepSeconds();
+     int checks = 0, fails = 0;
+     auto check = [&](bool ok, const char* what) { ++checks; if (!ok) ++fails; LOG_INFO("CAMPAIGNTEST %s %s", ok ? "PASS" : "FAIL", what); };
+diff -ruN a/src/core/LoadYield.cpp b/src/core/LoadYield.cpp
+--- a/src/core/LoadYield.cpp	2026-10-24 01:17:31.207700400 -0500
++++ b/src/core/LoadYield.cpp	2026-10-24 01:17:31.221246300 -0500
+@@ -5,7 +5,10 @@
+ #include <chrono>
+ #include <cmath>
+ #include <fstream>
++#include <algorithm>
++#include <cstdlib>
+ #include <map>
++#include <vector>
+ #include <sstream>
+ 
+ namespace core {
+@@ -22,6 +25,12 @@
+ long g_steps = 0, g_expected = 0;
+ float g_frac = 0.0f;
+ const char* g_stage = "";
++// WFC_LOADSTAGES: per-label wall time since the previous step
++const bool g_stagesOn = std::getenv("WFC_LOADSTAGES") != nullptr;
++const auto g_t0 = std::chrono::steady_clock::now();
++auto g_stageAt = g_t0;
++struct StageTime { double ms = 0.0; long steps = 0; };
++std::map<std::string, StageTime> g_stageTimes;
+ const char* kProfileFile = "wfc_loadprofile.ini";   // (next to wfc_profile.ini: key=steps per line)
+ std::map<std::string, long> readProfile() {
+     std::map<std::string, long> m;
+@@ -41,6 +50,12 @@
+ }
+ 
+ void loadYield(const char* where) {
++    if (g_stagesOn && !g_inside) {
++        const auto t = std::chrono::steady_clock::now();
++        StageTime& st = g_stageTimes[where ? where : "?"];
++        st.ms += std::chrono::duration<double, std::milli>(t - g_stageAt).count(); ++st.steps;
++        g_stageAt = t;
++    }
+     if (g_progOn && !g_inside) {                       // (every call is a load step, presented or not)
+         ++g_steps;
+         g_stage = where ? where : "";
+@@ -86,6 +101,22 @@
+     LOG_INFO("load progress: %s done in %ld steps (expected %ld)", g_progKey.c_str(), g_steps, g_expected);
+ }
+ 
++void logLoadStages(const char* when) {
++    if (!g_stagesOn) return;
++    const auto t = std::chrono::steady_clock::now();
++    const double total = std::chrono::duration<double, std::milli>(t - g_t0).count();
++    const double tail = std::chrono::duration<double, std::milli>(t - g_stageAt).count();
++    std::vector<std::pair<std::string, StageTime>> v(g_stageTimes.begin(), g_stageTimes.end());
++    std::sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.second.ms > b.second.ms; });
++    double inSteps = 0.0; long steps = 0;
++    for (const auto& kv : v) { inSteps += kv.second.ms; steps += kv.second.steps; }
++    LOG_INFO("LOADSTAGES %s: %.0f ms since start, %ld steps in %zu labels (%.0f ms), %.0f ms after the last step", when, total, steps,
++             v.size(), inSteps, tail);
++    for (size_t i = 0; i < v.size() && i < 15; ++i)
++        LOG_INFO("LOADSTAGES   %8.0f ms %5.1f%%  %6ld steps  %s", v[i].second.ms, total > 0 ? 100.0 * v[i].second.ms / total : 0.0,
++                 v[i].second.steps, v[i].first.c_str());
++}
++
+ LoadProgress loadProgress() {
+     LoadProgress p;
+     p.active = g_progOn; p.fraction = g_frac; p.stage = g_stage; p.steps = g_steps; p.expected = g_expected;
+diff -ruN a/src/core/LoadYield.h b/src/core/LoadYield.h
+--- a/src/core/LoadYield.h	2026-10-24 01:17:31.137960600 -0500
++++ b/src/core/LoadYield.h	2026-10-24 01:17:31.151506900 -0500
+@@ -31,4 +31,8 @@
+ void endLoadProgress();
+ LoadProgress loadProgress();
+ 
++// DIAGNOSTIC (WFC_LOADSTAGES=1, Systems' load-time pass): the wall time between consecutive loadYield calls, summed per stage label
++// (the work that ended at that step), and logLoadStages() prints the table: the top labels, their share, the step counts.
++void logLoadStages(const char* when);
++
+ } // namespace core
