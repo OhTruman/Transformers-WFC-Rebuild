@@ -4238,3 +4238,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   headless (Gameplay), no data issues. Rendering's headless render-data check of Fortress / Havoc: JSON / atlases /
   references OK; two data items with AssetTools: 30 'no master material' per map (the DLC chain's parent lookup needs the
   base packages: build_materials rerun) and no LightsVisibilitiesVolume (renderer fallback if the levels lack it).
+2026-10-23 21:29 MERGED 95bdd709 split-screen HUD rect hook (one HUD movie per seat); FSR3 per view deferred to phase 4 (native per view).
+  Split screen status: render phases 1-3 + Gameplay seat 2 (join, HUD state, bot-slot handover) + Systems input / audio
+  interfaces merged; the Frontend's per-seat HUD + pad-Start join + lobby rows are the last offline piece; online
+  two-locals = Systems' later wire patch.
