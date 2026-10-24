@@ -183,6 +183,7 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
     }
     std::stable_sort(maps_.begin(), maps_.end(), [](const MapInfo& a, const MapInfo& b) { return a.iniOrder < b.iniOrder; });
     loadTransLevels(extractedRoot, manifestRoot, runtimeMapRoot);
+    loadDlc(manifestRoot, runtimeMapRoot);
 
     // ---- modes / playlists / settings ----
     assets::Json md;
@@ -549,6 +550,53 @@ void Catalog::loadTransLevels(const std::string& extractedRoot, const std::strin
     }
     flushMap();
     LOG_INFO("FRONTEND catalog: %zu campaign checkpoints, %d campaign chapters (TransLevels.ini)", checkpoints_.size(), added);
+}
+
+void Catalog::loadDlc(const std::string& manifestRoot, const std::string& runtimeMapRoot) {
+    dlcUnlockedChassis_.clear();
+    dlcMaps_ = 0;
+    assets::Json inv;
+    if (!readJson(manifestRoot + "/dlc/dlc_inventory.json", inv)) { LOG_INFO("FRONTEND catalog: no DLC inventory (dlc/dlc_inventory.json)"); return; }
+    // a name with U+FFFD (a Latin-1 text read as UTF-8 by the inventory) is unusable: the INT name stands in
+    auto clean = [](const std::string& v) { return v.find("\xEF\xBF\xBD") == std::string::npos ? v : std::string(); };
+    int order = 0;
+    for (const MapInfo& m : maps_) order = std::max(order, m.iniOrder);
+    for (const auto& [packName, pack] : inv["packs"].obj) {
+        for (size_t i = 0; i < pack["maps"].size(); ++i) {
+            const assets::Json& d = pack["maps"][i];
+            const int id = std::atoi(d["MapId"].asString().c_str());
+            if (id <= 0) continue;
+            MapInfo* mi = nullptr;
+            for (MapInfo& m : maps_) if (m.mapId == id) mi = &m;
+            if (!mi) { maps_.emplace_back(); mi = &maps_.back(); mi->iniOrder = ++order; }
+            mi->mapId = id;
+            mi->presenceId = std::atoi(d["PresenceId"].asString().c_str());
+            mi->mapFilename = d["MapFilename"].asString();
+            if (d["Faction"].isString()) mi->faction = std::atoi(d["Faction"].asString().c_str());
+            mi->compatibleGameTypes.clear();
+            for (size_t k = 0; k < d["game_types"].size(); ++k) mi->compatibleGameTypes.push_back(d["game_types"][k].asString());
+            if (d["ImagePath"].isString()) mi->imagePath = d["ImagePath"].asString();
+            const std::string nameInt = d["friendly"]["INT"].asString();
+            if (!nameInt.empty()) mi->friendlyName = mi->friendlyNameInt = nameInt;
+            mi->friendlyNameFra = clean(d["friendly"]["FRA"].asString());
+            mi->cooked = true;   // DLC always owned (the user's packs)
+            std::string dir = mi->mapFilename;
+            if (iendsWith(dir, "_Base_m")) dir = dir.substr(0, dir.size() - 7);
+            mi->runtimeDir = dir;
+            mi->hasRequiredAssets = runtimeFileExists(runtimeMapRoot + "/" + dir + "/world.glb") &&
+                                    (runtimeFileExists(runtimeMapRoot + "/" + dir + "/render_index.json") ||
+                                     runtimeFileExists(manifestRoot + "/maps/" + dir + "/render_index_generic.json"));
+            ++dlcMaps_;
+            LOG_INFO("FRONTEND catalog DLC map %d %s \"%s\" (%s) selectable=%d", id, mi->mapFilename.c_str(), mi->friendlyName.c_str(),
+                     packName.c_str(), (int)mi->hasRequiredAssets);
+        }
+        for (size_t i = 0; i < pack["chassis_entries"].size(); ++i) {
+            const assets::Json& c = pack["chassis_entries"][i];
+            if (c["LockedChassis"].asString() == "false" || c["LockedCharacter"].asString() == "false")
+                dlcUnlockedChassis_.push_back(c["chassis"].asString());
+        }
+    }
+    std::stable_sort(maps_.begin(), maps_.end(), [](const MapInfo& a, const MapInfo& b) { return a.iniOrder < b.iniOrder; });
 }
 
 std::vector<std::string> Catalog::languages() const {

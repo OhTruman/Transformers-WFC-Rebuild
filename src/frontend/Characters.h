@@ -62,6 +62,8 @@ public:
     bool save(const std::string& path) const;
     void loadSaved(const std::string& path);
     const ChassisInfo* chassis(const std::string& id) const;
+    // The DLC packs' TransCustomization (always owned): LockedChassis / LockedCharacter false for these chassis.
+    void unlockChassis(const std::string& id);
     int numberOfColorPalettes = 5;            // TnCharacterCustomizationData.NumberOfColorPalettes (authored)
     const std::map<std::string, ChassisInfo>& allChassis() const { return chassis_; }
     // Iconic mode (CharacterSelect_GFX's wheel): TnProfileSettings.PresetIconicCharacters in authored order

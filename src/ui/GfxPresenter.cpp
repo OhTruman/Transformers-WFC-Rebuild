@@ -3,6 +3,7 @@
 #include "platform/Clipboard.h"
 #include "core/FrameProfile.h"
 #include "core/Log.h"
+#include "frontend/DataPaths.h"
 #include "frontend/FlowTrace.h"
 
 #include <algorithm>
@@ -454,7 +455,7 @@ Value GfxPresenter::bridge(GfxMovie& m, const std::string& fn, Args& a) {
         // ImagePath "UI_LevelThumbnails_p.MP_Streets" -> the extracted texture.
         std::string obj = sa[1];
         size_t dot = obj.find('.');
-        std::string png = dot == std::string::npos ? "" : lib_.extractedRoot() + "/content/" + obj.substr(0, dot) + "/" + obj.substr(dot + 1) + ".png";
+        std::string png = dot == std::string::npos ? "" : frontend::contentImagePng(lib_.extractedRoot(), obj);   // + the DLC thumbnails
         m.setExternalTexture(sa[0], png);
         frontend::FlowTrace::emit("gfx.externalTexture", {{"movie", m.object()}, {"resource", sa[0]}, {"texture", obj}});
         return Value();

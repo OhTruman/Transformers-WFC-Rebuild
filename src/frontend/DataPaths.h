@@ -14,5 +14,10 @@ const std::string& frontendDataDir();
 
 // frontendDataDir() + "/" + name.
 std::string frontendDataFile(const char* name);
+// The DLC packs' extracted content (AssetTools out/dlc_content/content; WFC_DLC_CONTENT overrides): the map thumbnails
+// UI_DLCThumbnails_p / UI_DLC2Thumbnails_p live there, not in ExtractedAssets.
+std::string dlcContentRoot();
+// "<Package>.<Name>" -> the extracted PNG: ExtractedAssets/content first, then the DLC content root; "" if neither has it.
+std::string contentImagePng(const std::string& extractedRoot, const std::string& object);
 
 } // namespace frontend

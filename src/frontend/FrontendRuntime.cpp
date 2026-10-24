@@ -295,6 +295,7 @@ bool FrontendRuntime::init() {
     else if (const char* a = std::getenv("WFC_FRONTEND_AUTOPLAY")) script_.load(ScriptDriver::autoplayScript(a));
     stores_ = std::make_unique<DataStores>(flow_, catalog_);
     roster_.load(Catalog::defaultManifestRoot() + "/mp_content/roster_package.json");
+    for (const std::string& c : catalog_.dlcUnlockedChassis()) roster_.unlockChassis(c);   // the DLC packs' unlocks (always owned)
     roster_.loadAuthored(frontendDataFile("character_presets.json"));
     roster_.loadIconic(Catalog::defaultManifestRoot() + "/mp_content/mp_characters.json", frontendDataFile("iconic_presets.json"));
     // A fresh profile's characters are created with random palette colours (FillCharacterSlots ->

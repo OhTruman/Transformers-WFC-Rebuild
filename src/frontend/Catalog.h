@@ -136,6 +136,8 @@ public:
     // Localization ("$UIText.LoadScreen.LoadingMap" or section/key); INT. Empty when unknown.
     std::string localize(const std::string& file, const std::string& section, const std::string& key) const;
     std::string localizeKey(const std::string& dollarKey) const;
+    const std::vector<std::string>& dlcUnlockedChassis() const { return dlcUnlockedChassis_; }
+    int dlcMapCount() const { return dlcMaps_; }
     // The text language (PC EXTENSION Settings row, user 2026-10-23): INT plus every Coalesced_<lang> text pack present.
     // setLanguage rebuilds the table as INT overlaid with that language's files (a missing key stays INT), and switches
     // the map / mode names to the manifests' entries for it.
@@ -168,11 +170,18 @@ private:
     std::vector<CheckpointInfo> checkpoints_;
     // checkpoints, the maps' CampaignCharacters, and the campaign chapters the frontend_maps manifest does not list
     void loadTransLevels(const std::string& extractedRoot, const std::string& manifestRoot, const std::string& runtimeMapRoot);
+    // The DLC map packs, always owned (RE DLC_RE 4; AssetTools manifests/dlc/dlc_inventory.json): their TransLevels MapInfo
+    // merged (Pack 1 re-defines Fortress / Havoc / Tranquillity with an ImagePath, Pack 2 adds five), DlcId 0 (the shipped
+    // ContentIds=(0) playlists accept them), selectable once their runtime data exists as any map; the packs'
+    // TransCustomization unlocks (LockedChassis / LockedCharacter false).
+    void loadDlc(const std::string& manifestRoot, const std::string& runtimeMapRoot);
     std::vector<Playlist> playlists_;
     std::vector<GameModeInfo> modes_;
     std::map<std::string, GameSettings> settings_;
     int defaultQuickmatchPlaylist_ = 1;
     std::string language_ = "INT";
+    std::vector<std::string> dlcUnlockedChassis_;
+    int dlcMaps_ = 0;
     std::map<std::string, std::string> locInt_;   // the INT table as loaded (setLanguage starts from it)
     std::map<std::string, std::string> loc_;   // "UIText.Section.Key" -> INT text
     mutable std::map<std::string, std::string> locLower_;   // the same, keys lower-cased (built on the first miss)
