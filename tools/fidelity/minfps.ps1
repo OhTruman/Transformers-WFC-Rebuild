@@ -20,7 +20,9 @@
 # (program / texture first binds), which the full row keeps - the minimum the user sees includes them.
 # Per row: frames, average fps (frames / summed interval), 1% low (the fps of the 99th-percentile frame time), 0.1% low, the worst
 # frame (ms + fps) and its split: GPU-bound when its GPU time >= 90 % of its interval (the pass = the largest GPU pass), else
-# CPU-bound (the part = the largest of the CPU render parts and outside). Target 300 fps = 3.33 ms: PASS when the 1% low >= 300.
+# CPU-bound (the part = the largest of the CPU render parts and outside). Target 300 fps = 3.33 ms (Integration 2026-10-24: the user
+# said minimum): PASS when the WORST frame of a steady / wave / sweep row is >= 300 fps; the 1% low is reported beside it. The full rows
+# (from the match start) carry no verdict: their frames over 3.33 ms in the first 2 s are the load / first-use hitch list (HITCHES.md).
 #
 #   .\tools\fidelity\minfps.ps1 -Root work\ab\fast_48e42af -OutDir work\minfps\48e42af [-Rows camp-play,camp-sweep,esc]
 #        [-Res 2560x1440,3840x2160] [-Chapters A1_IAC,...] [-EscMaps 505,...] [-PlaySeconds 60] [-EscSeconds 240] [-ReportOnly]
@@ -30,8 +32,8 @@ param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir
       [string[]]$Chapters = @("A1_IAC", "A2_KON", "A3_COR", "A4_ORB", "A5_TRY", "D1_ORB", "D2_COR", "D3A_IAC", "D3B_IAC", "D5_OME"),
       [string[]]$EscMaps = @("505", "506", "MP_ESC_Tranquillity", "MP_ESC_District", "MP_ESC_Pulse", "MP_ESC_Static"),
       [int]$PlaySeconds = 60, [int]$EscSeconds = 240, [double]$TargetFps = 300, [switch]$ReportOnly,
-      [string]$Assets = "F:\Transformers Rebuild\Rebuild-Experimental\work\final_assets\VerticalSlice",
-      [string]$RenderData = "F:\Transformers Rebuild\Rebuild-Experimental\work\final_render")
+      [string]$Assets = "F:\Transformers Rebuild\Rebuild\work\assets_dlc\VerticalSlice",
+      [string]$RenderData = "F:\Transformers Rebuild\Rebuild\work\render")   # (Integration 2026-10-24: one root incl. the nine DLC maps)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 $Rows = @($Rows | % { "$_" -split ',' } | ? { $_ }); $Res = @($Res | % { "$_" -split ',' } | ? { $_ })
@@ -46,9 +48,11 @@ $cpuParts = "world", "chars", "fx", "transl", "post"
 
 function Run-Row([string]$dir, [hashtable]$extra, [int]$w, [int]$h, [string]$rs, [int]$timeoutS) {
     New-Item -ItemType Directory -Force $dir | Out-Null
-    (Get-BotProfile 4 0 1 -Width $w -Height $h -RayTracing 0) | Set-Content -Encoding ASCII (Join-Path $dir "wfc_profile.ini")
+    ((Get-BotProfile 4 0 1 -Width $w -Height $h -RayTracing 0) + "Upscaling=0`nFrameGeneration=0`n") | Set-Content -Encoding ASCII (Join-Path $dir "wfc_profile.ini")
     $e = @{ WFC_BOOT = "match"; WFC_LOGEVERY = "0"; WFC_SLOWFRAME = "0.01"; WFC_FPS_LIMIT = "0"; WFC_BOTAI = ""; WFC_HDTEXTURES = "0"
-            WFC_RENDER_DATA = $RenderData; WFC_ASSETS = $Assets }
+            WFC_RENDER_DATA = $RenderData; WFC_ASSETS = $Assets
+            # Rendering's phase-0 parser reads the same logs (2026-10-24): timestamps, FRAME lines, the sim / draw profilers (not CPUPROF)
+            WFC_LOGTIME = "1"; WFC_FRAMELOG = "1"; WFC_TICKPROF = "1"; WFC_DRAWPROF = "1"; WFC_SKIPINTRO = "1"; WFC_NOMOUSE = "1" }
     if ($rs -ne "${w}x${h}") { $e.WFC_RENDERSIZE = $rs }
     foreach ($k in $extra.Keys) { $e[$k] = $extra[$k] }
     if (-not (Wait-WfcGpu)) { "GPU busy" | Set-Content (Join-Path $dir "NOTRUN.txt"); return }
@@ -93,7 +97,7 @@ function Stats($frames, [string]$kind, [string]$map, [string]$rs, [string]$scope
     $row.avg_fps = [Math]::Round(1000.0 * $n / $sum, 1); $row.low1_fps = [Math]::Round(1000.0 / $p99, 1); $row.low01_fps = [Math]::Round(1000.0 / $p999, 1)
     $row.worst_ms = [Math]::Round($w.ms, 2); $row.worst_fps = [Math]::Round(1000.0 / $w.ms, 1); $row.worst_frame = $w.f
     $row.worst_bound = $bound; $row.worst_where = $where; $row.worst_cpu_ms = [Math]::Round($cpuTot, 2); $row.worst_gpu_ms = if ($w.gpu -ge 0) { [Math]::Round($w.gpu, 2) } else { "n/a" }
-    $row.verdict = if ($row.low1_fps -ge $TargetFps) { "PASS" } else { "FAIL" }
+    $row.verdict = if ($scope -notlike "steady*" -and $scope -notlike "wave*" -and $kind -ne "camp-sweep") { "-" } elseif ($row.worst_fps -ge $TargetFps) { "PASS" } else { "FAIL" }
     return [pscustomobject]$row
 }
 
@@ -140,6 +144,18 @@ foreach ($rs in $Res) {
         }
     }
 }
+# the load / first-use hitch list: per play / esc row, the frames over the target in the first 2 s after the match start
+$hit = @("# Load / first-use hitches - frames over $([Math]::Round(1000 / $TargetFps, 2)) ms in the first 2 s after the match start", "",
+         "| Row | Map | Res | Frames over | Worst 5 (frame: ms, bound / where) |", "|---|---|---|---|---|")
+foreach ($rs in $Res) { $tag = $rs -replace 'x', '_'
+    foreach ($dd in Get-ChildItem (Join-Path $OutDir $tag) -Directory -ErrorAction SilentlyContinue | ? { $_.Name -like 'camp-play_*' -or $_.Name -like 'esc_*' }) {
+        $fr = @((Read-Frames (Join-Path $dd.FullName "wfc.log")).frames | ? { $_.live -and $_.t -lt 2.0 -and $_.ms -gt 1000 / $TargetFps })
+        $top = @($fr | Sort-Object ms -Descending | Select-Object -First 5 | % {
+            $b = if ($_.gpu -ge 0.9 * $_.ms) { "GPU / " + ($_.gp.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 1).Key } else { "CPU / " + ($_.cpu.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 1).Key }
+            "f$($_.f): $([Math]::Round($_.ms, 1)) ms, $b" }) -join '; '
+        $kind, $map = $dd.Name -split '_', 2
+        $hit += "| $kind | $map | $rs | $($fr.Count) | $top |" } }
+$hit | Set-Content -Encoding UTF8 (Join-Path $OutDir "HITCHES.md")
 $csv = Join-Path $OutDir "minfps.csv"; $results | Export-Csv -NoTypeInformation -Encoding UTF8 $csv
 $md = @("# Min-fps baseline - $(Split-Path $Root -Leaf) - $(Get-Date -Format 'yyyy-MM-dd HH:mm')", "",
         "Target $TargetFps fps (3.33 ms) on the 1% low; the Off look (RT 0, HD 0, VSync 0, no frame limit); window 2560x1440, 4K offscreen. Columns: avg / 1% low / 0.1% low fps, the worst frame (ms, fps, frame no.) and where it lands (GPU-bound when its GPU time >= 90 % of the interval: the largest GPU pass; else CPU: the largest CPU part, 'outside' = sim + the rest).", "",
