@@ -4392,3 +4392,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 01:38 MERGED b6ddf3bc Escalation spawns at the authored points (RE §7; the PROV on-nav stand-in removed) + Pulse ESC data +
   FINAL_BASE_ITEMS 19: ESCTEST Remnant 15 / 15, BrokenHope 36 / 36, Tranquillity 7 / 7, District 11 / 11, Pulse 7 / 7
   (0 -> 134 spawns); ESC same-match deliberately re-baselined. Experimental rebuilds the gate base with 18 + 19.
+2026-10-24 01:48 MERGED 35be2b30 Graphics setting previews (#5; panel right of the Graphics window; RayTracing_0 / _2 images, Rendering's
+  same-view set to follow) + Create a Character colour picking by mouse / controller (#21; startDrag / stopDrag were
+  stubs). Card: Rendering perf rows + preview captures -> Frontend 5-min check -> Experimental final gate on the sha.
