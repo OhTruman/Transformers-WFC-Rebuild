@@ -2008,7 +2008,13 @@ static void testSplitProfiles() {
         f.leaveSeat2();
         ds.poll();
         const bool oneRow = ds.call("GetCollectionRowCount", {"<CurrentGame:Players>"}).n == 1;
-        check(refusedFrontEnd && refusedSamePad && joined && rows && oneRow && f.localSeats() == 1, "split.seat2_join",
+        // the script verb (TEST: no second real pad): seat2:join,<pad> / seat2:leave
+        rt.script().load("seat2:join,2");
+        runUntil(rt, [&] { return f.localSeats() == 2; }, 30);
+        const bool scripted = f.localSeats() == 2 && f.seat2Pad() == 2;
+        rt.script().load("seat2:leave");
+        runUntil(rt, [&] { return f.localSeats() == 1; }, 30);
+        check(refusedFrontEnd && refusedSamePad && joined && rows && oneRow && scripted && f.localSeats() == 1, "split.seat2_join",
               std::to_string(refusedFrontEnd) + std::to_string(refusedSamePad) + std::to_string(joined) + std::to_string(rows) + std::to_string(oneRow));
     }
     std::remove("wfc_profile.ini");
