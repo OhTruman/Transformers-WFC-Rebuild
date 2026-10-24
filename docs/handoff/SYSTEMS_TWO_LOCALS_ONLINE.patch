@@ -1,0 +1,784 @@
+diff -ruN a/src/core/Application_Net.cpp b/src/core/Application_Net.cpp
+--- a/src/core/Application_Net.cpp	2026-10-24 01:52:49.774977900 -0500
++++ b/src/core/Application_Net.cpp	2026-10-24 01:52:49.786517400 -0500
+@@ -18,6 +18,7 @@
+ //                             mic = the default microphone, open while the match runs (only with the user's OK). Headless runs have
+ //                             no audio device: frames are received, buffered and decoded, the stats logged at the end.
+ #include "core/Application.h"
++#include "platform/Window.h"
+ #include "core/Log.h"
+ #include "game/World.h"
+ #include "net/Lockstep.h"
+@@ -184,11 +185,23 @@
+         cfg.keepHistory = self == 0;
+         cfg.lateJoin = std::getenv("WFC_NET_LATEJOIN") != nullptr;
+     }
++    // Split screen online (harness): WFC_NET_OWNER=<owner of seat 0>,<of seat 1>,... e.g. 0,1,1 = seat 2 is seat 1's second local player
++    // (no transport address of its own); the owner feeds it with the scripted seat-2 input (WFC_SEAT2BOT=1).
++    if (const char* ow = std::getenv("WFC_NET_OWNER")) {
++        for (const char* q = ow; *q;) {
++            cfg.owner.push_back(std::atoi(q));
++            while (*q && *q != ',') ++q;
++            if (*q == ',') ++q;
++        }
++        cfg.owner.resize((size_t)seats, -1);
++        for (int s = 0; s < seats; ++s) if (cfg.owner[(size_t)s] < 0) cfg.owner[(size_t)s] = s;
++    }
+     cfg.seats = seats; cfg.self = self; cfg.delay = (int)env("WFC_NET_DELAY", 0); cfg.hashEvery = (int)env("WFC_NET_HASH_EVERY", 60);   // delay 0 = auto from the RTT
+     cfg.peerTimeoutS = (double)env("WFC_NET_TIMEOUT_S", 10); cfg.launchHash = lh;
+     if (const char* lp = std::getenv("WFC_NET_LOG")) cfg.logPath = lp;
+     net::Lockstep ls(*t, cfg);
+     if (cfg.keepHistory) ls.setJoinReady([&ls](int seat) { ls.activateSeat(seat, seat % 2); });   // the harness: the launch's team
++    if (ls.ownedSeat() >= 0) world_.addLocalSeat(1, game::CharacterSelection{}, true, seatMp[(size_t)ls.ownedSeat()]);   // pad 2 -> its seat
+     const long desyncAt = env("WFC_NET_DESYNC_AT", -1);
+     std::unique_ptr<net::VoiceSession> voice;
+     if (const char* vm = std::getenv("WFC_NET_VOICE")) {
+@@ -259,6 +272,7 @@
+             platform::InputFrame input;
+             world_.playerBotInput(input, step);
+             world_.handleInput(input, step);
++            if (ls.ownedSeat() >= 0) ls.submitOwned(nextLocal, world_.encodeSeat2Command());   // before submitLocal (one send carries both)
+             ls.submitLocal(nextLocal, world_.encodeLocalCommand());
+             ++nextLocal;
+         }
+@@ -480,8 +494,16 @@
+         LOG_INFO("online: seat %d (%s) wakes at tick %u on team %d%s", seat, r.name.c_str(), atTick, team, local ? " - this peer" : "");
+         queueLateSeat(world_, seat, r, atTick);
+     };
++    c.seatOwner = udpSession_->matchOwners();   // split screen online: the second local players' owners
++    c.encodeOwned = [this] { return world_.encodeSeat2Command(); };
+     netDriver_ = std::make_unique<net::NetMatchDriver>(world_, *udpSession_->matchTransport(), audio_, c);
+     LOG_INFO("online: the lockstep driver runs the match (seat %d of %d, launch hash %016llx)", localSeat, seats, (unsigned long long)lh);
++    for (int s = 0; s < (int)c.seatOwner.size(); ++s)   // this peer's second local player: pad 2 feeds its match seat
++        if (s != localSeat && c.seatOwner[(size_t)s] == localSeat) {
++            const int pad = window_ ? window_->seatPad(1) : -1;
++            const int mp = world_.addLocalSeat(pad >= 0 ? pad : 1, game::CharacterSelection{}, true, seatPlayerOf(world_, s));
++            LOG_INFO("online: seat %d is this peer's second local player (pad %d, match player %d)", s, pad, mp);
++        }
+ }
+ 
+ // The Audio rows -> the voice lane: the voice / proximity volumes, who hears this player (TeamRadio: the team by radio; AllRadio:
+@@ -657,6 +679,12 @@
+             }
+             s.joinRunningMatch();
+         }
++        if (std::getenv("WFC_UDPSECOND")) {   // split screen online (harness): this member brings a second local player
++            if (!pump(30.0, [&] { return has(T::Joined) || has(T::JoinFailed); }) || !has(T::Joined)) { LOG_ERROR("UDPMATCH: not joined"); exitCode_ = 4; return; }
++            frontend::SessionMemberInfo p2; p2.displayName = "Player 2"; p2.hasCharacter = true;
++            s.setSecondLocal(&p2);
++            LOG_INFO("UDPMATCH: a second local player joins with this member");
++        }
+         if (!pump(60.0, [&] { return has(T::CountdownStarted) || has(T::JoinFailed) || has(T::HostLost); }) || !has(T::CountdownStarted)) {
+             if (has(T::JoinFailed)) for (const SessionEvent& e : ev) if (e.type == T::JoinFailed) LOG_INFO("UDPMATCH: JoinFailed reason %d", (int)e.joinFailure);
+             LOG_ERROR("UDPMATCH: no launch from the host (joined %d)", has(T::Joined) ? 1 : 0); exitCode_ = 4; return;
+@@ -718,6 +746,14 @@
+         queueLateSeat(world_, seat, r, atTick);
+         if (local) pickAfterWake = true;   // the woken joiner goes through Choose Character (an event, as in the game)
+     };
++    c.seatOwner = s.matchOwners();   // split screen online: a second local player rides its owner's packets
++    c.encodeOwned = [this] { return world_.encodeSeat2Command(); };
++    int ownedHere = -1;
++    for (int i = 0; i < (int)c.seatOwner.size(); ++i)
++        if (i != self && c.seatOwner[(size_t)i] == self) ownedHere = world_.addLocalSeat(1, cs, true, seatPlayerOf(world_, i));
++    for (int i = 0; i < (int)c.seatOwner.size(); ++i)
++        if (c.seatOwner[(size_t)i] != i) LOG_INFO("UDPMATCH seat %d (%s) is seat %d's second local player%s", i, s.matchMemberName(i).c_str(), c.seatOwner[(size_t)i],
++                                                 ownedHere >= 0 && c.seatOwner[(size_t)i] == self ? " - this peer" : "");
+     net::NetMatchDriver drv(world_, *s.matchTransport(), nullptr, c);
+     // WFC_UDPPICK_EARLY=1 (a late joiner): pick at once, while still catching up, as the frontend does (pt9); the driver holds it
+     const bool pickEarly = std::getenv("WFC_UDPPICK_EARLY") != nullptr;
+@@ -732,6 +768,7 @@
+         const auto t = std::chrono::steady_clock::now();
+         const double dt = std::chrono::duration<double>(t - last).count();
+         last = t;
++        if (ownedHere >= 0) { platform::InputFrame none; world_.handleInput(none, (float)dt); }   // seat 2's controller (WFC_SEAT2BOT input)
+         steps += drv.frame(dt);
+         if (pickAfterWake && pickEarly) pickAfterWake = false;
+         if (pickAfterWake && !drv.catchingUp()) { pickAfterWake = false; drv.chooseCharacter(cs); LOG_INFO("UDPMATCH: the joiner picks its character"); }
+diff -ruN a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-24 01:52:49.842709800 -0500
++++ b/src/game/World.cpp	2026-10-24 01:52:49.856256300 -0500
+@@ -3270,7 +3270,7 @@
+     LOG_INFO("match: launched %s %s (goal %d, time %d s, bots %d: friendly %d enemy %d %s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore,
+              l.settings.timeLimit, nb, l.bots.friendly, l.bots.enemy, botDifficultyName(l.bots.difficulty));
+     seat2_ = -1; seat2Pad_ = -1;   // a new match: no second local seat until a pad joins
+-    if (std::getenv("WFC_SEAT2BOT") && localPlayer_ >= 0)   // test only: seat 2 joins with the first player's pick
++    if (std::getenv("WFC_SEAT2BOT") && localPlayer_ >= 0 && !onlineSeats_)   // test only: seat 2 joins with the first player's pick (offline; online the launch has it)
+         addLocalSeat(1, match_.players()[(size_t)localPlayer_].selection, match_.players()[(size_t)localPlayer_].hasSelectedCharacter);
+     {   // [integration 09b] Systems M09b / M09c glue: every other participant's (bots') weapon cues and character cue set are
+         // decoded at match load, not on a bot's first shot / spawn (PC ADAPTATION, load scheduling).
+diff -ruN a/src/game/World.h b/src/game/World.h
+--- a/src/game/World.h	2026-10-24 01:52:49.904923300 -0500
++++ b/src/game/World.h	2026-10-24 01:52:49.916964300 -0500
+@@ -942,7 +942,10 @@
+     // Online: this machine's command for tick simTick() + 1 from the local controller (the wire encoding; see the contract).
+     RemoteCommand encodeLocalCommand();
+     // Split screen: a second local human seat (a Remote participant fed by its own local controller; GAMEPLAY_SPLITSCREEN_PLAN.md).
+-    int addLocalSeat(int pad, const CharacterSelection& sel, bool selected);   // the seat's match player (-1: none)
++    // matchSeat >= 0 (online, Systems' two-locals wire patch): bind seat 2 to that match player - already a Remote participant from the
++    // launch's seat order (no bot-slot swap, no new participant); its commands then travel through the lockstep (encodeSeat2Command).
++    int addLocalSeat(int pad, const CharacterSelection& sel, bool selected, int matchSeat = -1);   // the seat's match player (-1: none)
++    RemoteCommand encodeSeat2Command();   // online: seat 2's command for tick simTick() + 1 (encoded, not applied; the driver submits it)
+     void removeLocalSeat();
+     void setSeat2Input(const platform::InputFrame& in);   // pad 2's frame, before handleInput
+     int localSeatCount() const;
+diff -ruN a/src/game/WorldLocalSeat.cpp b/src/game/WorldLocalSeat.cpp
+--- a/src/game/WorldLocalSeat.cpp	2026-10-24 01:52:49.963624400 -0500
++++ b/src/game/WorldLocalSeat.cpp	2026-10-24 01:52:49.975164100 -0500
+@@ -11,8 +11,22 @@
+ 
+ namespace game {
+ 
+-int World::addLocalSeat(int pad, const CharacterSelection& sel, bool selected) {
++int World::addLocalSeat(int pad, const CharacterSelection& sel, bool selected, int matchSeat) {
+     if (seat2_ >= 0 || !matchActive_) return seat2_;
++    if (matchSeat >= 0) {   // online: the launch made the match seat a Remote participant; this peer feeds it from pad 2
++        if ((size_t)matchSeat >= match_.players().size() || match_.players()[(size_t)matchSeat].kind != ParticipantKind::Remote) {
++            LOG_WARN("local seat 2: match seat %d is not a Remote participant - not bound", matchSeat);
++            return -1;
++        }
++        (void)sel; (void)selected;   // the launch record carries its selection (every peer applies it)
++        seat2_ = matchSeat;
++        seat2Pad_ = pad;
++        seat2Ctl_ = PlayerController{};
++        seat2Ctl_.setWireSeat(true);
++        seat2In_ = platform::InputFrame{};
++        LOG_INFO("local seat 2: pad %d bound to match player p%d (online: its commands go through the lockstep)", pad, seat2_);
++        return seat2_;
++    }
+     RemoteSeat r;
+     r.name = "Player 2";
+     const int me = localPlayer_;
+@@ -75,8 +89,16 @@
+ }
+ 
+ // Per step (tickPrefix, before the queued remote commands apply): seat 2's command for the step about to run.
++RemoteCommand World::encodeSeat2Command() {
++    Character* pc = seat2_ >= 0 ? participantPawnMutable(seat2_) : nullptr;
++    if (!pc) { RemoteCommand c; c.tick = (uint32_t)(simTick_ + 1); return c; }   // no pawn (yet): an empty command, as encodeLocalCommand's dead path
++    const bool dead = !match_.players()[(size_t)seat2_].alive;
++    return encodeSeatCommand(seat2Ctl_, pc, seat2_, dead);
++}
++
+ void World::seat2QueueCommand() {
+     if (seat2_ < 0) return;
++    if (onlineSeats_) return;   // online: the driver submits encodeSeat2Command() and every peer applies it from the lockstep
+     Character* pc = participantPawnMutable(seat2_);
+     if (!pc) return;
+     const bool dead = !match_.players()[(size_t)seat2_].alive;
+diff -ruN a/src/net/Lockstep.cpp b/src/net/Lockstep.cpp
+--- a/src/net/Lockstep.cpp	2026-10-24 01:52:50.022325600 -0500
++++ b/src/net/Lockstep.cpp	2026-10-24 01:52:50.034366900 -0500
+@@ -71,6 +71,14 @@
+ }
+ 
+ Lockstep::Lockstep(INetTransport& t, const Config& c) : t_(t), cfg_(c) {
++    owner_.resize((size_t)cfg_.seats);
++    for (int s = 0; s < cfg_.seats; ++s) {
++        const int o = s < (int)cfg_.owner.size() ? cfg_.owner[(size_t)s] : s;
++        owner_[(size_t)s] = o >= 0 && o < cfg_.seats ? o : s;
++    }
++    owned_ = ownedBy(cfg_.self);
++    if (owned_ >= 0 && cfg_.lateJoin) { LOG_WARN("NET a late joiner cannot bring a second local seat (seat %d dropped)", owned_); owned_ = -1; }
++    peerAck2_.assign((size_t)cfg_.seats, 0);
+     cmds_.resize((size_t)cfg_.seats);
+     contiguous_.assign((size_t)cfg_.seats, 0);
+     peerAck_.assign((size_t)cfg_.seats, 0);
+@@ -83,7 +91,7 @@
+     activeFrom_.resize((size_t)cfg_.seats, 1);
+     activeUntil_.assign((size_t)cfg_.seats, 0);
+     for (int s = 0; s < cfg_.seats; ++s)
+-        if (activeFrom_[(size_t)s] == 0 || cfg_.lateJoin) hello_[(size_t)s] = 1;   // reserved seats / a late joiner wait for no HELLO
++        if (activeFrom_[(size_t)s] == 0 || cfg_.lateJoin || !isPeer(s)) hello_[(size_t)s] = 1;   // reserved / owned seats, a late joiner: no HELLO
+     lastFullMs_.assign((size_t)cfg_.seats, 0.0);
+     delay_ = cfg_.delay > 0 ? cfg_.delay : 4;   // auto starts at 4 and follows the RTT
+     if (!cfg_.logPath.empty()) {
+@@ -92,7 +100,7 @@
+         logT0_ = nowMs();
+     }
+     std::vector<uint8_t> b; put8(b, kHello); put8(b, (uint8_t)cfg_.self); put64(b, cfg_.launchHash);
+-    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) t_.sendReliable(s, b.data(), b.size());
++    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && isPeer(s)) t_.sendReliable(s, b.data(), b.size());
+     if (cfg_.lateJoin && cfg_.self != 0) {   // join in progress: ask the host for the history
+         std::vector<uint8_t> j; put8(j, kJoinReq); put8(j, (uint8_t)cfg_.self);
+         t_.sendReliable(0, j.data(), j.size());
+@@ -101,10 +109,23 @@
+     LOG_INFO("NET lockstep: seat %d of %d, D %s%d, hash every %d, launch hash %016llx", cfg_.self, cfg_.seats, cfg_.delay > 0 ? "" : "auto from ",
+              delay_, cfg_.hashEvery,
+              (unsigned long long)cfg_.launchHash);
++    for (int s = 0; s < cfg_.seats; ++s)
++        if (!isPeer(s)) LOG_INFO("NET seat %d is a second local player of seat %d's peer%s", s, owner_[(size_t)s], s == owned_ ? " (this peer)" : "");
+ }
+ 
+ Lockstep::~Lockstep() { if (log_) std::fclose(log_); }
+ 
++int Lockstep::ownedBy(int s) const {
++    for (int o = 0; o < cfg_.seats; ++o) if (o != s && owner_[(size_t)o] == s) return o;
++    return -1;
++}
++
++int Lockstep::peerCount() const {
++    int n = 0;
++    for (int s = 0; s < cfg_.seats; ++s) n += isPeer(s) ? 1 : 0;
++    return n;
++}
++
+ void Lockstep::fail(Status s, const std::string& why) {
+     if (status_ != Status::Running) return;
+     status_ = s; statusText_ = why;
+@@ -126,10 +147,13 @@
+         const double overdue = 1.5 * (double)std::max(srtt_, 20.0f) + 10.0;
+         const bool idle = nowMs() - lastSendMs_ >= 30.0;
+         for (int s = 0; s < cfg_.seats; ++s) {
+-            if (s == cfg_.self || !joined(s)) continue;
+-            // overdue: the peer still lacks a tick I first sent more than `overdue` ago (and no full window went out since)
++            if (!peer(s)) continue;
++            // overdue: the peer still lacks a tick I first sent more than `overdue` ago (and no full window went out since); my owned
++            // seat's stream rides the same packets, so it lagging behind the main stream's ack is a loss too
+             auto next = producedMs_.find(peerAck_[(size_t)s] + 1);
+-            const bool lost = next != producedMs_.end() && nowMs() - next->second >= overdue && nowMs() - lastFullMs_[(size_t)s] >= overdue;
++            const bool lostOwned = owned_ >= 0 && peerAck2_[(size_t)s] < std::min(peerAck_[(size_t)s], ownedHigh_);
++            const bool lost = (lostOwned || (next != producedMs_.end() && nowMs() - next->second >= overdue)) &&
++                              nowMs() - lastFullMs_[(size_t)s] >= overdue;
+             if (idle || lost) sendCommands(s, true);
+         }
+     }
+@@ -137,13 +161,13 @@
+     if (nowMs() - lastPingMs_ >= 250.0) {
+         lastPingMs_ = nowMs();
+         std::vector<uint8_t> b; put8(b, kPing); put8(b, (uint8_t)cfg_.self); put64(b, (uint64_t)(nowMs() * 1000.0));
+-        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && joined(s)) t_.sendUnreliable(s, b.data(), b.size());
++        for (int s = 0; s < cfg_.seats; ++s) if (peer(s)) t_.sendUnreliable(s, b.data(), b.size());
+     }
+     if (!feeds_.empty()) pumpFeeds();
+     for (size_t i = 0; i < leaves_.size();) {   // the host: a leave is decided once every joined member reported (or 1 s passed)
+         Leave& l = leaves_[i];
+         bool all = true;
+-        for (int s = 1; s < cfg_.seats; ++s) if (s != l.seat && joined(s) && !l.reports.count(s)) all = false;
++        for (int s = 1; s < cfg_.seats; ++s) if (s != l.seat && s != owner_[(size_t)l.seat] && isPeer(s) && joined(s) && !l.reports.count(s)) all = false;
+         if (all || nowMs() - l.startMs >= kLeaveWaitMs) { finishLeave(l); leaves_.erase(leaves_.begin() + (long)i); continue; }
+         ++i;
+     }
+@@ -165,9 +189,11 @@
+     for (const Leave& l : leaves_) if (l.seat == seat) return;
+     Leave l; l.seat = seat; l.startMs = nowMs();
+     std::vector<uint8_t> b; put8(b, kLeaveQ); put8(b, (uint8_t)cfg_.self); put8(b, (uint8_t)seat); put32(b, contiguous_[(size_t)seat] + 1);
+-    for (int s = 1; s < cfg_.seats; ++s) if (s != seat && joined(s)) t_.sendReliable(s, b.data(), b.size());
++    for (int s = 1; s < cfg_.seats; ++s) if (s != seat && s != owner_[(size_t)seat] && peer(s)) t_.sendReliable(s, b.data(), b.size());
+     leaves_.push_back(l);
+     LOG_INFO("NET seat %d left mid-match: asking the members for its commands beyond tick %u", seat, contiguous_[(size_t)seat]);
++    const int o = ownedBy(seat);
++    if (o >= 0) dropSeat(o);   // its second local player leaves with it (the same protocol, its own agreed tick)
+ }
+ 
+ // Every report in (or the wait over): U = our contiguous tick of the leaver + 1 after the merge; each member gets what it lacks below U;
+@@ -328,6 +354,25 @@
+             uint32_t& a = eventsAnnounced_[(size_t)seat][first + (uint32_t)count - 1];
+             a = std::max(a, n);
+         }
++        const size_t tr = 11 + count * kWireCommandBytes + 2;   // the split-screen trailer (after the announcement)
++        if (d.size() >= tr + 11 && d[tr] == 0xA2) {
++            if (owned_ >= 0) peerAck2_[(size_t)seat] = std::max(peerAck2_[(size_t)seat], get32(&d[tr + 1]));
++            const int s2 = d[tr + 5];
++            const uint32_t first2 = get32(&d[tr + 6]);
++            const size_t count2 = d[tr + 10];
++            if (s2 != 0xFF && s2 < cfg_.seats && owner_[(size_t)s2] == seat && s2 != seat && d.size() >= tr + 11 + count2 * kWireCommandBytes) {
++                auto& m2 = cmds_[(size_t)s2];
++                for (size_t i = 0; i < count2; ++i) {
++                    const uint32_t tick = first2 + (uint32_t)i;
++                    if (!seatActive(s2, tick)) continue;
++                    WireCommand w;
++                    std::copy(d.begin() + (long)(tr + 11 + i * kWireCommandBytes), d.begin() + (long)(tr + 11 + (i + 1) * kWireCommandBytes), w.begin());
++                    m2.emplace(tick, w);
++                }
++                uint32_t& c2 = contiguous_[(size_t)s2];
++                while (m2.count(c2 + 1)) ++c2;
++            }
++        }
+         break;
+     }
+     case kEvent: {
+@@ -494,7 +539,7 @@
+     case kBye: {
+         const uint32_t last = d.size() >= 6 ? get32(&d[2]) : 0;
+         LOG_INFO("NET seat %d left (its last tick %u)", seat, last);
+-        if (seat != 0 && cfg_.seats > 2) { dropSeat(seat); break; }   // a member: the host runs the leave protocol; the match goes on
++        if (seat != 0 && peerCount() > 2) { dropSeat(seat); break; }   // a member: the host runs the leave protocol; the match goes on
+         if (last > 0) endTick_ = endTick_ ? std::min(endTick_, last) : last;   // finish up to there, then end normally
+         else if (seat == 0) fail(Status::HostLost, "the host left");
+         break;
+@@ -543,15 +588,45 @@
+         ++count;
+     }
+     b[countAt] = count;
+-    if (count > 0) {   // [phase 2] the event announcement: my events stamped at or before the packet's newest tick (u16 trailer)
+-        const uint32_t last = first + count - 1;
+-        const size_t n = (size_t)(std::upper_bound(ownEventTicks_.begin(), ownEventTicks_.end(), last) - ownEventTicks_.begin());
++    {   // [phase 2] the event announcement: my events stamped at or before the packet's newest tick (u16; read when count > 0)
++        const uint32_t last = count > 0 ? first + count - 1 : 0;
++        const size_t n = count > 0 ? (size_t)(std::upper_bound(ownEventTicks_.begin(), ownEventTicks_.end(), last) - ownEventTicks_.begin()) : 0;
+         b.push_back((uint8_t)n); b.push_back((uint8_t)(n >> 8));
+     }
++    appendOwned(b, peer, full);   // the split-screen trailer: my ack of the peer's owned seat + my owned seat's commands
+     t_.sendUnreliable(peer, b.data(), b.size());
+     lastSendMs_ = nowMs();
+ }
+ 
++void Lockstep::appendOwned(std::vector<uint8_t>& b, int peer, bool full) const {
++    const int theirs = ownedBy(peer);
++    put8(b, 0xA2); put32(b, theirs >= 0 ? contiguous_[(size_t)theirs] : 0);
++    if (owned_ < 0 || ownedHigh_ == 0) { put8(b, 0xFF); put32(b, 0); put8(b, 0); return; }
++    const uint32_t cap = full ? (uint32_t)std::max(cfg_.maxResend, 2 * delay_ + 4) : kRedundancy;
++    uint32_t first = peerAck2_[(size_t)peer] + 1;
++    if (ownedHigh_ >= cap && first + cap <= ownedHigh_) first = ownedHigh_ - cap + 1;
++    if (first > ownedHigh_) first = ownedHigh_;
++    put8(b, (uint8_t)owned_); put32(b, first);
++    const size_t countAt = b.size(); put8(b, 0);
++    uint8_t count = 0;
++    const auto& mine = cmds_[(size_t)owned_];
++    for (uint32_t t = first; t <= ownedHigh_ && count < 255; ++t) {
++        auto it = mine.find(t);
++        if (it == mine.end()) break;
++        b.insert(b.end(), it->second.begin(), it->second.end());
++        ++count;
++    }
++    b[countAt] = count;
++}
++
++void Lockstep::submitOwned(uint32_t tick, const game::RemoteCommand& c) {
++    if (owned_ < 0 || !seatActive(owned_, tick)) return;
++    cmds_[(size_t)owned_][tick] = encodeCommand(c);
++    ownedHigh_ = std::max(ownedHigh_, tick);
++    uint32_t& h = contiguous_[(size_t)owned_];
++    while (cmds_[(size_t)owned_].count(h + 1)) ++h;
++}
++
+ void Lockstep::submitLocal(uint32_t tick, const game::RemoteCommand& c) {
+     lastSubmitTick_ = std::max(lastSubmitTick_, tick);
+     if (!seatActive(cfg_.self, tick)) return;   // a reserved / late seat before its activeTick sends nothing
+@@ -560,12 +635,12 @@
+     producedMs_.emplace(tick, nowMs());
+     {   // forget send times every peer has acked
+         uint32_t minAck = localHigh_;
+-        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) minAck = std::min(minAck, peerAck_[(size_t)s]);
++        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && isPeer(s)) minAck = std::min(minAck, peerAck_[(size_t)s]);
+         while (!producedMs_.empty() && producedMs_.begin()->first <= minAck) producedMs_.erase(producedMs_.begin());
+     }
+     uint32_t& h = contiguous_[(size_t)cfg_.self];
+     while (cmds_[(size_t)cfg_.self].count(h + 1)) ++h;
+-    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && joined(s)) sendCommands(s, false);
++    for (int s = 0; s < cfg_.seats; ++s) if (peer(s)) sendCommands(s, false);
+ }
+ 
+ bool Lockstep::haveAll(uint32_t tick) const {
+@@ -593,7 +668,7 @@
+     put8(b, (uint8_t)len); put8(b, (uint8_t)(len >> 8));
+     b.insert(b.end(), payload.begin(), payload.begin() + (long)len);
+     put32(b, seq);
+-    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && joined(s)) t_.sendReliable(s, b.data(), b.size());
++    for (int s = 0; s < cfg_.seats; ++s) if (peer(s)) t_.sendReliable(s, b.data(), b.size());
+     Event e; e.seat = cfg_.self; e.atTick = at; e.kind = kind; e.seq = seq; e.payload.assign(payload.begin(), payload.begin() + (long)len);
+     acceptEvent(std::move(e));
+     return at;
+@@ -706,7 +781,7 @@
+ void Lockstep::fanOutVoice(int talker, const uint8_t* p, size_t n) {
+     const uint8_t flags = n > 4 ? p[4] : 0;
+     for (int s = 0; s < cfg_.seats; ++s) {
+-        if (s == cfg_.self || s == talker || !joined(s)) continue;
++        if (s == talker || !peer(s)) continue;
+         if (voiceAudience_ && !voiceAudience_(talker, s, flags)) continue;
+         t_.sendUnreliable(s, p, n);
+         if (talker != cfg_.self) ++voiceRelayed_;
+@@ -715,7 +790,7 @@
+ 
+ void Lockstep::bye(uint32_t lastTick) {
+     std::vector<uint8_t> b; put8(b, kBye); put8(b, (uint8_t)cfg_.self); put32(b, lastTick);
+-    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self && joined(s)) t_.sendReliable(s, b.data(), b.size());
++    for (int s = 0; s < cfg_.seats; ++s) if (peer(s)) t_.sendReliable(s, b.data(), b.size());
+     for (int i = 0; i < 20; ++i) t_.service();   // flush best-effort (the peers' acks may not come back before exit)
+     const NetStats st = t_.stats();
+     LOG_INFO("NET bye: sent %llu B / %llu pkts, received %llu B / %llu pkts, resends %llu, rtt %.1f ms, stalled %.0f ms total, D %d",
+diff -ruN a/src/net/Lockstep.h b/src/net/Lockstep.h
+--- a/src/net/Lockstep.h	2026-10-24 01:52:50.083535600 -0500
++++ b/src/net/Lockstep.h	2026-10-24 01:52:50.096580100 -0500
+@@ -42,6 +42,11 @@
+ // clamped 2..15, from PING / PONG every 250 ms to each peer (the worst peer counts); it rises at once and falls at most 1 tick a second.
+ // Wire command (23 bytes): i8 forward, i8 right, u32 buttons, u32 pressed, u16 yaw, i16 pitch (rotator units, 65536 = 360 deg),
+ //   i24 x / y / z aim point (cm; valid with kRemoteBitAimPoint).
++// Split screen online (two local players on one peer): a seat may be OWNED by another seat's peer (Config::owner) - it has no
++// transport endpoint, no HELLO / PING / timeout of its own; its commands ride on the owner's CMDS packet as a trailer after the u16
++// event announcement (always written then):  u8 0xA2, u32 ack of the RECEIVER's owned seat, u8 the sender's owned seat (0xFF none),
++// u32 first, u8 count, count x 23. Every peer stores and applies it like any seat; the owner's leave (BYE / dropSeat) also runs the
++// leave protocol for its owned seat. A late joiner cannot bring a second local seat.
+ #include "net/NetTransport.h"
+ 
+ #include <array>
+@@ -78,6 +83,9 @@
+         std::vector<uint32_t> activeFrom;
+         bool lateJoin = false;
+         bool keepHistory = false;   // the host: keep every command / event / hash for late joiners
++        // Split screen online: per seat, the seat whose peer sends its commands (empty, or owner[s] == s: its own peer). At most one
++        // owned seat per peer.
++        std::vector<int> owner;
+     };
+     static constexpr uint8_t kEventSeatJoin = 2;     // event kind (1 = Choose Character, NetMatchDriver)
+     static constexpr uint8_t kEventSeatLeave = 3;    // {u8 seat, u32 the first tick without it, u8 to a bot}
+@@ -89,6 +97,10 @@
+     void pump();                                  // transport service + receive; periodic command resend; call every loop iteration
+     bool everyoneHere() const;                    // every peer's HELLO arrived (and matched)
+     void submitLocal(uint32_t tick, const game::RemoteCommand& c);   // this seat's command for `tick` (encoded, stored, sent)
++    // This peer's owned seat (split screen: its second local player), -1 none; its command for `tick` - call BEFORE submitLocal for the
++    // same tick (submitLocal's send carries both streams).
++    int ownedSeat() const { return owned_; }
++    void submitOwned(uint32_t tick, const game::RemoteCommand& c);
+     bool haveAll(uint32_t tick) const;
+     void command(int seat, uint32_t tick, game::RemoteCommand& out) const;   // decoded (also for this seat)
+     bool wire(int seat, uint32_t tick, WireCommand& out) const;              // the raw 23 bytes (WFC_NET_RECORD)
+@@ -137,6 +149,15 @@
+ 
+ private:
+     void handle(const NetPacket& p);
++    bool isPeer(int s) const { return s >= 0 && s < cfg_.seats && owner_[(size_t)s] == s; }
++    bool peer(int s) const { return s != cfg_.self && isPeer(s) && joined(s); }   // a joined remote peer (a transport endpoint)
++    int ownedBy(int s) const;                 // the seat peer s owns (-1 none)
++    int peerCount() const;                    // peers in the launch (owned seats excluded)
++    std::vector<int> owner_;                  // per seat (Config::owner, identity filled)
++    int owned_ = -1;                          // this peer's owned seat
++    uint32_t ownedHigh_ = 0;                  // its newest submitted tick
++    std::vector<uint32_t> peerAck2_;          // per peer: their ack of my owned seat's commands
++    void appendOwned(std::vector<uint8_t>& b, int peer, bool full) const;
+     void sendCommands(int peer, bool full);   // full = from the peer's ack; else the newest kRedundancy ticks
+     std::vector<double> lastFullMs_;          // per peer: the last full-window send
+     std::map<uint32_t, double> producedMs_;   // this seat's ticks -> when first sent (ack-overdue test)
+diff -ruN a/src/net/NetMatchDriver.cpp b/src/net/NetMatchDriver.cpp
+--- a/src/net/NetMatchDriver.cpp	2026-10-24 01:52:50.148257500 -0500
++++ b/src/net/NetMatchDriver.cpp	2026-10-24 01:52:50.160298700 -0500
+@@ -91,6 +91,7 @@
+ NetMatchDriver::NetMatchDriver(game::World& world, INetTransport& transport, audio::IAudio* audio, const Config& cfg)
+     : impl_(std::make_unique<Impl>(world, transport, cfg)) {
+     Lockstep::Config lc;
++    lc.owner = cfg.seatOwner;   // split screen online: a second local player's commands ride its owner's packets
+     lc.seats = cfg.seats; lc.self = cfg.self; lc.delay = cfg.delay; lc.hashEvery = cfg.hashEvery;
+     lc.peerTimeoutS = cfg.peerTimeoutS; lc.launchHash = cfg.launchHash; lc.logPath = cfg.logPath;
+     lc.activeFrom = cfg.activeFrom; lc.lateJoin = cfg.lateJoin; lc.keepHistory = cfg.keepHistory;
+@@ -192,6 +193,11 @@
+         const uint32_t n = (uint32_t)m.world.simTick() + 1;
+         if (ls.endTick() > 0 && n > ls.endTick()) { m.ended = true; break; }
+         while (m.nextLocal <= n + (uint32_t)ls.delay()) {   // this seat's commands up to N + D (the local controller's input now)
++            if (ls.ownedSeat() >= 0 && m.cfg.encodeOwned) {   // the second local player's first (submitLocal's send carries both)
++                game::RemoteCommand c2 = m.cfg.encodeOwned();
++                c2.tick = m.nextLocal;
++                ls.submitOwned(m.nextLocal, c2);
++            }
+             game::RemoteCommand c = m.world.encodeLocalCommand();
+             c.tick = m.nextLocal;
+             ls.submitLocal(m.nextLocal, c);
+diff -ruN a/src/net/NetMatchDriver.h b/src/net/NetMatchDriver.h
+--- a/src/net/NetMatchDriver.h	2026-10-24 01:52:50.208463500 -0500
++++ b/src/net/NetMatchDriver.h	2026-10-24 01:52:50.220003300 -0500
+@@ -21,7 +21,7 @@
+ #include "net/VoiceSession.h"
+ 
+ namespace audio { class IAudio; }
+-namespace game { class World; struct CharacterSelection; }
++namespace game { class World; struct CharacterSelection; struct RemoteCommand; }
+ 
+ namespace net {
+ 
+@@ -62,6 +62,10 @@
+         std::function<void(int seat, int team, bool local, uint32_t atTick)> onSeatJoin;
+         // Seat -> match player for commands / voice (-1 = no participant yet). Unset: player == seat (the launch's seat order).
+         std::function<int(int seat)> seatPlayer;
++        // Split screen online: per seat, the seat whose peer sends its commands (empty: each its own; Lockstep::Config::owner). This
++        // peer's owned seat (its second local player) is fed by encodeOwned once per tick, before the local seat's command.
++        std::vector<int> seatOwner;
++        std::function<game::RemoteCommand()> encodeOwned;
+         // Leaving mid-match (Lockstep.h LEAVEQ): the host decides bot or empty; every peer, on the SeatLeave event: the seat's
+         // participant goes to a bot / leaves at untilTick (Gameplay: applySlotSwap toBot / World::queueLeave), the same tick everywhere.
+         std::function<bool(int seat)> leaveToBot;
+diff -ruN a/src/net/UdpSession.cpp b/src/net/UdpSession.cpp
+--- a/src/net/UdpSession.cpp	2026-10-24 01:52:50.267165000 -0500
++++ b/src/net/UdpSession.cpp	2026-10-24 01:52:50.279206100 -0500
+@@ -11,6 +11,8 @@
+ //     0x47 LEAVE     (member -> host: it left; host -> members: the host ended the session)
+ //     0x48 KICK      u8 SessionKickReason (host -> member)  0x49 DROPPED str fingerprint, u8 SessionLeaveReason, u8 inMatch
+ //     0x4A VERSION   (host -> member: its load hash differs; JoinFailed{Version})
++//     0x57 SECOND    u8 present, [member info] (member -> host: its second local player joins / leaves; MemberJoined / MemberLeft
++//                    on the host for <fingerprint>/2). LAUNCH and LATELAUNCH end with u8 n, n x u8 owner match seat (split screen).
+ //     0x4B RETURN    (host -> members: the match ended; a LOBBY follows)
+ //   unreliable: 0x4F KEEPALIVE (every 1 s to every peer; also a LEAVE / KICK copy goes unreliable twice before a socket closes)
+ #include "net/UdpSession.h"
+@@ -41,6 +43,7 @@
+     kLeave = 0x47, kKick = 0x48, kDropped = 0x49, kVersion = 0x4A, kReturn = 0x4B, kKeepalive = 0x4F,
+     kLateJoin = 0x4C, kLateLaunch = 0x4D, kSeatMap = 0x4E,   // join in progress: ask / the launch record + seat (or refusal) / a seat filled
+     kDiscover = 0x53, kAnnounce = 0x54, kPing = 0x55, kPong = 0x56,   // out of band: LAN discovery, candidate pings
++    kSecondLocal = 0x57,   // seated: a member's second local player (split screen online)
+ };
+ constexpr double kSearchCollectS = 1.0, kPingRoundS = 0.3;
+ constexpr double kRelayAfterS = 3.0;   // a joiner falls back to the relay after this long without a direct answer
+@@ -53,7 +56,7 @@
+     for (char c : s) { if (c == '"' || c == '\\') o += '\\'; if ((unsigned char)c >= 0x20) o += c; }
+     return o;
+ }
+-bool isSessionType(uint8_t t) { return t >= 0x40 && t <= 0x4F; }
++bool isSessionType(uint8_t t) { return (t >= 0x40 && t <= 0x4F) || t == kSecondLocal; }
+ 
+ struct W {
+     std::vector<uint8_t> b;
+@@ -399,6 +402,54 @@
+     if (role_ == Role::Member && peers_.count(0)) { W w(kInfo); w.info(self_); sendSeat(0, w.b); }
+ }
+ 
++void UdpSession::setSecondLocal(const SessionMemberInfo* info) {
++    SessionMemberInfo i;
++    if (info) i = *info;
++    i.id.fingerprint = frontend::ISession::secondLocalId(self_.id.fingerprint);
++    if (role_ == Role::Member) {
++        W w(kSecondLocal); w.u8(info ? 1 : 0); if (info) w.info(i);
++        if (peers_.count(0)) sendSeat(0, w.b);
++        LOG_INFO("session: second local player %s (%s)", info ? "joins" : "leaves", i.id.fingerprint.c_str());
++    } else if (role_ == Role::Host) {
++        setSecond(0, info ? &i : nullptr, false);
++    }
++}
++
++void UdpSession::setSecond(int seat, const SessionMemberInfo* info, bool inMatch) {
++    auto it = second_.find(seat);
++    SessionEvent e;
++    if (!info) {
++        if (it == second_.end()) return;
++        e.type = inMatch ? SessionEvent::Type::PeerDropped : SessionEvent::Type::MemberLeft;
++        e.member = it->second.id; e.leaveReason = SessionLeaveReason::Left;
++        second_.erase(it);
++    } else {
++        second_[seat] = *info;
++        e.type = SessionEvent::Type::MemberJoined; e.member = info->id; e.info = *info;
++    }
++    LOG_INFO("session: seat %d's second local player %s", seat, info ? "joined" : "left");
++    emit(e);
++}
++
++int UdpSession::slotSessionSeat(const SessionMemberId& m, bool& owned) const {
++    const std::string& fp = m.fingerprint;
++    owned = fp.size() >= 2 && fp.compare(fp.size() - 2, 2, "/2") == 0;
++    if (!owned) return fp.empty() ? 0 : seatOf(m);   // "" = the host itself (the flow's MatchLaunch.self convention)
++    const std::string base = fp.substr(0, fp.size() - 2);
++    for (const auto& kv : second_) {
++        const int s = kv.first;
++        const std::string sfp = s == 0 ? self_.id.fingerprint : (peers_.count(s) ? peers_.at(s).info.id.fingerprint : std::string());
++        if (base == sfp || (s == 0 && base.empty())) return s;
++    }
++    return -1;
++}
++
++std::vector<int> UdpSession::matchOwners() const {
++    std::vector<int> o(matchToSession_.size());
++    for (size_t i = 0; i < o.size(); ++i) o[i] = matchOwner_.size() == o.size() ? matchOwner_[i] : (int)i;
++    return o;
++}
++
+ void UdpSession::sendSeat(int seat, const std::vector<uint8_t>& msg) { if (t_) t_->sendReliable(seat, msg.data(), msg.size()); }
+ void UdpSession::sendAllMembers(const std::vector<uint8_t>& msg) { for (const auto& kv : peers_) sendSeat(kv.first, msg); }
+ 
+@@ -452,6 +503,7 @@
+     e.type = inMatch ? SessionEvent::Type::PeerDropped : SessionEvent::Type::MemberLeft;
+     e.member = id; e.leaveReason = why; e.value = 0;
+     if (role_ == Role::Host || inMatch) emit(e);
++    if (role_ == Role::Host) setSecond(seat, nullptr, inMatch);   // its second local player goes with it
+     if (inMatch) checkAllLoaded();
+ }
+ 
+@@ -465,20 +517,34 @@
+     // The match seats: the roster's humans in slot order (the launch record's humans); the host is among them.
+     matchToSession_.clear(); matchReserved_.clear(); lateJoin_ = false;
+     const SessionLobby& r = launchRoster_.slots.empty() ? lobby_ : launchRoster_;
++    std::vector<char> owned;   // per match seat: a second local player (split screen online)
+     for (const SessionSlot& s : r.slots) {
+-        if (s.kind == SessionSlot::Kind::Reserved) { matchToSession_.push_back(kNoSession); matchReserved_.push_back(1); continue; }   // join in progress
++        if (s.kind == SessionSlot::Kind::Reserved) { matchToSession_.push_back(kNoSession); matchReserved_.push_back(1); owned.push_back(0); continue; }   // join in progress
+         if (s.kind != SessionSlot::Kind::Human) continue;
+-        const int seat = s.member.fingerprint.empty() ? 0 : seatOf(s.member);   // "" = the host itself (the flow's MatchLaunch.self convention)
+-        if (seat >= 0) { matchToSession_.push_back(seat); matchReserved_.push_back(0); }
++        bool second = false;
++        const int seat = slotSessionSeat(s.member, second);
++        if (seat >= 0) { matchToSession_.push_back(seat); matchReserved_.push_back(0); owned.push_back(second ? 1 : 0); }
+         else LOG_WARN("session: roster member %s is not in the session - left out of the match", s.member.fingerprint.c_str());
+     }
+-    if (std::find(matchToSession_.begin(), matchToSession_.end(), 0) == matchToSession_.end()) {
+-        matchToSession_.insert(matchToSession_.begin(), 0); matchReserved_.insert(matchReserved_.begin(), 0);
++    bool hostIn = false;
++    for (size_t i = 0; i < matchToSession_.size(); ++i) hostIn = hostIn || (matchToSession_[i] == 0 && !owned[i]);
++    if (!hostIn) {
++        matchToSession_.insert(matchToSession_.begin(), 0); matchReserved_.insert(matchReserved_.begin(), 0); owned.insert(owned.begin(), 0);
++    }
++    matchOwner_.assign(matchToSession_.size(), 0); matchOwnedIds_.clear();
++    for (size_t i = 0; i < matchToSession_.size(); ++i) {   // a second local's owner: the match seat of the peer it rides on
++        matchOwner_[i] = (int)i;
++        if (!owned[i]) continue;
++        for (size_t j = 0; j < matchToSession_.size(); ++j)
++            if (!owned[j] && matchToSession_[j] == matchToSession_[i]) { matchOwner_[i] = (int)j; break; }
++        if (matchOwner_[i] == (int)i) LOG_WARN("session: match seat %zu (a second local player) has no owner seat in the launch", i);
+     }
+-    matchSelf_ = (int)(std::find(matchToSession_.begin(), matchToSession_.end(), 0) - matchToSession_.begin());
++    matchSelf_ = -1;
++    for (size_t i = 0; i < matchToSession_.size() && matchSelf_ < 0; ++i) if (matchToSession_[i] == 0 && matchOwner_[i] == (int)i) matchSelf_ = (int)i;
+     view_ = std::make_unique<MatchView>(*this);
+     W w(kLaunch); w.str(launchUrl_); w.u32(launchSeed_); w.lobby(r);
+     w.u8((int)matchToSession_.size()); for (int s : matchToSession_) w.u8(s);
++    w.u8((int)matchOwner_.size()); for (int o : matchOwner_) w.u8(o);   // split screen: each match seat's owner
+     sendAllMembers(w.b);
+     for (auto& kv : peers_) kv.second.loaded = false;
+     loadedSelf_ = false; loadStart_ = now_;
+@@ -591,6 +657,12 @@
+ const SessionMemberId& UdpSession::matchMember(int matchSeat) const {
+     static const SessionMemberId none;
+     if (matchSeat < 0 || (size_t)matchSeat >= matchToSession_.size()) return none;
++    if (matchOwner_.size() == matchToSession_.size() && matchOwner_[(size_t)matchSeat] != matchSeat) {   // a second local player
++        SessionMemberId& id = matchOwnedIds_[matchSeat];
++        id = matchMember(matchOwner_[(size_t)matchSeat]);
++        id.fingerprint = frontend::ISession::secondLocalId(id.fingerprint);
++        return id;
++    }
+     const int s = matchToSession_[(size_t)matchSeat];
+     if (t_ && s == t_->self()) return self_.id;
+     auto it = peers_.find(s);
+@@ -600,6 +672,11 @@
+ // ---- receive ----
+ std::string UdpSession::matchMemberName(int matchSeat) const {
+     if (matchSeat < 0 || (size_t)matchSeat >= matchToSession_.size()) return "";
++    if (matchOwner_.size() == matchToSession_.size() && matchOwner_[(size_t)matchSeat] != matchSeat) {   // a second local: the roster's name
++        const SessionMemberId& id = matchMember(matchSeat);
++        for (const SessionMemberInfo& m : launchRoster_.members) if (m.id == id) return m.displayName;
++        return "Player 2";
++    }
+     const int s = matchToSession_[(size_t)matchSeat];
+     if (t_ && s == t_->self()) return self_.displayName;
+     auto it = peers_.find(s);
+@@ -756,8 +833,16 @@
+         matchToSession_.clear();
+         for (int k = r.u8(); k > 0 && r.ok; --k) matchToSession_.push_back(r.u8());
+         if (!r.ok) break;
+-        auto me = std::find(matchToSession_.begin(), matchToSession_.end(), t_ ? t_->self() : -1);
+-        matchSelf_ = me == matchToSession_.end() ? -1 : (int)(me - matchToSession_.begin());
++        matchOwner_.clear(); matchOwnedIds_.clear();
++        {   // split screen: the owners (absent from older hosts)
++            R o = r;
++            std::vector<int> ow;
++            for (int k = o.u8(); k > 0 && o.ok; --k) ow.push_back(o.u8());
++            if (o.ok && ow.size() == matchToSession_.size()) matchOwner_ = ow;
++        }
++        matchSelf_ = -1;
++        for (size_t i = 0; i < matchToSession_.size() && matchSelf_ < 0; ++i)   // this peer's own seat (not its second local's)
++            if (t_ && matchToSession_[i] == t_->self() && (matchOwner_.empty() || matchOwner_[i] == (int)i)) matchSelf_ = (int)i;
+         matchReserved_.clear(); lateJoin_ = false;
+         for (int ms : matchToSession_) matchReserved_.push_back(ms == kNoSession ? 1 : 0);
+         if (matchSelf_ < 0) { LOG_WARN("session: the launch roster does not include this member"); break; }
+@@ -767,6 +852,17 @@
+         emit(e);
+         break;
+     }
++    case kSecondLocal: {   // the host: a member's second local player joins (info) / leaves
++        if (role_ != Role::Host || !peers_.count(seat)) break;
++        const int present = r.u8();
++        if (!r.ok) break;
++        if (!present) { setSecond(seat, nullptr, matchReady()); break; }
++        SessionMemberInfo info = r.info();
++        if (!r.ok) break;
++        info.id.fingerprint = frontend::ISession::secondLocalId(peers_[seat].info.id.fingerprint);   // derived from the joined id
++        setSecond(seat, &info, false);
++        break;
++    }
+     case kLoaded: {
+         if (role_ != Role::Host || !peers_.count(seat)) break;
+         (void)r.u64(); (void)r.u64();   // simId / loadHash: the lockstep's HELLO launch hash checks the launch itself
+@@ -801,6 +897,7 @@
+         w.u8((int)matchToSession_.size());
+         for (size_t i = 0; i < matchToSession_.size(); ++i) { w.u8(matchToSession_[i]); w.u8(matchReserved_[i]); }   // live seat + Reserved at launch
+         w.u8(ms);
++        { const std::vector<int> ow = matchOwners(); w.u8((int)ow.size()); for (int o : ow) w.u8(o); }   // split screen: the owners
+         sendSeat(seat, w.b);
+         peers_[seat].loaded = false; peers_[seat].lateLoadSince = now_;
+         LOG_INFO("session: late join - seat %d takes match seat %d (match tick %u); its load window %.0f s", seat, ms, matchTick_, kLateLoadS);
+@@ -815,6 +912,13 @@
+         for (int k = r.u8(); k > 0 && r.ok; --k) { matchToSession_.push_back(r.u8()); matchReserved_.push_back((char)r.u8()); }
+         const int mine = r.u8();
+         if (!r.ok || mine < 0 || (size_t)mine >= matchToSession_.size()) break;
++        matchOwner_.clear(); matchOwnedIds_.clear();
++        {   // split screen: the owners (absent from older hosts)
++            R o = r;
++            std::vector<int> ow;
++            for (int k = o.u8(); k > 0 && o.ok; --k) ow.push_back(o.u8());
++            if (o.ok && ow.size() == matchToSession_.size()) matchOwner_ = ow;
++        }
+         matchToSession_[(size_t)mine] = t_ ? t_->self() : kNoSession;
+         matchSelf_ = mine; lateJoin_ = true; matchRunning_ = false; catchUpDone_ = false; catchUpSentAt_ = -1.0;
+         view_ = std::make_unique<MatchView>(*this);
+@@ -895,9 +999,11 @@
+             continue;
+         }
+         if (view_) {   // a lockstep packet: to the match view in match seats
+-            auto m = std::find(matchToSession_.begin(), matchToSession_.end(), p.from);
+-            if (m == matchToSession_.end()) continue;
+-            p.from = (int)(m - matchToSession_.begin());
++            int ms = -1;   // the peer's own match seat (a second local player's shares its session seat but sends nothing itself)
++            for (size_t i = 0; i < matchToSession_.size() && ms < 0; ++i)
++                if (matchToSession_[i] == p.from && (matchOwner_.size() != matchToSession_.size() || matchOwner_[i] == (int)i)) ms = (int)i;
++            if (ms < 0) continue;
++            p.from = ms;
+             view_->inbox.push_back(std::move(p));
+         }
+     }
+diff -ruN a/src/net/UdpSession.h b/src/net/UdpSession.h
+--- a/src/net/UdpSession.h	2026-10-24 01:52:50.326869400 -0500
++++ b/src/net/UdpSession.h	2026-10-24 01:52:50.337907400 -0500
+@@ -57,6 +57,9 @@
+     void leave() override;
+     void publishLobby(const frontend::SessionLobby& lobby) override;
+     void setMemberInfo(const frontend::SessionMemberInfo& info) override;
++    // Split screen online: this peer's second local player (its id = secondLocalId(our fingerprint)); the host reports it as a member.
++    bool supportsSecondLocal() const override { return true; }
++    void setSecondLocal(const frontend::SessionMemberInfo* info) override;
+     void requestStart() override;
+     void setLaunch(const std::string& matchUrl, uint32_t seed, const frontend::SessionLobby& roster) override;
+     void reportLoaded(uint64_t simId, uint64_t loadHash) override;
+@@ -83,6 +86,8 @@
+     int matchSelf() const { return matchSelf_; }
+     INetTransport* matchTransport();                       // lockstep packets in match seats (null before the roster)
+     const frontend::SessionMemberId& matchMember(int matchSeat) const;
++    // Per match seat, the match seat whose peer sends its commands (a second local player's: its owner's); identity without any.
++    std::vector<int> matchOwners() const;
+     std::string matchMemberName(int matchSeat) const;   // the display name ("" unknown)
+     void matchEnded();                                     // back to the lobby (host: LobbyState with matchRunning false)
+     // The driver's lockstep failed (phase 1 codes): 3 desync -> Desync{tick}, 5 host lost -> HostLost, 4 / 6 -> ConnectionLost.
+@@ -220,7 +225,12 @@
+     std::string launchUrl_;
+     uint32_t launchSeed_ = 0;
+     frontend::SessionLobby launchRoster_;
+-    std::vector<int> matchToSession_;      // match seat -> session seat
++    std::vector<int> matchToSession_;      // match seat -> session seat (a second local player's = its owner's session seat)
++    std::vector<int> matchOwner_;          // match seat -> its owner match seat (split screen online; empty = each its own)
++    mutable std::map<int, frontend::SessionMemberId> matchOwnedIds_;   // a second local's member id (matchMember)
++    std::map<int, frontend::SessionMemberInfo> second_;   // the host: session seat -> that peer's second local player (0 = the host's)
++    void setSecond(int seat, const frontend::SessionMemberInfo* info, bool inMatch);   // the host: MemberJoined / MemberLeft for it
++    int slotSessionSeat(const frontend::SessionMemberId& m, bool& owned) const;   // a roster slot's member -> session seat
+     int matchSelf_ = -1;
+     std::vector<char> matchReserved_;      // per match seat: a Reserved slot of the launch roster
+     std::vector<int> droppedMatchSeats_;
+diff -ruN a/src/net/UdpTransport.cpp b/src/net/UdpTransport.cpp
+--- a/src/net/UdpTransport.cpp	2026-10-24 01:52:50.393096800 -0500
++++ b/src/net/UdpTransport.cpp	2026-10-24 01:52:50.404636400 -0500
+@@ -156,7 +156,14 @@
+     }
+     ~UdpTransport() override { if (sock_ != kBad) closeSock(sock_); }
+     int self() const override { return self_; }
+-    void sendUnreliable(int peer, const uint8_t* p, size_t n) override { raw(peer, ch_.wrap(peer, false, p, n)); }
++    void sendUnreliable(int peer, const uint8_t* p, size_t n) override {
++        // TEST ONLY: WFC_NET_LOSS=<0..1> drops that share of unreliable datagrams (the lockstep's resend / redundancy under loss)
++        static const double loss = std::getenv("WFC_NET_LOSS") ? std::atof(std::getenv("WFC_NET_LOSS")) : 0.0;
++        static uint32_t rng = 0x9e3779b9u;
++        if (loss > 0.0) { rng = rng * 1664525u + 1013904223u; if ((double)(rng >> 8) / 16777216.0 < loss) { ++lossDropped_; return; } }
++        raw(peer, ch_.wrap(peer, false, p, n));
++    }
++    long lossDropped_ = 0;
+     void sendReliable(int peer, const uint8_t* p, size_t n) override { raw(peer, ch_.wrap(peer, true, p, n)); }
+     bool poll(NetPacket& out) override {
+         drainSocket();
