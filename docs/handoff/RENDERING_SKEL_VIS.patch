@@ -1,0 +1,38 @@
+diff -ruN a/src/game/Campaign.h b/src/game/Campaign.h
+--- a/src/game/Campaign.h	2026-10-24 10:36:23.395105400 -0500
++++ b/src/game/Campaign.h	2026-10-24 10:36:23.468857400 -0500
+@@ -96,6 +96,7 @@
+     std::vector<core::Mat4> scratch;
+     std::vector<core::Mat4> palette;     // GPU skin: the bone palette of (posedClip, posedT), its serial for the renderer's cache
+     int posedClip = -1; float posedT = -1.0f; uint64_t serial = 0;
++    std::string object, unit;            // its full object path (cp_.actorHidden key) and streaming unit (chapter.json dir)
+ };
+ 
+ struct CampaignFactory {
+diff -ruN a/src/game/WorldCampaignMatinee.cpp b/src/game/WorldCampaignMatinee.cpp
+--- a/src/game/WorldCampaignMatinee.cpp	2026-10-24 10:36:23.407648000 -0500
++++ b/src/game/WorldCampaignMatinee.cpp	2026-10-24 10:36:23.469359200 -0500
+@@ -430,6 +430,9 @@
+         const assets::Json& L = r["location_gltf"];
+         if (L.size() >= 3) k.pos = core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
+         k.yawDeg = r["rotation_deg"]["yaw"].asFloat(0.0f);
++        k.object = r["object"].asString();
++        k.unit = r["sublevel"].asString();   // the level package; the unit dir drops its "_m"
++        if (k.unit.size() > 2 && k.unit.compare(k.unit.size() - 2, 2, "_m") == 0) k.unit.resize(k.unit.size() - 2);
+         if (!k.mesh.empty()) cpSkel_[shortName(r["actor"].asString())] = k;
+     }
+     LOG_INFO("campaign: %zu matinee skeletal actors", cpSkel_.size());
+@@ -442,6 +445,13 @@
+     for (auto& kv : cpSkel_) {
+         CampaignSkel& k = kv.second;
+         if (!k.active || k.clip.empty()) continue;
++        {   // (300 fps, RE CAMPAIGN_CULLING_LOD_RE.md 5-6) not in the original's world: its unit not Visible, or hidden / destroyed
++            auto uv = cp_.unitVisible.find(k.unit);
++            if (uv != cp_.unitVisible.end() && !uv->second) continue;
++            auto h = cp_.actorHidden.find(k.object.empty() ? kv.first : k.object);
++            if (h == cp_.actorHidden.end()) h = cp_.actorHidden.find(kv.first);
++            if (h != cp_.actorHidden.end() && h->second) continue;
++        }
+         if (!k.tried) {
+             k.tried = true;
+             k.ok = assets::loadSkinnedGlb(root + k.mesh, k.model);
