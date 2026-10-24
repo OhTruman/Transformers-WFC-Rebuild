@@ -1,0 +1,18 @@
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 82e81cea..8a648fcd 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -3295,6 +3295,13 @@ bool World::launchMatch(const MatchLaunch& l) {
+     const int nb = addBots(l.bots);
+     setupSurvival();   // Escalation: the horde slots (no-op otherwise)
+     setupCampaign(l);   // campaign: the human's pick, the AI squad, the level Kismet (no-op otherwise)
++    {   // every participant chassis' energon default (its character.json) now, not in the first vehicle-FX / mine step. Load scheduling only.
++        float e[3];
++        for (size_t q = 0; q < match_.players().size(); ++q) {
++            const std::string ch = resolveChassis(match_.players()[q].selection, match_.faction((int)q));
++            if (!ch.empty()) chassisEnergonDefault(ch, e);
++        }
++    }
+     if (nb > 0) awards_.setXpScale(BotXpPolicy::scale(botDifficulty_));   // XP in bot matches by bot difficulty (user decision)
+     evictUnusedAssets();
+     LOG_INFO("match: launched %s %s (goal %d, time %d s, bots %d: friendly %d enemy %d %s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore,
