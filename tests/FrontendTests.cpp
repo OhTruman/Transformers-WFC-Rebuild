@@ -1972,6 +1972,43 @@ static void testCampaignCoopLobby() {
           std::to_string(party) + std::to_string(lobby) + std::to_string(hosted) + std::to_string(claimed) + std::to_string(launch) + " " + url);
 }
 
+static void testSplitProfiles() {
+    // Split screen groundwork: the Split Layout row (Horizontal default / Vertical) round-trips in the profile; the second
+    // seat's profile is its own file (wfc_profile_2.ini) and does not touch seat 1's.
+    std::remove("wfc_profile.ini");
+    std::remove(LocalProfile::kSeat2File);
+    LocalProfile p1;
+    p1.display.splitLayout = 2;
+    p1.save();
+    LocalProfile p2;
+    p2.setFile(LocalProfile::kSeat2File);
+    p2.voice.mode = 2;
+    p2.save();
+    LocalProfile b1; b1.load();
+    LocalProfile b2; b2.setFile(LocalProfile::kSeat2File); b2.load();
+    const bool ok = b1.display.splitLayout == 2 && b1.voice.mode == 1 && b2.voice.mode == 2 && b2.display.splitLayout == 1;
+    check(ok, "split.profiles", std::to_string(b1.display.splitLayout) + std::to_string(b1.voice.mode) + std::to_string(b2.voice.mode));
+    // seat 2 joins from a lobby with another pad only; its profile is wfc_profile_2.ini; it leaves
+    {
+        FrontendRuntime rt;
+        if (!rt.init()) { check(false, "split.seat2_join", "init"); return; }
+        GameFlow& f = rt.flow();
+        runUntil(rt, [&] { return f.frontEndStarted(); });
+        f.setSeat1Pad(0);
+        const bool refusedFrontEnd = !f.joinSeat2(1);
+        f.call("Online.OpenPartyLobby", {"GTS_TeamGame"});
+        runUntil(rt, [&] { return f.level() == LevelKind::PartyLobby && !f.loading().active; });
+        const bool refusedSamePad = !f.joinSeat2(0);
+        const bool joined = f.joinSeat2(1) && f.localSeats() == 2 && f.seat2Pad() == 1 && f.seat2Profile().file() == LocalProfile::kSeat2File &&
+                            f.seat2Profile().voice.mode == 2;   // the file written above
+        f.leaveSeat2();
+        check(refusedFrontEnd && refusedSamePad && joined && f.localSeats() == 1, "split.seat2_join",
+              std::to_string(refusedFrontEnd) + std::to_string(refusedSamePad) + std::to_string(joined));
+    }
+    std::remove("wfc_profile.ini");
+    std::remove(LocalProfile::kSeat2File);
+}
+
 static void testDlcMerge() {
     // The DLC packs, always owned (RE DLC_RE 4): their nine maps in the catalog (Pack 1 re-defines Havoc / Fortress /
     // Tranquillity with a thumbnail), the ESC ones as SV maps with their faction, the thumbnails resolved from the DLC
@@ -2438,6 +2475,7 @@ int main() {
     testEscalationNoXp();
     testLanguageSetting();
     testDlcMerge();
+    testSplitProfiles();
     testCampaignCoopLobby();
     testFriendsInvites();
     testCampaignObjectivesManifest();
