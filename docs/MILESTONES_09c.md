@@ -4420,3 +4420,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   junction added to assets_dlc (all 9 DLC maps). Pulse content re-extracted from the fixed ENV_Pulse_Custom_p: one door
   texture recovered (Door_01_CLR_TEXSET_Color_NormX). Running: DLC authored.db regen (4 shards), District chain re-run,
   Pulse render refresh. Gameplay GO on Static data + item 21.
+2026-10-24 02:41 DLC DATA REFRESH: Static extras done (72 generators, 34 zones, 84 spawn points; navmesh 1032 cells); DLC authored.db
+  regenerated 02:31; District chain re-run OK 02:39 (one failed attempt: my shell leaked WFC_MANI_DIR into the chain ->
+  vs_pickups read the DLC-only db; re-run clean); Pulse render refresh running (dlc_render.py needs dlc_env.sh).
+  MERGED 250337ee level audio from the corrected packages (Tranquillity ops 12 -> 50, Static 118 ops, District emitters
+  139 -> 278; 0 damaged exports). Gameplay: Static waves + District re-check -> data patch + item 21.
