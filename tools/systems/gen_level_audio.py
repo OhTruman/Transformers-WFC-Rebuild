@@ -19,12 +19,21 @@ import io, json, os, sqlite3, sys
 DB = 'F:/Transformers Rebuild/AssetTools/manifests/authored.db'
 STREETS_AUDIO = 'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps/MP_IAC_Streets/audio.json'
 CONTENT = 'F:/Transformers Rebuild/ExtractedAssets/content/'
+# [Systems] the DLC map packs (Integration's DLC phase): their own authored.db and their maps / content beside the base ones
+# (AssetTools: manifests/dlc/authored.db, work/dlc_maps/VerticalSlice/Maps/<map>, out/dlc_content/content - the DLC-only files,
+# merged into the package's content/ by build_slim)
+DLC_DB = 'F:/Transformers Rebuild/AssetTools/manifests/dlc/authored.db'
+DLC_MAPS_DIR = 'F:/Transformers Rebuild/AssetTools/work/dlc_maps/VerticalSlice/Maps/'
+DLC_CONTENT = 'F:/Transformers Rebuild/AssetTools/out/dlc_content/content/'
 UI_LEVELS = ['UI_FrontEnd_m', 'UI_PartyLobby_m', 'UI_Lobby_m', 'UI_CampaignLobby_m']
 AUDIO_OPS = {'SeqAct_PlaySound', 'SeqAct_PlayPlayerPositionalSound', 'SeqAct_Reverb', 'SeqAct_PlayMusic',
              'SeqAct_StopMusic'}
 NOT_EVENTS = {'Completed', 'Aborted', 'Reversed', 'Out', 'Finished', 'Stopped'}
 
-c = sqlite3.connect(DB)
+c = sqlite3.connect('file:%s?mode=ro' % DB, uri=True)
+if os.path.exists(DLC_DB):   # one 'objects' over both (a TEMP view shadows main.objects; nothing is written to either file)
+    c.execute("ATTACH DATABASE ? AS dlc", ('file:%s?mode=ro' % DLC_DB,))
+    c.execute("CREATE TEMP VIEW objects AS SELECT * FROM main.objects UNION ALL SELECT * FROM dlc.objects")
 ROWS = {}
 def row(op):
     if op not in ROWS:
@@ -73,7 +82,7 @@ def cue_tree(cue, prefer=None):
         for w in [x for x in (ep.get('ChildNodes') or []) if x]:
             pk, nm = w.split('.', 1)
             wav = 'content/%s/%s.wav' % (pk, nm)
-            if not os.path.exists(CONTENT + wav[8:]): print('  MISSING wave', wav)
+            if not os.path.exists(CONTENT + wav[8:]) and not os.path.exists(DLC_CONTENT + wav[8:]): print('  MISSING wave', wav)
             entry = {'node': w, 'class': 'SoundNodeWaveEx', 'wav': wav}
             # Localized wave: the extracted file came from this _LOC_ twin (authored.db keeps one per path) [RE pass4 C].
             r = c.execute("select package from objects where opath=? and class like 'SoundNodeWave%'", (w,)).fetchone()
@@ -559,8 +568,12 @@ def actor_notify_cues(sets):   # {(animset, the sequence the actor plays)}
                     if q: out.add(q)
     return out
 announcer_sets = {}
-for level_name in sorted(d for d in os.listdir(MAPS_DIR) if d.startswith('MP_') and os.path.exists(MAPS_DIR + d + '/audio.json')):
-    am = json.load(io.open(MAPS_DIR + level_name + '/audio.json', encoding='utf-8'))
+MAP_DIRS = {d: MAPS_DIR for d in os.listdir(MAPS_DIR) if d.startswith('MP_') and os.path.exists(MAPS_DIR + d + '/audio.json')}
+if os.path.isdir(DLC_MAPS_DIR):   # the DLC maps AssetTools has shipped so far (a base map of the same name wins)
+    for d in os.listdir(DLC_MAPS_DIR):
+        if d.startswith('MP_') and d not in MAP_DIRS and os.path.exists(DLC_MAPS_DIR + d + '/audio.json'): MAP_DIRS[d] = DLC_MAPS_DIR
+for level_name in sorted(MAP_DIRS):
+    am = json.load(io.open(MAP_DIRS[level_name] + level_name + '/audio.json', encoding='utf-8'))
     subs = am['sublevels']
     base = [x for x in subs if 'base' in x.lower()] or subs[:1]
     geo = {z['event']: {'polygons': z['trigger_polygons_gltf'], 'trigger': z.get('trigger', {}), 'comment': z.get('comment', '')}
