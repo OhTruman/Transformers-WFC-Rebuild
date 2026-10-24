@@ -1,0 +1,365 @@
+diff --git a/src/frontend/DataPaths.cpp b/src/frontend/DataPaths.cpp
+index f7072696..c4bd583e 100644
+--- a/src/frontend/DataPaths.cpp
++++ b/src/frontend/DataPaths.cpp
+@@ -40,9 +40,13 @@ std::string parentOf(std::string p, int levels) {
+ 
+ std::string findPackageRoot() {
+     auto env = [](const char* k) { const char* e = std::getenv(k); return e && *e ? std::string(e) : std::string(); };
+-    if (std::string a = env("WFC_ASSETS"); !a.empty()) if (std::string r = parentOf(a, 2); !r.empty()) return r;
+-    if (std::string c = env("WFC_CONTENT"); !c.empty()) if (std::string r = parentOf(c, 2); !r.empty()) return r;
+-    if (std::string d = env("WFC_FRONTEND_DATA"); !d.empty()) if (std::string r = parentOf(d, 3); !r.empty()) return r;
++    auto isRoot = [](const std::string& r) {   // a derived root counts only when it holds AssetTools (a dev scratch tree's data
++        std::error_code ec;                     // dir, e.g. <worktree>/work/gpm/data/frontend, is not 3 levels below the root)
++        return !r.empty() && std::filesystem::is_directory(openPath(r + "/AssetTools"), ec);
++    };
++    if (std::string a = env("WFC_ASSETS"); !a.empty()) if (std::string r = parentOf(a, 2); isRoot(r)) return r;
++    if (std::string c = env("WFC_CONTENT"); !c.empty()) if (std::string r = parentOf(c, 2); isRoot(r)) return r;
++    if (std::string d = env("WFC_FRONTEND_DATA"); !d.empty()) if (std::string r = parentOf(d, 3); isRoot(r)) return r;
+     std::string dir = exeDir();
+     for (int i = 0; i < 8 && !dir.empty(); ++i) {   // the package: <root>/Rebuild/build/release/bin; a dev tree: <root>/<worktree>/...
+         std::error_code ec;
+@@ -63,6 +67,14 @@ std::string resolve() {
+             return ec ? c : p.generic_string();
+         }
+     }
++    // a lane / dev build whose exe sits deeper than the guesses above: the build's own source data (compile-time; it does not
++    // exist on a player's machine, so a package never uses it) before another tree's data - de6d4302 read the shared Rebuild
++    // tree's (possibly older) strings there and three frontend tests failed in a lane build
++    {
++        std::error_code ec;
++        const std::string src = std::string(WFC_SOURCE_DIR) + "/data/frontend";
++        if (std::filesystem::is_regular_file(openPath(src + "/profile_defaults.json"), ec)) return src;
++    }
+     return findPackageRoot() + "/Rebuild/data/frontend";   // the package's Rebuild tree
+ }
+ 
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 82e81cea..688654d1 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -38,6 +38,8 @@
+ #include <sstream>
+ #include <functional>
+ #include <atomic>
++#include <future>
++#include <set>
+ #include <thread>
+ 
+ namespace {
+@@ -1052,6 +1054,13 @@ bool World::loadMapAudio(const std::string& level) {
+     const bool ok = chapterAudio.empty() ? levelAudio_.load(level) : levelAudio_.load(level, chapterAudio);
+     if (ok) {                                                         // level-owned
+         CharacterAudio::loadCues(cues_, audioProfile());
++        // [Systems, 300 FPS pass] every cached body's voice / death / hit-reaction set too (the map's cue table starts empty): a first
++        // death or hit of a body nobody selected (Escalation wave enemies, campaign factory bodies) loaded it inside the sim step
++        // (Gameplay 2026-10-24: 5.7-6.9 ms at AbilityAudio::pawnDeath). loadCues skips the cues already in the table.
++        static const bool preload = [] { const char* e = std::getenv("WFC_PRESENTPRELOAD"); return !(e && e[0] == '0'); }();   // (A/B)
++        if (preload)
++            for (const auto& kv : chassisCache_)
++                if (const CharacterAudioProfile* ap = CharacterAudio::find(kv.first)) CharacterAudio::loadCues(cues_, *ap);
+         CharacterAudio::loadWeaponCues(cues_, weaponClass_);
+         CharacterAudio::loadHitCues(cues_, CharacterAudio::defaultProfile(), weaponClass_);   // the targets' hit sounds
+         CharacterAudio::loadAbilityCues(cues_);                                                // [Systems M08i]
+@@ -2307,15 +2316,22 @@ void World::tickPrefix(float dt) {
+     // cache costs the glb load + renderer prewarm, ~130-165 ms). Only bodies that can appear in this match are loaded (Pass 24h
+     // cached all eight MP defaults: ~1 GB per match, Integration 08i soak). Load scheduling only, not original behaviour.
+     // At most one first-time body load per tick: two late participants never stack into one frame.
+-    if (matchActive_)
+-        for (size_t p = 0; p < match_.players().size(); ++p) {
+-            const MatchPlayer& mp = match_.players()[p];
+-            if (!mp.hasSelectedCharacter) continue;
+-            const std::string id = resolveChassis(mp.selection, match_.faction((int)p));
+-            if (chassisCache_.count(id)) continue;
+-            chassisAssets(id);
+-            break;
+-        }
++    if (matchActive_) {
++        // [Systems] the first-time load runs as a background job (startChassisJob) and finishes on a later tick; WFC_CHASSISASYNC=0
++        // keeps the synchronous load here (A/B)
++        static const bool async = [] { const char* e = std::getenv("WFC_CHASSISASYNC"); return !(e && e[0] == '0'); }();
++        if (async && chassisJobReady()) finishChassisJob();
++        if (!async || !chassisJob_)
++            for (size_t p = 0; p < match_.players().size(); ++p) {
++                const MatchPlayer& mp = match_.players()[p];
++                if (!mp.hasSelectedCharacter) continue;
++                const std::string id = resolveChassis(mp.selection, match_.faction((int)p));
++                if (chassisCache_.count(id)) continue;
++                if (async) startChassisJob(id);
++                else chassisAssets(id);
++                break;
++            }
++    }
+     // The local player's selected weapons (only the local pawn draws a held weapon mesh): custom list, else the iconic preset.
+     if (matchActive_ && localPlayer_ >= 0 && (size_t)localPlayer_ < match_.players().size()) {
+         const MatchPlayer& lp = match_.players()[(size_t)localPlayer_];
+@@ -5198,6 +5214,7 @@ void World::releaseModelGpu(const assets::SkinnedModel& m) {
+ // running). Kept besides what the roster stamped: the local pawn's body and its inventory's weapons. The ability-actor meshes and the
+ // boot weapon are members, not cache entries. A chassis that returns later reloads under that match's load. Load scheduling only.
+ void World::evictUnusedAssets() {
++    if (chassisJob_) finishChassisJob();   // a background body load completes first (its job reads cached animation files)
+     if (!localChassis_.empty()) chassisAssets(localChassis_);
+     {   // every participant still present (bots were just added; any non-bot participant keeps its body and weapons)
+         for (size_t i = 0; i < match_.players().size(); ++i) {
+@@ -5295,25 +5312,51 @@ void World::resolveModelTextures(assets::SkinnedModel& m) {
+     }
+ }
+ 
+-const World::ChassisAssets* World::chassisAssets(const std::string& id) {
+-    auto it = chassisCache_.find(id);
+-    if (it != chassisCache_.end()) { it->second->lastUse = cacheGen_; return it->second.get(); }
+-    struct ProfScope { const std::string& id; double t0 = profNowMs(); ~ProfScope() { if (spawnProf()) LOG_INFO("SPAWNPROF chassis load %s: %.1f ms", id.c_str(), profNowMs() - t0); } } profScope{id};
+-    auto a = std::make_unique<ChassisAssets>();
+-    double chProf[6] = {0, 0, 0, 0, 0, 0};   // SPAWNPROF split: robot glb, vehicle glb, textures, arm, prewarm
++namespace {
++void logAnimHash(const std::string& path, const assets::AnimFile& f);   // (below, with the animation file cache)
++// TEST ONLY (WFC_CHASSISHASH=1, the async body load's identity check): FNV-1a over a chassis' CPU-built data - every form's
++// vertices / skin / indices / submeshes, material texture URIs and colours, skeleton, clips, bounds, the def's hull - logged per
++// chassis by the path that built it (synchronous or background).
++uint64_t fnvMix(uint64_t h, const void* p, size_t n) { const uint8_t* b = (const uint8_t*)p; for (size_t i = 0; i < n; ++i) { h ^= b[i]; h *= 1099511628211ULL; } return h; }
++template <class T> uint64_t fnvVec(uint64_t h, const std::vector<T>& v) { const size_t n = v.size(); h = fnvMix(h, &n, sizeof n); return v.empty() ? h : fnvMix(h, v.data(), v.size() * sizeof(T)); }
++uint64_t fnvStr(uint64_t h, const std::string& s) { return fnvMix(h, s.c_str(), s.size() + 1); }
++uint64_t hashSkinned(uint64_t h, const assets::SkinnedModel& m) {
++    h = fnvVec(h, m.positions); h = fnvVec(h, m.normals); h = fnvVec(h, m.tangents); h = fnvVec(h, m.uv); h = fnvVec(h, m.uv1);
++    h = fnvVec(h, m.joints); h = fnvVec(h, m.weights); h = fnvVec(h, m.indices);
++    for (const render::SubMesh& sm : m.subs) { h = fnvMix(h, &sm.indexOffset, sizeof sm.indexOffset); h = fnvMix(h, &sm.indexCount, sizeof sm.indexCount); h = fnvMix(h, &sm.material, sizeof sm.material); }
++    for (const render::Material& mt : m.mats) {
++        for (const std::string* u : {&mt.baseColorUri, &mt.emissiveUri, &mt.normalUri, &mt.specularUri, &mt.wfcName, &mt.sourceName}) h = fnvStr(h, *u);
++        h = fnvMix(h, &mt.color, sizeof mt.color);
++    }
++    for (const std::string& n : m.nodeNames) h = fnvStr(h, n);
++    h = fnvVec(h, m.roots); h = fnvVec(h, m.skinJoints); h = fnvVec(h, m.invBind);
++    for (const assets::AnimClip& c : m.clips) {
++        h = fnvStr(h, c.name); h = fnvMix(h, &c.duration, sizeof c.duration);
++        for (const assets::AnimSampler& sp : c.samplers) { h = fnvVec(h, sp.times); h = fnvVec(h, sp.values); const int k[2] = {(int)sp.interp, sp.comps}; h = fnvMix(h, k, sizeof k); }
++        for (const assets::AnimChannel& ch : c.channels) { const int v[3] = {ch.sampler, ch.node, (int)ch.path}; h = fnvMix(h, v, sizeof v); }
++    }
++    h = fnvMix(h, &m.boundsMin, sizeof m.boundsMin); h = fnvMix(h, &m.boundsMax, sizeof m.boundsMax);
++    return h;
++}
++}  // namespace
++
++// The CPU part of a chassis load - no renderer, no World cache write: the chassis def, the robot body (the shared animation sets
++// through `robotShared`, else robot.glb), the vehicle body, the mesh hull, the first-person arm. Runs on the main thread (the
++// synchronous path) or on a background thread (startChassisJob) with the same code, so both build the same bytes.
++void World::buildChassisCpu(const std::string& id, ChassisAssets& a_, const std::function<bool(const ChassisDef&, assets::SkinnedModel&)>& robotShared,
++                            double* chProf) const {
++    ChassisAssets* a = &a_;
+     const std::string root = assetRoot();
+     const std::string ext = root + "/../";
+     if (!loadChassisDef(root, id, a->def)) {
+         a->error = a->def.loadError;
+-    } else if ((chProf[0] = profNowMs(), !(loadRobotShared(a->def, a->robot) || assets::loadSkinnedGlb(ext + a->def.robotGlb, a->robot))) || (chProf[1] = profNowMs(), !a->robot.valid())) {
++    } else if ((chProf[0] = profNowMs(), !(robotShared(a->def, a->robot) || assets::loadSkinnedGlb(ext + a->def.robotGlb, a->robot))) || (chProf[1] = profNowMs(), !a->robot.valid())) {
+         a->error = "robot.glb failed to load for " + id;
+     } else if (a->def.vehicleGlb.empty() && (a->def.flyerNoTransform = true, !assets::loadSkinnedGlb(ext + a->def.robotGlb, a->vehicle))) {
+         a->error = "robot.glb (as the vehicle stand-in) failed to load for " + id;   // no vehicle form (the Spider): never transforms
+     } else if (!a->def.vehicleGlb.empty() && (!assets::loadSkinnedGlb(ext + a->def.vehicleGlb, a->vehicle) || (chProf[2] = profNowMs(), !a->vehicle.valid()))) {
+         a->error = "vehicle.glb failed to load for " + id;
+     } else {
+-        resolveModelTextures(a->robot);
+-        resolveModelTextures(a->vehicle);
+         chProf[3] = profNowMs();
+         if (!a->def.vehicle.hullFromPhysics) {
+             // Hull from the vehicle mesh bind-pose bounds (glTF x = UE forward, z = UE right) [PROV until the per-chassis
+@@ -5327,15 +5370,44 @@ const World::ChassisAssets* World::chassisAssets(const std::string& id) {
+         }
+         if (!a->def.armGltf.empty() && assets::loadSkinnedGlb(ext + a->def.armGltf, a->arm)) {
+             if (!a->def.armAnimGltf.empty()) assets::loadAnimationsByName(ext + a->def.armAnimGltf, a->arm);
+-            resolveModelTextures(a->arm);
+             a->hasArm = true;
+         }
+         a->ok = true;
+     }
++}
++
++// The main-thread part: texture resolution (upload; the decodes may already be done by the prefetch pool) in the synchronous
++// path's order - robot, vehicle, arm - then the renderer prewarm and the cache entry.
++const World::ChassisAssets* World::finishChassis(const std::string& id, std::unique_ptr<ChassisAssets> a, double* chProf, const char* how) {
++    if (a->ok) {
++        resolveModelTextures(a->robot);
++        resolveModelTextures(a->vehicle);
++        if (a->hasArm) resolveModelTextures(a->arm);
++        // [Systems, 300 FPS pass] the body's presentation data with it, so its first death / hit / shot does not load them inside the
++        // sim step: the voice / death / hit-reaction cue set (a first melee death loaded it in AbilityAudio::pawnDeath: 5.7-6.9 ms,
++        // Gameplay 2026-10-24) and the energon colour (chassisEnergonDefault parses character.json on first use: 2.4 ms in a first
++        // shot's spawnMuzzleLight). Same functions, same values, earlier; loadCues skips the cues already loaded.
++        // WFC_PRESENTPRELOAD=0: the old first-use loads (A/B)
++        static const bool preload = [] { const char* e = std::getenv("WFC_PRESENTPRELOAD"); return !(e && e[0] == '0'); }();
++        if (preload) {
++            if (const CharacterAudioProfile* ap = CharacterAudio::find(id)) CharacterAudio::loadCues(cues_, *ap);
++            float energon[3];
++            (void)chassisEnergonDefault(id, energon);
++        }
++    }
+     chProf[4] = profNowMs();
+     if (a->ok) LOG_INFO("chassis %s (%s): robot %zu clips, vehicle %zu clips, arm %s", id.c_str(), a->def.iconic.c_str(),
+                         a->robot.clips.size(), a->vehicle.clips.size(), a->hasArm ? "yes" : "no");
+     else LOG_ERROR("chassis %s UNAVAILABLE: %s", id.c_str(), a->error.c_str());
++    static const bool hashLog = std::getenv("WFC_CHASSISHASH") != nullptr;
++    if (hashLog && a->ok) {
++        uint64_t h = 1469598103934665603ULL;
++        h = hashSkinned(h, a->robot); h = hashSkinned(h, a->vehicle); if (a->hasArm) h = hashSkinned(h, a->arm);
++        const VehicleParams& V = a->def.vehicle;
++        const float hull[5] = {V.hullFront, V.hullBack, V.hullHalfWidth, V.hullBottom, V.hullTop};
++        h = fnvMix(h, hull, sizeof hull);
++        LOG_INFO("CHASSISHASH %016llx %s (%s)", (unsigned long long)h, id.c_str(), how);
++    }
+     ChassisAssets* raw = a.get();
+     // Rendering M53: compile the programs / upload the textures of every form's materials now, so the first robot -> vehicle
+     // transform does not pay for them in one frame (measured 65-166 ms hitch). Once per chassis (cached; bots share it).
+@@ -5347,13 +5419,76 @@ const World::ChassisAssets* World::chassisAssets(const std::string& id) {
+             prewarmSkin(*m);   // the GPU-skin model too (robot, vehicle form, arm): no build at first sight / first transform
+         }
+     }
+-    if (spawnProf() && chProf[0] > 0.0) LOG_INFO("SPAWNPROF chassis %s split: robot glb %.0f ms, vehicle glb %.0f, textures %.0f, arm %.0f, prewarm %.0f",
++    if (spawnProf() && chProf[0] > 0.0) LOG_INFO("SPAWNPROF chassis %s split: robot glb %.0f ms, vehicle glb %.0f, arm %.0f, textures %.0f, prewarm %.0f",
+                                          id.c_str(), chProf[1] - chProf[0], chProf[2] - chProf[1], chProf[3] - chProf[2], chProf[4] - chProf[3], profNowMs() - chProf[4]);
+     a->lastUse = cacheGen_; ++chassisLoads_;
+     chassisCache_[id] = std::move(a);
+     return raw;
+ }
+ 
++// [Systems, the 300 FPS pass] A first-time body load mid-match (a late participant, a class change, an Escalation wave's new enemy:
++// ~130-165 ms on the main thread) starts as a background job: buildChassisCpu on a worker thread with its own animation files
++// (the cached ones by pointer - nothing evicts while a job runs) and the PNG decodes queued to the prefetch pool; a later tick
++// finishes it (finishChassis: uploads + prewarm on the main thread). chassisAssets(id) of a body still loading waits for that job,
++// so a spawn gets the same data whenever it happens. WFC_CHASSISASYNC=0: the synchronous path (A/B).
++void World::startChassisJob(const std::string& id) {
++    auto job = std::make_unique<ChassisJob>();
++    job->id = id;
++    job->a = std::make_unique<ChassisAssets>();
++    for (const auto& kv : animFiles_) job->known[kv.first] = kv.second.get();
++    for (const auto& kv : texCache_) job->cachedUris.insert(kv.first);
++    ChassisJob* j = job.get();
++    job->done = std::async(std::launch::async, [this, j] {
++        auto lookup = [j](const std::string& path) -> const SharedAnimFile* {
++            auto k = j->known.find(path);
++            if (k != j->known.end()) { j->used.insert(path); return k->second; }
++            auto& f = j->fresh[path];
++            if (!f) {
++                f = std::make_unique<SharedAnimFile>();
++                f->ok = assets::loadAnimationFile(path, f->file);
++                for (size_t i = 0; i < f->file.clips.size(); ++i) f->byName.emplace(f->file.clips[i].name, i);   // first clip of a name
++                logAnimHash(path, f->file);
++            }
++            return f.get();
++        };
++        buildChassisCpu(j->id, *j->a, [this, &lookup](const ChassisDef& d, assets::SkinnedModel& m) { return loadRobotSharedWith(d, m, lookup, false); }, j->prof);
++        if (j->a->ok) {   // the bodies' PNG decodes on the prefetch pool (resolveTexture collects them on the main thread)
++            std::vector<std::string> uris;
++            for (const assets::SkinnedModel* m : {&j->a->robot, &j->a->vehicle, j->a->hasArm ? &j->a->arm : nullptr})
++                if (m) for (const render::Material& M : m->mats)
++                    for (const std::string* u : {&M.baseColorUri, &M.emissiveUri}) if (!u->empty() && !j->cachedUris.count(*u)) uris.push_back(*u);
++            platform::prefetchImages(uris);
++        }
++    });
++    LOG_INFO("chassis %s: loading in the background", id.c_str());
++    chassisJob_ = std::move(job);
++}
++
++const World::ChassisAssets* World::finishChassisJob() {
++    if (!chassisJob_) return nullptr;
++    std::unique_ptr<ChassisJob> j = std::move(chassisJob_);
++    j->done.wait();
++    for (auto& kv : j->fresh)   // the job's own animation files join the cache (a file cached meanwhile keeps its entry)
++        if (!animFiles_.count(kv.first)) { kv.second->lastUse = cacheGen_; animFiles_[kv.first] = std::move(kv.second); }
++    for (const std::string& p : j->used) { auto it = animFiles_.find(p); if (it != animFiles_.end()) it->second->lastUse = cacheGen_; }
++    return finishChassis(j->id, std::move(j->a), j->prof, "background");
++}
++
++bool World::chassisJobReady() const {
++    return chassisJob_ && chassisJob_->done.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
++}
++
++const World::ChassisAssets* World::chassisAssets(const std::string& id) {
++    auto it = chassisCache_.find(id);
++    if (it != chassisCache_.end()) { it->second->lastUse = cacheGen_; return it->second.get(); }
++    if (chassisJob_ && chassisJob_->id == id) return finishChassisJob();   // loading in the background: wait for that job
++    struct ProfScope { const std::string& id; double t0 = profNowMs(); ~ProfScope() { if (spawnProf()) LOG_INFO("SPAWNPROF chassis load %s: %.1f ms", id.c_str(), profNowMs() - t0); } } profScope{id};
++    auto a = std::make_unique<ChassisAssets>();
++    double chProf[6] = {0, 0, 0, 0, 0, 0};   // SPAWNPROF split: robot glb, vehicle glb, arm, textures, prewarm
++    buildChassisCpu(id, *a, [this](const ChassisDef& d, assets::SkinnedModel& m) { return loadRobotShared(d, m); }, chProf);
++    return finishChassis(id, std::move(a), chProf, "synchronous");
++}
++
+ bool World::applyChassisToPawn(Character& pc, const std::string& id) {
+     const ChassisAssets* a = chassisAssets(id);
+     if (!a || !a->ok) return false;
+@@ -9577,6 +9712,11 @@ void World::prefetchAnimFiles(const std::vector<std::string>& paths) {
+ }
+ 
+ bool World::loadRobotShared(const ChassisDef& def, assets::SkinnedModel& m) {
++    return loadRobotSharedWith(def, m, [this](const std::string& path) { return sharedAnimFile(path); }, true);
++}
++
++bool World::loadRobotSharedWith(const ChassisDef& def, assets::SkinnedModel& m, const std::function<const SharedAnimFile*(const std::string&)>& anim,
++                                bool prefetch) {
+     if (def.robotSkelGltf.empty() || def.robotAnims.empty()) return false;
+     const std::string ext = assetRoot() + "/../";
+     if (!assets::loadSkinnedGlb(ext + def.robotSkelGltf, m) || !m.valid()) return false;
+@@ -9591,12 +9731,12 @@ bool World::loadRobotShared(const ChassisDef& def, assets::SkinnedModel& m) {
+     {   // every source file this chassis needs, in parallel when not cached (prefetchAnimFiles)
+         std::vector<std::string> srcs;
+         for (const ChassisDef::AnimRef& r : def.robotAnims) srcs.push_back(ext + r.source);
+-        prefetchAnimFiles(srcs);
++        if (prefetch) prefetchAnimFiles(srcs);   // the synchronous path only: a background job must not touch the cache
+     }
+     // Per source file: file node -> model node by bone name (the matching loadAnimationsByName / appendAnimations use).
+     std::map<const SharedAnimFile*, std::vector<int>> remaps;
+     for (const ChassisDef::AnimRef& r : def.robotAnims) {
+-        const SharedAnimFile* f = sharedAnimFile(ext + r.source);
++        const SharedAnimFile* f = anim(ext + r.source);
+         if (!f || !f->ok) { LOG_WARN("shared anims: %s unavailable for %s", r.source.c_str(), def.id.c_str()); return false; }
+         auto ci = f->byName.find(r.name);
+         if (ci == f->byName.end()) { LOG_WARN("shared anims: clip %s not in %s (%s)", r.name.c_str(), r.source.c_str(), def.id.c_str()); return false; }
+diff --git a/src/game/World.h b/src/game/World.h
+index de764a8b..f9363ae1 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -9,6 +9,7 @@
+ #include <thread>
+ #include <string>
+ #include <map>
++#include <future>
+ #include <set>
+ #include <unordered_map>
+ #include <vector>
+@@ -1253,6 +1254,9 @@ public:
+         std::string error;
+     };
+     const ChassisAssets* chassisAssets(const std::string& id);
++    void buildChassisCpu(const std::string& id, ChassisAssets& a, const std::function<bool(const ChassisDef&, assets::SkinnedModel&)>& robotShared,
++                         double* chProf) const;   // [Systems] the CPU part (any thread)
++    const ChassisAssets* finishChassis(const std::string& id, std::unique_ptr<ChassisAssets> a, double* chProf, const char* how);   // main thread
+     // TnPawn.ApplyTransformer for the local pawn: models, rigs, collision, stats, weapon socket. False = unavailable.
+     bool applyChassisToLocalPawn(const std::string& id);
+     // TnPawn.ApplyTransformer for any pawn (local or participant): models, rigs, collision, stats, weapon / arm sockets.
+@@ -1660,10 +1664,27 @@ private:
+     // clips (~1.2 s of the ~2 s first load, WFC_SPAWNPROF). Load scheduling only, not original behaviour.
+     struct SharedAnimFile { assets::AnimFile file; std::map<std::string, size_t> byName; bool ok = false; unsigned lastUse = 0; };
+     std::map<std::string, std::unique_ptr<SharedAnimFile>> animFiles_;
++    // [Systems] a first-time body load in the background (startChassisJob / finishChassisJob); declared after the caches it reads,
++    // so it is destroyed (its future joins) first
++    struct ChassisJob {
++        std::string id;
++        std::unique_ptr<ChassisAssets> a;
++        std::map<std::string, const SharedAnimFile*> known;                  // the cached animation files at the start (by pointer)
++        std::map<std::string, std::unique_ptr<SharedAnimFile>> fresh;        // the files the job loaded itself
++        std::set<std::string> used, cachedUris;
++        double prof[6] = {0, 0, 0, 0, 0, 0};
++        std::future<void> done;
++    };
++    std::unique_ptr<ChassisJob> chassisJob_;
++    void startChassisJob(const std::string& id);
++    const ChassisAssets* finishChassisJob();
++    bool chassisJobReady() const;
+     const SharedAnimFile* sharedAnimFile(const std::string& path);
+     void prefetchAnimFiles(const std::vector<std::string>& paths);   // [Systems] uncached ones load on worker threads
+ public:
+     bool loadRobotShared(const ChassisDef& def, assets::SkinnedModel& out);   // false -> the caller uses robot.glb
++    bool loadRobotSharedWith(const ChassisDef& def, assets::SkinnedModel& out,
++                             const std::function<const SharedAnimFile*(const std::string&)>& anim, bool prefetch);   // [Systems] files via `anim`
+     // WFC_ANIMSHARECHECK: robot.glb vs loadRobotShared for one chassis; returns a one-line report, ok = identical within eps.
+     std::string compareRobotShared(const std::string& chassisId, bool& ok);
+ private:
