@@ -4207,3 +4207,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   assets_dlc/ (junctions: VerticalSlice/Maps/<base maps> + MP_KON_Fortress; content/<pkg> = 800 base + 13 DLC; config /
   maps / movies) -> WFC_ASSETS=.../work/assets_dlc/VerticalSlice; render data junction work/render/MP_KON_Fortress.
   Fortress headless TDM 20 s: exit 0, 1801 SIMHASH lines, 0 errors. Frontend split step 1 needs a recut vs the head.
+2026-10-23 21:04 MERGED eafcc4e5 Frontend split step 1 (seat 2 join / leave, wfc_profile_2.ini, Split Screen Layout row + glue, in-place
+  campaign restart glue). Cut status (Systems): packaging rerun 1 done (38.22 GB: base 17 + HD 22); verify: Streets /
+  Settings / RT PASS, Gorge + Debris failed on the missing per-map lens_flares.json -> build_slim fix taken (123d3e7f),
+  repackage 2 running (IO only), then verify Gorge + Debris. Rendering has the card for 2 split phase-1 runs meanwhile.
