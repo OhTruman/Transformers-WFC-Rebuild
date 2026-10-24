@@ -4222,3 +4222,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 21:14 MERGED bf8029a2 split-screen render phase 1 (two views per frame, per-view post into its rect; one view = today's frame;
   later: RT / FSR per view, one HUD per half). AssetTools moves the DLC map root to out/dlc_content/VerticalSlice/Maps/
   (base-style URIs); Fortress + Havoc rebuilding there -> re-point my work/assets_dlc junctions when they land.
+2026-10-23 21:17 MERGED 01988f7a split-screen seat 2 steps 1 + 2 (Gameplay; replaces 1d392b3d; PresentedFrame::seats). Frontend goes on the
+  per-seat HUD + the pad-Start join + lobby rows; Gameplay steps 3 (online, two local seats) + 4 (campaign / ESC seat 2);
+  Rendering phase 2 (seat cameras + RT per view). User playtest in progress (card held by the user).
