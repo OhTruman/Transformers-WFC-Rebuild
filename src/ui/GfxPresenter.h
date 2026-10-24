@@ -151,7 +151,8 @@ private:
     std::string previewLoaded_;
     uint64_t previewKey_ = 0;
     void syncFirstLaunchBrightness(gfx::Player& p, frontend::GameFlow& flow);   // the calibration at the first main menu (#34)
-    bool firstBrightnessShown_ = false;   // Commit Changes' confirmation (requestSettingsCommit) -> the original commit + apply + the result
+    bool firstBrightnessShown_ = false;
+    bool lobbyCountingSeen_ = false;      // #25: the lobby's start countdown was running (a cancel restores the menu updateMenu hid)
     gfx::Player* commitPlayer_ = nullptr;
     gfx::avm1::Value commitFn_, commitSelf_;   // the original writeGraphicsSettings and the button it ran on
     frontend::LocalProfile::Display graphicsOpened_;   // the display settings when the Graphics page opened (the PC rows save live)
