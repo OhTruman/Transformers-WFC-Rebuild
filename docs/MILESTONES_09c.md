@@ -4484,3 +4484,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   target (p99 < 1.7 ms); the sim spikes are first-use loads (ability / chassis / melee / matinee clips) and a few Kismet
   steps (D5 1781 up to 38 ms). Gameplay: preload patch next. Phase-0 slot (Experimental drives, fast_bd543d9, 1440p then
   4K) GO after Systems' verify ends.
+2026-10-24 11:09 MERGED bcd70a61 first-use loads moved to map / chapter load (melee weapons, gibs, matinee pawn clips): the reproducible
+  sim spikes are gone; left 5-6 ms Kismet steps (fix F per RE's KISMET_VM_SCHEDULING_RE.md) + 3-4 ms matinee. Phase-0
+  baseline moves to fast_bcd70a61; GO after Systems' verify. Systems: first-time body load fix in progress.
