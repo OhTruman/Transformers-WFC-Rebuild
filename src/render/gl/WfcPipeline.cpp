@@ -6136,7 +6136,7 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
         return mn.x <= mx.x && std::isfinite(mn.x) && std::isfinite(mx.x) && std::isfinite(mn.y) && std::isfinite(mx.y) &&
                std::isfinite(mn.z) && std::isfinite(mx.z);
     };
-    const bool skipPrep = pawnOccPrepOn() && !split_ && si.serial != 0 && si.mx.x >= si.mn.x && pawnOcc_.count(drawOwner_) &&
+    const bool skipPrep = pawnOccPrepOn() && !split_ && drawOwner_ != 0 && si.serial != 0 && si.mx.x >= si.mn.x && pawnOcc_.count(drawOwner_) &&
                           pawnOcc_[drawOwner_].occluded;
     if (skipPrep) {                                     // hidden body + shadow: light env tick + query box only
         SkinDraw d0;
@@ -7857,7 +7857,10 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
     gStats.dynEnvMs += std::chrono::duration<double, std::milli>(tEnv1 - tEnv0).count();
     if (offscreen) { envSamples_ = nullptr; envForm_ = -1; return; }   // light environment ticked above
     bool occluded = false;
-    if (envSamples_ && !warmup_ && pawnOcclusionOn() && !split_) {   // character / weapon parts: the owner's occlusion box
+    // (the local player's own pawn, owner 0, is never occlusion-culled: the third-person camera frames it, and a pawn stuck
+    // in geometry had its box hidden by the walls for a frame or two at a time - skipped, back, skipped: the user's "flicker
+    // in and out" while stuck, playtest 2026-10-23b)
+    if (envSamples_ && !warmup_ && pawnOcclusionOn() && !split_ && drawOwner_ != 0) {   // character / weapon parts: the owner's occlusion box
         PawnOcc& po = pawnOcc_[drawOwner_];
         if (po.boxFrame != frameNo_) { po.mn = {1e30f, 1e30f, 1e30f}; po.mx = {-1e30f, -1e30f, -1e30f}; po.boxFrame = frameNo_; }
         for (int k = 0; k < 8; ++k) {
