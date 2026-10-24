@@ -1,0 +1,33 @@
+diff -ru a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
+--- a/src/render/gl/GLRenderer.cpp	2026-10-24 01:08:51.212171700 -0500
++++ b/src/render/gl/GLRenderer.cpp	2026-10-24 01:08:51.241773300 -0500
+@@ -2,6 +2,7 @@
+ // Deliberately GL 1.1 immediate mode: no extension loading needed to get pixels on screen.
+ #if defined(_WIN32)
+ #define WIN32_LEAN_AND_MEAN
++#include "core/LoadYield.h"
+ #include "core/PresRand.h"
+ #include "assets/Gltf.h"
+ #include "assets/SkinnedModel.h"
+@@ -474,7 +475,7 @@
+         slowFrameEnd();
+         glx::gpuTimerEnd();
+         glx::gpuStamp("2D: marker, reticle, screen batches");
+-        if (!slotWaited_) { applyLimit(userLimit_); watchdog::phase("frame limiter"); limiter_.wait(); }   // the loop did not call waitFrameSlot (load frames: the player's limit)
++        if (!slotWaited_) { applyLimit(slotLimit()); watchdog::phase("frame limiter"); limiter_.wait(); }   // the loop did not call waitFrameSlot (the frontend's own loop, load frames)
+         slotWaited_ = false;
+         { static int frames = 0; watchdog::frameDone(++frames);
+           if (frames == 60 && WFC_ENV("WFC_HANGTEST")) {   // diagnostics: a 7 s stall to exercise the watchdog
+@@ -1440,8 +1441,11 @@
+     void setHudScreenEffect(int chain) override { wfc_.setHudScreenEffect(chain); }
+     float drawOwnerRenderAge(int owner) const override { return wfc_.drawOwnerRenderAge(owner); }
+     void notePresentedFrame() override { watchdog::phase("presented outside the renderer (movie / frontend)"); }
++    // the frame's limit: a match or a running load (core::loadProgress) at the player's limit, the menus at menuLimit()
++    // (measured 2026-10-24: the frontend runs its own loop - menu frames come through endFrame's wait, so both paths ask here)
++    float slotLimit() const { return matchMap_ || core::loadProgress().active ? userLimit_ : menuLimit(); }
+     void waitFrameSlot() override {
+-        applyLimit(matchMap_ ? userLimit_ : menuLimit());
++        applyLimit(slotLimit());
+         watchdog::phase("frame limiter"); limiter_.wait(); slotWaited_ = true;
+     }
+     // M73 decal receivers: compact copy (positions + triangle indices) of the authored world geometry - the full CPU
