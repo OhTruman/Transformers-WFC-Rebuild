@@ -1908,6 +1908,27 @@ void Application::routeMatchToFrontend(float dt) {
         // the key / pad icon via the HUD's prompt translator)
         if (!h.cpInteract.empty())
             hf.contextualPrompts->push_back(frontend_->catalog().localize("TransGame", "ContextualCommands", "UseInteract"));
+        // [Frontend] Escalation: the generator in reach (Gameplay svGeneratorName = its SurvivalGeneratorNames key, svGeneratorNeeded =
+        // the power it takes) -> the original TransGame.ContextualCommands AddToGenerator ("Hold ^ADD_TO_GENERATOR `g  [power]`n");
+        // the cost turns red when the seat's power is short; during District's power outage (svPowerOutage: no buying) the
+        // cost reads "Power outage" [PC text: the original data has no outage string]
+        if (!h.svGeneratorName.empty() && h.svGeneratorNeeded >= 0) {
+            const frontend::Catalog& cat = frontend_->catalog();
+            std::string name = cat.localize("TransGame", "SurvivalGeneratorNames", h.svGeneratorName);
+            if (name.empty()) name = cat.localize("TransGame", "SurvivalGeneratorNames", "GenericGenerator");
+            std::string t = cat.localize("TransGame", "ContextualCommands", "AddToGenerator");
+            auto sub = [&](const char* tok, const std::string& v) { const size_t at = t.find(tok); if (at != std::string::npos) t.replace(at, 2, v); };
+            sub("`g", name);
+            sub("`n", std::to_string(h.svGeneratorNeeded));
+            const size_t font = t.find("<font");
+            if (h.svPowerOutage && font != std::string::npos)
+                t = t.substr(0, font) + "<font color='#F03C3C'>" + cat.localizeKey("$WfcPC.Escalation.PowerOutage") + "</font>";
+            else if (h.svPower < h.svGeneratorNeeded) {
+                const size_t c = t.find("#8AF0FF");
+                if (c != std::string::npos) t.replace(c, 7, "#F03C3C");
+            }
+            hf.contextualPrompts->push_back(t);
+        }
         hf.cantTransformCount = o.cantTransformCount;
         // scrambled / scoringMultiplier / downedHealth have no source yet: left unset (nothing sent).
         // Damage direction: the ring turns with the view (-PlayerYaw) and each arrow keeps its world yaw, both in the HUD's
