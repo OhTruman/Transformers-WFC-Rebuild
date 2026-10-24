@@ -1,13 +1,19 @@
 diff --git a/src/core/Application.cpp b/src/core/Application.cpp
-index 7ce31400..23672508 100644
+index 7ce31400..86736721 100644
 --- a/src/core/Application.cpp
 +++ b/src/core/Application.cpp
-@@ -561,6 +561,8 @@ void Application::runHeadlessMatch() {
+@@ -561,6 +561,14 @@ void Application::runHeadlessMatch() {
          if ((float)steps * step > 600.0f) { LOG_INFO("HEADLESS end: 600 s simulated (guard)"); break; }
          const bool inProgress = world_.matchActive() && world_.match().state() == game::Match::State::InProgress;
          if (inProgress) started = true;
 +        static bool soakGod = false;   // WFC_SOAK_GOD=1 (with WFC_QA=1): the human cannot die, so a perf soak runs its full time
 +        if (inProgress && !soakGod && std::getenv("WFC_SOAK_GOD")) { soakGod = true; world_.qaSetGodMode(true); }
++        // WFC_SOAK_KILLEVERY=<s> (perf soaks): every s seconds the lowest live horde slot dies, so Escalation waves advance while the
++        // horde stays near its alive cap (the bot-driven human alone rarely clears a wave)
++        static const float soakKill = std::getenv("WFC_SOAK_KILLEVERY") ? (float)std::atof(std::getenv("WFC_SOAK_KILLEVERY")) : 0.0f;
++        if (soakKill > 0.0f && inProgress && steps > 0 && steps % std::max(1L, (long)std::lround(soakKill / step)) == 0)
++            for (const auto& sl : world_.survival().slots)
++                if (sl.inUse && sl.player >= 0 && world_.participantPawn(sl.player)) { world_.applyMatchDamage(sl.player, world_.localMatchPlayer(), 1.0e7f, false, "TnDamageType"); break; }
          if (started && !inProgress) { LOG_INFO("HEADLESS end: the match left InProgress"); break; }
          if (matchSeconds > 0.0f && inProgress && world_.match().elapsedTime() >= matchSeconds) {
              LOG_INFO("WFC_MATCH_SECONDS: %d s of match time reached at step %ld (step-identical end point)", (int)world_.match().elapsedTime(), steps);
