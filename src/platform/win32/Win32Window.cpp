@@ -238,6 +238,7 @@ public:
                 for (uint32_t m : uiPad_[i]) if (padBits_ & m) ui |= 1u << i;
             }
         input.uiDown = ui;
+        input.padButtons = padBits_ & 0xFFFFu;   // the XInput buttons only (the synthetic trigger / stick bits sit above)
         input.padActive = padBits_ != 0 || std::fabs(input.padRX) > 0.5f || std::fabs(input.padRY) > 0.5f;
         input.keyActive = keyUi;
         for (int i = 0; i < (int)Button::Count && !input.keyActive; ++i) input.keyActive = input.down[i];

@@ -29,6 +29,8 @@ enum class Button {
 // Menu / UI keys (frontend movies): keyboard keys and gamepad buttons, platform-neutral.
 enum class UiKey { Up, Down, Left, Right, Accept, Back, X, Y, Start, Select, LB, RB, LT, RT, LThumb, RThumb, Count };
 
+constexpr uint32_t kPadDPadUp = 0x0001, kPadDPadDown = 0x0002, kPadDPadLeft = 0x0004, kPadDPadRight = 0x0008;
+
 struct InputFrame {
     uint32_t uiDown = 0;          // bit (1 << UiKey) held (keyboard or pad)
     bool  down[(int)Button::Count]    = {};   // currently held
@@ -37,6 +39,7 @@ struct InputFrame {
     float mouseDY = 0.0f;
     // Gamepad (optional; zeroed if none connected)
     bool  padConnected = false;
+    uint32_t padButtons = 0;      // the frame's pad buttons (XInput wButtons bit values: kPadDPadRight ...); 0 without a pad
     float padLX = 0, padLY = 0;   // left stick, -1..1
     float padRX = 0, padRY = 0;   // right stick, -1..1
     float padLT = 0;              // left trigger, 0..1

@@ -1408,16 +1408,26 @@ static void testOnlineVoice() {
         frontend::LocalProfile c;
         // All Radio (1) differs from the default audience either way (Team Radio 0, the original's rule, after Systems' voice channels)
         c.voice.mode = 2; c.voice.audience = 1; c.voice.pttKey = "Mouse 4"; c.voice.muted = {"WFC-AAAA-AAAA-1", "WFC-BBBB-BBBB-2"};
+        c.voice.channelKey = "K";
         c.save();
         std::ifstream b("wfc_profile.ini"); frontend::LocalProfile r; r.loadFrom(b); b.close();
         check(as.str().find("[Voice]") == std::string::npos && r.voice.mode == 2 && r.voice.audience == 1 && r.voice.pttKey == "Mouse 4" &&
               r.voice.muted.size() == 2 && r.voice.muted[1] == "WFC-BBBB-BBBB-2" && d.voice.mode == 1 &&
-              d.voice.audience == frontend::LocalProfile::Voice{}.audience, "profile.voice_settings_persisted");
+              d.voice.audience == frontend::LocalProfile::Voice{}.audience && r.voice.channelKey == "K" && d.voice.channelKey == "N",
+              "profile.voice_settings_persisted");
         std::remove("wfc_profile.ini");
     }
     SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD-4H"; o.address = "192.168.1.20:7777";
     OnlineRig r({after("host", o)});
     const bool host = r.ok && hostLobby(r);
+    {   // V1b (Systems QC): the Voice Channel key's cycle - Team -> All -> Proximity -> Radio + Proximity -> Team, each step saved
+        const int start = r.f().profile().voice.audience;
+        const int a1 = r.f().cycleVoiceAudience(), a2 = r.f().cycleVoiceAudience(), a3 = r.f().cycleVoiceAudience();
+        std::ifstream b("wfc_profile.ini"); frontend::LocalProfile saved; saved.loadFrom(b); b.close();
+        const int a4 = r.f().cycleVoiceAudience();
+        check(start == 0 && a1 == 1 && a2 == 2 && a3 == 3 && saved.voice.audience == 3 && a4 == 0, "online.voice_channel_cycle");
+        r.frames(2);
+    }
     // V2: the settings reach the session when the session starts and on each change; push-to-talk only in that mode, on change
     const std::string aud = std::to_string(frontend::LocalProfile::Voice{}.audience);   // Team Radio 0 (Systems' voice channels)
     const bool first = r.fake->count("setVoiceSettings") == 1 && r.fake->last("setVoiceSettings")->arg == "1," + aud + ",,70";

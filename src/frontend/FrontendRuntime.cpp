@@ -1423,6 +1423,7 @@ void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
 
 void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt) {
     updateOnlineVoice();   // push-to-talk in the match too
+    updateVoiceChannelKey(input);
     platform::InputFrame in = input;
     hideRealPointer(in);
     script_.applySynthetic(in);
@@ -1606,6 +1607,21 @@ void FrontendRuntime::setCinematicMode(bool on, bool hideHud) {
     }
     FlowTrace::emit("campaign.cinematicMode", {{"on", FlowTrace::boolean(on)}, {"hideHud", FlowTrace::boolean(hideHud)},
                                                {"hudHidden", FlowTrace::boolean(cinematicHudHidden_)}});
+}
+
+void FrontendRuntime::updateVoiceChannelKey(const platform::InputFrame& input) {
+    // Only while the player plays: a menu (pause, settings: D-pad Right moves its selection) or the scoreboard has the input.
+    const bool online = flow_.online() && flow_.sessionRole() != GameFlow::SessionRole::Offline;
+    const bool gameplay = flow_.ui().state() == UIState::InGame && !scoreboard_;
+    const int vk = platform::virtualKeyForName(flow_.profile().voice.channelKey);
+    const bool down = online && gameplay && ((vk && platform::isKeyHeld(vk)) || (input.padButtons & platform::kPadDPadRight));
+    if (down && !voiceChannelWas_) {
+        static const char* const kNames[] = {"$WfcPC.Voice.VoiceTeamRadio", "$WfcPC.Voice.VoiceAllRadio", "$WfcPC.Voice.VoiceProximity",
+                                             "$WfcPC.Voice.VoiceRadioProximity"};
+        const int a = flow_.cycleVoiceAudience();
+        hud_.announce(catalog_.localizeKey("$WfcPC.Voice.VoiceChannel") + ": " + catalog_.localizeKey(kNames[a]));
+    }
+    voiceChannelWas_ = down;
 }
 
 void FrontendRuntime::updateOnlineVoice() {

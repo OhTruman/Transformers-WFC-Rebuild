@@ -1288,23 +1288,26 @@ bool addVoiceRows(gfx::Player& p, const std::string& linkage, gfx::avm1::Object*
         vm.set(item, "text", V(std::string(label)));
         a.o->elems.push_back(V(item));
     };
-    std::vector<V> mode, aud, dev, ptt, vol, pvol, mic;
+    std::vector<V> mode, aud, dev, ptt, vol, pvol, mic, chk;
     choice(mode, V(0.0), "$WfcPC.Voice.VoiceOff"); choice(mode, V(1.0), "$WfcPC.Voice.VoicePushToTalk"); choice(mode, V(2.0), "$WfcPC.Voice.VoiceOpenMic");
     choice(aud, V(0.0), "$WfcPC.Voice.VoiceTeamRadio"); choice(aud, V(1.0), "$WfcPC.Voice.VoiceAllRadio");
     choice(aud, V(2.0), "$WfcPC.Voice.VoiceProximity"); choice(aud, V(3.0), "$WfcPC.Voice.VoiceRadioProximity");
     choice(dev, V(std::string()), "$WfcPC.Voice.InputDeviceDefault");
     for (const std::string& d : net::voiceCaptureDevices()) choice(dev, V(d), d);   // Systems: the active capture endpoints by name
     pttChoices(vm, ptt, pttKey);
+    // the Voice Channel key: keys no match action uses (WFC's PC card + ours); the pad's is D-pad Right (shown in the description)
+    for (const char* k : {"N", "H", "J", "K", "L", "M", "U", "Y"}) choice(chk, V(std::string(k)), k);
     choice(mic, V(0.0), frontend::GameFlow::micMeterText(0.0f));
     for (int t = 0; t <= 100; t += 10) { choice(vol, V((double)t), std::to_string(t)); choice(pvol, V((double)t), std::to_string(t)); }
     row(mode, "<PCSettings:VoiceMode>", "$WfcPC.Voice.VoiceChatDesc", "$WfcPC.Voice.VoiceChat");
     row(aud, "<PCSettings:VoiceAudience>", "$WfcPC.Voice.VoiceChannelDesc", "$WfcPC.Voice.VoiceChannel");
     row(dev, "<PCSettings:VoiceDevice>", "$WfcPC.Voice.InputDeviceDesc", "$WfcPC.Voice.InputDevice");
     row(ptt, "<PCSettings:VoicePushToTalkKey>", "$WfcPC.Voice.PushToTalkKeyDesc", "$WfcPC.Voice.PushToTalkKey");
+    row(chk, "<PCSettings:VoiceChannelKey>", "$WfcPC.Voice.ChannelKeyDesc", "$WfcPC.Voice.ChannelKey");
     row(vol, "<PCSettings:VoiceVolume>", "$WfcPC.Voice.VoiceVolumeDesc", "$WfcPC.Voice.VoiceVolume");
     row(pvol, "<PCSettings:ProximityVolume>", "$WfcPC.Voice.ProximityVolumeDesc", "$WfcPC.Voice.ProximityVolume");
     row(mic, "<PCSettings:VoiceMicTest>", "$WfcPC.Voice.MicTestDesc", "$WfcPC.Voice.MicTest");
-    frontend::FlowTrace::emit("settings.voiceRows", {{"rows", "7"}, {"provenance", "PC EXTENSION"}});
+    frontend::FlowTrace::emit("settings.voiceRows", {{"rows", "8"}, {"provenance", "PC EXTENSION"}});
     return true;
 }
 

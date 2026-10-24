@@ -303,6 +303,8 @@ private:
     bool cinematicHudHidden_ = false, cinematicShowPending_ = false;
     void updateCinematicHud();
     void updateOnlineVoice();
+    void updateVoiceChannelKey(const platform::InputFrame& input);   // [Systems] the Voice Channel key / D-pad Right in a match
+    bool voiceChannelWas_ = false;
     bool voiceUiOverride_ = false;
     bool pttCaptureArmed_ = false;   // the capture waits for every key to be released first (the key that chose "Custom...")
     std::string spectateSent_;            // SetSpectateTarget: the name last sent to the respawn movie

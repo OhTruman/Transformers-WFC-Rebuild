@@ -114,6 +114,7 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<PCSettings:VoiceAudience>") return std::to_string(flow_.profile().voice.audience);
     if (markup == "<PCSettings:VoiceDevice>") return flow_.profile().voice.device;
     if (markup == "<PCSettings:VoicePushToTalkKey>") return flow_.profile().voice.pttKey;
+    if (markup == "<PCSettings:VoiceChannelKey>") return flow_.profile().voice.channelKey;
     if (markup == "<PCSettings:VoiceVolume>") return std::to_string(flow_.profile().voice.volume);
     if (markup == "<PCSettings:ProximityVolume>") return std::to_string(flow_.profile().voice.proximityVolume);
     if (markup == "<PCSettings:VoiceMicTest>") return "0";   // the meter row (its value text is the live level)
@@ -499,6 +500,7 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         if (m == "<PCSettings:VoiceMode>") v.mode = std::clamp(std::atoi(a.c_str()), 0, 2);
         else if (m == "<PCSettings:VoiceAudience>") v.audience = std::clamp(std::atoi(a.c_str()), 0, 3);
         else if (m == "<PCSettings:VoiceDevice>") v.device = a;
+        else if (m == "<PCSettings:VoiceChannelKey>") { if (!a.empty()) v.channelKey = a; }
         else if (m == "<PCSettings:VoicePushToTalkKey>") { if (a == "__custom") flow_.beginPttCapture(); else v.pttKey = a; }
         else if (m == "<PCSettings:VoiceVolume>") v.volume = std::clamp(std::atoi(a.c_str()), 0, 100);
         else if (m == "<PCSettings:ProximityVolume>") v.proximityVolume = std::clamp(std::atoi(a.c_str()), 0, 100);

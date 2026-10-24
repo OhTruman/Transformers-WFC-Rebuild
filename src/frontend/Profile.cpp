@@ -123,6 +123,7 @@ bool LocalProfile::loadFrom(std::istream& f) {
             else if (k == "Audience") voice.audience = std::clamp(std::atoi(v.c_str()), 0, 3);
             else if (k == "Device") voice.device = v;
             else if (k == "PushToTalkKey") voice.pttKey = v;
+            else if (k == "VoiceChannelKey" && !v.empty()) voice.channelKey = v;
             else if (k == "Volume") voice.volume = std::clamp(std::atoi(v.c_str()), 0, 100);
             else if (k == "ProximityVolume") voice.proximityVolume = std::clamp(std::atoi(v.c_str()), 0, 100);
             else if (k == "Muted" || k == "Blocked") {
@@ -237,7 +238,7 @@ void LocalProfile::save() const {
     for (const auto& [id, v] : progression.stats) if (v != 0) f << "Stat." << id << "=" << v << "\n";
     if (!voice.isDefault()) {   // voice chat settings / mutes: only when changed (offline profiles unchanged)
         f << "\n[Voice]\nMode=" << voice.mode << "\nAudience=" << voice.audience << "\nDevice=" << voice.device
-          << "\nPushToTalkKey=" << voice.pttKey << "\nVolume=" << voice.volume << "\nProximityVolume=" << voice.proximityVolume << "\nMuted=";
+          << "\nPushToTalkKey=" << voice.pttKey << "\nVoiceChannelKey=" << voice.channelKey << "\nVolume=" << voice.volume << "\nProximityVolume=" << voice.proximityVolume << "\nMuted=";
         for (size_t i = 0; i < voice.muted.size(); ++i) f << (i ? "," : "") << voice.muted[i];
         f << "\n";
         if (!voice.blocked.empty()) {
