@@ -1986,9 +1986,15 @@ static void testSplitProfiles() {
         const bool refusedSamePad = !f.joinSeat2(0);
         const bool joined = f.joinSeat2(1) && f.localSeats() == 2 && f.seat2Pad() == 1 && f.seat2Profile().file() == LocalProfile::kSeat2File &&
                             f.seat2Profile().voice.mode == 2;   // the file written above
+        // the lobby lists both locals: seat 2's row after seat 1's, on its team, named from its profile (else "Player 2")
+        DataStores& ds = rt.dataStores();
+        ds.poll();
+        const bool rows = ds.call("GetCollectionRowCount", {"<CurrentGame:Players>"}).n == 2;
         f.leaveSeat2();
-        check(refusedFrontEnd && refusedSamePad && joined && f.localSeats() == 1, "split.seat2_join",
-              std::to_string(refusedFrontEnd) + std::to_string(refusedSamePad) + std::to_string(joined));
+        ds.poll();
+        const bool oneRow = ds.call("GetCollectionRowCount", {"<CurrentGame:Players>"}).n == 1;
+        check(refusedFrontEnd && refusedSamePad && joined && rows && oneRow && f.localSeats() == 1, "split.seat2_join",
+              std::to_string(refusedFrontEnd) + std::to_string(refusedSamePad) + std::to_string(joined) + std::to_string(rows) + std::to_string(oneRow));
     }
     std::remove("wfc_profile.ini");
     std::remove(LocalProfile::kSeat2File);

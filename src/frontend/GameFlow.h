@@ -316,6 +316,7 @@ public:
     int seat2Pad() const { return seat2Active_ ? seat2Pad_ : -1; }
     void setSeat1Pad(int pad) { seat1Pad_ = pad; }
     LocalProfile& seat2Profile() { return seat2Profile_; }
+    const LocalProfile& seat2Profile() const { return seat2Profile_; }
     // Online session (PC EXTENSION, Session.h; docs/handoff/ONLINE_MP_FRONTEND_TESTS.md). Not set = the offline flow
     // (today's behaviour); nothing reads it yet.
     void setSession(std::unique_ptr<ISession> s) { session_ = std::move(s); role_ = SessionRole::Offline; }

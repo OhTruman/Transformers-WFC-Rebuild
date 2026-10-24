@@ -77,6 +77,10 @@ public:
     virtual void setWorldLabels(const std::vector<WorldLabel>& labels) { (void)labels; }   // DEV TOOL overlay text
     // The HUD movie's visible stage in its own units (Hud_GFX Stage.width / height): marker screen coordinates.
     virtual bool hudStageSize(double& w, double& h) const { (void)w; (void)h; return false; }
+    // Split screen: seat 1's own Hud_GFX (seat 0 is the HUD above), drawn in its view rect.
+    virtual void setSeatHud(int seat, bool open, bool visible) { if (seat == 0) setHud(open, visible); }
+    virtual void seatHudCall(int seat, const std::string& fn, const std::vector<BridgeValue>& args) { if (seat == 0) hudCall(fn, args); }
+    virtual bool seatHudStageSize(int seat, double& w, double& h) const { return seat == 0 && hudStageSize(w, h); }
     // Keyboard prompts: pad glyphs (pad = true) or key text in the movies' button glyph slots.
     virtual void setPadPrompts(bool pad) { (void)pad; }
     // A function of a notification movie (e.g. UI_GFxChallengeNotifies_p.ChallengeNotify_GFX ChallengeUnlocked): the
@@ -189,6 +193,7 @@ public:
     void setSceneRenderer(IFrontendSceneRenderer* r) { sceneRenderer_ = r; }
     const FrontendScene& scene() const { return scene_; }
     HudController& hud() { return hud_; }
+    HudController& hud2() { return hud2_; }   // split screen: seat 2's HUD (fed from Gameplay's PresentedFrame::seats[1])
     // Campaign tutorial message (TnSeqAct_DisplayTutorialMessage(MessageType) -> TnHUD.DisplayTutorialMessage;
     // CAMPAIGN_HUD_PLAN.md E5): once per profile, text Localize("TutorialMessages", type, "TransGame") with commands
     // translated, sound WHSH_TUTORIAL_BOX. False (nothing shown) in versus, for a type already shown, or an unknown type.
@@ -308,6 +313,7 @@ private:
     BridgeValue commitCharacter(const std::vector<std::string>& args);
     BridgeValue pcSettings(const std::string& fn, const std::vector<std::string>& args);
     HudController hud_;
+    HudController hud2_;
     InputPrompts prompts_;          // ^COMMAND -> key text (TnInputCommandToBindingMapper)
     InputDevice device_;            // the last-used device (prompts)
     int lastMouseX_ = -1, lastMouseY_ = -1;
