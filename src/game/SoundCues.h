@@ -136,6 +136,11 @@ public:
     // Localized waves resolved so far: from the selected _LOC twin / the merged copy (it is that twin) / not played.
     struct LocStats { int twin = 0, merged = 0, skipped = 0; };
     static LocStats& locStats();
+    // [Systems] The audio language (GLanguage; the Settings Language row, LANGUAGE_OPTION_PLAN): "INT" / "FRA" (upper case),
+    // process-wide - it survives map changes by itself. Default: WFC_LANGUAGE, else INT. A change applies to waves resolved from
+    // then on (the next level audio load) and to the next movie; a missing twin of the language falls back to the INT twin.
+    static void setLanguage(const std::string& code);
+    static const std::string& language();
 
     // ---- lifecycle ----
     // Hard stop of every instance (voices stopped at once, queued wave events dropped, cue mixer presets

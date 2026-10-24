@@ -50,8 +50,7 @@ bool LevelAudioHost::startMovieAudio(const std::string& path, int languageSlot) 
     movieStream_ = true;
     applyMovieMute();
     if (languageSlot < 0) {
-        const char* lang = std::getenv("WFC_LANGUAGE");                 // GLanguage (Language=int in Xe-TransEngine.ini)
-        languageSlot = audio::movieLanguageSlot(lang ? lang : "INT");
+        languageSlot = audio::movieLanguageSlot(SoundCues::language().c_str());   // GLanguage (the Settings Language row)
         if (const char* s = std::getenv("WFC_MOVIE_LANGSLOT")) languageSlot = std::atoi(s);
     }
     std::unique_ptr<audio::MovieAudioPlayer> p(audio::createMovieAudioPlayer());

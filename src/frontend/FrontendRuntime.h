@@ -46,6 +46,9 @@ public:
     // game mix): start with the first video frame, stop at its end / skip. False: the movie has no audio (loading Binks).
     virtual bool startMovieAudio(const std::string& moviePath) { (void)moviePath; return false; }
     virtual void stopMovieAudio() {}
+    // [Systems] The Settings Language row (LANGUAGE_OPTION_PLAN): "INT" / "FRA". Call on boot and on Apply; dialogue / localized waves
+    // follow from the next level audio load, movies from the next movie (an INT twin stands in for a missing one).
+    virtual void setLanguage(const std::string& code) { (void)code; }
 };
 
 // DEV TOOL: a text label at a window pixel (QA bot overlay names, projected from the world).

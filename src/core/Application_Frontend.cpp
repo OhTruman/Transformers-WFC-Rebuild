@@ -518,6 +518,7 @@ struct SystemsFrontendAudio final : frontend::IFrontendAudio {
     // Movie audio: the movie's own Bink tracks, decoded and streamed by Systems (FrontendAudioRuntime, M07), outside
     // the categories CINE_MUTE_FOR_BINK ducks [integration M06: replaces the frontend WAV cache].
     bool startMovieAudio(const std::string& p) override { return rt.startMovieAudio(p); }
+    void setLanguage(const std::string& code) override { game::SoundCues::setLanguage(code); }
     void stopMovieAudio() override {
         // Soak / sync evidence: the movie sound's clock when it is stopped (compare with movie.finished position) and
         // the Systems state right after (no movie stream may remain).

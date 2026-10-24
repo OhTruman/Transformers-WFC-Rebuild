@@ -1,0 +1,139 @@
+diff -ruN a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+--- a/src/core/Application_Frontend.cpp	2026-10-23 21:23:30.438418900 -0500
++++ b/src/core/Application_Frontend.cpp	2026-10-23 21:23:30.450962200 -0500
+@@ -518,6 +518,7 @@
+     // Movie audio: the movie's own Bink tracks, decoded and streamed by Systems (FrontendAudioRuntime, M07), outside
+     // the categories CINE_MUTE_FOR_BINK ducks [integration M06: replaces the frontend WAV cache].
+     bool startMovieAudio(const std::string& p) override { return rt.startMovieAudio(p); }
++    void setLanguage(const std::string& code) override { game::SoundCues::setLanguage(code); }
+     void stopMovieAudio() override {
+         // Soak / sync evidence: the movie sound's clock when it is stopped (compare with movie.finished position) and
+         // the Systems state right after (no movie stream may remain).
+diff -ruN a/src/frontend/FrontendRuntime.h b/src/frontend/FrontendRuntime.h
+--- a/src/frontend/FrontendRuntime.h	2026-10-23 21:23:31.642546700 -0500
++++ b/src/frontend/FrontendRuntime.h	2026-10-23 21:23:31.656594800 -0500
+@@ -46,6 +46,9 @@
+     // game mix): start with the first video frame, stop at its end / skip. False: the movie has no audio (loading Binks).
+     virtual bool startMovieAudio(const std::string& moviePath) { (void)moviePath; return false; }
+     virtual void stopMovieAudio() {}
++    // [Systems] The Settings Language row (LANGUAGE_OPTION_PLAN): "INT" / "FRA". Call on boot and on Apply; dialogue / localized waves
++    // follow from the next level audio load, movies from the next movie (an INT twin stands in for a missing one).
++    virtual void setLanguage(const std::string& code) { (void)code; }
+ };
+ 
+ // DEV TOOL: a text label at a window pixel (QA bot overlay names, projected from the world).
+diff -ruN a/src/game/LevelAudioHost.cpp b/src/game/LevelAudioHost.cpp
+--- a/src/game/LevelAudioHost.cpp	2026-10-23 21:23:34.106995000 -0500
++++ b/src/game/LevelAudioHost.cpp	2026-10-23 21:23:34.120039400 -0500
+@@ -50,8 +50,7 @@
+     movieStream_ = true;
+     applyMovieMute();
+     if (languageSlot < 0) {
+-        const char* lang = std::getenv("WFC_LANGUAGE");                 // GLanguage (Language=int in Xe-TransEngine.ini)
+-        languageSlot = audio::movieLanguageSlot(lang ? lang : "INT");
++        languageSlot = audio::movieLanguageSlot(SoundCues::language().c_str());   // GLanguage (the Settings Language row)
+         if (const char* s = std::getenv("WFC_MOVIE_LANGSLOT")) languageSlot = std::atoi(s);
+     }
+     std::unique_ptr<audio::MovieAudioPlayer> p(audio::createMovieAudioPlayer());
+diff -ruN a/src/game/SoundCues.cpp b/src/game/SoundCues.cpp
+--- a/src/game/SoundCues.cpp	2026-10-23 21:23:35.180173700 -0500
++++ b/src/game/SoundCues.cpp	2026-10-23 21:23:35.193720300 -0500
+@@ -303,6 +303,28 @@
+ // language is never substituted. Twin of GLanguage: INT -> "int", else the language code (FRA ...).
+ SoundCues::LocStats& SoundCues::locStats() { static LocStats s; return s; }
+ 
++namespace {
++std::string& languageRef() {
++    static std::string lang = [] {
++        const char* e = std::getenv("WFC_LANGUAGE");
++        std::string l = e && *e ? e : "INT";
++        for (char& ch : l) ch = (char)std::toupper((unsigned char)ch);
++        return l;
++    }();
++    return lang;
++}
++}
++
++void SoundCues::setLanguage(const std::string& code) {
++    std::string l = code.empty() ? std::string("INT") : code;
++    for (char& ch : l) ch = (char)std::toupper((unsigned char)ch);
++    if (l == languageRef()) return;
++    LOG_INFO("audio: language %s -> %s (from the next level audio load / movie)", languageRef().c_str(), l.c_str());
++    languageRef() = l;
++}
++
++const std::string& SoundCues::language() { return languageRef(); }
++
+ core::Vec3 SoundCues::nearestListener(const core::Vec3& p) const {
+     if (!l2Active_) return listener_;
+     const core::Vec3 a = p - listener_, b = p - l2_;
+@@ -320,26 +342,32 @@
+ }
+ 
+ std::string SoundCues::localizedWave(const std::string& rel, const std::string& owner, const std::string& contentRoot, bool account) {
+-    const char* lang = std::getenv("WFC_LANGUAGE");
+-    std::string twin = lang && *lang ? lang : "INT";
+-    for (char& ch : twin) ch = (char)std::toupper((unsigned char)ch);
++    std::string twin = language();
+     if (twin == "INT") twin = "int";
+     const char* locRoot = std::getenv("WFC_LOC_ROOT");
+-    const std::string alt = (locRoot && *locRoot ? std::string(locRoot) + "/" : contentRoot + "_LOC/") + twin + "/" + rel;
+-    const std::string altPath = alt.size() > 1 && (alt[1] == ':' || alt[0] == '/') ? alt : contentRoot + alt;
+     // The twin's WAV, or (a package without WAVs) its original bank beside it: the audio backend decodes X.fsb for X.wav.
+     // [Systems] long / non-ASCII paths: a real open (WFC_FILELOG logs it, as the narrow fopen it replaces), wide via longPath
+-    std::FILE* fp = _wfopen(platform::longPath(altPath).c_str(), L"rb");
+-    if (!fp && altPath.size() > 4) fp = _wfopen(platform::longPath(altPath.substr(0, altPath.size() - 4) + ".fsb").c_str(), L"rb");
+-    if (fp) {
++    auto twinPath = [&](const std::string& tw) -> std::string {
++        const std::string alt = (locRoot && *locRoot ? std::string(locRoot) + "/" : contentRoot + "_LOC/") + tw + "/" + rel;
++        const std::string altPath = alt.size() > 1 && (alt[1] == ':' || alt[0] == '/') ? alt : contentRoot + alt;
++        std::FILE* fp = _wfopen(platform::longPath(altPath).c_str(), L"rb");
++        if (!fp && altPath.size() > 4) fp = _wfopen(platform::longPath(altPath.substr(0, altPath.size() - 4) + ".fsb").c_str(), L"rb");
++        if (!fp) return std::string();
+         std::fclose(fp);
+-        if (account) ++locStats().twin;
+         return alt;
+-    }
++    };
++    std::string alt = twinPath(twin);
++    if (!alt.empty()) { if (account) ++locStats().twin; return alt; }
+     std::string o = owner, t = twin;
+     for (char& ch : o) ch = (char)std::toupper((unsigned char)ch);
+     for (char& ch : t) ch = (char)std::toupper((unsigned char)ch);
+     if (o == t) { if (account) ++locStats().merged; return rel; }
++    // [Systems] the Language setting: a language without this wave's twin plays the INT one (never silent for a gap)
++    if (twin != "int") {
++        alt = twinPath("int");
++        if (!alt.empty()) { if (account) ++locStats().twin; return alt; }
++        if (o == "INT") { if (account) ++locStats().merged; return rel; }
++    }
+     if (!account) return std::string();
+     ++locStats().skipped;
+     static std::set<std::string> warned;
+diff -ruN a/src/game/SoundCues.h b/src/game/SoundCues.h
+--- a/src/game/SoundCues.h	2026-10-23 21:23:35.279012600 -0500
++++ b/src/game/SoundCues.h	2026-10-23 21:23:35.292057300 -0500
+@@ -136,6 +136,11 @@
+     // Localized waves resolved so far: from the selected _LOC twin / the merged copy (it is that twin) / not played.
+     struct LocStats { int twin = 0, merged = 0, skipped = 0; };
+     static LocStats& locStats();
++    // [Systems] The audio language (GLanguage; the Settings Language row, LANGUAGE_OPTION_PLAN): "INT" / "FRA" (upper case),
++    // process-wide - it survives map changes by itself. Default: WFC_LANGUAGE, else INT. A change applies to waves resolved from
++    // then on (the next level audio load) and to the next movie; a missing twin of the language falls back to the INT twin.
++    static void setLanguage(const std::string& code);
++    static const std::string& language();
+ 
+     // ---- lifecycle ----
+     // Hard stop of every instance (voices stopped at once, queued wave events dropped, cue mixer presets
+diff -ruN a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-23 21:23:36.492672800 -0500
++++ b/src/game/World.cpp	2026-10-23 21:23:36.506721100 -0500
+@@ -1029,7 +1029,7 @@
+         dialogEvents_.setLevel(canonicalMapName(level), cues_);   // [Systems] the level's character dialog sets + manager
+         const SoundCues::LocStats& ls = SoundCues::locStats();
+         LOG_INFO("localized waves (language %s): %d from the _LOC twin, %d merged copy of that twin, %d not played",
+-                 std::getenv("WFC_LANGUAGE") ? std::getenv("WFC_LANGUAGE") : "INT", ls.twin, ls.merged, ls.skipped);
++                 SoundCues::language().c_str(), ls.twin, ls.merged, ls.skipped);
+     }
+     return ok;
+ }

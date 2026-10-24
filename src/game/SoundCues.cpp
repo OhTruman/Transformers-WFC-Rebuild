@@ -303,6 +303,28 @@ int SoundCues::applyLoopPoints() {
 // language is never substituted. Twin of GLanguage: INT -> "int", else the language code (FRA ...).
 SoundCues::LocStats& SoundCues::locStats() { static LocStats s; return s; }
 
+namespace {
+std::string& languageRef() {
+    static std::string lang = [] {
+        const char* e = std::getenv("WFC_LANGUAGE");
+        std::string l = e && *e ? e : "INT";
+        for (char& ch : l) ch = (char)std::toupper((unsigned char)ch);
+        return l;
+    }();
+    return lang;
+}
+}
+
+void SoundCues::setLanguage(const std::string& code) {
+    std::string l = code.empty() ? std::string("INT") : code;
+    for (char& ch : l) ch = (char)std::toupper((unsigned char)ch);
+    if (l == languageRef()) return;
+    LOG_INFO("audio: language %s -> %s (from the next level audio load / movie)", languageRef().c_str(), l.c_str());
+    languageRef() = l;
+}
+
+const std::string& SoundCues::language() { return languageRef(); }
+
 core::Vec3 SoundCues::nearestListener(const core::Vec3& p) const {
     if (!l2Active_) return listener_;
     const core::Vec3 a = p - listener_, b = p - l2_;
@@ -320,26 +342,32 @@ core::Vec3 SoundCues::devicePos(const core::Vec3& p) const {
 }
 
 std::string SoundCues::localizedWave(const std::string& rel, const std::string& owner, const std::string& contentRoot, bool account) {
-    const char* lang = std::getenv("WFC_LANGUAGE");
-    std::string twin = lang && *lang ? lang : "INT";
-    for (char& ch : twin) ch = (char)std::toupper((unsigned char)ch);
+    std::string twin = language();
     if (twin == "INT") twin = "int";
     const char* locRoot = std::getenv("WFC_LOC_ROOT");
-    const std::string alt = (locRoot && *locRoot ? std::string(locRoot) + "/" : contentRoot + "_LOC/") + twin + "/" + rel;
-    const std::string altPath = alt.size() > 1 && (alt[1] == ':' || alt[0] == '/') ? alt : contentRoot + alt;
     // The twin's WAV, or (a package without WAVs) its original bank beside it: the audio backend decodes X.fsb for X.wav.
     // [Systems] long / non-ASCII paths: a real open (WFC_FILELOG logs it, as the narrow fopen it replaces), wide via longPath
-    std::FILE* fp = _wfopen(platform::longPath(altPath).c_str(), L"rb");
-    if (!fp && altPath.size() > 4) fp = _wfopen(platform::longPath(altPath.substr(0, altPath.size() - 4) + ".fsb").c_str(), L"rb");
-    if (fp) {
+    auto twinPath = [&](const std::string& tw) -> std::string {
+        const std::string alt = (locRoot && *locRoot ? std::string(locRoot) + "/" : contentRoot + "_LOC/") + tw + "/" + rel;
+        const std::string altPath = alt.size() > 1 && (alt[1] == ':' || alt[0] == '/') ? alt : contentRoot + alt;
+        std::FILE* fp = _wfopen(platform::longPath(altPath).c_str(), L"rb");
+        if (!fp && altPath.size() > 4) fp = _wfopen(platform::longPath(altPath.substr(0, altPath.size() - 4) + ".fsb").c_str(), L"rb");
+        if (!fp) return std::string();
         std::fclose(fp);
-        if (account) ++locStats().twin;
         return alt;
-    }
+    };
+    std::string alt = twinPath(twin);
+    if (!alt.empty()) { if (account) ++locStats().twin; return alt; }
     std::string o = owner, t = twin;
     for (char& ch : o) ch = (char)std::toupper((unsigned char)ch);
     for (char& ch : t) ch = (char)std::toupper((unsigned char)ch);
     if (o == t) { if (account) ++locStats().merged; return rel; }
+    // [Systems] the Language setting: a language without this wave's twin plays the INT one (never silent for a gap)
+    if (twin != "int") {
+        alt = twinPath("int");
+        if (!alt.empty()) { if (account) ++locStats().twin; return alt; }
+        if (o == "INT") { if (account) ++locStats().merged; return rel; }
+    }
     if (!account) return std::string();
     ++locStats().skipped;
     static std::set<std::string> warned;

@@ -1029,7 +1029,7 @@ bool World::loadMapAudio(const std::string& level) {
         dialogEvents_.setLevel(canonicalMapName(level), cues_);   // [Systems] the level's character dialog sets + manager
         const SoundCues::LocStats& ls = SoundCues::locStats();
         LOG_INFO("localized waves (language %s): %d from the _LOC twin, %d merged copy of that twin, %d not played",
-                 std::getenv("WFC_LANGUAGE") ? std::getenv("WFC_LANGUAGE") : "INT", ls.twin, ls.merged, ls.skipped);
+                 SoundCues::language().c_str(), ls.twin, ls.merged, ls.skipped);
     }
     return ok;
 }
