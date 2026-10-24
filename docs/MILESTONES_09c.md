@@ -4301,3 +4301,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   VSync ignored on D3D12 present (fixes in progress), renderer-recreate re-applies only Brightness + a hidden Water row
   (Frontend). Experimental's menu-QA driver synced (needs the Frontend's step lists + navcheck fields). Rendering swept
   88 GB; Experimental 174 GB; the user deleted Systems' old packages: F: 516 GB free.
+2026-10-23 23:45 MERGED 41a3bcac graphics settings fixes (Texture Quality live mip bias, VSync on the D3D12 present path, menus held at
+  60 FPS, loads at the player's limit). USER (going to bed): "Make sure everything's included in this build. Also make
+  sure campaign works ... make sure everything is working how it's supposed to work so I can play campaign, escalation or
+  multiplayer. Take control and stop when everything is done, or if you need me for something super super important."
+  OVERNIGHT PLAN: (1) QC pass to the three e2e flows PASSING (Experimental's menu-QA gate) incl. Campaign from the menu
+  for every chapter; (2) the user's settings extras; (3) the performance pass (timed gate + loads + menus); (4) DLC (9
+  maps) + Language + offline split screen in the same build; (5) gate -> refresh.sh -> verify -> hand-over note. Wake the
+  user only for something super important.
