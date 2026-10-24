@@ -1,0 +1,136 @@
+diff --git a/src/game/PickupFactory.cpp b/src/game/PickupFactory.cpp
+index f4881d9..9e07841 100644
+--- a/src/game/PickupFactory.cpp
++++ b/src/game/PickupFactory.cpp
+@@ -37,12 +37,13 @@ bool PickupFactory::tryGive(Character& c) {
+             c.health().heal(Health::HealType::AddAllSegments, kAddedHealth);
+             return true;
+         case Kind::AmmoCrate: {
+-            // ValidWeaponTypes WT_Primary/WT_Secondary/WT_Vehicle [CONF]; amount native -> [PROV] refill the
+-            // reserve to MaxAmmoCount. The slice's only weapon is the Ion Blaster (primary).
+-            Weapon& w = c.weapon();
+-            if (w.reserve >= w.reserveMax) return false;                 // AmmoMaxed
+-            w.reserve = w.reserveMax;
+-            return true;
++            // ValidWeaponTypes WT_Primary/WT_Secondary/WT_Vehicle [CONF]: every such weapon the pawn carries; amount native ->
++            // [PROV] refill each reserve to MaxAmmoCount. AmmoMaxed (no take) only when all of them are full.
++            bool any = false;
++            for (Weapon& w : c.inventoryMutable())
++                if (w.def && (w.def->typeCode == 0 || w.def->typeCode == 1) && w.reserve < w.reserveMax) { w.reserve = w.reserveMax; any = true; }
++            if (Weapon* vw = c.vehicleWeapon()) if (vw->reserve < vw->reserveMax) { vw->reserve = vw->reserveMax; any = true; }
++            return any;
+         }
+         case Kind::OverShield:
+             if (c.health().normalizedOverShield() >= 1.0f) return false;
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index deba6c8..5eff7ae 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -456,6 +456,8 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
+     std::vector<std::pair<std::string, std::vector<core::Vec3>>> pawnMovers, weaponMovers;
+     bool authored = campaignMap_ ? loadCampaignMesh("collision_pawn.glb", colMesh) : assets::loadGlb(overlayed(mapDir + "collision_pawn.glb"), colMesh);
+     if (!authored) assets::loadGlb(mapDir + "collision.glb", colMesh);
++    perPolyProbe_.clear(); perPolyTris_.clear();
++    if (!campaignMap_) applyPerPolyCollision(colMesh, mapDir, true, !std::getenv("WFC_NOPERPOLY"));   // PC ADAPTATION: per-poly meshes (Streets' crater); WFC_NOPERPOLY=1: the authored hulls (A/B)
+     // Per-node bounds of the authored movement collision (for tracing contacts back to authored actors).
+     colActors_.clear();
+     for (const render::SubMesh& sm : colMesh.subs) {
+@@ -479,10 +481,12 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
+         if (campaignMap_) { cpCollectMovers(); cpSplitMovers(colMesh, pawnStatic); }   // campaign: the chapter's InterpActors
+         else splitMovers(colMesh, pawnStatic, pawnMovers);
+         collision_.build(pawnStatic);
++        if (std::getenv("WFC_CRATERPROBE")) perPolyProbe();   // diagnostic
+         svMechAddBlockers();
+         if (campaignMap_) cpRegisterMovers();
+         core::loadYield("World: movement collision");
+         if (assets::loadGlb(mapDir + "collision_weapon.glb", weaponColMesh)) {
++            if (!campaignMap_) applyPerPolyCollision(weaponColMesh, mapDir, false, !std::getenv("WFC_NOPERPOLY"));
+             splitMovers(weaponColMesh, weaponStatic, weaponMovers);
+             weaponCollision_.build(weaponStatic);
+             loadWeaponPhysmats(mapDir, weaponColMesh);
+@@ -9043,6 +9047,71 @@ core::Vec3 World::Corpse::playAt(const char* so) const {
+ 
+ // The gib meshes: the static chunks and the two skeletal gib templates (once; at the match load and at the first gib).
+ // The vehicle-death gib hull of every participant chassis (the cache gibCorpse fills; same load, textures and prewarm).
++// PC ADAPTATION (playtest 3, Integration decision 2026-10-24): meshes that collide per-poly (their render triangles at every colliding
++// placement of props.json) instead of their authored simple hull. One entry: Streets' ENV_CraterUpNoRing_STAT, whose hull lens is
++// 8-10 m wider than the visible crater and whose rim lip our movement model (no cylinder sweep) cannot ramp onto.
++void World::applyPerPolyCollision(render::MeshData& m, const std::string& mapDir, bool recordProbe, bool apply) {
++    static const struct { const char* map; const char* mesh; } kPerPoly[] = {{"MP_IAC_Streets", "ENV_IAC_Ground_p.Debris.ENV_CraterUpNoRing_STAT"}};
++    for (const auto& e : kPerPoly) {
++        if (mapName_ != e.map) continue;
++        std::string text; assets::Json props;
++        if (!readTextFile(mapDir + "props.json", text) || !assets::Json::parse(text, props)) { LOG_WARN("per-poly collision: %sprops.json unreadable", mapDir.c_str()); continue; }
++        int removed = 0, added = 0;
++        for (render::SubMesh& sm : m.subs) if (sm.sourceMesh == e.mesh && sm.indexCount > 0) {   // the simple hull
++            if (recordProbe && !apply) for (uint32_t i = sm.indexOffset; i < sm.indexOffset + sm.indexCount; ++i) { const uint32_t v = m.indices[i]; perPolyTris_.push_back({m.positions[v * 3], m.positions[v * 3 + 1], m.positions[v * 3 + 2]}); }
++            if (apply) { removed += (int)sm.indexCount / 3; sm.indexCount = 0; }
++        }
++        render::MeshData rm; std::string gltf;
++        const assets::Json& list = props["props"];
++        for (size_t i = 0; i < list.size(); ++i) {
++            const assets::Json& p = list[i];
++            if (p["mesh"].asString() != e.mesh || !p["collide"].asBool(false) || !p["block"].asBool(false)) continue;
++            if (gltf.empty()) { gltf = p["gltf"].asString(); if (!assets::loadGlb(assetRoot() + "/../" + gltf, rm)) { LOG_WARN("per-poly collision: %s unavailable", gltf.c_str()); break; } }
++            const assets::Json& g = p["gltf_matrix"];
++            if (g.size() != 16) continue;
++            std::array<float, 16> M{}; for (int k = 0; k < 16; ++k) M[(size_t)k] = g[(size_t)k].asFloat(0.0f);   // column-major (glTF)
++            if (recordProbe) perPolyProbe_.push_back(M);
++            if (!apply) continue;
++            render::SubMesh sm; sm.indexOffset = (uint32_t)m.indices.size(); sm.nodeName = p["actor"].asString(); sm.sourceMesh = e.mesh;
++            const uint32_t base = (uint32_t)(m.positions.size() / 3);
++            for (size_t v = 0; v + 2 < rm.positions.size(); v += 3) {
++                const float x = rm.positions[v], y = rm.positions[v + 1], z = rm.positions[v + 2];
++                m.positions.push_back(M[0] * x + M[4] * y + M[8] * z + M[12]);
++                m.positions.push_back(M[1] * x + M[5] * y + M[9] * z + M[13]);
++                m.positions.push_back(M[2] * x + M[6] * y + M[10] * z + M[14]);
++            }
++            for (uint32_t ix : rm.indices) { m.indices.push_back(base + ix); if (recordProbe) perPolyTris_.push_back({m.positions[(base + ix) * 3], m.positions[(base + ix) * 3 + 1], m.positions[(base + ix) * 3 + 2]}); }
++            sm.indexCount = (uint32_t)rm.indices.size(); added += (int)sm.indexCount / 3;
++            m.subs.push_back(sm);
++        }
++        if (apply) LOG_INFO("per-poly collision: %s %s: simple hull %d triangles -> render %d triangles", e.map, e.mesh, removed, added);
++    }
++}
++
++// WFC_CRATERPROBE (diagnostic): knee-height rays toward each per-poly placement's centre; the nearest first hit in mesh-local units.
++void World::perPolyProbe() const {
++    render::MeshData cm; CollisionWorld only;   // the crater triangles alone (the hull or the render mesh), floors from the full world
++    for (const core::Vec3& v : perPolyTris_) { cm.positions.push_back(v.x); cm.positions.push_back(v.y); cm.positions.push_back(v.z); cm.indices.push_back((uint32_t)cm.indices.size()); }
++    { render::SubMesh sm; sm.indexCount = (uint32_t)cm.indices.size(); cm.subs.push_back(sm); }
++    only.build(cm);
++    for (const std::array<float, 16>& M : perPolyProbe_) {
++        const float s = std::sqrt(M[0] * M[0] + M[2] * M[2]);   // the horizontal scale (local -> world)
++        const core::Vec3 o{M[12], M[13], M[14]};
++        int hits = 0, outside = 0; float outer = 0.0f;
++        for (int k = 0; k < 16; ++k) {
++            const float a = 6.2831853f * (float)k / 16.0f;
++            const core::Vec3 far{o.x + std::cos(a) * 40.0f * s, o.y, o.z + std::sin(a) * 40.0f * s};
++            float gy = o.y; core::Vec3 n;
++            if (!collision_.groundHeight(far.x, far.z, o.y + 3.0f, 0.0f, gy, n)) gy = o.y;
++            const core::Vec3 from{far.x, gy + 0.55f, far.z}, to{o.x, gy + 0.55f, o.z};
++            float t;
++            if (only.segmentHit(from, to, t)) { const float d = (1.0f - t) * 40.0f; ++hits; outer = std::max(outer, d); outside += d > 21.0f; }
++        }
++        LOG_INFO("CRATERPROBE at (%.1f %.1f %.1f): %d of 16 knee rays blocked, %d of them outside the visible rim (> 21 local units), outermost %.1f (hull rim 27.7, visible ~18-19.5)",
++                 o.x, o.y, o.z, hits, outside, outer);
++    }
++}
++
+ void World::ensureHullMeshes() {
+     if (!renderer_) return;
+     for (size_t q = 0; q < match_.players().size(); ++q) {
+diff --git a/src/game/World.h b/src/game/World.h
+index d134b98..a66289e 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1216,6 +1216,9 @@ public:
+     void ensureAbilityModels();
+     void ensureGibModels();
+     void ensureHullMeshes();
++    void applyPerPolyCollision(render::MeshData& m, const std::string& mapDir, bool recordProbe, bool apply);   // PC ADAPTATION (playtest 3 crater)
++    void perPolyProbe() const;   // WFC_CRATERPROBE
++    std::vector<std::array<float, 16>> perPolyProbe_; std::vector<core::Vec3> perPolyTris_;
+     // (Escalation DLC mechanisms) the presentation, WorldSurvivalMechPresent.cpp [Rendering]
+     void svMechPresent(render::IRenderer& r) const;
+     void svMechDrawSentries(render::IRenderer& r) const;
