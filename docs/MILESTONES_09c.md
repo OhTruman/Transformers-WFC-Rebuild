@@ -4447,3 +4447,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 04:33 PACKAGE a2e9fbd9 cut (Systems refresh, NOPROMOTE): Rebuild-Systems/work/playtest_slim_a2e9fbd9 (19 GB) + _HDpack (22 GB);
   build_slim 125,386 kept + 7,161 xpr, 0 failures, 0 PROBLEMs; overlay 114 / 114, HD 4,005 + M6 498, 10 chapters, 9 DLC
   maps. FREEZE sent to every lane; Experimental runs the 3-flow menu gate + final-gate.sh a2e9fbd9 (base final12).
+2026-10-24 05:07 GATE a2e9fbd9 interim (Experimental): menu gate ESC PASS, CAMP PASS, MP FAIL at one step: after the countdown cancel (#25
+  works) Start again does nothing (startGame_mc 50 px higher; click lands, no effect) -> Frontend fixes code-only
+  (GameFlow / presenter), one more refresh + mp-flow rerun on the new sha; the timed gate on a2e9fbd9 stays valid for
+  a frontend-only delta. Pre PASS: same match head = base on 508 / 506 / 505 / 511 / 512 + all 7 bare-name DLC maps,
+  negative control differs; CAMPAIGNTEST 24 / 24, KISMETTEST 10 / 10, VOICETEST PASS; 10 MP maps clean TDM both seeds.
+  Timed rows running under the hold (restarted ~05:10 after a stale matB manifest read).
