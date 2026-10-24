@@ -1018,6 +1018,93 @@ void main() {
 }
 )";
 
+// [Systems, playtest 3: ~30 s into a match] The program binary cache on disk. The material prewarm compiles and links ~400-470
+// programs per match load (31 s at 1440p in the user's log, every launch). A linked program is saved as the driver's own binary
+// (glGetProgramBinary) under <exe dir>/shadercache, keyed by the vertex + fragment source and the GL vendor / renderer / version;
+// later launches load it (glProgramBinary) instead of compiling. The driver's own binary of the same sources = the same program, so
+// nothing drawn changes. A binary the driver rejects (driver update) or a missing / short file = the normal compile + link, and
+// the file is written again. WFC_PROGBINCACHE=0 = off; =<dir> = another cache folder.
+namespace {
+std::unordered_map<GLuint, uint64_t> gShaderSrcHash;   // shader object -> FNV of the source it was compiled from
+uint64_t fnv64(uint64_t h, const char* s, size_t n) { for (size_t i = 0; i < n; ++i) { h ^= (unsigned char)s[i]; h *= 1099511628211ULL; } return h; }
+int gProgBinHits = 0, gProgBinWrites = 0, gProgBinRejected = 0;
+const std::string& progBinDir() {
+    static const std::string dir = [] {
+        const char* e = std::getenv("WFC_PROGBINCACHE");
+        if (e && std::strcmp(e, "0") == 0) return std::string();
+        if (std::getenv("WFC_SHADERNONCE")) return std::string();   // (the cold-compile diagnostic: never served from the cache)
+        if (!GetProgramBinary || !ProgramBinary || !ProgramParameteri) return std::string();
+        GLint formats = 0;
+        glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &formats);
+        if (formats <= 0) { LOG_INFO("wfc: program binary cache off (the driver offers no binary format)"); return std::string(); }
+        std::string d = e && *e ? std::string(e) : exeDir() + "/shadercache";
+        std::error_code ec;
+        std::filesystem::create_directories(platform::longPath(d), ec);
+        LOG_INFO("wfc: program binary cache %s (%d driver formats)", d.c_str(), formats);
+        return d;
+    }();
+    return dir;
+}
+uint64_t progBinKey(GLuint vs, const std::string& fs) {   // 0 = not cacheable (the vertex shader's source is unknown)
+    static const uint64_t drv = [] {
+        uint64_t h = 1469598103934665603ULL;
+        for (GLenum e : {(GLenum)GL_VENDOR, (GLenum)GL_RENDERER, (GLenum)GL_VERSION}) {
+            const char* s = (const char*)glGetString(e);
+            h = fnv64(h, s ? s : "", s ? std::strlen(s) : 0); h = fnv64(h, "|", 1);
+        }
+        return h;
+    }();
+    const auto it = gShaderSrcHash.find(vs);
+    if (it == gShaderSrcHash.end()) return 0;
+    uint64_t h = fnv64(drv, (const char*)&it->second, sizeof it->second);
+    h = fnv64(h, fs.data(), fs.size());
+    return h ? h : 1;
+}
+std::string progBinPath(uint64_t key) {
+    char name[24]; std::snprintf(name, sizeof name, "%016llx.bin", (unsigned long long)key);
+    return progBinDir() + "/" + name;
+}
+const char kProgBinMagic[8] = {'W', 'F', 'C', 'P', 'B', 'I', 'N', '1'};
+GLuint loadProgBin(uint64_t key) {
+    std::ifstream in(platform::longPath(progBinPath(key)), std::ios::binary | std::ios::ate);
+    if (!in) return 0;
+    const std::streamoff n = in.tellg();
+    if (n < 24) return 0;
+    std::string b((size_t)n, '\0');
+    in.seekg(0); in.read(&b[0], n);
+    uint64_t k = 0; uint32_t fmt = 0;
+    std::memcpy(&k, b.data() + 8, 8); std::memcpy(&fmt, b.data() + 16, 4);
+    if (!in || std::memcmp(b.data(), kProgBinMagic, 8) != 0 || k != key) return 0;
+    GLuint p = CreateProgram();
+    ProgramBinary(p, (GLenum)fmt, b.data() + 24, (GLsizei)(b.size() - 24));
+    GLint ok = 0; GetProgramiv(p, GL_LINK_STATUS, &ok);
+    if (!ok) { DeleteProgram(p); ++gProgBinRejected; return 0; }   // (a driver update: compiled again, the file rewritten)
+    ++gProgBinHits;
+    return p;
+}
+void saveProgBin(GLuint p, uint64_t key) {
+    GLint len = 0; GetProgramiv(p, GL_PROGRAM_BINARY_LENGTH, &len);
+    if (len <= 0) return;
+    std::string b(24 + (size_t)len, '\0');
+    GLenum fmt = 0; GLsizei got = 0;
+    GetProgramBinary(p, len, &got, &fmt, &b[24]);
+    if (got <= 0) return;
+    b.resize(24 + (size_t)got);
+    const uint32_t f32 = (uint32_t)fmt;
+    std::memcpy(&b[0], kProgBinMagic, 8); std::memcpy(&b[8], &key, 8); std::memcpy(&b[16], &f32, 4);
+    // written to a temporary name and renamed: a second game instance never reads a half-written file
+    const std::string path = progBinPath(key), tmp = path + ".tmp" + std::to_string((unsigned long)(uintptr_t)&b);
+    {
+        std::ofstream out(platform::longPath(tmp), std::ios::binary | std::ios::trunc);
+        out.write(b.data(), (std::streamsize)b.size());
+        if (!out) return;
+    }
+    std::error_code ec;
+    std::filesystem::rename(platform::longPath(tmp), platform::longPath(path), ec);
+    if (ec) std::filesystem::remove(platform::longPath(tmp), ec); else ++gProgBinWrites;
+}
+}  // namespace
+
 GLuint compile(GLenum type, const std::string& src0, const std::string& tag) {
     ++gShaderCompiles;
     GLuint s = CreateShader(type);
@@ -1030,6 +1117,7 @@ GLuint compile(GLenum type, const std::string& src0, const std::string& tag) {
         if (nl != std::string::npos) src.insert(nl + 1, std::string("#define WFC_NONCE_") + nonce + "\n");
     }
     const char* p = src.c_str();
+    gShaderSrcHash[s] = fnv64(1469598103934665603ULL, src.data(), src.size());   // (the program binary cache's key)
     ShaderSource(s, 1, &p, nullptr);
     CompileShader(s);
     GLint ok = 0; GetShaderiv(s, GL_COMPILE_STATUS, &ok);
@@ -1071,9 +1159,10 @@ size_t texPoolMax() {                                    // WFC_TEXPOOLMAX=<n> (
 }
 } // namespace
 
-GLuint link(GLuint vs, GLuint fs, const std::string& tag) {
+GLuint link(GLuint vs, GLuint fs, const std::string& tag, bool retrievable = false) {
     GLuint p = CreateProgram();
     AttachShader(p, vs); AttachShader(p, fs);
+    if (retrievable) ProgramParameteri(p, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE);
     LinkProgram(p);
     GLint ok = 0; GetProgramiv(p, GL_LINK_STATUS, &ok);
     if (!ok) {
@@ -1207,6 +1296,8 @@ void Pipeline::prewarmMaterials() {
     }
     LOG_INFO("wfc: prewarmed %d material programs in %.0f ms (%d linked programs reused)", built,
              std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(), progCacheHits_);
+    LOG_INFO("wfc: program binary cache so far: %d loaded, %d written, %d rejected by the driver", gProgBinHits, gProgBinWrites,
+             gProgBinRejected);
 }
 
 void Pipeline::clearProgramCache() {
@@ -3485,6 +3576,9 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         ++progCacheHits_;
     } else {
         const auto tc0 = std::chrono::steady_clock::now();
+        const uint64_t pbKey = vsUse && !progBinDir().empty() ? progBinKey(vsUse, fs) : 0;
+        id = pbKey ? loadProgBin(pbKey) : 0;
+        if (!id) {
         GLuint f = compile(GL_FRAGMENT_SHADER, fs, key);
         if (!f && r1Text) {                              // (R1: a sun-swap text that does not compile - this program without it)
             LOG_WARN("RT R1: program %s failed with the sun-swap text: built without it (no swap on its pixels)", key.c_str());
@@ -3494,9 +3588,11 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
             return r;
         }
         if (!vsUse || !f) return -1;
-        id = link(vsUse, f, key);
+        id = link(vsUse, f, key, pbKey != 0);
         DeleteShader(f);
         if (!id) return -1;
+        if (pbKey) saveProgBin(id, pbKey);
+        }
         if (id < commonKeyById_.size()) commonKeyById_[id].valid = false;   // a new (or recycled) program object
         static const bool stats = std::getenv("WFC_RENDERSTATS") != nullptr;
         if (stats && frameNo_ > 0)            // diagnostics: a program compiled after the load (a hitch on that frame)

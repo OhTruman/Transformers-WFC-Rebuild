@@ -24,6 +24,9 @@ typedef ptrdiff_t GLintptr;
 #define GL_VERTEX_SHADER 0x8B31
 #define GL_COMPILE_STATUS 0x8B81
 #define GL_LINK_STATUS 0x8B82
+#define GL_PROGRAM_BINARY_RETRIEVABLE_HINT 0x8257
+#define GL_PROGRAM_BINARY_LENGTH 0x8741
+#define GL_NUM_PROGRAM_BINARY_FORMATS 0x87FE
 #define GL_INFO_LOG_LENGTH 0x8B84
 #define GL_TEXTURE0 0x84C0
 #define GL_TEXTURE_CUBE_MAP 0x8513
@@ -136,6 +139,9 @@ namespace glx {
 typedef void(APIENTRY* GLDEBUGPROCWFC)(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
                                        const GLchar* message, const void* userParam);
 #define WFC_GL_OPT_FUNCS(X) \
+    X(void, GetProgramBinary, (GLuint, GLsizei, GLsizei*, GLenum*, void*)) \
+    X(void, ProgramBinary, (GLuint, GLenum, const void*, GLsizei)) \
+    X(void, ProgramParameteri, (GLuint, GLenum, GLint)) \
     X(void, DebugMessageCallback, (GLDEBUGPROCWFC, const void*)) \
     X(void, DebugMessageControl, (GLenum, GLenum, GLenum, GLsizei, const GLuint*, GLboolean)) \
     X(GLenum, GetGraphicsResetStatus, (void)) \
