@@ -4457,3 +4457,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   after the a2e9fbd9 package: Rendering (render side, PERF_300_PLAN.md), Gameplay (sim side, PERF_300_SIM_PLAN.md),
   Systems (platform half), Experimental (min-fps harness per chapter / ESC map at 1440p + 2160p), RE (original culling /
   LOD rules). Lossless fixes only; the target is a gate for this pass.
+2026-10-24 10:33 GATE a2e9fbd9 result (Experimental a3bd6ea7): MENU_QA_a2e9fbd9.md ESC PASS, CAMP PASS, MP FAIL only at Start-after-cancel
+  (Frontend fix df8f62a4 building); FINAL_GATE_PRE_a2e9fbd9.md PASS: same match head = base on 508 / 506 / 505 / 511 /
+  512 + all 7 DLC maps, negative control differs, CAMPAIGN 24 / 24, KISMET 10 / 10, VOICE PASS. The TIMED rows never ran:
+  the gate script waited 05:05-10:31 for a 'clear card' because its busy() counted the user's Codex node.exe runtimes
+  (fixed). Decision: ship after the mp rerun + verify; the timed rows fold into the 300 fps phase-0 baseline.
