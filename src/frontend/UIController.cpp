@@ -37,6 +37,7 @@ const char* uiControllerClassName(UIControllerClass c) {
     case UIControllerClass::GameLobby: return "TnUIControllerGameLobby";
     case UIControllerClass::Multiplayer: return "TnUIControllerMultiplayer";
     case UIControllerClass::Coop: return "TnUIControllerCoop";
+    case UIControllerClass::Survival: return "TnUIControllerSurvival";
     }
     return "?";
 }
@@ -50,15 +51,15 @@ std::string UIController::lobbyUI() const {
 // TnUIControllerCoop (campaign): InGameLobbyUI = CharacterSelect_GFX (the chapter's iconic trio), no pre-game countdown screen,
 // the pause menu, EndGameStats (CCP after a mission), CampaignGameOverUI = CampaignGameOver_GFX [RE CAMPAIGN_RUNTIME_EVENTS_RE].
 std::string UIController::inGameLobbyUI() const {
-    if (cls_ == UIControllerClass::Coop) return "UI_GFxCharacterSelect_p.CharacterSelect_GFX_1";
+    if (cls_ == UIControllerClass::Coop || cls_ == UIControllerClass::Survival) return "UI_GFxCharacterSelect_p.CharacterSelect_GFX_1";
     return cls_ == UIControllerClass::Multiplayer ? "UI_GFxCustomize_p.CustomTransformers_GFX_1" : "";
 }
 std::string UIController::campaignGameOverUI() const { return cls_ == UIControllerClass::Coop ? "UI_GFxGameOver_p.CampaignGameOver_GFX_1" : ""; }
-std::string UIController::gameStartUI() const { return cls_ == UIControllerClass::Multiplayer ? "UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1" : ""; }
-std::string UIController::pauseUI() const { return cls_ == UIControllerClass::Multiplayer || cls_ == UIControllerClass::Coop ? "UI_GFxPause_p.PauseMenu_GFX_1" : ""; }
-std::string UIController::spectatingUI() const { return cls_ == UIControllerClass::Multiplayer ? "UI_GFxRespawn_p.MultiplayerRespawn_GFX_1" : ""; }
+std::string UIController::gameStartUI() const { return mp() ? "UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1" : ""; }
+std::string UIController::pauseUI() const { return mp() || cls_ == UIControllerClass::Coop ? "UI_GFxPause_p.PauseMenu_GFX_1" : ""; }
+std::string UIController::spectatingUI() const { return mp() ? "UI_GFxRespawn_p.MultiplayerRespawn_GFX_1" : ""; }
 std::string UIController::endGameUI() const {
-    return cls_ == UIControllerClass::Multiplayer || cls_ == UIControllerClass::Coop ? "UI_GFxEndGameStats_p.EndGameStats_GFX_1" : "";
+    return mp() || cls_ == UIControllerClass::Coop ? "UI_GFxEndGameStats_p.EndGameStats_GFX_1" : "";
 }
 
 void UIController::initialize(UIControllerClass cls, OpenFn open, CloseFn close, HudFn hud, StateFn onState, bool inGameLobby) {
@@ -70,7 +71,7 @@ void UIController::initialize(UIControllerClass cls, OpenFn open, CloseFn close,
     LOG_INFO("FLOW uicontroller Initialize %s", uiControllerClassName(cls));
     // StartingState: NotInGame (base); InLobby (party/game lobby); WaitingOnGameStart (multiplayer).
     if (cls == UIControllerClass::PartyLobby || cls == UIControllerClass::GameLobby) gotoState(UIState::InLobby);
-    else if (cls == UIControllerClass::Multiplayer || cls == UIControllerClass::Coop) gotoState(UIState::WaitingOnGameStart);
+    else if ((cls == UIControllerClass::Multiplayer || cls == UIControllerClass::Survival) || cls == UIControllerClass::Coop) gotoState(UIState::WaitingOnGameStart);
 }
 
 void UIController::openUI(const std::string& movie) {

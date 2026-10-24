@@ -630,6 +630,18 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
             if (!mi || mi->campaignCharacters.empty() || GameFlow::inCampaignTrio(*mi, p.name)) names.push_back(p.name);
         return BridgeValue(join(names));
     }
+    if (iconic && fn == "Customize.GetPlayableCharacters" && flow_.lobby().gameModeTag == "SV") {
+        // Escalation: the map's CampaignCharacters (TransLevels.ini) in their authored order - never the chassis roster (which
+        // lists both factions and Truck7 'Optimus' beside 'Optimus Prime') [RE BASE_GAME_FLOWS_RE 1.4; playtest 2026-10-23b #11 / #12]
+        const MapInfo* mi = catalog_.mapById(flow_.lobby().mapId);
+        auto lower = [](std::string v) { for (char& ch : v) ch = (char)std::tolower((unsigned char)ch); return v; };
+        std::vector<std::string> names;
+        if (mi)
+            for (const std::string& t : mi->campaignCharacters)
+                for (const CharacterPreset& p : roster_.iconicCharacters())
+                    if (lower(p.name) == lower(t)) { names.push_back(p.name); break; }
+        if (!names.empty()) return BridgeValue(join(names));
+    }
     if (iconic && fn == "Customize.GetPlayableCharacters") {   // GetPlayableIconicCharacterNames + FilterLockedIconicCharacters
         std::vector<std::string> names;
         for (const CharacterPreset& p : roster_.iconicCharacters()) if (iconicUnlocked(p)) names.push_back(p.name);

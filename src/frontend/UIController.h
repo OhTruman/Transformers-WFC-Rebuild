@@ -22,7 +22,9 @@ enum class UIState {
 };
 const char* uiStateName(UIState s);
 
-enum class UIControllerClass { Base, FrontEnd, PartyLobby, GameLobby, Multiplayer, Coop };   // Coop: campaign SOLO / CP / CCP
+// Coop: campaign SOLO / CP / CCP. Survival: Escalation (TnSurvivalGame.UIControllerClass): the multiplayer controller with the
+// iconic CharacterSelect_GFX as its in-game lobby (a player without a lobby pick) [RE BASE_GAME_FLOWS_RE 1.5].
+enum class UIControllerClass { Base, FrontEnd, PartyLobby, GameLobby, Multiplayer, Coop, Survival };
 const char* uiControllerClassName(UIControllerClass c);
 
 class UIController {
@@ -43,6 +45,7 @@ public:
     void setGRIAvailable(bool v);
 
     UIState state() const { return state_; }
+    bool mp() const { return cls_ == UIControllerClass::Multiplayer || cls_ == UIControllerClass::Survival; }   // the versus-derived controllers
     UIControllerClass cls() const { return cls_; }
     const std::string& openMovie() const { return openMovie_; }
     bool hudVisible() const { return hudVisible_; }

@@ -1552,12 +1552,15 @@ void GameFlow::matchLoaded() {
     // controller with UseInGameLobby = !PRI.HasSelectedCharacter() = true [CONFIRMED script]. WaitingOnGameStart then
     // ignores OnBeginGame (Choose Character stays up until a character is chosen) and the UI enters InGame when the
     // player's pawn spawns (OnRespawn, event 5).
-    selected_ = SelectedCharacter{};
+    // Escalation: the Survival GRI has RetainSelectedCharacterOnTransition = True - the lobby pick carries into the map and the
+    // player goes straight to the countdown; versus (False) picks again [RE BASE_GAME_FLOWS_RE 1.5; playtest 2026-10-23b #15]
+    const bool survival = match_.modeTag == "SV";
+    if (!survival) selected_ = SelectedCharacter{};
     // a late joiner enters a running match: GRI.bMatchHasBegun is already true, so its pick spawns it at once (no pre-game
     // countdown screen) [RE ONLINE_JOIN_IN_PROGRESS_RE]
     matchHasBegun_ = match_.lateSeat >= 0;
     // TnCampaignGame -> TnUIControllerCoop (in-map trio select, MISSION FAILED); versus -> TnUIControllerMultiplayer
-    setUIController(campaign() ? UIControllerClass::Coop : UIControllerClass::Multiplayer, !selected_.valid);
+    setUIController(campaign() ? UIControllerClass::Coop : survival ? UIControllerClass::Survival : UIControllerClass::Multiplayer, !selected_.valid);
     ui_.setGRIAvailable(true);
     // PlayerController.CanCloseLoadingMovie: the world is fully loaded before gameplay [HIGH].
     if (session_ && role_ != SessionRole::Offline) {   // online: the load gate holds the loading screen until all have loaded
