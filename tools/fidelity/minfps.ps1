@@ -33,7 +33,7 @@ param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir
       [string[]]$EscMaps = @("505", "506", "MP_ESC_Tranquillity", "MP_ESC_District", "MP_ESC_Pulse", "MP_ESC_Static"),
       [int]$PlaySeconds = 60, [int]$EscSeconds = 240, [int]$WaveSeconds = 90, [double]$TargetFps = 300, [switch]$ReportOnly,
       [string]$Assets = "F:\Transformers Rebuild\Rebuild\work\assets_dlc\VerticalSlice",
-      [string]$RenderData = "F:\Transformers Rebuild\Rebuild\work\render")   # (Integration 2026-10-24: one root incl. the nine DLC maps)
+      [string]$RenderData = "F:\Transformers Rebuild\Rebuild\work\render", [string[]]$ExtraEnv = @())   # (Integration 2026-10-24: one root incl. the nine DLC maps)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 $Rows = @($Rows | % { "$_" -split ',' } | ? { $_ }); $Res = @($Res | % { "$_" -split ',' } | ? { $_ })
@@ -57,6 +57,7 @@ function Run-Row([string]$dir, [hashtable]$extra, [int]$w, [int]$h, [string]$rs,
             WFC_LOGTIME = "1"; WFC_FRAMELOG = "1"; WFC_TICKPROF = "1"; WFC_DRAWPROF = "1"; WFC_SKIPINTRO = "1"; WFC_NOMOUSE = "1" }
     if ($rs -ne "${w}x${h}") { $e.WFC_RENDERSIZE = $rs }
     foreach ($k in $extra.Keys) { $e[$k] = $extra[$k] }
+    foreach ($kv in $ExtraEnv) { $i = $kv.IndexOf("="); if ($i -gt 0) { $e[$kv.Substring(0, $i)] = $kv.Substring($i + 1) } }   # -ExtraEnv: e.g. a separate untimed trace rep
     if (-not (Wait-WfcGpu)) { "GPU busy" | Set-Content (Join-Path $dir "NOTRUN.txt"); return }
     $null = Invoke-WfcExe $exe $dir $e "run.log" $timeoutS
 }
