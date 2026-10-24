@@ -958,6 +958,17 @@ void GameFlow::clearSelectedCharacter() {
 }
 
 void GameFlow::quitToMainMenu() {
+    // PC ADAPTATION (the user, playtest 2026-10-23b #25): Back during the host's start countdown cancels it instead of leaving
+    // (the original has no cancel: Start stays disabled until the level loads [RE BASE_GAME_FLOWS_RE 3]). Only before the final
+    // countdown and with nobody joined - online, the launch record goes out at the start.
+    if (level_ == LevelKind::GameLobby && lobby_.countingDown && !lobby_.finalCountdown && lobby_.playlistId < 0 &&
+        role_ != SessionRole::Member && onlineMembers_.empty() && !isCampaignTag(lobby_.gameModeTag)) {
+        lobby_.countingDown = lobby_.countdownRubicon = false;
+        lobby_.countdown = 0;
+        lobby_.countdownTimer = 0.0f;
+        FlowTrace::emit("gamelobby.countdown", {{"state", "cancelled"}, {"by", "Back"}, {"provenance", "PC ADAPTATION (user playtest 2026-10-23b #25)"}});
+        return;
+    }
     // Game.QuitToMainMenu -> UIController.ShowCustomPopupUI(TnQuitMessageBox): TnGame.GetQuitGameMessage
     // (LeaveLobby / LeaveLobbyConfirm), A Yes -> ConfirmQuitToMainMenu (waiting icon, "Quitting..." post-confirm
     // message, then QuitGame(0) once TnGame.IsSafeToQuit), B No [CONFIRMED script].
@@ -1031,6 +1042,27 @@ void GameFlow::popupClosedByMovie() {
     if (popup_.open && !quitPending_) closePopup();
 }
 
+void GameFlow::requestSettingsCommit() {
+    Popup p;
+    p.title = txt("$WfcPC.Settings.ApplyTitle");
+    p.message = txt("$WfcPC.Settings.ApplyMessage");
+    p.a = PopupButton{txt("$WfcPC.Settings.ApplyButton"), "settingsApply", true};
+    p.b = PopupButton{txt("$UIText.MessagePrompts.GenericCancelButton"), "settingsCancel", true};
+    p.showDefaultButtons = false;
+    settingsCommitAnswer_ = 0;
+    showPopup(p);
+    FlowTrace::emit("settings.commit", {{"state", "asked"}, {"provenance", "PC ADAPTATION (user playtest 2026-10-23b #4)"}});
+}
+
+void GameFlow::settingsCommitted(bool needsRestart, bool nextMap) {
+    Popup p;
+    p.title = txt(needsRestart ? "$WfcPC.Settings.RestartTitle" : "$WfcPC.Settings.AppliedTitle");
+    p.message = txt(needsRestart ? "$WfcPC.Settings.RestartMessage" : nextMap ? "$WfcPC.Settings.NextMapMessage" : "$WfcPC.Settings.AppliedMessage");
+    if (needsRestart && nextMap) p.message += " " + txt("$WfcPC.Settings.NextMapMessage");
+    showPopup(p);   // the default Ok button
+    FlowTrace::emit("settings.commit", {{"state", "applied"}, {"restart", FlowTrace::boolean(needsRestart)}, {"nextMap", FlowTrace::boolean(nextMap)}});
+}
+
 void GameFlow::popupButton(char which) {
     if (!popup_.open) return;
     PopupButton btn = which == 'A' ? popup_.a : which == 'B' ? popup_.b : which == 'X' ? popup_.x : popup_.y;
@@ -1050,6 +1082,8 @@ void GameFlow::popupButton(char which) {
         FlowTrace::emit("online.join", {{"result", "cancelled"}});
     }
     if (btn.action == "pttCancel") endPttCapture("");
+    if (btn.action == "settingsApply") settingsCommitAnswer_ = 1;
+    if (btn.action == "settingsCancel") settingsCommitAnswer_ = 2;
     if (btn.action.rfind("inviteJoin:", 0) == 0) joinFriendGame(btn.action.substr(11));
     if ((btn.action == "cardMute" || btn.action == "cardBlock") && !cardMember_.empty()) {
         auto toggle = [&](std::vector<std::string>& v) {
@@ -1117,6 +1151,10 @@ void GameFlow::gameLobbyBegin() {
     lobby_.countingDown = lobby_.countdownRubicon = lobby_.finalCountdown = false;
     lobby_.countdown = 0;
     lobby_.localTeam = -1;
+    // PC ADAPTATION (the user, playtest 2026-10-23b #23): in a Private Match team lobby the host is on a side from the start
+    // (shown under AUTOBOTS / DECEPTICONS, switched with the lobby's Team row; that side is the match team). The original keeps
+    // everyone unassigned until the final countdown under Autobalanced [RE BASE_GAME_FLOWS_RE 3].
+    if (isPrivate && lobby_.gameTeamStatus == 3 && role_ == SessionRole::Offline) lobby_.localTeam = pickTeam();   // online: the host's balancing (S10 / S11)
     launchLobby_ = SessionLobby{};
     FlowTrace::emit("gamelobby.game", {{"gameClass", levelUrl_.option("Game")}, {"tag", tag}, {"settings", gs ? gs->className : "?"},
                                        {"private", FlowTrace::boolean(isPrivate)}, {"mapSelectionMethod", std::to_string(lobby_.mapSelectionMethod)}});

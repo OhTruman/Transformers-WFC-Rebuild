@@ -1012,6 +1012,39 @@ void GfxPresenter::scrollSettingsSubMenu(gfx::Player& p, const platform::InputFr
         const bool show = j >= top && j < top + kSettingsRows;
         if (rows[(size_t)j]->visible != show) vm.set(o, "_visible", V(show));
     }
+    // Scroll indicators (the user, playtest 2026-10-23b #2): an up arrow above the window while rows are hidden above it, a
+    // down arrow below it while rows are hidden below, both when both; drawn in the UI cyan, a click scrolls one row.
+    auto arrow = [&](const char* name, bool up) -> V {
+        V a = vm.get(menu->script, name);
+        if (a.isObject()) return a;
+        a = vm.callMethod(V(menu->script), "createEmptyMovieClip", {V(std::string(name)), V(up ? 90050.0 : 90051.0)});
+        if (!a.isObject()) return a;
+        vm.callMethod(a, "beginFill", {V((double)0x8AF0FF), V(100.0)});
+        vm.callMethod(a, "moveTo", {V(-9.0), V(up ? 4.0 : -4.0)});
+        vm.callMethod(a, "lineTo", {V(9.0), V(up ? 4.0 : -4.0)});
+        vm.callMethod(a, "lineTo", {V(0.0), V(up ? -5.0 : 5.0)});
+        vm.callMethod(a, "lineTo", {V(-9.0), V(up ? 4.0 : -4.0)});
+        vm.callMethod(a, "endFill", {});
+        gfx::avm1::Object* m = menu->script;
+        vm.set(a.o, "onRelease", V(vm.newFunction([m, up](gfx::avm1::VM& v, const V&, gfx::avm1::Args&) -> V {
+            v.set(m, "__wfcTop", V(v.toNumber(v.get(m, "__wfcTop")) + (up ? -1.0 : 1.0)));
+            return V();
+        }, "onRelease", 0)));
+        return a;
+    };
+    const V upA = arrow("wfcScrollUp_mc", true), downA = arrow("wfcScrollDown_mc", false);
+    gfx::avm1::Object* first = rows[(size_t)top]->script, *lastRow = rows[(size_t)(top + kSettingsRows - 1)]->script;
+    const double cx = vm.toNumber(vm.get(first, "_x")) + vm.toNumber(vm.get(first, "_width")) * 0.5;
+    if (upA.isObject()) {
+        vm.set(upA.o, "_x", V(cx));
+        vm.set(upA.o, "_y", V(vm.toNumber(vm.get(first, "_y")) - 9.0));
+        vm.set(upA.o, "_visible", V(top > 0));
+    }
+    if (downA.isObject()) {
+        vm.set(downA.o, "_x", V(cx));
+        vm.set(downA.o, "_y", V(vm.toNumber(vm.get(lastRow, "_y")) + kSettingsStep + 6.0));
+        vm.set(downA.o, "_visible", V(top + kSettingsRows < n));
+    }
 }
 
 void GfxPresenter::checkKillFeed(float dt) {
@@ -1315,7 +1348,8 @@ bool addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
                        const std::function<void()>& onRecommended, bool hdAvailable, bool fsr3Available, int upscalingCurrent,
                        bool frameGenAvailable, bool frameGenActive, bool rtAvailable, bool hdEnhancedAvailable, int vramMB, int hdCurrent,
                        bool rtNextMap, int rtCurrent, bool volumetricCurrent, bool volumetricAvailable,
-                       const std::vector<std::string>& languageNames) {
+                       const std::vector<std::string>& languageNames,
+                       const std::function<void(const gfx::avm1::Value&, const gfx::avm1::Value&)>& onCommit) {
     if (linkage != "mc_subMenu" || !init) return false;
     gfx::avm1::VM& vm = p.vm();
     gfx::avm1::Value a = vm.get(init, "buildArray");
@@ -1461,6 +1495,18 @@ bool addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         }, "recommendedSettingsClick")));
         a.o->elems.insert(a.o->elems.end() - 1, gfx::avm1::Value(item));
     }
+    {   // Commit Changes (the original last item, clickFunction writeGraphicsSettings): asks first (the user, playtest 2026-10-23b #4)
+        const gfx::avm1::Value last = a.o->elems.empty() ? gfx::avm1::Value() : a.o->elems.back();
+        const gfx::avm1::Value orig = last.isObject() ? vm.get(last.o, "clickFunction") : gfx::avm1::Value();
+        if (orig.isObject() && onCommit) {
+            vm.set(last.o, "__wfcCommitFn", orig);   // keeps the original alive with the item
+            std::function<void(const gfx::avm1::Value&, const gfx::avm1::Value&)> cb = onCommit;
+            vm.set(last.o, "clickFunction", gfx::avm1::Value(vm.newFunction([cb, orig](gfx::avm1::VM&, const gfx::avm1::Value& self, gfx::avm1::Args&) {
+                cb(orig, self);
+                return gfx::avm1::Value();
+            }, "commitChangesConfirm")));
+        }
+    }
     frontend::FlowTrace::emit("settings.frameLimitItem", {{"current", std::to_string(current)}, {"choices", std::to_string(choices.size())},
                                                           {"provenance", "PC ADAPTATION"}});
     frontend::FlowTrace::emit("settings.pcExtensionRows", {{"rows", std::string("Upscaling,HD Textures,Anisotropic Filtering,") + (frameGenAvailable ? "Frame Generation," : "") + (rtAvailable ? "Ray Tracing," : "") + (rtAvailable && volumetricAvailable ? "Volumetric Lighting," : "") + "Recommended Settings"}, {"provenance", "PC EXTENSION"}});
@@ -1586,6 +1632,32 @@ void GfxPresenter::runFirstRunUi(gfx::Player& p, frontend::GameFlow& flow, const
     }
 }
 
+// Commit Changes, confirmed: the original writeGraphicsSettings on the button it was pressed on (resolution / texture quality
+// / vsync), then the profile apply (the PC rows), then the result: a restart for Frame Generation (decided at start-up), the next
+// map for a changed HD level or Ray Tracing turned on in a map that loaded without it, else "applied".
+void GfxPresenter::syncSettingsCommit() {
+    const int answer = rt_.flow().takeSettingsCommitAnswer();
+    if (answer == 0) return;
+    gfx::Player* p = commitPlayer_;
+    const gfx::avm1::Value fn = commitFn_, self = commitSelf_;
+    commitPlayer_ = nullptr; commitFn_ = commitSelf_ = gfx::avm1::Value();
+    if (answer != 1 || !p) { frontend::FlowTrace::emit("settings.commit", {{"state", "cancelled"}}); return; }
+    bool alive = false;
+    for (const Open& op : movies_) if (&op.movie->player() == p) alive = true;
+    if (!alive || !fn.isObject()) return;
+    gfx::avm1::VM& vm = p->vm();
+    if (self.isObject() && vm.getV(self, "_name").isUndef()) return;   // the page closed meanwhile
+    frontend::LocalProfile& prof = rt_.flow().profile();
+    const frontend::LocalProfile::Display before = prof.display;
+    gfx::avm1::Args none;
+    vm.call(fn, self, none);
+    prof.apply();
+    const auto& d = prof.display;
+    const bool restart = rt_.frameGenerationAvailable() && (d.frameGeneration != 0) != rt_.frameGenerationActive();
+    const bool nextMap = d.hdTextures != before.hdTextures || rt_.rayTracingOnAppliesNextMap();
+    rt_.flow().settingsCommitted(restart, nextMap);
+}
+
 // ONLINE_LOBBY_FLOW_V2 1.1: the party lobby's Private Match row hosts at once (the last-used mode; offline the same lobby
 // with bots) instead of opening the mode list and the options page. Versus only (GTS_TeamGame): the Escalation and Campaign
 // party lobbies keep the original Host Game (mc_menuEscalationHostGame / mc_menuCampaignHostGame, PartyLobby_GFX sprites
@@ -1696,6 +1768,55 @@ void GfxPresenter::syncGameSettings(gfx::Player& p, frontend::GameFlow& flow) {
                 return V();
             }, "onClick", 0)));
             frontend::FlowTrace::emit("lobby.gameSettingsRow", {{"built", "true"}});
+        }
+    }
+    // PC ADAPTATION (the user, playtest 2026-10-23b #23): the Team row under Game Settings - "Team:  < Autobots >"; Accept / a
+    // click switches sides (Online.SwitchTeam); team lobbies only (GTS_TeamGame), host and members alike.
+    gfx::MovieClip* gsRow = findClipNamed(p.root(), "gameSettings_mc");
+    const bool teamLobby = flow.level() == frontend::LevelKind::GameLobby && flow.lobby().gameTeamStatus == 3 && flow.lobby().playlistId < 0;
+    if (teamLobby && gsRow && gsRow->script && cc && cc->script && cc->parent && cc->parent->script &&
+        !vm.get(cc->parent->script, "wfcTeam_mc").isObject()) {
+        gfx::avm1::Object* menu = cc->parent->script;
+        const double gsY = vm.toNumber(vm.get(gsRow->script, "_y")), ccY = vm.toNumber(vm.get(cc->script, "_y"));
+        const double pitch = ccY > gsY ? ccY - gsY : 20.0;
+        for (auto& [depth, child] : cc->parent->children) {
+            auto* mc = dynamic_cast<gfx::MovieClip*>(child.get());
+            if (!mc || !mc->script || mc == gsRow) continue;
+            const double y = vm.toNumber(vm.get(mc->script, "_y"));
+            if (y > gsY + 1.0) vm.set(mc->script, "_y", V(y + pitch));
+        }
+        gfx::avm1::Object* init = vm.newPlain();
+        vm.set(init, "_y", V(gsY + pitch));
+        gfx::MovieClip* dup = p.duplicate(cc, "wfcTeam_mc", 952, init);
+        if (dup && dup->script) {
+            gfx::avm1::Object* o = dup->script;
+            const V below = vm.get(gsRow->script, "focusDown");
+            vm.set(o, "focusUp", V(std::string("gameSettings_mc")));
+            vm.set(o, "focusDown", below);
+            vm.set(gsRow->script, "focusDown", V(std::string("wfcTeam_mc")));
+            if (below.isString()) { const V next = vm.get(menu, vm.toString(below)); if (next.isObject()) vm.set(next.o, "focusUp", V(std::string("wfcTeam_mc"))); }
+            vm.set(o, "onOver", V(vm.newFunction([menu](gfx::avm1::VM& v, const V&, gfx::avm1::Args&) -> V {
+                const V w = v.get(menu, "HintWidget");
+                if (w.isObject()) v.set(w.o, "HintText", V(std::string("$WfcPC.Lobby.TeamDesc")));
+                return V();
+            }, "onOver", 0)));
+            frontend::GameFlow* fl = &flow;
+            vm.set(o, "onClick", V(vm.newFunction([fl](gfx::avm1::VM&, const V&, gfx::avm1::Args&) -> V {
+                fl->call("Online.SwitchTeam");
+                return V();
+            }, "onClick", 0)));
+            frontend::FlowTrace::emit("lobby.teamRow", {{"built", "true"}, {"provenance", "PC ADAPTATION (user playtest 2026-10-23b #23)"}});
+        }
+    }
+    if (const V tr = cc && cc->parent && cc->parent->script ? vm.get(cc->parent->script, "wfcTeam_mc") : V(); tr.isObject()) {
+        const int t = flow.lobby().localTeam;
+        const std::string side = rt_.catalog().localize("TransGame", t == 1 ? "TnFactionTeamDecepticons" : "TnFactionTeamAutobots", "TeamName");
+        const std::string label = rt_.catalog().localizeKey("$WfcPC.Lobby.Team") + "   < " + (t < 0 ? std::string("-") : side) + " >";
+        if (vm.toString(vm.get(tr.o, "__wfcLabel")) != label) {
+            vm.set(tr.o, "__wfcLabel", V(label));
+            vm.set(tr.o, "text", V(label));
+            const V lab = vm.get(tr.o, "label_txt");
+            if (lab.isObject()) vm.set(lab.o, "htmlText", V(label));
         }
     }
     // the page
@@ -2177,12 +2298,17 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
                                       rt_.frameGenerationAvailable(), rt_.frameGenerationActive(), rt_.rayTracingAvailable(),
                                       rt_.hdTextureLevelAvailable(2), rt_.vramMB(), rt_.flow().profile().display.hdTextures,
                                       rt_.rayTracingOnAppliesNextMap(), rt_.flow().profile().display.rayTracing,
-                                      rt_.flow().profile().display.volumetricLighting, rt_.volumetricLightingAvailable(), languageNames()))
+                                      rt_.flow().profile().display.volumetricLighting, rt_.volumetricLightingAvailable(), languageNames(),
+                                      [this, &p](const gfx::avm1::Value& fn, const gfx::avm1::Value& self) {
+                                          commitPlayer_ = &p; commitFn_ = fn; commitSelf_ = self;
+                                          rt_.flow().requestSettingsCommit();
+                                      }))
                     graphicsPagePlayer_ = &p;
                 else if (rt_.flow().online() && addVoiceRows(p, linkage, init, rt_.flow().profile().voice.pttKey))   // online only
                     audioPagePlayer_ = &p;
             };
     }
+    syncSettingsCommit();
     // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).
     for (const auto& iv : rt_.flow().takeUiInvokes()) {   // "fn|arg|arg": true / false become booleans, the rest strings
         Deferred d{iv.first, iv.second, {}};
