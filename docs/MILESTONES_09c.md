@@ -4202,3 +4202,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   interface (SplitScreen.h; GL path next) + the Frontend's split plan. RE's ESC inputs delivered (zone order, factions,
   kismet extra). Split screen coding starts on all three lanes; Systems' input frames / localSeats / second listener
   queued after the package. AssetTools: FRA names re-export (U+FFFD), thumbnails in dlc_content.
+2026-10-23 21:01 DLC MAP 1 / 9 FORTRESS SHIPPED (AssetTools: map data AssetTools/work/dlc_maps/VerticalSlice/Maps/MP_KON_Fortress, render
+  data AssetTools/out/dlc_render/MP_KON_Fortress; base identity proven on Gorge). Dev root for DLC runs: Rebuild/work/
+  assets_dlc/ (junctions: VerticalSlice/Maps/<base maps> + MP_KON_Fortress; content/<pkg> = 800 base + 13 DLC; config /
+  maps / movies) -> WFC_ASSETS=.../work/assets_dlc/VerticalSlice; render data junction work/render/MP_KON_Fortress.
+  Fortress headless TDM 20 s: exit 0, 1801 SIMHASH lines, 0 errors. Frontend split step 1 needs a recut vs the head.
