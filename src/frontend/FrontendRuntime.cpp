@@ -982,7 +982,7 @@ BridgeValue FrontendRuntime::pcSettings(const std::string& fn, const std::vector
     if (fn == "PCSettings.SetTextureQualityLevel") {
         p.display.textureQuality = std::atoi(arg(0).c_str());
         p.save();
-        FlowTrace::emit("settings.owner", {{"setting", "TextureQuality"}, {"owner", "none (Rendering has no texture quality control yet)"}});
+        FlowTrace::emit("settings.owner", {{"setting", "TextureQuality"}, {"owner", "renderer (IRenderer::setTextureQuality on the profile Apply)"}});
         return {};
     }
     if (fn == "PCSettings.SetVSyncState") {

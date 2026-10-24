@@ -175,6 +175,7 @@ private:
     void runFirstRunUi(gfx::Player& p, frontend::GameFlow& flow, const std::string& movie);
     // Lobby flow v2 (ONLINE_LOBBY_FLOW_V2.md): Private Match hosts at once; the host's Game Settings row and page.
     void syncHostNowRow(gfx::Player& p, frontend::GameFlow& flow);
+    void syncLoadBar();   // the loading screen's progress bar (core::loadProgress)
     void syncGameSettings(gfx::Player& p, frontend::GameFlow& flow);
     void syncVoteRows(gfx::Player& p, frontend::GameFlow& flow);   // the public lobby's map vote rows (ONLINE_LOBBY_FLOW_V2 4.1)
     void attachGameSettingsPage(gfx::Player& p, frontend::GameFlow& flow);

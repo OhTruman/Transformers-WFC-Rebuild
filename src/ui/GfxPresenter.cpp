@@ -2,6 +2,7 @@
 #include "ui/MapLabel.h"
 #include "platform/Clipboard.h"
 #include "core/FrameProfile.h"
+#include "core/LoadYield.h"
 #include "core/Log.h"
 #include "frontend/DataPaths.h"
 #include "render/SplitScreen.h"
@@ -1587,6 +1588,46 @@ void GfxPresenter::runFirstRunUi(gfx::Player& p, frontend::GameFlow& flow, const
     }
 }
 
+// PC ADAPTATION (playtest 2026-10-23b #33, the user: "never a static screen"): a progress bar on the loading screen. The original
+// LoadScreen_GFX has none ('LOADING', the level info and the engage texts only), so it is drawn into the movie with the drawing
+// API in the UI cyan (0x8AF0FF): a 25 % track and a solid fill, 30 % of the stage wide, near the bottom, centred. The fraction is
+// Rendering's core::loadProgress (the loader's own steps over the map's remembered total; never backwards, < 1 until done).
+void GfxPresenter::syncLoadBar() {
+    if (!loading_) return;
+    const core::LoadProgress lp = core::loadProgress();
+    gfx::Player& p = loading_->player();
+    if (!p.root() || !p.root()->script) return;
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    gfx::avm1::Object* root = p.root()->script;
+    V bar = vm.get(root, "wfcLoadBar_mc");
+    if (!bar.isObject()) {
+        if (!lp.active) return;
+        const double sw = p.stageViewW() > 0 ? p.stageViewW() : 1280.0, sh = p.stageViewH() > 0 ? p.stageViewH() : 720.0;
+        const double w = sw * 0.3, h = 4.0;
+        bar = vm.callMethod(V(root), "createEmptyMovieClip", {V(std::string("wfcLoadBar_mc")), V(90040.0)});
+        if (!bar.isObject()) return;
+        auto rect = [&](const V& mc, double alpha) {
+            vm.callMethod(mc, "beginFill", {V((double)0x8AF0FF), V(alpha)});
+            vm.callMethod(mc, "moveTo", {V(0.0), V(0.0)});
+            vm.callMethod(mc, "lineTo", {V(w), V(0.0)});
+            vm.callMethod(mc, "lineTo", {V(w), V(h)});
+            vm.callMethod(mc, "lineTo", {V(0.0), V(h)});
+            vm.callMethod(mc, "lineTo", {V(0.0), V(0.0)});
+            vm.callMethod(mc, "endFill", {});
+        };
+        rect(bar, 25.0);
+        const V fill = vm.callMethod(bar, "createEmptyMovieClip", {V(std::string("fill_mc")), V(1.0)});
+        if (fill.isObject()) rect(fill, 100.0);
+        vm.set(bar.o, "_x", V((sw - w) * 0.5));
+        vm.set(bar.o, "_y", V(sh * 0.93));
+        frontend::FlowTrace::emit("loading.bar", {{"built", "true"}, {"provenance", "PC ADAPTATION"}});
+    }
+    vm.set(bar.o, "_visible", V(lp.active));
+    const V fill = vm.get(bar.o, "fill_mc");
+    if (fill.isObject()) vm.set(fill.o, "_xscale", V(100.0 * std::max(0.0f, std::min(1.0f, lp.active ? lp.fraction : 1.0f))));
+}
+
 // ONLINE_LOBBY_FLOW_V2 1.1: the party lobby's Private Match row hosts at once (the last-used mode; offline the same lobby
 // with bots) instead of opening the mode list and the options page. Versus only (GTS_TeamGame): the Escalation and Campaign
 // party lobbies keep the original Host Game (mc_menuEscalationHostGame / mc_menuCampaignHostGame, PartyLobby_GFX sprites
@@ -2106,7 +2147,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
             frontend::FlowTrace::emit("gfx.playerListInput", {{"given", frontend::FlowTrace::boolean(want)}});
         }
     }
-    if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
+    if (loading_) { loading_->advance(dt); loadingTime_ += dt; syncLoadBar(); }
     // Movies may open / close others from their scripts: iterate over a snapshot of the objects.
     std::vector<std::string>& objs = objsScratch_;
     objs.clear();
