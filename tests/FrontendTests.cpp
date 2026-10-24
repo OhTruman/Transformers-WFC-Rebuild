@@ -2022,9 +2022,12 @@ static void testDlcMerge() {
                       havoc && havoc->cooked && havoc->imagePath == "UI_DLCThumbnails_p.MP_Havoc";
     const std::string png = frontend::contentImagePng(Catalog::defaultExtractedRoot(), "UI_DLC2Thumbnails_p.MP_Horizon");
     const bool thumb = png.find("dlc_content") != std::string::npos || std::getenv("WFC_DLC_CONTENT");
+    // the packs' TransGame text: the new generators (Escalation prompts), INT; FRA after setLanguage
+    const std::string tele = c.localize("TransGame", "SurvivalGeneratorNames", "TeleporterGenerator");
+    const bool text = c.dlcTextKeys() == 0 || tele.find("Teleporter") != std::string::npos;
     const ChassisInfo* tank4 = rt.roster().chassis("Tank4");
     const bool unlocked = tank4 && !tank4->lockedChassis && !tank4->lockedCharacter && c.dlcUnlockedChassis().size() == 7;
-    check(maps && thumb && unlocked, "dlc.merge", std::to_string(c.dlcMapCount()) + " " + std::to_string(maps) + std::to_string(thumb) +
+    check(maps && thumb && unlocked && text, "dlc.merge", std::to_string(c.dlcMapCount()) + " " + std::to_string(maps) + std::to_string(thumb) +
           std::to_string(unlocked) + " " + png + " unlocks=" + std::to_string(c.dlcUnlockedChassis().size()));
 }
 

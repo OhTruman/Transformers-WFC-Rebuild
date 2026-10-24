@@ -138,6 +138,7 @@ public:
     std::string localizeKey(const std::string& dollarKey) const;
     const std::vector<std::string>& dlcUnlockedChassis() const { return dlcUnlockedChassis_; }
     int dlcMapCount() const { return dlcMaps_; }
+    int dlcTextKeys() const { return dlcTextKeys_; }   // the DLC packs' INT text keys merged at load (0: not present)
     // The text language (PC EXTENSION Settings row, user 2026-10-23): INT plus every Coalesced_<lang> text pack present.
     // setLanguage rebuilds the table as INT overlaid with that language's files (a missing key stays INT), and switches
     // the map / mode names to the manifests' entries for it.
@@ -182,6 +183,8 @@ private:
     std::string language_ = "INT";
     std::vector<std::string> dlcUnlockedChassis_;
     int dlcMaps_ = 0;
+    int dlcTextKeys_ = 0;
+    int mergeDlcText(const std::string& lang);
     std::map<std::string, std::string> locInt_;   // the INT table as loaded (setLanguage starts from it)
     std::map<std::string, std::string> loc_;   // "UIText.Section.Key" -> INT text
     mutable std::map<std::string, std::string> locLower_;   // the same, keys lower-cased (built on the first miss)
