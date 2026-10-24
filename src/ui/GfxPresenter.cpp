@@ -1,6 +1,7 @@
 #include "ui/GfxPresenter.h"
 #include "ui/MapLabel.h"
 #include "platform/Clipboard.h"
+#include "platform/Image.h"
 #include "core/FrameProfile.h"
 #include "core/LoadYield.h"
 #include "core/Log.h"
@@ -1723,6 +1724,49 @@ void GfxPresenter::syncFirstLaunchBrightness(gfx::Player& p, frontend::GameFlow&
     frontend::FlowTrace::emit("brightness.firstLaunch", {{"shown", "true"}, {"provenance", "PC ADAPTATION (user playtest 2026-10-23b #34)"}});
 }
 
+// PC ADAPTATION (the user, playtest 2026-10-23b #5): a preview panel on the right of the Graphics window for the new rows -
+// Upscaling, HD Textures, Ray Tracing, Frame Generation - showing the focused row's current value
+// (data/frontend/previews/<row>_<value>.png, 16:9, framed); it updates with the selection and hides for a value with no image.
+void GfxPresenter::syncSettingsPreview() {
+    previewPng_.clear();
+    gfx::Player* p = graphicsPagePlayer_;
+    bool alive = false;
+    for (const Open& op : movies_) if (p && &op.movie->player() == p) alive = true;
+    if (!alive) return;
+    gfx::MovieClip* menu = findNamed(p->root(), "subMenu_mc");
+    if (!menu || !menu->script || !menu->visible) return;
+    gfx::avm1::VM& vm = p->vm();
+    const gfx::avm1::Value cf = vm.get(menu->script, "_currentFocus");
+    if (!cf.isObject()) return;
+    const std::string store = vm.toString(vm.get(cf.o, "dataStore"));
+    const auto& d = rt_.flow().profile().display;
+    std::string row;
+    int value = 0;
+    if (store == "<PCSettings:Upscaling>") { row = "Upscaling"; value = d.upscaling; }
+    else if (store == "<PCSettings:HDTextures>") { row = "HDTextures"; value = d.hdTextures; }
+    else if (store == "<PCSettings:RayTracing>") { row = "RayTracing"; value = d.rayTracing; }
+    else if (store == "<PCSettings:FrameGeneration>") { row = "FrameGeneration"; value = d.frameGeneration; }
+    if (row.empty()) return;
+    previewPng_ = frontend::settingsPreviewPng(row, value);
+    if (previewPng_.empty()) return;
+    // the window rect: right of the menu, 16:9, as wide as the room allows (at most 40 % of the window)
+    gfx::Rect b = menu->boundsIn(menu->worldMatrix());
+    const gfx::Matrix mm = GfxRendererGL::movieMatrix(*p, viewW_, viewH_);
+    const gfx::Point tl = mm.apply({b.xmin, b.ymin}), br = mm.apply({b.xmax, b.ymax});
+    const float left = br.x + viewW_ * 0.03f, room = (float)viewW_ - left - viewW_ * 0.04f;
+    const float w = std::min(room, viewW_ * 0.4f), h = w * 9.0f / 16.0f;
+    if (w < 64.0f) { previewPng_.clear(); return; }
+    previewRect_[0] = left; previewRect_[1] = std::max(8.0f, (tl.y + br.y) * 0.5f - h * 0.5f); previewRect_[2] = w; previewRect_[3] = h;
+    if (previewLoaded_ != previewPng_) {
+        previewImage_ = render::ImageData{};
+        platform::decodeImage(previewPng_, previewImage_);
+        previewLoaded_ = previewPng_;
+        ++previewKey_;
+        frontend::FlowTrace::emit("settings.preview", {{"row", row}, {"value", std::to_string(value)}, {"ok", frontend::FlowTrace::boolean(previewImage_.valid())},
+                                                       {"provenance", "PC ADAPTATION (user playtest 2026-10-23b #5)"}});
+    }
+}
+
 // ONLINE_LOBBY_FLOW_V2 1.1: the party lobby's Private Match row hosts at once (the last-used mode; offline the same lobby
 // with bots) instead of opening the mode list and the options page. Versus only (GTS_TeamGame): the Escalation and Campaign
 // party lobbies keep the original Host Game (mc_menuEscalationHostGame / mc_menuCampaignHostGame, PartyLobby_GFX sprites
@@ -2388,6 +2432,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
             };
     }
     syncSettingsCommit();
+    syncSettingsPreview();
     // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).
     for (const auto& iv : rt_.flow().takeUiInvokes()) {   // "fn|arg|arg": true / false become booleans, the rest strings
         Deferred d{iv.first, iv.second, {}};
@@ -2501,6 +2546,8 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
         if (fps_) drawMovie(*fps_);
     }
     if (cursor_ && !videoOver_) drawMovie(*cursor_);
+    if (!previewPng_.empty() && previewImage_.valid())
+        gl_.drawImage(previewImage_.rgba.data(), previewImage_.w, previewImage_.h, previewKey_, previewRect_[0], previewRect_[1], previewRect_[2], previewRect_[3]);
     gl_.end();
 }
 

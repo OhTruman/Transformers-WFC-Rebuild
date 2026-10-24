@@ -793,6 +793,49 @@ void GfxRendererGL::drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial
     glEnable(GL_BLEND);
 }
 
+void GfxRendererGL::drawImage(const uint8_t* rgba, int w, int h, uint64_t key, float x, float y, float dw, float dh) {
+    if (!ok_ || !rgba || w <= 0 || h <= 0 || dw <= 0 || dh <= 0) return;
+    if (!image_.id || image_.w != w || image_.h != h || key != imageKey_) {
+        if (!image_.id) glGenTextures(1, &image_.id);
+        glBindTexture(GL_TEXTURE_2D, image_.id);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        image_.w = w; image_.h = h;
+        imageKey_ = key;
+    }
+    gfx::Matrix id;
+    id.a = id.d = 1;
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glStencilFunc(GL_ALWAYS, 0, 0xFF);
+    glStencilMask(0x00);
+    applyBlend(0);
+    {   // the frame: 2 px outside the image, the UI cyan (0x8AF0FF)
+        gfx::FillStyle frame;
+        frame.color = gfx::RGBA{0x8A, 0xF0, 0xFF, 255};
+        setFill(frame, id, gfx::CXForm{}, 1.0f);
+        const float b = 2.0f, x0 = x - b, y0 = y - b, x1 = x + dw + b, y1 = y + dh + b;
+        auto rect = [](std::vector<float>& v, float ax, float ay, float bx, float by) {
+            const float q[] = {ax, ay, bx, ay, bx, by, ax, ay, bx, by, ax, by};
+            v.insert(v.end(), q, q + 12);
+        };
+        std::vector<float> v;
+        rect(v, x0, y0, x1, y); rect(v, x0, y + dh, x1, y1); rect(v, x0, y, x, y + dh); rect(v, x + dw, y, x1, y + dh);
+        drawTriangles(v, id);
+    }
+    gfx::FillStyle fs;
+    const float sx = dw / (float)w, sy = dh / (float)h;
+    fs.m.a = sx; fs.m.d = sy; fs.m.tx = x; fs.m.ty = y;
+    setFill(fs, id, gfx::CXForm{}, 1.0f, 4);
+    glx::Uniform2f(uTexSize_, (float)w, (float)h);
+    glBindTexture(GL_TEXTURE_2D, image_.id);
+    const float q[] = {x, y, x + dw, y, x + dw, y + dh, x, y, x + dw, y + dh, x, y + dh};
+    std::vector<float> v(q, q + 12);
+    drawTriangles(v, id);
+}
+
 void GfxRendererGL::fullscreen() {
     gfx::FillStyle none;
     gfx::Matrix id;

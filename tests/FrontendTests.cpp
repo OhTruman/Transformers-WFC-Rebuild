@@ -2038,6 +2038,13 @@ static void testDlcMerge() {
           std::to_string(unlocked) + " " + png + " unlocks=" + std::to_string(c.dlcUnlockedChassis().size()));
 }
 
+static void testSettingsPreview() {
+    // #5: the preview images resolve per row and value; a value without an image is "" (the panel hides)
+    const std::string off = frontend::settingsPreviewPng("RayTracing", 0), none = frontend::settingsPreviewPng("RayTracing", 99);
+    check(none.empty() && (off.empty() || off.find("previews/RayTracing_0.png") != std::string::npos), "settings.preview",
+          "off=" + off + " none=" + none);
+}
+
 static void testLanguageSetting() {
     // The Settings Language row (PC EXTENSION, user 2026-10-23): INT + every Coalesced_<lang> text pack (FRA in the base game);
     // the profile's choice applies on the next frame (boot / Apply), French text overlays INT key by key (a key FRA lacks
@@ -2481,6 +2488,7 @@ int main() {
     testCampaignC6();
     testEscalationNoXp();
     testLanguageSetting();
+    testSettingsPreview();
     testDlcMerge();
     testSplitProfiles();
     testCampaignCoopLobby();
