@@ -1386,6 +1386,11 @@ bool addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         for (size_t i = 0; i < languageNames.size(); ++i) add(lg, (int)i, languageNames[i].c_str());
         row(lg, "<PCSettings:Language>", "$WfcPC.Settings.LanguageDesc", "$WfcPC.Settings.Language");
     }
+    {   // PC EXTENSION (split screen, user 2026-10-23): the two-player layout - Horizontal (stock UE3 default) / Vertical
+        std::vector<gfx::avm1::Value> sl;
+        add(sl, 0, "$WfcPC.Settings.SplitHorizontal"); add(sl, 1, "$WfcPC.Settings.SplitVertical");
+        row(sl, "<PCSettings:SplitLayout>", "$WfcPC.Settings.SplitLayoutDesc", "$WfcPC.Settings.SplitLayout");
+    }
     {   // PC EXTENSION (user decisions; Rendering setSmokeMode / setWaterMode): Original = the shipped look (default)
         std::vector<gfx::avm1::Value> sm, wa;
         // Smoke ships in every mode (Rendering's tuned stage 1 passed by eye; Integration 2026-10-23)

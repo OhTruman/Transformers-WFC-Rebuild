@@ -18,6 +18,7 @@
 #include "platform/Movie.h"
 #include "platform/Window.h"
 #include "render/Renderer.h"
+#include "render/SplitScreen.h"
 #include "ui/GfxPresenter.h"
 #include "ui/UiGL.h"
 #include "ui/gl/GlCensus.h"
@@ -57,6 +58,20 @@ constexpr bool kRendererFrameGenStartup =
     !std::is_same_v<decltype(render::setFrameGenerationAtStartup(true)), render::FrameGenStartupMissing>;
 
 namespace {
+// [Frontend, split screen] The renderer's view layout follows the seats: split (the profile's Split Layout row, Horizontal
+// default / Vertical) only in a match with two local seats; menus, loading screens and one seat draw a single view.
+void syncSplitLayout(render::IRenderer* r, const frontend::GameFlow& flow) {
+    if (!r) return;
+    const render::SplitLayout want = flow.level() == frontend::LevelKind::Match && flow.localSeats() == 2
+                                         ? (flow.profile().display.splitLayout == 2 ? render::SplitLayout::Vertical : render::SplitLayout::Horizontal)
+                                         : render::SplitLayout::Single;
+    if (r->splitLayout() != want) {
+        r->setSplitLayout(want);
+        frontend::FlowTrace::emit("split.layout", {{"layout", want == render::SplitLayout::Single ? "Single" : want == render::SplitLayout::Vertical ? "Vertical" : "Horizontal"},
+                                                    {"views", std::to_string(render::splitViewCount(want))}});
+    }
+}
+
 // Gameplay's look settings (PlayerController::setLookSettings(CameraSensitivity, InvertY_Robot, InvertY_Car,
 // InvertY_Plane, InvertY_Tank); the 5-argument form, detected). Car covers trucks, as UpdateInvertMouseBy*Form.
 // Rendering M28: unloadMapRenderData releases every texture the match uploaded (setTexturePersistent marks exceptions).
@@ -1304,6 +1319,7 @@ void Application::runFrontend() {
                 core::prof::Scope prof("+frontend.update");
                 frontend_->update(input, (float)dt);
             }
+            syncSplitLayout(renderer_, flow);   // [Frontend] menus: a single view
             tickLobbyVoice();   // [Systems] lobby voice (in a session, no match)
             if (flow.quitRequested()) { quit = true; break; }
             drawFrontendFrame();
@@ -1753,8 +1769,13 @@ void Application::routeMatchToFrontend(float dt) {
         default: break;
         }
     }
-    // [Frontend C6] Restart From Last Checkpoint: until Gameplay's in-place RestartFromActiveCheckpoint, relaunch at the active checkpoint
-    if (flow.takeCampaignRestartRequest()) flow.campaignRelaunchAt(pf.hud.cpCheckpoint);
+    syncSplitLayout(renderer_, flow);   // [Frontend] a match with two local seats splits the view
+    // [Frontend C6] Restart From Last Checkpoint: Gameplay's in-place RestartFromActiveCheckpoint (the respawn closes MISSION FAILED);
+    // online the host relaunches at the active checkpoint so every member follows the new launch record
+    if (flow.takeCampaignRestartRequest()) {
+        if (netDriver_) flow.campaignRelaunchAt(pf.hud.cpCheckpoint);
+        else world_.submit([](game::World& w) { w.cpRestartFromCheckpoint(); });
+    }
     // RUNTIME-EVENTS: timer, once per change of GRI.RemainingTime while the match runs
     if (pf.matchState == (int)game::Match::State::InProgress && pf.remainingTime != lastLoggedRemaining_) {
         lastLoggedRemaining_ = pf.remainingTime;

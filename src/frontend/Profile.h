@@ -21,6 +21,10 @@ namespace frontend {
 class LocalProfile {
 public:
     static constexpr const char* kFile = "wfc_profile.ini";
+    static constexpr const char* kSeat2File = "wfc_profile_2.ini";   // split screen: the second local seat's own profile
+    std::string file_ = kFile;   // the file this profile reads / writes (kSeat2File for split screen's seat 2)
+    void setFile(const std::string& path) { file_ = path; }
+    const std::string& file() const { return file_; }
     void load();
     // Parses a profile; returns true when an older format was migrated (load() then saves it once).
     bool loadFrom(std::istream& in);
@@ -58,6 +62,7 @@ public:
         bool hdTexturesUserSet = false, hdPackHintShown = false, showFps = false;
         bool volumetricLighting = true;   // [PCSettings] VolumetricLighting: Rendering's X3 froxel volumetrics, Realistic only
         std::string language = "INT";     // [PCSettings] Language: INT (default) / FRA / ... (a Coalesced_<lang> text pack); only when not INT
+        int splitLayout = 1;              // [PCSettings] SplitLayout (split screen, PC EXTENSION): 1 Horizontal (default) / 2 Vertical; only when not 1
         int lensFlares = 2;               // [PCSettings] LensFlares: 0 Off, 1 Subtle, 2 Original (default, the shipped look); only when not 2
         int smoke = 0;                    // [PCSettings] Smoke: 0 Original (default, the authored sprites), 1 Enhanced; only when not 0
         int water = 0;                    // [PCSettings] Water: 0 Original (default, the authored materials), 1 Enhanced; only when not 0

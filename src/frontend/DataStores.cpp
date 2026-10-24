@@ -99,6 +99,7 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<PCSettings:FrameGeneration>") return flow_.profile().display.frameGeneration ? "1" : "0";   // PC EXTENSION
     if (markup == "<PCSettings:RayTracing>") return std::to_string(flow_.profile().display.rayTracing);        // PC EXTENSION
     if (markup == "<PCSettings:ShowFps>") return flow_.profile().display.showFps ? "1" : "0";                // PC EXTENSION
+    if (markup == "<PCSettings:SplitLayout>") return std::to_string(flow_.profile().display.splitLayout - 1);   // 0 Horizontal / 1 Vertical
     if (markup == "<PCSettings:Language>") {   // PC EXTENSION: the index in the catalog's languages (INT first)
         const std::vector<std::string> l = cat_.languages();
         const auto it = std::find(l.begin(), l.end(), flow_.profile().display.language);
@@ -503,6 +504,11 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         const bool ok = flow_.changeLobbyMode(arg(1));
         FlowTrace::emit("lobby.gameModeRow", {{"mode", arg(1)}, {"applied", FlowTrace::boolean(ok)}});
         invalidate();
+        return {};
+    }
+    if (fn == "WriteValue" && m == "<PCSettings:SplitLayout>") {   // PC EXTENSION (split screen): RenderingSplitLayout 1 / 2
+        flow_.profile().display.splitLayout = std::clamp(std::atoi(arg(1).c_str()) + 1, 1, 2);
+        FlowTrace::emit("settings.splitLayout", {{"layout", flow_.profile().display.splitLayout == 2 ? "Vertical" : "Horizontal"}, {"provenance", "PC EXTENSION"}});
         return {};
     }
     if (fn == "WriteValue" && m == "<PCSettings:Language>") {   // PC EXTENSION (user 2026-10-23): the text language

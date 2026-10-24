@@ -307,6 +307,15 @@ public:
     void applyRecommendedBots(const char* why);
     LocalProfile& profile() { return profile_; }
     const LocalProfile& profile() const { return profile_; }
+    // Split screen seats (SPLITSCREEN_FRONTEND_PLAN 1-2): seat 1 = keyboard / mouse + its pad; seat 2 = the next other pad
+    // that presses Start in a party / game lobby (offline or host; never mid-match, at press-start or in a chapter). Seat 2
+    // has its own profile file (wfc_profile_2.ini). The renderer splits the view in a match with two seats.
+    bool joinSeat2(int pad);
+    void leaveSeat2();
+    int localSeats() const { return seat2Active_ ? 2 : 1; }
+    int seat2Pad() const { return seat2Active_ ? seat2Pad_ : -1; }
+    void setSeat1Pad(int pad) { seat1Pad_ = pad; }
+    LocalProfile& seat2Profile() { return seat2Profile_; }
     // Online session (PC EXTENSION, Session.h; docs/handoff/ONLINE_MP_FRONTEND_TESTS.md). Not set = the offline flow
     // (today's behaviour); nothing reads it yet.
     void setSession(std::unique_ptr<ISession> s) { session_ = std::move(s); role_ = SessionRole::Offline; }
@@ -471,6 +480,9 @@ private:
     const GameSettings* currentSettings_ = nullptr;   // SettingsDataStore current (EditGameMode / PlayPrivateGame)
     MatchValues matchValues_;
     LocalProfile profile_;
+    LocalProfile seat2Profile_;
+    bool seat2Active_ = false;
+    int seat2Pad_ = -1, seat1Pad_ = -1;
     std::unique_ptr<ISession> session_;
     SessionRole role_ = SessionRole::Offline;
     enum class OnlinePending { None, Hosting, Joining, Searching } onlinePending_ = OnlinePending::None;

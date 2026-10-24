@@ -1,0 +1,296 @@
+diff --git a/src/frontend/Profile.h b/src/frontend/Profile.h
+index 123ad4af..9d079a3c 100644
+--- a/src/frontend/Profile.h
++++ b/src/frontend/Profile.h
+@@ -21,6 +21,10 @@ namespace frontend {
+ class LocalProfile {
+ public:
+     static constexpr const char* kFile = "wfc_profile.ini";
++    static constexpr const char* kSeat2File = "wfc_profile_2.ini";   // split screen: the second local seat's own profile
++    std::string file_ = kFile;   // the file this profile reads / writes (kSeat2File for split screen's seat 2)
++    void setFile(const std::string& path) { file_ = path; }
++    const std::string& file() const { return file_; }
+     void load();
+     // Parses a profile; returns true when an older format was migrated (load() then saves it once).
+     bool loadFrom(std::istream& in);
+@@ -58,6 +62,7 @@ public:
+         bool hdTexturesUserSet = false, hdPackHintShown = false, showFps = false;
+         bool volumetricLighting = true;   // [PCSettings] VolumetricLighting: Rendering's X3 froxel volumetrics, Realistic only
+         std::string language = "INT";     // [PCSettings] Language: INT (default) / FRA / ... (a Coalesced_<lang> text pack); only when not INT
++        int splitLayout = 1;              // [PCSettings] SplitLayout (split screen, PC EXTENSION): 1 Horizontal (default) / 2 Vertical; only when not 1
+         int lensFlares = 2;               // [PCSettings] LensFlares: 0 Off, 1 Subtle, 2 Original (default, the shipped look); only when not 2
+         int smoke = 0;                    // [PCSettings] Smoke: 0 Original (default, the authored sprites), 1 Enhanced; only when not 0
+         int water = 0;                    // [PCSettings] Water: 0 Original (default, the authored materials), 1 Enhanced; only when not 0
+diff --git a/src/frontend/Profile.cpp b/src/frontend/Profile.cpp
+index 249fc1d6..d12a3d69 100644
+--- a/src/frontend/Profile.cpp
++++ b/src/frontend/Profile.cpp
+@@ -67,7 +67,7 @@ void LocalProfile::set(const std::string& field, const std::string& value) {
+ }
+ 
+ void LocalProfile::load() {
+-    std::ifstream f(core::userFilePath(kFile));
++    std::ifstream f(core::userFilePath(file_.c_str()));
+     if (loadFrom(f)) save();
+ }
+ 
+@@ -102,6 +102,7 @@ bool LocalProfile::loadFrom(std::istream& f) {
+             else if (k == "VolumetricLighting") display.volumetricLighting = v != "0";
+             else if (k == "LensFlares") display.lensFlares = std::clamp(std::atoi(v.c_str()), 0, 2);
+             else if (k == "Language" && !v.empty()) display.language = v;
++            else if (k == "SplitLayout") display.splitLayout = std::clamp(std::atoi(v.c_str()), 1, 2);
+             else if (k == "Smoke") display.smoke = std::clamp(std::atoi(v.c_str()), 0, 1);
+             else if (k == "Water") display.water = std::clamp(std::atoi(v.c_str()), 0, 1);
+             else if (k == "RayTracing") display.rayTracing = std::clamp(std::atoi(v.c_str()), 0, Display::kRayTracingMax);
+@@ -194,7 +195,7 @@ bool LocalProfile::loadFrom(std::istream& f) {
+ }
+ 
+ void LocalProfile::save() const {
+-    std::ofstream f(core::userFilePath(kFile));
++    std::ofstream f(core::userFilePath(file_.c_str()));
+     f << "; WFC rebuild local profile (TnProfileSettings role). Original fields under [ProfileData]; the PC SKU's\n"
+          "; display settings under [PCSettings].\n";
+     f << "\n[ProfileData]\n";
+@@ -213,6 +214,7 @@ void LocalProfile::save() const {
+       << "\nFrameGeneration=" << display.frameGeneration << "\nRayTracing=" << display.rayTracing
+       << "\nShowFps=" << (display.showFps ? 1 : 0) << "\nVolumetricLighting=" << (display.volumetricLighting ? 1 : 0)
+       << (display.language != "INT" ? "\nLanguage=" + display.language : std::string())   // only when not the default
++      << (display.splitLayout != 1 ? "\nSplitLayout=" + std::to_string(display.splitLayout) : std::string())
+       << (display.lensFlares != 2 ? "\nLensFlares=" + std::to_string(display.lensFlares) : std::string())   // only when not the default
+       << (display.smoke != 0 ? "\nSmoke=" + std::to_string(display.smoke) : std::string())
+       << (display.water != 0 ? "\nWater=" + std::to_string(display.water) : std::string())
+diff --git a/src/frontend/GameFlow.h b/src/frontend/GameFlow.h
+index e10633c4..48aefc2e 100644
+--- a/src/frontend/GameFlow.h
++++ b/src/frontend/GameFlow.h
+@@ -307,6 +307,15 @@ public:
+     void applyRecommendedBots(const char* why);
+     LocalProfile& profile() { return profile_; }
+     const LocalProfile& profile() const { return profile_; }
++    // Split screen seats (SPLITSCREEN_FRONTEND_PLAN 1-2): seat 1 = keyboard / mouse + its pad; seat 2 = the next other pad
++    // that presses Start in a party / game lobby (offline or host; never mid-match, at press-start or in a chapter). Seat 2
++    // has its own profile file (wfc_profile_2.ini). The renderer splits the view in a match with two seats.
++    bool joinSeat2(int pad);
++    void leaveSeat2();
++    int localSeats() const { return seat2Active_ ? 2 : 1; }
++    int seat2Pad() const { return seat2Active_ ? seat2Pad_ : -1; }
++    void setSeat1Pad(int pad) { seat1Pad_ = pad; }
++    LocalProfile& seat2Profile() { return seat2Profile_; }
+     // Online session (PC EXTENSION, Session.h; docs/handoff/ONLINE_MP_FRONTEND_TESTS.md). Not set = the offline flow
+     // (today's behaviour); nothing reads it yet.
+     void setSession(std::unique_ptr<ISession> s) { session_ = std::move(s); role_ = SessionRole::Offline; }
+@@ -471,6 +480,9 @@ private:
+     const GameSettings* currentSettings_ = nullptr;   // SettingsDataStore current (EditGameMode / PlayPrivateGame)
+     MatchValues matchValues_;
+     LocalProfile profile_;
++    LocalProfile seat2Profile_;
++    bool seat2Active_ = false;
++    int seat2Pad_ = -1, seat1Pad_ = -1;
+     std::unique_ptr<ISession> session_;
+     SessionRole role_ = SessionRole::Offline;
+     enum class OnlinePending { None, Hosting, Joining, Searching } onlinePending_ = OnlinePending::None;
+diff --git a/src/frontend/GameFlow_Online.cpp b/src/frontend/GameFlow_Online.cpp
+index 40192cb6..7a89f69d 100644
+--- a/src/frontend/GameFlow_Online.cpp
++++ b/src/frontend/GameFlow_Online.cpp
+@@ -137,6 +137,32 @@ void GameFlow::setPushToTalkHeld(bool held) {
+     session_->setPushToTalk(held);
+ }
+ 
++bool GameFlow::joinSeat2(int pad) {
++    const bool lobby = (level_ == LevelKind::PartyLobby || level_ == LevelKind::GameLobby) && !loading_.active;
++    std::string why;
++    if (seat2Active_) why = "already joined";
++    else if (pad < 0 || pad == seat1Pad_) why = "seat 1's device";
++    else if (!lobby) why = "not in a lobby";
++    else if (role_ == SessionRole::Member) why = "an online member cannot add a local player";
++    else if (campaign()) why = "campaign chapter";
++    if (!why.empty()) { FlowTrace::emit("split.join", {{"pad", std::to_string(pad)}, {"result", "refused"}, {"why", why}}); return false; }
++    seat2Profile_ = LocalProfile{};
++    seat2Profile_.setFile(LocalProfile::kSeat2File);
++    seat2Profile_.load();
++    seat2Active_ = true;
++    seat2Pad_ = pad;
++    FlowTrace::emit("split.join", {{"pad", std::to_string(pad)}, {"result", "joined"}, {"profile", LocalProfile::kSeat2File}});
++    return true;
++}
++
++void GameFlow::leaveSeat2() {
++    if (!seat2Active_) return;
++    seat2Profile_.save();
++    seat2Active_ = false;
++    FlowTrace::emit("split.leave", {{"pad", std::to_string(seat2Pad_)}});
++    seat2Pad_ = -1;
++}
++
+ void GameFlow::publicSnakeDraft() {
+     // RE ONLINE_POSTMATCH_PARTY_VOICE_RE: at a public lobby's final countdown the teams are re-drafted (PublicSnakeDraft) by
+     // score if anyone scored (the match just played), else by level.
+diff --git a/src/frontend/DataStores.cpp b/src/frontend/DataStores.cpp
+index 4696f045..78da4f69 100644
+--- a/src/frontend/DataStores.cpp
++++ b/src/frontend/DataStores.cpp
+@@ -99,6 +99,7 @@ std::string DataStores::read(const std::string& markup, bool* known) {
+     if (markup == "<PCSettings:FrameGeneration>") return flow_.profile().display.frameGeneration ? "1" : "0";   // PC EXTENSION
+     if (markup == "<PCSettings:RayTracing>") return std::to_string(flow_.profile().display.rayTracing);        // PC EXTENSION
+     if (markup == "<PCSettings:ShowFps>") return flow_.profile().display.showFps ? "1" : "0";                // PC EXTENSION
++    if (markup == "<PCSettings:SplitLayout>") return std::to_string(flow_.profile().display.splitLayout - 1);   // 0 Horizontal / 1 Vertical
+     if (markup == "<PCSettings:Language>") {   // PC EXTENSION: the index in the catalog's languages (INT first)
+         const std::vector<std::string> l = cat_.languages();
+         const auto it = std::find(l.begin(), l.end(), flow_.profile().display.language);
+@@ -505,6 +506,11 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
+         invalidate();
+         return {};
+     }
++    if (fn == "WriteValue" && m == "<PCSettings:SplitLayout>") {   // PC EXTENSION (split screen): RenderingSplitLayout 1 / 2
++        flow_.profile().display.splitLayout = std::clamp(std::atoi(arg(1).c_str()) + 1, 1, 2);
++        FlowTrace::emit("settings.splitLayout", {{"layout", flow_.profile().display.splitLayout == 2 ? "Vertical" : "Horizontal"}, {"provenance", "PC EXTENSION"}});
++        return {};
++    }
+     if (fn == "WriteValue" && m == "<PCSettings:Language>") {   // PC EXTENSION (user 2026-10-23): the text language
+         const std::vector<std::string> l = cat_.languages();
+         const int i = std::atoi(arg(1).c_str());
+diff --git a/src/ui/GfxPresenter.cpp b/src/ui/GfxPresenter.cpp
+index c4805fe0..7c038ffa 100644
+--- a/src/ui/GfxPresenter.cpp
++++ b/src/ui/GfxPresenter.cpp
+@@ -1386,6 +1386,11 @@ bool addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
+         for (size_t i = 0; i < languageNames.size(); ++i) add(lg, (int)i, languageNames[i].c_str());
+         row(lg, "<PCSettings:Language>", "$WfcPC.Settings.LanguageDesc", "$WfcPC.Settings.Language");
+     }
++    {   // PC EXTENSION (split screen, user 2026-10-23): the two-player layout - Horizontal (stock UE3 default) / Vertical
++        std::vector<gfx::avm1::Value> sl;
++        add(sl, 0, "$WfcPC.Settings.SplitHorizontal"); add(sl, 1, "$WfcPC.Settings.SplitVertical");
++        row(sl, "<PCSettings:SplitLayout>", "$WfcPC.Settings.SplitLayoutDesc", "$WfcPC.Settings.SplitLayout");
++    }
+     {   // PC EXTENSION (user decisions; Rendering setSmokeMode / setWaterMode): Original = the shipped look (default)
+         std::vector<gfx::avm1::Value> sm, wa;
+         // Smoke ships in every mode (Rendering's tuned stage 1 passed by eye; Integration 2026-10-23)
+diff --git a/data/frontend/pc_strings.int b/data/frontend/pc_strings.int
+index a6e7a6aa..2df049f8 100644
+--- a/data/frontend/pc_strings.int
++++ b/data/frontend/pc_strings.int
+@@ -49,6 +49,10 @@ LensFlares=Lens Flares
+ LensFlaresDesc=The sun's lens flare on outdoor maps.
+ LensFlaresSubtle=Subtle
+ LensFlaresOriginal=Original
++SplitLayout=Split Screen Layout
++SplitLayoutDesc=How the screen divides when a second player joins: one above the other, or side by side.
++SplitHorizontal=Horizontal
++SplitVertical=Vertical
+ Language=Language
+ LanguageDesc=The language of the menus, subtitles and voices (where the game ships it). Menus change when you next open them; voices from the next map.
+ Smoke=Smoke
+diff --git a/tests/FrontendTests.cpp b/tests/FrontendTests.cpp
+index 0f104dc9..c09f21ab 100644
+--- a/tests/FrontendTests.cpp
++++ b/tests/FrontendTests.cpp
+@@ -1972,6 +1972,43 @@ static void testCampaignCoopLobby() {
+           std::to_string(party) + std::to_string(lobby) + std::to_string(hosted) + std::to_string(claimed) + std::to_string(launch) + " " + url);
+ }
+ 
++static void testSplitProfiles() {
++    // Split screen groundwork: the Split Layout row (Horizontal default / Vertical) round-trips in the profile; the second
++    // seat's profile is its own file (wfc_profile_2.ini) and does not touch seat 1's.
++    std::remove("wfc_profile.ini");
++    std::remove(LocalProfile::kSeat2File);
++    LocalProfile p1;
++    p1.display.splitLayout = 2;
++    p1.save();
++    LocalProfile p2;
++    p2.setFile(LocalProfile::kSeat2File);
++    p2.voice.mode = 2;
++    p2.save();
++    LocalProfile b1; b1.load();
++    LocalProfile b2; b2.setFile(LocalProfile::kSeat2File); b2.load();
++    const bool ok = b1.display.splitLayout == 2 && b1.voice.mode == 1 && b2.voice.mode == 2 && b2.display.splitLayout == 1;
++    check(ok, "split.profiles", std::to_string(b1.display.splitLayout) + std::to_string(b1.voice.mode) + std::to_string(b2.voice.mode));
++    // seat 2 joins from a lobby with another pad only; its profile is wfc_profile_2.ini; it leaves
++    {
++        FrontendRuntime rt;
++        if (!rt.init()) { check(false, "split.seat2_join", "init"); return; }
++        GameFlow& f = rt.flow();
++        runUntil(rt, [&] { return f.frontEndStarted(); });
++        f.setSeat1Pad(0);
++        const bool refusedFrontEnd = !f.joinSeat2(1);
++        f.call("Online.OpenPartyLobby", {"GTS_TeamGame"});
++        runUntil(rt, [&] { return f.level() == LevelKind::PartyLobby && !f.loading().active; });
++        const bool refusedSamePad = !f.joinSeat2(0);
++        const bool joined = f.joinSeat2(1) && f.localSeats() == 2 && f.seat2Pad() == 1 && f.seat2Profile().file() == LocalProfile::kSeat2File &&
++                            f.seat2Profile().voice.mode == 2;   // the file written above
++        f.leaveSeat2();
++        check(refusedFrontEnd && refusedSamePad && joined && f.localSeats() == 1, "split.seat2_join",
++              std::to_string(refusedFrontEnd) + std::to_string(refusedSamePad) + std::to_string(joined));
++    }
++    std::remove("wfc_profile.ini");
++    std::remove(LocalProfile::kSeat2File);
++}
++
+ static void testDlcMerge() {
+     // The DLC packs, always owned (RE DLC_RE 4): their nine maps in the catalog (Pack 1 re-defines Havoc / Fortress /
+     // Tranquillity with a thumbnail), the ESC ones as SV maps with their faction, the thumbnails resolved from the DLC
+@@ -2438,6 +2475,7 @@ int main() {
+     testEscalationNoXp();
+     testLanguageSetting();
+     testDlcMerge();
++    testSplitProfiles();
+     testCampaignCoopLobby();
+     testFriendsInvites();
+     testCampaignObjectivesManifest();
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index ee3e1a8e..1122312d 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -18,6 +18,7 @@
+ #include "platform/Movie.h"
+ #include "platform/Window.h"
+ #include "render/Renderer.h"
++#include "render/SplitScreen.h"
+ #include "ui/GfxPresenter.h"
+ #include "ui/UiGL.h"
+ #include "ui/gl/GlCensus.h"
+@@ -57,6 +58,20 @@ constexpr bool kRendererFrameGenStartup =
+     !std::is_same_v<decltype(render::setFrameGenerationAtStartup(true)), render::FrameGenStartupMissing>;
+ 
+ namespace {
++// [Frontend, split screen] The renderer's view layout follows the seats: split (the profile's Split Layout row, Horizontal
++// default / Vertical) only in a match with two local seats; menus, loading screens and one seat draw a single view.
++void syncSplitLayout(render::IRenderer* r, const frontend::GameFlow& flow) {
++    if (!r) return;
++    const render::SplitLayout want = flow.level() == frontend::LevelKind::Match && flow.localSeats() == 2
++                                         ? (flow.profile().display.splitLayout == 2 ? render::SplitLayout::Vertical : render::SplitLayout::Horizontal)
++                                         : render::SplitLayout::Single;
++    if (r->splitLayout() != want) {
++        r->setSplitLayout(want);
++        frontend::FlowTrace::emit("split.layout", {{"layout", want == render::SplitLayout::Single ? "Single" : want == render::SplitLayout::Vertical ? "Vertical" : "Horizontal"},
++                                                    {"views", std::to_string(render::splitViewCount(want))}});
++    }
++}
++
+ // Gameplay's look settings (PlayerController::setLookSettings(CameraSensitivity, InvertY_Robot, InvertY_Car,
+ // InvertY_Plane, InvertY_Tank); the 5-argument form, detected). Car covers trucks, as UpdateInvertMouseBy*Form.
+ // Rendering M28: unloadMapRenderData releases every texture the match uploaded (setTexturePersistent marks exceptions).
+@@ -1304,6 +1319,7 @@ void Application::runFrontend() {
+                 core::prof::Scope prof("+frontend.update");
+                 frontend_->update(input, (float)dt);
+             }
++            syncSplitLayout(renderer_, flow);   // [Frontend] menus: a single view
+             tickLobbyVoice();   // [Systems] lobby voice (in a session, no match)
+             if (flow.quitRequested()) { quit = true; break; }
+             drawFrontendFrame();
+@@ -1753,8 +1769,13 @@ void Application::routeMatchToFrontend(float dt) {
+         default: break;
+         }
+     }
+-    // [Frontend C6] Restart From Last Checkpoint: until Gameplay's in-place RestartFromActiveCheckpoint, relaunch at the active checkpoint
+-    if (flow.takeCampaignRestartRequest()) flow.campaignRelaunchAt(pf.hud.cpCheckpoint);
++    syncSplitLayout(renderer_, flow);   // [Frontend] a match with two local seats splits the view
++    // [Frontend C6] Restart From Last Checkpoint: Gameplay's in-place RestartFromActiveCheckpoint (the respawn closes MISSION FAILED);
++    // online the host relaunches at the active checkpoint so every member follows the new launch record
++    if (flow.takeCampaignRestartRequest()) {
++        if (netDriver_) flow.campaignRelaunchAt(pf.hud.cpCheckpoint);
++        else world_.submit([](game::World& w) { w.cpRestartFromCheckpoint(); });
++    }
+     // RUNTIME-EVENTS: timer, once per change of GRI.RemainingTime while the match runs
+     if (pf.matchState == (int)game::Match::State::InProgress && pf.remainingTime != lastLoggedRemaining_) {
+         lastLoggedRemaining_ = pf.remainingTime;

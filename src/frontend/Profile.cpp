@@ -67,7 +67,7 @@ void LocalProfile::set(const std::string& field, const std::string& value) {
 }
 
 void LocalProfile::load() {
-    std::ifstream f(core::userFilePath(kFile));
+    std::ifstream f(core::userFilePath(file_.c_str()));
     if (loadFrom(f)) save();
 }
 
@@ -102,6 +102,7 @@ bool LocalProfile::loadFrom(std::istream& f) {
             else if (k == "VolumetricLighting") display.volumetricLighting = v != "0";
             else if (k == "LensFlares") display.lensFlares = std::clamp(std::atoi(v.c_str()), 0, 2);
             else if (k == "Language" && !v.empty()) display.language = v;
+            else if (k == "SplitLayout") display.splitLayout = std::clamp(std::atoi(v.c_str()), 1, 2);
             else if (k == "Smoke") display.smoke = std::clamp(std::atoi(v.c_str()), 0, 1);
             else if (k == "Water") display.water = std::clamp(std::atoi(v.c_str()), 0, 1);
             else if (k == "RayTracing") display.rayTracing = std::clamp(std::atoi(v.c_str()), 0, Display::kRayTracingMax);
@@ -194,7 +195,7 @@ bool LocalProfile::loadFrom(std::istream& f) {
 }
 
 void LocalProfile::save() const {
-    std::ofstream f(core::userFilePath(kFile));
+    std::ofstream f(core::userFilePath(file_.c_str()));
     f << "; WFC rebuild local profile (TnProfileSettings role). Original fields under [ProfileData]; the PC SKU's\n"
          "; display settings under [PCSettings].\n";
     f << "\n[ProfileData]\n";
@@ -213,6 +214,7 @@ void LocalProfile::save() const {
       << "\nFrameGeneration=" << display.frameGeneration << "\nRayTracing=" << display.rayTracing
       << "\nShowFps=" << (display.showFps ? 1 : 0) << "\nVolumetricLighting=" << (display.volumetricLighting ? 1 : 0)
       << (display.language != "INT" ? "\nLanguage=" + display.language : std::string())   // only when not the default
+      << (display.splitLayout != 1 ? "\nSplitLayout=" + std::to_string(display.splitLayout) : std::string())
       << (display.lensFlares != 2 ? "\nLensFlares=" + std::to_string(display.lensFlares) : std::string())   // only when not the default
       << (display.smoke != 0 ? "\nSmoke=" + std::to_string(display.smoke) : std::string())
       << (display.water != 0 ? "\nWater=" + std::to_string(display.water) : std::string())
