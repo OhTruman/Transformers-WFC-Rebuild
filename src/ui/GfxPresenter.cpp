@@ -1388,7 +1388,7 @@ bool addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         : hdEnhancedAvailable && vramMB > 0 && vramMB < frontend::kHdEnhancedMinVramMB ? "Enhanced may exceed this GPU's memory on large maps."
         : hdEnhancedAvailable && rtAvailable && vramMB > 0 && vramMB < frontend::kHdEnhancedRtMinVramMB
             ? "Enhanced with Ray Tracing may exceed this GPU's memory."
-        : hdEnhancedAvailable ? "Faithful: the original, sharper. Enhanced: new materials."
+        : hdEnhancedAvailable ? "Faithful: the original, sharper. Enhanced: new materials. Applies on next map."
                               : "HD textures use more video memory. Applies on next map.", "HD Textures");
     row(af, "<PCSettings:Anisotropy>", "Sharper textures at grazing angles (4x is the original setting).", "Anisotropic Filtering");
     if (frameGenAvailable) {   // decided at start-up: a value different from this session's state says so
