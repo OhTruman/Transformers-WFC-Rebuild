@@ -284,7 +284,9 @@ class MatCompiler:
     def x_Power(self, c, n, p, o):
         b, tb = self.req(c, n, 'Base', p) if n.get('Base') else self.req(c, n, 'A', p)
         e = self.input(c, n, 'Exponent') or self.input(c, n, 'B') or (glf(n.get('ConstExponent', 2.0)), 1)
-        return 'pow(max(%s, %s(0.0)), %s)' % (b, GLSL_T[tb], cast(e[0], e[1], tb)), tb
+        # UE3 ClampedPow (RE, shipped microcode: MAX(|x|, 1e-6) -> LOG -> MUL -> EXP): the runtime wraps every material-body
+        # pow as wfcPowM = pow(max(abs(x), 1e-6), y); the old max(x, 0) here zeroed negative bases the original takes as |x|
+        return 'pow(%s, %s)' % (b, cast(e[0], e[1], tb)), tb
 
     def x_Clamp(self, c, n, p, o):
         x, t = self.req(c, n, 'Input', p)

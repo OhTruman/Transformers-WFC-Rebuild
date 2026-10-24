@@ -281,8 +281,11 @@ void Pipeline::setActorPose(const std::string& actor, const core::Vec3& p, const
     std::transform(a.begin(), a.end(), a.begin(), ::tolower);
     auto it = actorPose0_.find(a);
     if (it == actorPose0_.end()) {                     // no such placed actor in the loaded scene: reported, not guessed
+        // (a CameraActor: not drawn - the cinematic view takes the matinee camera; a campaign chapter's actor in a unit not
+        // resident yet: the persistent level's matinees run regardless) an info line, not a warning
+        if (a.rfind("cameraactor", 0) == 0) return;
         if (posesUnknown_.insert(a).second && posesUnknown_.size() <= 8)
-            LOG_WARN("wfc: frontend pose for unknown actor %s (not in the scene's actors_by_level)", a.c_str());
+            LOG_INFO("wfc: frontend pose for an actor not in the loaded scene: %s (a unit not resident, or not drawn)", a.c_str());
         return;
     }
     ++posesApplied_;
