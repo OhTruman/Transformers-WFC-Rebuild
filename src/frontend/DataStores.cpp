@@ -266,6 +266,10 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
         const MatchValues& mv = flow_.matchValues();
         const bool live = inMatch && mv.valid;   // [integration] Gameplay's PRI values in a match
         int team = live ? mv.myTeam : inMatch ? flow_.currentMatch().teamIndex : flow_.lobby().localTeam;
+        // The party lobby has no teams (TnPartyLobbyGame TeamHandler = TnTeamHandlerNoTeams: TeamID 255 for everyone), so
+        // PlayerList draws one plain list - a stale / unset team (-1) drew AUTOBOTS / DECEPTICONS there [RE BASE_GAME_FLOWS_RE 2;
+        // playtest 2026-10-23b #19]. 255 is also the original's "no team yet" anywhere else.
+        if (flow_.level() == LevelKind::PartyLobby || team < 0) team = 255;
         std::string teamName = team == 0 ? cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName")
                              : team == 1 ? cat_.localize("TransGame", "TnFactionTeamDecepticons", "TeamName") : "";
         // A fresh profile is level 1 in every specialty (no XP / progression service yet) [PARTIAL].
@@ -345,7 +349,8 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
             for (const GameFlow::OnlineMember& m : flow_.onlineMembers()) {
                 std::string headset;
                 const std::string shown = onlineRow(m, headset);
-                c.rows.push_back({shown, std::to_string(m.team), teamNameOf(m.team), "0", "0", "0", "0", headset, "", "0",
+                const int mt = flow_.level() == LevelKind::PartyLobby || m.team < 0 ? 255 : m.team;   // no teams in the party lobby
+                c.rows.push_back({shown, std::to_string(mt), teamNameOf(mt), "0", "0", "0", "0", headset, "", "0",
                                   m.connecting ? "1" : "0", "0", "", "", "0", "0", "0", "0", std::to_string(m.info.level)});
                 c.enabled.push_back(true);
             }
@@ -357,7 +362,7 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
         c.columns = {"TeamName", "TeamID", "TeamIndex", "Score"};
         bool inMatch = flow_.level() == LevelKind::Match;
         int gts = inMatch ? flow_.currentMatch().gameTeamStatus : flow_.lobby().gameTeamStatus;
-        if (gts == 3) {
+        if (gts == 3 && flow_.level() != LevelKind::PartyLobby) {   // the party lobby has no teams (TnTeamHandlerNoTeams)
             const MatchValues& mv = flow_.matchValues();
             const bool live = inMatch && mv.valid;   // [integration] Gameplay's TeamInfo.Score in a match
             c.rows.push_back({cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName"), "0", "0", std::to_string(live ? mv.teamScore[0] : 0)});
