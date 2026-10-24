@@ -1,5 +1,6 @@
 #include "frontend/Catalog.h"
 #include "frontend/DataPaths.h"
+#include "frontend/FlowTrace.h"
 #include "frontend/OpenPath.h"
 #include "assets/Json.h"
 #include "core/Config.h"
@@ -138,6 +139,8 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
         }
     }
 
+    locInt_ = loc_;
+    language_ = "INT";
     loadProviders(extractedRoot);
     loadKeyDescriptions(extractedRoot);
 
@@ -546,6 +549,59 @@ void Catalog::loadTransLevels(const std::string& extractedRoot, const std::strin
     }
     flushMap();
     LOG_INFO("FRONTEND catalog: %zu campaign checkpoints, %d campaign chapters (TransLevels.ini)", checkpoints_.size(), added);
+}
+
+std::vector<std::string> Catalog::languages() const {
+    std::vector<std::string> out{"INT"};
+    for (const char* c : {"FRA", "DEU", "ITA", "ESN", "ESM", "JPN", "KOR", "CHT", "POL", "RUS", "CZE", "HUN", "PTB"}) {
+        std::string lc = c;
+        for (char& ch : lc) ch = (char)std::tolower((unsigned char)ch);
+        if (std::ifstream(openPath(extractedRoot_ + "/config/Coalesced_" + std::string(c) + "/TransGame/Localization/" + c + "/UIText." + lc)).good())
+            out.push_back(c);
+    }
+    return out;
+}
+
+std::string Catalog::languageName(const std::string& code) {
+    if (code == "FRA") return "Fran\u00e7ais";
+    if (code == "DEU") return "Deutsch";
+    if (code == "ITA") return "Italiano";
+    if (code == "ESN" || code == "ESM") return "Espa\u00f1ol";
+    return code == "INT" ? "English" : code;
+}
+
+void Catalog::setLanguage(const std::string& codeIn) {
+    std::string code = codeIn.empty() ? "INT" : codeIn;
+    const std::vector<std::string> avail = languages();
+    if (std::find(avail.begin(), avail.end(), code) == avail.end()) code = "INT";
+    loc_ = locInt_;
+    language_ = code;
+    if (code != "INT") {
+        std::string lc = code;
+        for (char& ch : lc) ch = (char)std::tolower((unsigned char)ch);
+        const std::string dir = extractedRoot_ + "/config/Coalesced_" + code + "/TransGame/Localization/" + code + "/";
+        auto overlay = [&](const std::string& path, const std::string& prefix, bool stripQuotes) {
+            std::ifstream f(openPath(path));
+            std::string line, section;
+            while (std::getline(f, line)) {
+                if (!line.empty() && line.back() == '\r') line.pop_back();
+                if (line.empty() || line[0] == ';') continue;
+                if (line[0] == '[') { section = line.substr(1, line.find(']') - 1); continue; }
+                const size_t eq = line.find('=');
+                if (eq == std::string::npos || section.empty()) continue;
+                std::string v = line.substr(eq + 1);
+                if (stripQuotes && v.size() >= 2 && v.front() == '"' && v.back() == '"') v = v.substr(1, v.size() - 2);
+                loc_[prefix + section + "." + line.substr(0, eq)] = v;   // the language wins; keys it lacks stay INT
+            }
+        };
+        for (const char* file : {"TransGame", "UIText", "Engine", "TransContent"}) overlay(dir + file + "." + lc, std::string(file) + ".", true);
+        overlay(frontendDataFile(("pc_strings." + lc).c_str()), "WfcPC.", false);   // the PC-only rows' translation, when present
+    }
+    for (MapInfo& m : maps_) {
+        if (m.friendlyNameInt.empty()) m.friendlyNameInt = m.friendlyName;
+        m.friendlyName = code == "FRA" && !m.friendlyNameFra.empty() ? m.friendlyNameFra : m.friendlyNameInt;
+    }
+    FlowTrace::emit("catalog.language", {{"code", code}, {"strings", std::to_string(loc_.size())}});
 }
 
 std::string Catalog::localize(const std::string& file, const std::string& section, const std::string& key) const {

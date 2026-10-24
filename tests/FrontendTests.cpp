@@ -1954,6 +1954,36 @@ static void testCampaignCoopLobby() {
           std::to_string(party) + std::to_string(lobby) + std::to_string(hosted) + std::to_string(claimed) + std::to_string(launch) + " " + url);
 }
 
+static void testLanguageSetting() {
+    // The Settings Language row (PC EXTENSION, user 2026-10-23): INT + every Coalesced_<lang> text pack (FRA in the base game);
+    // the profile's choice applies on the next frame (boot / Apply), French text overlays INT key by key (a key FRA lacks
+    // stays INT), map names follow, Game.GetLanguageCode answers it, INT again restores English; the profile round-trips it.
+    std::remove("wfc_profile.ini");
+    FrontendRuntime rt;
+    if (!rt.init()) { check(false, "settings.language", "init"); return; }
+    runUntil(rt, [&] { return rt.flow().frontEndStarted(); });
+    const std::vector<std::string> langs = rt.catalog().languages();
+    const bool hasFra = std::find(langs.begin(), langs.end(), "FRA") != langs.end() && langs.front() == "INT";
+    const bool intFirst = rt.catalog().localizeKey("$UIText.Accounts.CreateAccount") == "Create";
+    DataStores& ds = rt.dataStores();
+    ds.call("WriteValue", {"<PCSettings:Language>", "1"});   // FRA
+    rt.update(platform::InputFrame{}, 1.0f / 60.0f);
+    const bool fra = rt.catalog().language() == "FRA" && rt.catalog().localizeKey("$UIText.Accounts.CreateAccount") == "Cr\u00e9er" &&
+                     rt.catalog().localizeKey("$WfcPC.Settings.Language") == "Language" &&   // no pc_strings.fra key: INT
+                     rt.bridge("", "Game.GetLanguageCode", {}).s == "FRA" &&
+                     ds.call("ReadValue", {"<PCSettings:Language>"}).s == "1";
+    rt.flow().profile().save();
+    LocalProfile back; back.load();
+    const bool saved = back.display.language == "FRA";
+    ds.call("WriteValue", {"<PCSettings:Language>", "0"});
+    rt.update(platform::InputFrame{}, 1.0f / 60.0f);
+    const bool backInt = rt.catalog().language() == "INT" && rt.catalog().localizeKey("$UIText.Accounts.CreateAccount") == "Create";
+    check(hasFra && intFirst && fra && saved && backInt, "settings.language",
+          std::to_string(hasFra) + std::to_string(intFirst) + std::to_string(fra) + std::to_string(saved) + std::to_string(backInt) + " " +
+          rt.catalog().localizeKey("$UIText.Accounts.CreateAccount"));
+    std::remove("wfc_profile.ini");
+}
+
 static void testEscalationNoXp() {
     // RE ESCALATION_WAVES_RE 5: TnGameReplicationInfoSurvival.CanGainXp is false - Escalation earns no XP (the end screen's bars
     // show no gain); an offline versus match keeps the PC progression rule
@@ -2366,6 +2396,7 @@ int main() {
     testSmokeWaterRows();
     testCampaignC6();
     testEscalationNoXp();
+    testLanguageSetting();
     testCampaignCoopLobby();
     testFriendsInvites();
     testCampaignObjectivesManifest();

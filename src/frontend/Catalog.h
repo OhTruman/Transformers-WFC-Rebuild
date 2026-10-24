@@ -28,6 +28,7 @@ struct MapInfo {
     std::string imagePath;                  // UI_LevelThumbnails_p.<name>
     std::string thumbnailPng;               // ExtractedAssets-relative
     std::string friendlyName, friendlyNameFra;
+    std::string friendlyNameInt;   // the INT name, kept while friendlyName follows the language (Catalog::setLanguage)
     bool cooked = false;                    // cooked package present in the dump
     // Rebuild: HasRequiredAssets() is native in WFC (DLC check). The rebuild equivalent is "this map's
     // reconstructed runtime data exists" (ExtractedAssets/VerticalSlice/Maps/<runtimeDir>/world.glb).
@@ -135,6 +136,13 @@ public:
     // Localization ("$UIText.LoadScreen.LoadingMap" or section/key); INT. Empty when unknown.
     std::string localize(const std::string& file, const std::string& section, const std::string& key) const;
     std::string localizeKey(const std::string& dollarKey) const;
+    // The text language (PC EXTENSION Settings row, user 2026-10-23): INT plus every Coalesced_<lang> text pack present.
+    // setLanguage rebuilds the table as INT overlaid with that language's files (a missing key stays INT), and switches
+    // the map / mode names to the manifests' entries for it.
+    std::vector<std::string> languages() const;
+    void setLanguage(const std::string& code);
+    const std::string& language() const { return language_; }
+    static std::string languageName(const std::string& code);   // the language's own name: "English", "Français"
     // Pad in use (PC ADAPTATION of the device switch): serve the console overrides; else the PC strings.
     void setConsoleStrings(bool on) { consoleStrings_ = on; }
     bool consoleStrings() const { return consoleStrings_; }
@@ -164,6 +172,8 @@ private:
     std::vector<GameModeInfo> modes_;
     std::map<std::string, GameSettings> settings_;
     int defaultQuickmatchPlaylist_ = 1;
+    std::string language_ = "INT";
+    std::map<std::string, std::string> locInt_;   // the INT table as loaded (setLanguage starts from it)
     std::map<std::string, std::string> loc_;   // "UIText.Section.Key" -> INT text
     mutable std::map<std::string, std::string> locLower_;   // the same, keys lower-cased (built on the first miss)
     // The shipped console overrides (UIText_360.int, TransGame_360.int, ...): the pad's button-token strings ({x} Reload)
