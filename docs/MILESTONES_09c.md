@@ -4428,3 +4428,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 02:43 DLC DATA DONE 02:50: all 9 DLC maps exported and current (Pulse render refreshed with the recovered door texture). Card:
   Rendering D1 split A/B -> Frontend 5-min check -> Experimental final gate on the build sha. Waiting: Gameplay Static
   data + item 21, Rendering mech draw patch, Experimental re-stage, AssetTools movers + cleanup.
+2026-10-24 02:47 MERGED a61249c0 Static Escalation data + FINAL_BASE_ITEMS 21 (ESCTEST all six pass; Static 9 / 9: door generator,
+  fire-jet trap with real values). DLC complete except Static's ambient FIREJETS / FIREEXP bursts + camera Kismet and
+  Pulse's healing platform / Nexus / sentries / Trypticon (open list). Before the sha: Rendering mech draw + denoiser
+  fallback, Frontend 5-min check.
