@@ -1,0 +1,24 @@
+        {   // a door generator (District's Zone_Manager): its Open Doors transform, its Enable Survival Zones activate
+            const auto& TA = world_.transformingActors();
+            LOG_INFO("ESCTEST %s: %zu transforming actors", map.c_str(), TA.actors().size());
+            int dg = -1;
+            for (size_t g = 0; g < D.generators.size() && dg < 0; ++g)
+                if (!S.generatorDone[g]) for (const auto& a : D.generators[g].actions) if (a.op == "transform" && TA.find(a.target) >= 0) { dg = (int)g; break; }
+            if (dg >= 0) {
+                const game::SurvivalData::Generator& G = D.generators[(size_t)dg];
+                static core::Vec3 at2; at2 = (G.mn + G.mx) * 0.5f; at2.y = G.mn.y + 0.5f;
+                pin = &at2; interact = false; step(); step(); interact = true;
+                float b = 0.0f; while (b < 30.0f && !S.generatorDone[(size_t)dg]) { step(); b += dt; }
+                interact = false; step(); pin = nullptr;
+                run(3.0f);   // the doors' transform clips
+                int doors = 0, opened = 0, zones = 0, zonesOn = 0;
+                for (const auto& a : G.actions) {
+                    if (a.op == "transform") { const int i = TA.find(a.target); if (i >= 0) { ++doors; opened += TA.actors()[(size_t)i].desired == 1 && TA.actors()[(size_t)i].t > 0.0f; } }
+                    if (a.op == "on" && a.cls == "TnSurvivalZoneVolume")
+                        for (const auto& z : D.zones) if ("TnSurvivalZoneVolume_" + z.id == a.target) { ++zones; zonesOn += z.active; }
+                }
+                LOG_INFO("ESCTEST %s: door generator %s (cost %d) %s: doors %d/%d opening, zones %d/%d on", map.c_str(), G.id.c_str(), G.cost,
+                         S.generatorDone[(size_t)dg] ? "bought" : "NOT bought", opened, doors, zonesOn, zones);
+                check(S.generatorDone[(size_t)dg] && doors > 0 && opened == doors && zonesOn == zones, "a door generator opens its doors and activates its zones");
+            } else if (map == "MP_ESC_District") check(false, "District: a door generator with loaded doors");
+        }

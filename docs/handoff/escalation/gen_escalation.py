@@ -82,6 +82,19 @@ for m in COOP:
     OPS = {'SeqAct_ToggleHidden': {'UnHide': 'unhide', 'Hide': 'hide'}, 'TnSeqAct_TransformWorldProp': {'Transform': 'transform', 'Untransform': 'untransform'},
            'SeqAct_ChangeCollision': {'In': 'collide'}, 'SeqAct_Toggle': {'Turn On': 'on', 'Turn Off': 'off', 'Toggle': 'toggle'}}
     out['generators'] = []
+    # Subsequence calls on New Power Level (District's Zone_Manager / Zone, RE notes/data/escalation): their linked variables are
+    # the actions AssetTools' flattened chains do not follow - Open Doors -> transform, Enable Survival Zones -> zone on, Disable
+    # Volumes -> TriggerVolume off (NavMeshCells: the original NavigationCell gating, the escNav path only; not carried).
+    SUBVARS = {'Open Doors': ('transform', 'TnTransformingWorldActor'), 'Enable Survival Zones': ('on', 'TnSurvivalZoneVolume'),
+               'Disable Volumes': ('off', 'TriggerVolume')}
+    subacts = {}
+    for e in re_.get('events', []):
+        if e.get('class') != 'TnSeqEvent_SurvivalGenerator': continue
+        for y in e.get('downstream', [])[1:]:
+            if y.get('class') != 'Sequence' or not str(y.get('via') or '').endswith('New Power Level'): continue
+            for k, (op, cls) in SUBVARS.items():
+                for t in (y.get('vars') or {}).get(k, []):
+                    subacts.setdefault(e['originator'], []).append({'op': op, 'class': cls, 'target': t})
     for g in geo['generators']:
         pts = [p for poly in g['activation_polygons_gltf'] for p in poly]
         acts = []
@@ -91,6 +104,8 @@ for m in COOP:
                 if not op: continue
                 for t in a.get('targets', []) or []:
                     acts.append({'op': op, 'class': t['class'], 'target': t['target']})
+        for x in subacts.get(g['generator'], []):
+            if x not in acts: acts.append(x)
         out['generators'].append({
             'id': g['generator'].replace('TnSurvivalGenerator_', ''), 'nameKey': g['name_key'], 'cost': g['power_levels'][0] if g['power_levels'] else 0,
             'drainRate': g['drain_rate'], 'location': g['location_gltf'], 'volume': g['activation_volume'],
