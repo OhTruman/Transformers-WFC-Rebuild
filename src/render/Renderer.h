@@ -84,6 +84,10 @@ public:
     virtual void beginView(int view, const Camera& cam) { (void)view; (void)cam; }
     // the view currently receiving draw calls (0 outside a split frame)
     virtual int currentView() const { return 0; }
+    // the draw owner that is "me" in the current view (the local seat's pawn: first-person / own-pawn rules), set inside each
+    // view block after beginView. Split frames submit absolute owners (100 + participant) so per-owner state (light
+    // environments, skin caches) never mixes two seats' pawns; one view keeps today's convention (owner 0 = me, the default)
+    virtual void setLocalOwner(int drawOwner) { (void)drawOwner; }
 
     // Oriented box centred at `center`, full extents `size`, rotated `yaw` about Y.
     virtual void drawBox(const core::Vec3& center, const core::Vec3& size,
