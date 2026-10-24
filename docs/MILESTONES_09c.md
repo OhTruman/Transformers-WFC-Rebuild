@@ -4425,3 +4425,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   vs_pickups read the DLC-only db; re-run clean); Pulse render refresh running (dlc_render.py needs dlc_env.sh).
   MERGED 250337ee level audio from the corrected packages (Tranquillity ops 12 -> 50, Static 118 ops, District emitters
   139 -> 278; 0 damaged exports). Gameplay: Static waves + District re-check -> data patch + item 21.
+2026-10-24 02:43 DLC DATA DONE 02:50: all 9 DLC maps exported and current (Pulse render refreshed with the recovered door texture). Card:
+  Rendering D1 split A/B -> Frontend 5-min check -> Experimental final gate on the build sha. Waiting: Gameplay Static
+  data + item 21, Rendering mech draw patch, Experimental re-stage, AssetTools movers + cleanup.
