@@ -82,13 +82,15 @@ std::string manifestRoot() {
 }
 
 const assets::Json* rosterPackage() {
-    static assets::Json j; static int state = 0;
-    if (state == 0) {
+    // a magic static (thread-safe first init): a background body load (World::startChassisJob) may be the first caller
+    static const assets::Json* const pkg = [] {
+        static assets::Json j;
         std::string txt;
-        state = (readFile(manifestRoot() + "/mp_content/roster_package.json", txt) && assets::Json::parse(txt, j)) ? 1 : -1;
-        if (state < 0) LOG_WARN("ChassisDef: roster_package.json unavailable under %s", manifestRoot().c_str());
-    }
-    return state > 0 ? &j : nullptr;
+        if (readFile(manifestRoot() + "/mp_content/roster_package.json", txt) && assets::Json::parse(txt, j)) return (const assets::Json*)&j;
+        LOG_WARN("ChassisDef: roster_package.json unavailable under %s", manifestRoot().c_str());
+        return (const assets::Json*)nullptr;
+    }();
+    return pkg;
 }
 
 const assets::Json* rosterEntry(const std::string& id) {

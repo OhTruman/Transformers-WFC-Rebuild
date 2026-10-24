@@ -2123,6 +2123,7 @@ void World::joinStep() {
     // Main-thread work the background part asked for: model loads (GL uploads), retried by the next step.
     for (const WeaponDef* d : deferredWeaponLoads_) if (d) weaponModelFor(*d);
     deferredWeaponLoads_.clear();
+    if (!deferredChassisGpu_.empty()) completeDeferredChassis();   // [Systems] bodies finished off the main thread
     if (!deferredHooks_.empty()) { std::vector<std::function<void()>> hooks; hooks.swap(deferredHooks_); for (auto& h : hooks) h(); }
     if (!fxOps_.empty()) { std::vector<FxOp> ops; ops.swap(fxOps_); for (const FxOp& op : ops) runFxOp(op); }
     tickCorpses(pendingDt_);   // [Gameplay] presentation only (main thread, after the deferred corpse requests ran)
@@ -5378,8 +5379,13 @@ void World::buildChassisCpu(const std::string& id, ChassisAssets& a_, const std:
 
 // The main-thread part: texture resolution (upload; the decodes may already be done by the prefetch pool) in the synchronous
 // path's order - robot, vehicle, arm - then the renderer prewarm and the cache entry.
-const World::ChassisAssets* World::finishChassis(const std::string& id, std::unique_ptr<ChassisAssets> a, double* chProf, const char* how) {
-    if (a->ok) {
+// The main-thread presentation part of a loaded body: its textures (upload) and the presentation data its first death / hit / shot
+// needs (below). finishChassis runs it at once on the main thread; a body finished off it (chassisAssets reached from the step's
+// background part, Gameplay 2026-10-24) is cached GPU-pending and completes at the join (completeDeferredChassis) - the sim data is
+// the same either way, only the uploads wait for the main thread.
+void World::chassisGpu(const std::string& id, ChassisAssets& a_) {
+    ChassisAssets* a = &a_;
+    {
         resolveModelTextures(a->robot);
         resolveModelTextures(a->vehicle);
         if (a->hasArm) resolveModelTextures(a->arm);
@@ -5395,6 +5401,35 @@ const World::ChassisAssets* World::finishChassis(const std::string& id, std::uni
             (void)chassisEnergonDefault(id, energon);
         }
     }
+}
+
+// Rendering M53: compile the programs / upload the textures of every form's materials now, so the first robot -> vehicle transform
+// does not pay for them in one frame (measured 65-166 ms hitch). Once per chassis (cached; bots share it). Main thread.
+void World::chassisPrewarm(const ChassisAssets& a) {
+    if (!renderer_ || !a.ok) return;
+    for (const assets::SkinnedModel* m : {&a.robot, &a.vehicle, a.hasArm ? &a.arm : nullptr}) {
+        if (!m || !m->valid()) continue;
+        render::MeshData md; md.subs = m->subs; md.mats = m->mats;
+        fxPrewarm(*renderer_, md, 0);
+        prewarmSkin(*m);   // the GPU-skin model too (robot, vehicle form, arm): no build at first sight / first transform
+    }
+}
+
+void World::completeDeferredChassis() {   // the join (main thread): the GPU-pending bodies' uploads, prewarm, presentation data
+    std::vector<std::string> ids; ids.swap(deferredChassisGpu_);
+    for (const std::string& id : ids) {
+        auto it = chassisCache_.find(id);
+        if (it == chassisCache_.end() || !it->second->gpuPending) continue;
+        chassisGpu(id, *it->second);
+        chassisPrewarm(*it->second);
+        it->second->gpuPending = false;
+        LOG_INFO("chassis %s: GPU part completed on the main thread (finished off it)", id.c_str());
+    }
+}
+
+const World::ChassisAssets* World::finishChassis(const std::string& id, std::unique_ptr<ChassisAssets> a, double* chProf, const char* how) {
+    const bool main = onMainThread();
+    if (a->ok && main) chassisGpu(id, *a);
     chProf[4] = profNowMs();
     if (a->ok) LOG_INFO("chassis %s (%s): robot %zu clips, vehicle %zu clips, arm %s", id.c_str(), a->def.iconic.c_str(),
                         a->robot.clips.size(), a->vehicle.clips.size(), a->hasArm ? "yes" : "no");
@@ -5409,16 +5444,8 @@ const World::ChassisAssets* World::finishChassis(const std::string& id, std::uni
         LOG_INFO("CHASSISHASH %016llx %s (%s)", (unsigned long long)h, id.c_str(), how);
     }
     ChassisAssets* raw = a.get();
-    // Rendering M53: compile the programs / upload the textures of every form's materials now, so the first robot -> vehicle
-    // transform does not pay for them in one frame (measured 65-166 ms hitch). Once per chassis (cached; bots share it).
-    if (renderer_ && a->ok) {
-        for (const assets::SkinnedModel* m : {&a->robot, &a->vehicle, a->hasArm ? &a->arm : nullptr}) {
-            if (!m || !m->valid()) continue;
-            render::MeshData md; md.subs = m->subs; md.mats = m->mats;
-            fxPrewarm(*renderer_, md, 0);
-            prewarmSkin(*m);   // the GPU-skin model too (robot, vehicle form, arm): no build at first sight / first transform
-        }
-    }
+    if (main) chassisPrewarm(*a);
+    else if (a->ok) { a->gpuPending = true; deferredChassisGpu_.push_back(id); }   // the uploads wait for the join
     if (spawnProf() && chProf[0] > 0.0) LOG_INFO("SPAWNPROF chassis %s split: robot glb %.0f ms, vehicle glb %.0f, arm %.0f, textures %.0f, prewarm %.0f",
                                          id.c_str(), chProf[1] - chProf[0], chProf[2] - chProf[1], chProf[3] - chProf[2], chProf[4] - chProf[3], profNowMs() - chProf[4]);
     a->lastUse = cacheGen_; ++chassisLoads_;
@@ -5464,6 +5491,16 @@ void World::startChassisJob(const std::string& id) {
     chassisJob_ = std::move(job);
 }
 
+// Threads (Gameplay / Integration review 2026-10-24):
+//  - the job body (startChassisJob's std::async lambda) runs on its own worker thread. It writes only the job's own fields (a, fresh,
+//    used); it reads the cached animation files by the pointers snapshotted at the start (nothing evicts while a job is pending:
+//    evictUnusedAssets finishes it first) and no other World state; no GL / renderer call; no sim RNG (the loaders draw none); the
+//    PNG decodes go to the thread-safe prefetch pool; logging is thread-safe; rosterPackage's first init is a magic static.
+//  - finishChassisJob / finishChassis run on the thread that calls chassisAssets() or the warm-up: the main thread, or the step's
+//    background part when a spawn there needs the body (that part owns World state while it runs, as the synchronous load always
+//    did). Off the main thread they touch no GL: the body is cached GPU-pending and completeDeferredChassis does its textures /
+//    prewarm / presentation data at the join. The cue preload's std::rand draws (SoundCues::ensurePick) shift presentation-only
+//    random picks (accepted, Integration 2026-10-24); the sim never reads std::rand.
 const World::ChassisAssets* World::finishChassisJob() {
     if (!chassisJob_) return nullptr;
     std::unique_ptr<ChassisJob> j = std::move(chassisJob_);

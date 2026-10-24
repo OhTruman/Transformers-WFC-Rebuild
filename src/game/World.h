@@ -1250,13 +1250,18 @@ public:
         ChassisDef def;
         assets::SkinnedModel robot, vehicle, arm;
         bool ok = false, hasArm = false;
+        bool gpuPending = false;   // [Systems] finished off the main thread: textures / prewarm wait for the join
         unsigned lastUse = 0;   // cacheGen_ of the last match that used it (evictUnusedAssets)
         std::string error;
     };
     const ChassisAssets* chassisAssets(const std::string& id);
     void buildChassisCpu(const std::string& id, ChassisAssets& a, const std::function<bool(const ChassisDef&, assets::SkinnedModel&)>& robotShared,
                          double* chProf) const;   // [Systems] the CPU part (any thread)
-    const ChassisAssets* finishChassis(const std::string& id, std::unique_ptr<ChassisAssets> a, double* chProf, const char* how);   // main thread
+    const ChassisAssets* finishChassis(const std::string& id, std::unique_ptr<ChassisAssets> a, double* chProf, const char* how);   // any thread
+    void chassisGpu(const std::string& id, ChassisAssets& a);   // main thread: textures + presentation data
+    void chassisPrewarm(const ChassisAssets& a);                // main thread: programs / GPU skin
+    void completeDeferredChassis();                             // the join: GPU-pending bodies
+    std::vector<std::string> deferredChassisGpu_;
     // TnPawn.ApplyTransformer for the local pawn: models, rigs, collision, stats, weapon socket. False = unavailable.
     bool applyChassisToLocalPawn(const std::string& id);
     // TnPawn.ApplyTransformer for any pawn (local or participant): models, rigs, collision, stats, weapon / arm sockets.
