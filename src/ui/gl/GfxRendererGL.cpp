@@ -1126,8 +1126,10 @@ void GfxRendererGL::drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial
     glEnable(GL_BLEND);
 }
 
-void GfxRendererGL::drawImage(const uint8_t* rgba, int w, int h, uint64_t key, float x, float y, float dw, float dh) {
-    if (!ok_ || !rgba || w <= 0 || h <= 0 || dw <= 0 || dh <= 0) return;
+void GfxRendererGL::drawImage(const uint8_t* rgba, int w, int h, uint64_t key, float x, float y, float dw, float dh, int slot) {
+    if (!ok_ || !rgba || w <= 0 || h <= 0 || dw <= 0 || dh <= 0 || slot < 0 || slot > 2) return;
+    Tex& image_ = this->image_[slot];
+    uint64_t& imageKey_ = this->imageKey_[slot];
     if (!image_.id || image_.w != w || image_.h != h || key != imageKey_) {
         if (!image_.id) glGenTextures(1, &image_.id);
         glBindTexture(GL_TEXTURE_2D, image_.id);

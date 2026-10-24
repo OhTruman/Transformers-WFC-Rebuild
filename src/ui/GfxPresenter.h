@@ -142,14 +142,13 @@ private:
     // Escape / Enter, frames from now) so the original rows re-read their values.
     void recommendedSettingsPressed();
     void syncSettingsCommit();
-    void syncSettingsPreview();
+    void syncSettingsPreview(const platform::InputFrame& in);
     bool colourPickerMouse(gfx::Player& p, const platform::InputFrame& in);   // #21: Create a Character colours by mouse (true: took the press)
-    bool pickerHeld_ = false;   // #5: the focused Graphics row's preview image (previewPng_, previewRect_)
-    std::string previewPng_;
-    float previewRect_[4] = {0, 0, 0, 0};
-    render::ImageData previewImage_;
-    std::string previewLoaded_;
-    uint64_t previewKey_ = 0;
+    bool pickerHeld_ = false;   // #21: a press on the colour square is being held
+    struct PreviewImage { std::string png, loaded; render::ImageData image; uint64_t key = 0; float rect[4] = {0, 0, 0, 0}; };
+    PreviewImage preview_[2];             // #5: [0] the baseline (value 0, left), [1] the selected value (right)
+    int previewZoom_ = -1;                // the image under the mouse: drawn enlarged
+    float previewZoomRect_[4] = {0, 0, 0, 0};
     void syncFirstLaunchBrightness(gfx::Player& p, frontend::GameFlow& flow);   // the calibration at the first main menu (#34)
     bool firstBrightnessShown_ = false;
     bool lobbyCountingSeen_ = false;      // #25: the lobby's start countdown was running (a cancel restores the menu updateMenu hid)

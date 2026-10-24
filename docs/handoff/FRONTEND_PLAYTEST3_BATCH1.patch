@@ -1,0 +1,357 @@
+diff --git a/src/frontend/DataStores.cpp b/src/frontend/DataStores.cpp
+index fa04746e..0139fac3 100644
+--- a/src/frontend/DataStores.cpp
++++ b/src/frontend/DataStores.cpp
+@@ -152,7 +152,8 @@ std::string DataStores::read(const std::string& markup, bool* known) {
+         return b(flow_.level() == LevelKind::GameLobby && L.mapSelectionMethod == 1 && !L.countdownRubicon && L.mapId >= 0 &&
+                  flow_.sessionRole() != GameFlow::SessionRole::Member &&     // an online member never starts the game
+                  flow_.mapVote().round == 0 &&   // CanHostRequestGameStart = IsPrivateMatch: a public lobby starts by itself [RE]
+-                 (flow_.sessionRole() == GameFlow::SessionRole::Offline || L.lobbyStatus == 3 ||
++                 // a private host alone (no member yet) starts as offline: CanHostRequestGameStart = IsPrivateMatch [RE; playtest 3 ESC 1]
++                 (flow_.sessionRole() == GameFlow::SessionRole::Offline || L.lobbyStatus == 3 || flow_.onlineMembers().empty() ||
+                   GameFlow::isCampaignTag(L.gameModeTag)));   // online: the original gate (D4); TnGameLobbyGameCampaign: always
+     if (markup == "<CurrentGame:LobbyStatus>") {
+         if (flow_.level() != LevelKind::GameLobby || L.countingDown) return "";
+diff --git a/src/frontend/Catalog.cpp b/src/frontend/Catalog.cpp
+index fdb7f99c..ddb22648 100644
+--- a/src/frontend/Catalog.cpp
++++ b/src/frontend/Catalog.cpp
+@@ -598,6 +598,19 @@ void Catalog::loadDlc(const std::string& manifestRoot, const std::string& runtim
+                 dlcUnlockedChassis_.push_back(c["chassis"].asString());
+         }
+     }
++    // The DLC Escalation maps carry no CampaignCharacters of their own (TransLevels lists only the base maps): Tranquillity / Pulse
++    // use Broken Hope's 13 Autobots, District / Static Remnant's 13 Decepticons [RE DLC_RE 2]. Without them the wheel fell back to
++    // every iconic chassis - both factions and Truck7 "Optimus" beside "Optimus Prime" (playtest 3 ESC 3).
++    auto baseList = [&](const char* key) -> std::vector<std::string> {
++        for (const MapInfo& m : maps_) if (m.mapFilename.find(key) != std::string::npos && !m.campaignCharacters.empty()) return m.campaignCharacters;
++        return {};
++    };
++    for (MapInfo& m : maps_) {
++        if (!m.campaignCharacters.empty() || !m.compatibleWith("SV")) continue;
++        const std::string& f = m.mapFilename;
++        if (f.find("Tranquil") != std::string::npos || f.find("Pulse") != std::string::npos) m.campaignCharacters = baseList("BrokenHope");
++        else if (f.find("District") != std::string::npos || f.find("Static") != std::string::npos) m.campaignCharacters = baseList("Remnant");
++    }
+     std::stable_sort(maps_.begin(), maps_.end(), [](const MapInfo& a, const MapInfo& b) { return a.iniOrder < b.iniOrder; });
+ }
+ 
+diff --git a/src/ui/GfxPresenter.cpp b/src/ui/GfxPresenter.cpp
+index 58907e7a..70d382ee 100644
+--- a/src/ui/GfxPresenter.cpp
++++ b/src/ui/GfxPresenter.cpp
+@@ -1003,7 +1003,7 @@ void GfxPresenter::scrollSettingsSubMenu(gfx::Player& p, const platform::InputFr
+     const V cf = vm.get(menu->script, "_currentFocus");
+     for (int i = 0; i < n && cf.isObject(); ++i) if (cf.o == rows[(size_t)i]->script) focus = i;
+     const V topV = vm.get(menu->script, "__wfcTop"), lastV = vm.get(menu->script, "__wfcFocus");
+-    int top = topV.isUndef() ? n - kSettingsRows : (int)vm.toNumber(topV);
++    int top = topV.isUndef() ? 0 : (int)vm.toNumber(topV);   // a long page opens at its top (playtest 3)
+     const int last = lastV.isUndef() ? -2 : (int)vm.toNumber(lastV);
+     if (focus >= 0 && focus != last) {   // a new focus: bring it into the window
+         if (focus < top) top = focus;
+@@ -1050,16 +1050,17 @@ void GfxPresenter::scrollSettingsSubMenu(gfx::Player& p, const platform::InputFr
+         return a;
+     };
+     const V upA = arrow("wfcScrollUp_mc", true), downA = arrow("wfcScrollDown_mc", false);
+-    gfx::avm1::Object* first = rows[(size_t)top]->script, *lastRow = rows[(size_t)(top + kSettingsRows - 1)]->script;
+-    const double cx = vm.toNumber(vm.get(first, "_x")) + vm.toNumber(vm.get(first, "_width")) * 0.5;
++    // fixed positions (playtest 3: they jumped): the window's first / last slots - the authored places of rows n-K and n-1
++    gfx::avm1::Object* slotTop = rows[(size_t)(n - kSettingsRows)]->script, *slotBottom = rows[(size_t)(n - 1)]->script;
++    const double cx = vm.toNumber(vm.get(slotBottom, "_x")) + 206.0;   // the rows' 413 px panel centre
+     if (upA.isObject()) {
+         vm.set(upA.o, "_x", V(cx));
+-        vm.set(upA.o, "_y", V(vm.toNumber(vm.get(first, "_y")) - 9.0));
++        vm.set(upA.o, "_y", V(vm.toNumber(vm.get(slotTop, "__wfcBaseY")) - 9.0));
+         vm.set(upA.o, "_visible", V(top > 0));
+     }
+     if (downA.isObject()) {
+         vm.set(downA.o, "_x", V(cx));
+-        vm.set(downA.o, "_y", V(vm.toNumber(vm.get(lastRow, "_y")) + kSettingsStep + 6.0));
++        vm.set(downA.o, "_y", V(vm.toNumber(vm.get(slotBottom, "__wfcBaseY")) + kSettingsStep + 6.0));
+         vm.set(downA.o, "_visible", V(top + kSettingsRows < n));
+     }
+ }
+@@ -1315,6 +1316,34 @@ void pttChoices(gfx::avm1::VM& vm, std::vector<gfx::avm1::Value>& out, const std
+ 
+ // Settings > Audio voice rows (PC EXTENSION, online only; ONLINE_MP_FLOWS.md 3.12, ONLINE_MP_UI_STRINGS.md 9b): appended to
+ // the original audio page (identified by its FX Volume row), in the page's own lateral-selector item form.
++// PC EXTENSION (user 2026-10-23): Language - every text pack the data ships (INT + FRA in the base game), each in its own name; on
++// the Audio page (playtest 3: out of Video), after the original rows. The choice values are the languages' indices.
++bool addLanguageRow(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, const std::vector<std::string>& languageNames) {
++    if (linkage != "mc_subMenu" || !init || languageNames.empty()) return false;
++    gfx::avm1::VM& vm = p.vm();
++    using V = gfx::avm1::Value;
++    V a = vm.get(init, "buildArray");
++    if (!a.isObject() || a.o->kind != gfx::avm1::ObjKind::Array || a.o->elems.empty()) return false;
++    const V first = a.o->elems.front();
++    if (!first.isObject() || vm.toString(vm.get(first.o, "dataStore")) != "<OnlinePlayerData:ProfileData.FX Volume>") return false;
++    for (const V& e : a.o->elems) if (e.isObject() && vm.toString(vm.get(e.o, "dataStore")) == "<PCSettings:Language>") return true;
++    std::vector<V> ch;
++    for (size_t i = 0; i < languageNames.size(); ++i) {
++        gfx::avm1::Object* c = vm.newPlain();
++        vm.set(c, "Value", V((double)i));
++        vm.set(c, "FriendlyName", V(languageNames[i]));
++        ch.push_back(V(c));
++    }
++    gfx::avm1::Object* item = vm.newPlain();
++    vm.set(item, "choiceArray", V(vm.newArray(ch)));
++    vm.set(item, "dataStore", V(std::string("<PCSettings:Language>")));
++    vm.set(item, "hintText", V(std::string("$WfcPC.Settings.LanguageDesc")));
++    vm.set(item, "panelWidth", V(413.0));
++    vm.set(item, "text", V(std::string("$WfcPC.Settings.Language")));
++    a.o->elems.push_back(V(item));
++    return true;
++}
++
+ bool addVoiceRows(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, const std::string& pttKey) {
+     if (linkage != "mc_subMenu" || !init) return false;
+     gfx::avm1::VM& vm = p.vm();
+@@ -1472,16 +1501,6 @@ bool addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
+         add(lf, 0, "Off"); add(lf, 1, "$WfcPC.Settings.LensFlaresSubtle"); add(lf, 2, "$WfcPC.Settings.LensFlaresOriginal");
+         row(lf, "<PCSettings:LensFlares>", "$WfcPC.Settings.LensFlaresDesc", "$WfcPC.Settings.LensFlares");
+     }
+-    {   // PC EXTENSION (user 2026-10-23): Language - every text pack the data ships (INT + FRA in the base game), each in its own name
+-        std::vector<gfx::avm1::Value> lg;
+-        for (size_t i = 0; i < languageNames.size(); ++i) add(lg, (int)i, languageNames[i].c_str());
+-        row(lg, "<PCSettings:Language>", "$WfcPC.Settings.LanguageDesc", "$WfcPC.Settings.Language");
+-    }
+-    {   // PC EXTENSION (split screen, user 2026-10-23): the two-player layout - Horizontal (stock UE3 default) / Vertical
+-        std::vector<gfx::avm1::Value> sl;
+-        add(sl, 0, "$WfcPC.Settings.SplitHorizontal"); add(sl, 1, "$WfcPC.Settings.SplitVertical");
+-        row(sl, "<PCSettings:SplitLayout>", "$WfcPC.Settings.SplitLayoutDesc", "$WfcPC.Settings.SplitLayout");
+-    }
+     {   // PC EXTENSION (user decisions; Rendering setSmokeMode / setWaterMode): Original = the shipped look (default)
+         std::vector<gfx::avm1::Value> sm, wa;
+         // Smoke ships in every mode (Rendering's tuned stage 1 passed by eye; Integration 2026-10-23)
+@@ -1498,6 +1517,12 @@ bool addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
+         add(fc, 0, "Off"); add(fc, 1, "On");
+         row(fc, "<PCSettings:ShowFps>", "Shows frames per second in the top-right corner.", "FPS Counter");
+     }
++    {   // PC EXTENSION (split screen, user 2026-10-23): the two-player layout - Horizontal (stock UE3 default) / Vertical; at the
++        // bottom by the FPS Counter (playtest 3; Language moved to the Audio page)
++        std::vector<gfx::avm1::Value> sl;
++        add(sl, 0, "$WfcPC.Settings.SplitHorizontal"); add(sl, 1, "$WfcPC.Settings.SplitVertical");
++        row(sl, "<PCSettings:SplitLayout>", "$WfcPC.Settings.SplitLayoutDesc", "$WfcPC.Settings.SplitLayout");
++    }
+     {   // PC EXTENSION action row in the original button form (as Commit Changes / Brightness: mc_panelButton +
+         // clickFunction): re-applies the auto-detected preset.
+         gfx::avm1::Object* item = vm.newPlain();
+@@ -1702,8 +1727,13 @@ void GfxPresenter::syncFirstLaunchBrightness(gfx::Player& p, frontend::GameFlow&
+ // PC ADAPTATION (the user, playtest 2026-10-23b #5): a preview panel on the right of the Graphics window for the new rows -
+ // Upscaling, HD Textures, Ray Tracing, Frame Generation - showing the focused row's current value
+ // (data/frontend/previews/<row>_<value>.png, 16:9, framed); it updates with the selection and hides for a value with no image.
+-void GfxPresenter::syncSettingsPreview() {
+-    previewPng_.clear();
++void GfxPresenter::syncSettingsPreview(const platform::InputFrame& in) {
++    // Playtest 3: standard-size panels right of the Graphics window - LEFT the baseline (the row's value 0, the original look),
++    // RIGHT the selected value (only when it differs); the image under the mouse is drawn enlarged; Frame Generation is
++    // described in the row's text only (a still cannot show it). Rows: Upscaling (Off / FSR 1 / FSR 3.1 Quality / Balanced /
++    // Performance), HD Textures, Ray Tracing, Volumetric Lighting, Lens Flares; images data/frontend/previews/<Row>_<value>.png.
++    for (PreviewImage& pi : preview_) pi.png.clear();
++    previewZoom_ = -1;
+     gfx::Player* p = graphicsPagePlayer_;
+     bool alive = false;
+     for (const Open& op : movies_) if (p && &op.movie->player() == p) alive = true;
+@@ -1720,26 +1750,42 @@ void GfxPresenter::syncSettingsPreview() {
+     if (store == "<PCSettings:Upscaling>") { row = "Upscaling"; value = d.upscaling; }
+     else if (store == "<PCSettings:HDTextures>") { row = "HDTextures"; value = d.hdTextures; }
+     else if (store == "<PCSettings:RayTracing>") { row = "RayTracing"; value = d.rayTracing; }
+-    else if (store == "<PCSettings:FrameGeneration>") { row = "FrameGeneration"; value = d.frameGeneration; }
++    else if (store == "<PCSettings:VolumetricLighting>") { row = "VolumetricLighting"; value = d.volumetricLighting ? 1 : 0; }
++    else if (store == "<PCSettings:LensFlares>") { row = "LensFlares"; value = d.lensFlares; }
+     if (row.empty()) return;
+-    previewPng_ = frontend::settingsPreviewPng(row, value);
+-    if (previewPng_.empty()) return;
+-    // the window rect: right of the menu, 16:9, as wide as the room allows (at most 40 % of the window)
++    preview_[0].png = frontend::settingsPreviewPng(row, 0);
++    preview_[1].png = value != 0 ? frontend::settingsPreviewPng(row, value) : std::string();
++    if (preview_[0].png.empty() && preview_[1].png.empty()) return;
++    // standard size: each image 22 % of the window wide (16:9), the pair right of the menu, centred on it vertically
+     gfx::Rect b = menu->boundsIn(menu->worldMatrix());
+     const gfx::Matrix mm = GfxRendererGL::movieMatrix(*p, viewW_, viewH_);
+     const gfx::Point tl = mm.apply({b.xmin, b.ymin}), br = mm.apply({b.xmax, b.ymax});
+-    const float left = br.x + viewW_ * 0.03f, room = (float)viewW_ - left - viewW_ * 0.04f;
+-    const float w = std::min(room, viewW_ * 0.4f), h = w * 9.0f / 16.0f;
+-    if (w < 64.0f) { previewPng_.clear(); return; }
+-    previewRect_[0] = left; previewRect_[1] = std::max(8.0f, (tl.y + br.y) * 0.5f - h * 0.5f); previewRect_[2] = w; previewRect_[3] = h;
+-    if (previewLoaded_ != previewPng_) {
+-        previewImage_ = render::ImageData{};
+-        platform::decodeImage(previewPng_, previewImage_);
+-        previewLoaded_ = previewPng_;
+-        ++previewKey_;
+-        frontend::FlowTrace::emit("settings.preview", {{"row", row}, {"value", std::to_string(value)}, {"ok", frontend::FlowTrace::boolean(previewImage_.valid())},
+-                                                       {"provenance", "PC ADAPTATION (user playtest 2026-10-23b #5)"}});
++    const float w = viewW_ * 0.22f, h = w * 9.0f / 16.0f, gap = viewW_ * 0.012f;
++    const float left = br.x + viewW_ * 0.03f, top = std::max(8.0f, (tl.y + br.y) * 0.5f - h * 0.5f);
++    for (int i = 0; i < 2; ++i) {
++        PreviewImage& pi = preview_[i];
++        if (pi.png.empty()) continue;
++        pi.rect[0] = left + (w + gap) * (float)i; pi.rect[1] = top; pi.rect[2] = w; pi.rect[3] = h;
++        if (pi.loaded != pi.png) {
++            pi.image = render::ImageData{};
++            platform::decodeImage(pi.png, pi.image);
++            pi.loaded = pi.png;
++            ++pi.key;
++        }
++        if (in.mouseX >= pi.rect[0] && in.mouseX <= pi.rect[0] + w && in.mouseY >= pi.rect[1] && in.mouseY <= pi.rect[1] + h) previewZoom_ = i;
++    }
++    if (previewZoom_ >= 0) {   // hover: the image at 2x, kept inside the window
++        const float zw = std::min(w * 2.0f, viewW_ * 0.6f), zh = zw * 9.0f / 16.0f;
++        previewZoomRect_[0] = std::max(8.0f, std::min((float)viewW_ - zw - 8.0f, left));
++        previewZoomRect_[1] = std::max(8.0f, std::min((float)viewH_ - zh - 8.0f, top - (zh - h) * 0.5f));
++        previewZoomRect_[2] = zw; previewZoomRect_[3] = zh;
+     }
++    static std::string lastPreview;
++    if (lastPreview == row + std::to_string(value)) return;
++    lastPreview = row + std::to_string(value);
++    frontend::FlowTrace::emit("settings.preview", {{"row", row}, {"value", std::to_string(value)}, {"baseline", frontend::FlowTrace::boolean(!preview_[0].png.empty())},
++                                                   {"selected", frontend::FlowTrace::boolean(!preview_[1].png.empty())},
++                                                   {"provenance", "PC ADAPTATION (user playtest 2026-10-23b #5, 2026-10-24)"}});
+ }
+ 
+ // PC ADAPTATION (the user, playtest 2026-10-23b #21): Create a Character's colour picker (HmPickablePalette) by mouse. The
+@@ -1857,6 +1903,14 @@ void GfxPresenter::syncGameSettings(gfx::Player& p, frontend::GameFlow& flow) {
+             vm.set(menu, "_y", V(0.0));
+             frontend::FlowTrace::emit("lobby.countdownCancelMenu", {{"restored", "true"}});
+         }
++        if (counting != lobbyCountingSeen_) {   // playtest 3 MP 11: the cancel as an obvious control - the B hint reads "Cancel Start"
++            const bool cancellable = counting && flow.lobby().playlistId < 0 && flow.onlineMembers().empty() &&
++                                     !frontend::GameFlow::isCampaignTag(flow.lobby().gameModeTag);
++            if (gfx::MovieClip* hints = findClipNamed(p.root(), "buttonHints_mc"); hints && hints->script && (cancellable || !counting))
++                vm.callMethod(V(hints->script), "setButtonHint", {V(std::string("B")),
++                              V(std::string(cancellable ? "$WfcPC.Lobby.CancelStart" : "$UIText.ButtonHints.Back")),
++                              V(std::string("_global.currentMenu.closeMenu"))});
++        }
+         lobbyCountingSeen_ = counting;
+     }
+     if (host && cc && sm && cc->script && sm->script && cc->parent && cc->parent->script &&
+@@ -2203,7 +2257,14 @@ void GfxPresenter::syncJoinPanel(gfx::Player& p, frontend::GameFlow& flow, const
+     }
+     {   // the lobby's own overlays (Y Game Stats: EndGameStats with hideContainer lobby_mc) hide lobby_mc; the panel follows it
+         const V lobby = vm.get(root->script, "lobby_mc");
+-        const bool lobbyShown = !lobby.isObject() || vm.toBool(vm.get(lobby.o, "_visible"));
++        bool lobbyShown = !lobby.isObject() || vm.toBool(vm.get(lobby.o, "_visible"));
++        // ... and any nested menu over the lobby (Create a Character, Leaderboards, Friends, Game Settings: playtest 3 MP 4): the
++        // panel shows only while the lobby's own menu has the input
++        const V cur = vm.get(vm.global, "currentMenu");
++        gfx::MovieClip* anchor = findClipNamed(root, "menuAnchor_mc");
++        const V lobbyMenu = anchor && anchor->script ? vm.get(anchor->script, "menu_mc") : V();
++        if (cur.isObject() && lobbyMenu.isObject() && cur.o != lobbyMenu.o) lobbyShown = false;
++        if (findClipNamed(root, "wfcGameSettings_mc")) lobbyShown = false;
+         vm.set(panel.o, "_visible", V(lobbyShown));
+         if (!lobbyShown) return;
+     }
+@@ -2451,12 +2512,15 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame&
+                     graphicsPagePlayer_ = &p;
+                     graphicsOpened_ = rt_.flow().profile().display;
+                 }
+-                else if (rt_.flow().online() && addVoiceRows(p, linkage, init, rt_.flow().profile().voice.pttKey))   // online only
+-                    audioPagePlayer_ = &p;
++                else {
++                    addLanguageRow(p, linkage, init, languageNames());   // the Audio page, every player
++                    if (rt_.flow().online() && addVoiceRows(p, linkage, init, rt_.flow().profile().voice.pttKey))   // online only
++                        audioPagePlayer_ = &p;
++                }
+             };
+     }
+     syncSettingsCommit();
+-    syncSettingsPreview();
++    syncSettingsPreview(in);
+     // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).
+     for (const auto& iv : rt_.flow().takeUiInvokes()) {   // "fn|arg|arg": true / false become booleans, the rest strings
+         Deferred d{iv.first, iv.second, {}};
+@@ -2570,8 +2634,16 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
+         if (fps_) drawMovie(*fps_);
+     }
+     if (cursor_ && !videoOver_) drawMovie(*cursor_);
+-    if (!previewPng_.empty() && previewImage_.valid())
+-        gl_.drawImage(previewImage_.rgba.data(), previewImage_.w, previewImage_.h, previewKey_, previewRect_[0], previewRect_[1], previewRect_[2], previewRect_[3]);
++    for (int i = 0; i < 2; ++i) {   // #5: baseline left, selected right; the hovered one again, enlarged, on top
++        const PreviewImage& pi = preview_[i];
++        if (pi.png.empty() || !pi.image.valid()) continue;
++        gl_.drawImage(pi.image.rgba.data(), pi.image.w, pi.image.h, pi.key, pi.rect[0], pi.rect[1], pi.rect[2], pi.rect[3], i);
++    }
++    if (previewZoom_ >= 0 && !preview_[previewZoom_].png.empty() && preview_[previewZoom_].image.valid()) {
++        const PreviewImage& pi = preview_[previewZoom_];
++        gl_.drawImage(pi.image.rgba.data(), pi.image.w, pi.image.h, pi.key, previewZoomRect_[0], previewZoomRect_[1], previewZoomRect_[2],
++                      previewZoomRect_[3], previewZoom_);
++    }
+     gl_.end();
+ }
+ 
+diff --git a/src/ui/GfxPresenter.h b/src/ui/GfxPresenter.h
+index 0f139082..69469b5b 100644
+--- a/src/ui/GfxPresenter.h
++++ b/src/ui/GfxPresenter.h
+@@ -142,14 +142,13 @@ private:
+     // Escape / Enter, frames from now) so the original rows re-read their values.
+     void recommendedSettingsPressed();
+     void syncSettingsCommit();
+-    void syncSettingsPreview();
++    void syncSettingsPreview(const platform::InputFrame& in);
+     bool colourPickerMouse(gfx::Player& p, const platform::InputFrame& in);   // #21: Create a Character colours by mouse (true: took the press)
+-    bool pickerHeld_ = false;   // #5: the focused Graphics row's preview image (previewPng_, previewRect_)
+-    std::string previewPng_;
+-    float previewRect_[4] = {0, 0, 0, 0};
+-    render::ImageData previewImage_;
+-    std::string previewLoaded_;
+-    uint64_t previewKey_ = 0;
++    bool pickerHeld_ = false;   // #21: a press on the colour square is being held
++    struct PreviewImage { std::string png, loaded; render::ImageData image; uint64_t key = 0; float rect[4] = {0, 0, 0, 0}; };
++    PreviewImage preview_[2];             // #5: [0] the baseline (value 0, left), [1] the selected value (right)
++    int previewZoom_ = -1;                // the image under the mouse: drawn enlarged
++    float previewZoomRect_[4] = {0, 0, 0, 0};
+     void syncFirstLaunchBrightness(gfx::Player& p, frontend::GameFlow& flow);   // the calibration at the first main menu (#34)
+     bool firstBrightnessShown_ = false;
+     bool lobbyCountingSeen_ = false;      // #25: the lobby's start countdown was running (a cancel restores the menu updateMenu hid)
+diff --git a/src/ui/gl/GfxRendererGL.h b/src/ui/gl/GfxRendererGL.h
+index 5586ab26..a49d4210 100644
+--- a/src/ui/gl/GfxRendererGL.h
++++ b/src/ui/gl/GfxRendererGL.h
+@@ -35,7 +35,7 @@ public:
+     // A full-screen movie frame (RGBA8, top row first), letterboxed into the window; serial skips re-uploads.
+     void drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial);
+     // An RGBA image into a window rect (pixels, top-left origin) with a 2 px UI-cyan frame; re-uploaded when key changes.
+-    void drawImage(const uint8_t* rgba, int w, int h, uint64_t key, float x, float y, float dw, float dh);
++    void drawImage(const uint8_t* rgba, int w, int h, uint64_t key, float x, float y, float dw, float dh, int slot = 0);   // slot 0..2
+     bool ok() const { return ok_; }
+     size_t cachedShapes() const { return shapes_.size(); }
+     // The tessellation cache is keyed by ShapeDef address: when a movie (and its definitions) is destroyed, a later
+@@ -155,7 +155,7 @@ private:
+     unsigned frame_ = 0;   // begin() count: display-object shapes (drawing API redrawn per frame) are dropped when unused
+     struct Tex { unsigned id = 0; int w = 0, h = 0; };
+     Tex video_;
+-    Tex image_; uint64_t imageKey_ = 0;   // drawImage
++    Tex image_[3]; uint64_t imageKey_[3] = {0, 0, 0};   // drawImage slots
+     uint64_t videoSerial_ = 0;
+     std::map<std::string, Tex> textures_;
+     std::map<std::string, unsigned> gradients_;
+diff --git a/src/ui/gl/GfxRendererGL.cpp b/src/ui/gl/GfxRendererGL.cpp
+index 0a19a6f5..03b051cf 100644
+--- a/src/ui/gl/GfxRendererGL.cpp
++++ b/src/ui/gl/GfxRendererGL.cpp
+@@ -1126,8 +1126,10 @@ void GfxRendererGL::drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial
+     glEnable(GL_BLEND);
+ }
+ 
+-void GfxRendererGL::drawImage(const uint8_t* rgba, int w, int h, uint64_t key, float x, float y, float dw, float dh) {
+-    if (!ok_ || !rgba || w <= 0 || h <= 0 || dw <= 0 || dh <= 0) return;
++void GfxRendererGL::drawImage(const uint8_t* rgba, int w, int h, uint64_t key, float x, float y, float dw, float dh, int slot) {
++    if (!ok_ || !rgba || w <= 0 || h <= 0 || dw <= 0 || dh <= 0 || slot < 0 || slot > 2) return;
++    Tex& image_ = this->image_[slot];
++    uint64_t& imageKey_ = this->imageKey_[slot];
+     if (!image_.id || image_.w != w || image_.h != h || key != imageKey_) {
+         if (!image_.id) glGenTextures(1, &image_.id);
+         glBindTexture(GL_TEXTURE_2D, image_.id);
+diff --git a/data/frontend/pc_strings.int b/data/frontend/pc_strings.int
+index 5b6d4099..9430d8a2 100644
+--- a/data/frontend/pc_strings.int
++++ b/data/frontend/pc_strings.int
+@@ -99,6 +99,7 @@ VoiceVolume=Voice Volume
+ VoiceVolumeDesc=How loud other players' voices are.
+ MicBlocked=The browser has not allowed the microphone.
+ [Lobby]
++CancelStart=Cancel Start
+ Team=Team
+ TeamDesc=Switch sides: your team for this match.
+ GameSettings=Game Settings

@@ -152,7 +152,8 @@ std::string DataStores::read(const std::string& markup, bool* known) {
         return b(flow_.level() == LevelKind::GameLobby && L.mapSelectionMethod == 1 && !L.countdownRubicon && L.mapId >= 0 &&
                  flow_.sessionRole() != GameFlow::SessionRole::Member &&     // an online member never starts the game
                  flow_.mapVote().round == 0 &&   // CanHostRequestGameStart = IsPrivateMatch: a public lobby starts by itself [RE]
-                 (flow_.sessionRole() == GameFlow::SessionRole::Offline || L.lobbyStatus == 3 ||
+                 // a private host alone (no member yet) starts as offline: CanHostRequestGameStart = IsPrivateMatch [RE; playtest 3 ESC 1]
+                 (flow_.sessionRole() == GameFlow::SessionRole::Offline || L.lobbyStatus == 3 || flow_.onlineMembers().empty() ||
                   GameFlow::isCampaignTag(L.gameModeTag)));   // online: the original gate (D4); TnGameLobbyGameCampaign: always
     if (markup == "<CurrentGame:LobbyStatus>") {
         if (flow_.level() != LevelKind::GameLobby || L.countingDown) return "";
