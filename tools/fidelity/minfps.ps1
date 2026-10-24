@@ -27,7 +27,7 @@
 #   .\tools\fidelity\minfps.ps1 -Root work\ab\fast_48e42af -OutDir work\minfps\48e42af [-Rows camp-play,camp-sweep,esc]
 #        [-Res 2560x1440,3840x2160] [-Chapters A1_IAC,...] [-EscMaps 505,...] [-PlaySeconds 60] [-EscSeconds 240] [-ReportOnly]
 #        [-Assets <WFC_ASSETS for the DLC maps>] [-RenderData <WFC_RENDER_DATA>]
-param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [string[]]$Rows = @("camp-play", "camp-sweep", "esc"),
+param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [string[]]$Rows = @("camp-play", "control", "camp-sweep", "esc"),
       [string[]]$Res = @("2560x1440", "3840x2160"),
       [string[]]$Chapters = @("A1_IAC", "A2_KON", "A3_COR", "A4_ORB", "A5_TRY", "D1_ORB", "D2_COR", "D3A_IAC", "D3B_IAC", "D5_OME"),
       [string[]]$EscMaps = @("505", "506", "MP_ESC_Tranquillity", "MP_ESC_District", "MP_ESC_Pulse", "MP_ESC_Static"),
@@ -113,6 +113,23 @@ foreach ($rs in $Res) {
             $r = Read-Frames (Join-Path $dPlay "wfc.log")
             $results.Add((Stats @($r.frames | ? { $_.live }) "camp-play" $ch $rs "chapter start + $PlaySeconds s"))
             $results.Add((Stats @($r.frames | ? { $_.live -and $_.t -ge 2.0 }) "camp-play" $ch $rs "steady (from 2 s)"))
+        }
+        # log-overhead control (Rendering 2026-10-24: per-frame SLOWFRAME / FRAME lines are main-thread log I/O at 300+ fps): the same
+        # chapter row with every per-frame log off (an empty value unsets the variable), only WFC_PERFLOG=600 (one average line per
+        # 600 frames); its average frame time vs the logged row's. > 3 % slower logged = the per-frame logs skew the rows.
+        if ($Rows -contains "control" -and $ch -eq $Chapters[0]) {
+            $dC = Join-Path $OutDir "$tag\control_$ch"
+            if (-not $ReportOnly) { Run-Row $dC @{ WFC_MAP = $ch; WFC_MATCH_URL = $url; WFC_PLAYERBOT = "1"; WFC_MATCH_SECONDS = "$PlaySeconds"
+                                                   WFC_SLOWFRAME = ""; WFC_FRAMELOG = ""; WFC_TICKPROF = ""; WFC_DRAWPROF = ""; WFC_PERFLOG = "600" } $w $h $rs (300 + $PlaySeconds) }
+            $pl = Join-Path $dC "wfc.log"; $avgC = $null
+            if (Test-Path $pl) { $on = $false; $v = @(foreach ($l in [IO.File]::ReadLines($pl)) { if ($l.Contains('MATCH start')) { $on = $true }; if ($on -and $l -match 'PERF f\d+ frame=([\d.]+)ms') { [double]$Matches[1] } })
+                                 if ($v.Count -gt 1) { $avgC = ($v | Select-Object -Skip 1 | Measure-Object -Average).Average } }   # (the first block holds the start hitches)
+            $logged = @($results | ? { $_.kind -eq "camp-play" -and $_.map -eq $ch -and $_.res -eq $rs -and $_.scope -like "steady*" })[0]
+            $row = [ordered]@{ kind = "control"; map = $ch; res = $rs; scope = "per-frame logs off (PERFLOG=600 avg)"; frames = ""; avg_fps = $(if ($avgC) { [Math]::Round(1000 / $avgC, 1) } else { "" })
+                               low1_fps = ""; low01_fps = ""; worst_ms = ""; worst_fps = ""; worst_frame = ""; worst_bound = ""; worst_where = ""; worst_cpu_ms = ""; worst_gpu_ms = ""; verdict = "UNKNOWN"; note = "" }
+            if ($avgC -and $logged -and $logged.avg_fps) { $d = (1000 / $logged.avg_fps - $avgC) / $avgC * 100
+                $row.note = "logged steady avg $($logged.avg_fps) fps = $([Math]::Round($d, 1)) % slower per frame"; $row.verdict = if ($d -le 3) { "PASS" } else { "FAIL" } }
+            $results.Add([pscustomobject]$row)
         }
         if ($Rows -contains "camp-sweep") {
             $r = Read-Frames (Join-Path $dPlay "wfc.log"); $dSw = Join-Path $OutDir "$tag\camp-sweep_$ch"
