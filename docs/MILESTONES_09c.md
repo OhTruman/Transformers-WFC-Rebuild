@@ -4333,3 +4333,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Choose Character, the map's 13 CampaignCharacters on the wheel in authored order: closes #11 / #12 / #15 / #29) + the
   gate's buttonhold step; d95ebc91 controller seat routing (Systems). NEW finding -> Systems: pad buttons map only to UI
   actions, so on a controller nothing fires / transforms / jumps / reloads in a match.
+2026-10-24 00:25 MERGED c51e9a3f subtitles provider (169 A1 lines timed, 0 wrong; Frontend draws), 1e4b6130 controller buttons drive the
+  match actions (authored XboxTypeS layout; X tap reload / hold revive per RE; profile remaps). Frontend: pause routing
+  closed by the merged fixes; D1 reproduced = the campaign lobby's autostart never fires after the pick (root-causing);
+  calibration logos draw as authored (the photo's exposure) and now take the UI gamma. Gate run queued behind the repro exes.
