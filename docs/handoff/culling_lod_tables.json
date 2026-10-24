@@ -1,0 +1,8795 @@
+{
+ "per_package": {
+  "A1_IAC_ArmoryTrans_Art_m": {
+   "prims": 77,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 77
+   },
+   "by_class": {
+    "StaticMeshComponent": 77
+   }
+  },
+  "A1_IAC_Armory_m": {
+   "prims": 380,
+   "with_cull_distance": 2,
+   "hist": {
+    "0 (never)": 378,
+    "32000-inf": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 361,
+    "ModelComponent": 17,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "A1_IAC_Audio_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "A1_IAC_Base_m": {
+   "prims": 93,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 93
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 67,
+    "StaticMeshComponent": 25,
+    "ParticleSystemComponent": 1
+   }
+  },
+  "A1_IAC_CommandCenter_Art_m": {
+   "prims": 382,
+   "with_cull_distance": 4,
+   "hist": {
+    "0 (never)": 378,
+    "32000-inf": 4
+   },
+   "by_class": {
+    "StaticMeshComponent": 371,
+    "ModelComponent": 7,
+    "ParticleSystemComponent": 4
+   }
+  },
+  "A1_IAC_DecoEnd_Art_m": {
+   "prims": 645,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 645
+   },
+   "by_class": {
+    "StaticMeshComponent": 631,
+    "ModelComponent": 9,
+    "SkeletalMeshComponent": 5
+   }
+  },
+  "A1_IAC_DecoEnd_Design_m": {
+   "prims": 94,
+   "with_cull_distance": 34,
+   "hist": {
+    "0 (never)": 60,
+    "32000-inf": 34
+   },
+   "by_class": {
+    "StaticMeshComponent": 40,
+    "ParticleSystemComponent": 34,
+    "SkeletalMeshComponent": 19,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "A1_IAC_DecoFoyer_Art_m": {
+   "prims": 579,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 579
+   },
+   "by_class": {
+    "StaticMeshComponent": 432,
+    "ModelComponent": 147
+   }
+  },
+  "A1_IAC_DecoFoyer_Design_m": {
+   "prims": 73,
+   "with_cull_distance": 32,
+   "hist": {
+    "0 (never)": 41,
+    "32000-inf": 32
+   },
+   "by_class": {
+    "ParticleSystemComponent": 32,
+    "SkeletalMeshComponent": 23,
+    "StaticMeshComponent": 15,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 3
+   }
+  },
+  "A1_IAC_DecoInt_Art_m": {
+   "prims": 1900,
+   "with_cull_distance": 22,
+   "hist": {
+    "0 (never)": 1878,
+    "32000-inf": 22
+   },
+   "by_class": {
+    "StaticMeshComponent": 1862,
+    "ParticleSystemComponent": 22,
+    "ModelComponent": 16
+   }
+  },
+  "A1_IAC_DecoInt_Design_m": {
+   "prims": 302,
+   "with_cull_distance": 97,
+   "hist": {
+    "0 (never)": 205,
+    "32000-inf": 97
+   },
+   "by_class": {
+    "StaticMeshComponent": 159,
+    "ParticleSystemComponent": 97,
+    "SkeletalMeshComponent": 44,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2
+   }
+  },
+  "A1_IAC_DecoPlaza_Art_m": {
+   "prims": 984,
+   "with_cull_distance": 9,
+   "hist": {
+    "0 (never)": 975,
+    "32000-inf": 9
+   },
+   "by_class": {
+    "StaticMeshComponent": 902,
+    "ModelComponent": 71,
+    "ParticleSystemComponent": 9,
+    "SkeletalMeshComponent": 2
+   }
+  },
+  "A1_IAC_DecoPlaza_Design_m": {
+   "prims": 148,
+   "with_cull_distance": 8,
+   "hist": {
+    "0 (never)": 140,
+    "32000-inf": 8
+   },
+   "by_class": {
+    "StaticMeshComponent": 123,
+    "SkeletalMeshComponent": 15,
+    "ParticleSystemComponent": 8,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2
+   }
+  },
+  "A1_IAC_DecoPlaza_Vig_m": {
+   "prims": 226,
+   "with_cull_distance": 80,
+   "hist": {
+    "0 (never)": 146,
+    "32000-inf": 80
+   },
+   "by_class": {
+    "ParticleSystemComponent": 80,
+    "SkeletalMeshComponent": 78,
+    "StaticMeshComponent": 63,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 5
+   }
+  },
+  "A1_IAC_DecoTransform_Design_m": {
+   "prims": 37,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 37
+   },
+   "by_class": {
+    "StaticMeshComponent": 36,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "A1_IAC_Elevator_Art_m": {
+   "prims": 1811,
+   "with_cull_distance": 20,
+   "hist": {
+    "0 (never)": 1791,
+    "32000-inf": 20
+   },
+   "by_class": {
+    "StaticMeshComponent": 1647,
+    "ModelComponent": 143,
+    "ParticleSystemComponent": 20,
+    "DecalComponent": 1
+   }
+  },
+  "A1_IAC_Elevator_Design_m": {
+   "prims": 220,
+   "with_cull_distance": 88,
+   "hist": {
+    "0 (never)": 132,
+    "32000-inf": 88
+   },
+   "by_class": {
+    "StaticMeshComponent": 89,
+    "ParticleSystemComponent": 88,
+    "SkeletalMeshComponent": 35,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 8
+   }
+  },
+  "A1_IAC_Global_Art_m": {
+   "prims": 1,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 1
+   }
+  },
+  "A1_IAC_HGHWY2_Art_m": {
+   "prims": 2300,
+   "with_cull_distance": 16,
+   "hist": {
+    "32000-inf": 16,
+    "0 (never)": 2284
+   },
+   "by_class": {
+    "StaticMeshComponent": 2284,
+    "ParticleSystemComponent": 16
+   }
+  },
+  "A1_IAC_HGHWY2_Design_m": {
+   "prims": 256,
+   "with_cull_distance": 18,
+   "hist": {
+    "0 (never)": 238,
+    "32000-inf": 18
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 223,
+    "ParticleSystemComponent": 18,
+    "StaticMeshComponent": 11,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 4
+   }
+  },
+  "A1_IAC_HGHWY2_End_Art_m": {
+   "prims": 1746,
+   "with_cull_distance": 18,
+   "hist": {
+    "0 (never)": 1728,
+    "32000-inf": 18
+   },
+   "by_class": {
+    "StaticMeshComponent": 1704,
+    "ModelComponent": 18,
+    "ParticleSystemComponent": 18,
+    "DecalComponent": 6
+   }
+  },
+  "A1_IAC_HGHWY2_Trans_Art_m": {
+   "prims": 251,
+   "with_cull_distance": 10,
+   "hist": {
+    "0 (never)": 241,
+    "32000-inf": 10
+   },
+   "by_class": {
+    "StaticMeshComponent": 230,
+    "ModelComponent": 11,
+    "ParticleSystemComponent": 10
+   }
+  },
+  "A1_IAC_HGHWY3_Art_m": {
+   "prims": 1852,
+   "with_cull_distance": 6,
+   "hist": {
+    "0 (never)": 1846,
+    "32000-inf": 6
+   },
+   "by_class": {
+    "StaticMeshComponent": 1705,
+    "ModelComponent": 141,
+    "ParticleSystemComponent": 6
+   }
+  },
+  "A1_IAC_HGHWY3_Design_m": {
+   "prims": 4,
+   "with_cull_distance": 1,
+   "hist": {
+    "0 (never)": 3,
+    "32000-inf": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 2,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1,
+    "ParticleSystemComponent": 1
+   }
+  },
+  "A1_IAC_HalfPipe_Art_m": {
+   "prims": 1452,
+   "with_cull_distance": 41,
+   "hist": {
+    "0 (never)": 1411,
+    "32000-inf": 41
+   },
+   "by_class": {
+    "StaticMeshComponent": 1408,
+    "ModelComponent": 27,
+    "ParticleSystemComponent": 11,
+    "DecalComponent": 6
+   }
+  },
+  "A1_IAC_HalfPipe_Vig_m": {
+   "prims": 461,
+   "with_cull_distance": 38,
+   "hist": {
+    "32000-inf": 38,
+    "0 (never)": 423
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 329,
+    "StaticMeshComponent": 94,
+    "ParticleSystemComponent": 38
+   }
+  },
+  "A1_IAC_Intr1_Art_m": {
+   "prims": 2507,
+   "with_cull_distance": 40,
+   "hist": {
+    "0 (never)": 2467,
+    "32000-inf": 40
+   },
+   "by_class": {
+    "StaticMeshComponent": 2406,
+    "ParticleSystemComponent": 40,
+    "ModelComponent": 34,
+    "DecalComponent": 27
+   }
+  },
+  "A1_IAC_Intr1_Design_m": {
+   "prims": 104,
+   "with_cull_distance": 7,
+   "hist": {
+    "0 (never)": 97,
+    "32000-inf": 7
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 54,
+    "StaticMeshComponent": 38,
+    "ParticleSystemComponent": 7,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 5
+   }
+  },
+  "A1_IAC_Intr1_Trans_Art_m": {
+   "prims": 236,
+   "with_cull_distance": 6,
+   "hist": {
+    "0 (never)": 230,
+    "32000-inf": 6
+   },
+   "by_class": {
+    "StaticMeshComponent": 227,
+    "ParticleSystemComponent": 6,
+    "DecalComponent": 3
+   }
+  },
+  "A1_IAC_Intr1_Trans_Design_m": {
+   "prims": 46,
+   "with_cull_distance": 16,
+   "hist": {
+    "0 (never)": 30,
+    "32000-inf": 16
+   },
+   "by_class": {
+    "ParticleSystemComponent": 16,
+    "StaticMeshComponent": 15,
+    "SkeletalMeshComponent": 10,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 5
+   }
+  },
+  "A1_IAC_Intr1_Vig_m": {
+   "prims": 402,
+   "with_cull_distance": 181,
+   "hist": {
+    "32000-inf": 181,
+    "0 (never)": 221
+   },
+   "by_class": {
+    "ParticleSystemComponent": 182,
+    "StaticMeshComponent": 143,
+    "SkeletalMeshComponent": 77
+   }
+  },
+  "A1_IAC_IntroVista_Art_m": {
+   "prims": 249,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 249
+   },
+   "by_class": {
+    "StaticMeshComponent": 249
+   }
+  },
+  "A1_IAC_IntroVista_Vig_m": {
+   "prims": 472,
+   "with_cull_distance": 188,
+   "hist": {
+    "0 (never)": 284,
+    "32000-inf": 188
+   },
+   "by_class": {
+    "StaticMeshComponent": 210,
+    "ParticleSystemComponent": 188,
+    "SkeletalMeshComponent": 72,
+    "ModelComponent": 2
+   }
+  },
+  "A1_IAC_Music_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "A1_IAC_SideAlleyTrans_Art_m": {
+   "prims": 251,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 251
+   },
+   "by_class": {
+    "StaticMeshComponent": 248,
+    "DecalComponent": 3
+   }
+  },
+  "A1_IAC_SideAlley_Art_m": {
+   "prims": 2268,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 2268
+   },
+   "by_class": {
+    "StaticMeshComponent": 2207,
+    "ModelComponent": 53,
+    "DecalComponent": 8
+   }
+  },
+  "A1_IAC_SideAlley_Design_m": {
+   "prims": 156,
+   "with_cull_distance": 6,
+   "hist": {
+    "0 (never)": 150,
+    "32000-inf": 6
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 97,
+    "StaticMeshComponent": 50,
+    "ParticleSystemComponent": 6,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 3
+   }
+  },
+  "A1_IAC_SideAlley_Vig_m": {
+   "prims": 172,
+   "with_cull_distance": 42,
+   "hist": {
+    "32000-inf": 42,
+    "0 (never)": 130
+   },
+   "by_class": {
+    "StaticMeshComponent": 94,
+    "ParticleSystemComponent": 42,
+    "SkeletalMeshComponent": 36
+   }
+  },
+  "A1_IAC_Strts0_Art_m": {
+   "prims": 1097,
+   "with_cull_distance": 2,
+   "hist": {
+    "0 (never)": 1095,
+    "32000-inf": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 1091,
+    "ModelComponent": 4,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "A1_IAC_Strts0_Design_m": {
+   "prims": 311,
+   "with_cull_distance": 72,
+   "hist": {
+    "0 (never)": 239,
+    "32000-inf": 72
+   },
+   "by_class": {
+    "StaticMeshComponent": 169,
+    "ParticleSystemComponent": 72,
+    "SkeletalMeshComponent": 69,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "A1_IAC_Strts0_End_Art_m": {
+   "prims": 669,
+   "with_cull_distance": 2,
+   "hist": {
+    "32000-inf": 2,
+    "0 (never)": 667
+   },
+   "by_class": {
+    "StaticMeshComponent": 667,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "A1_IAC_Strts1_Art_m": {
+   "prims": 1492,
+   "with_cull_distance": 12,
+   "hist": {
+    "0 (never)": 1480,
+    "32000-inf": 12
+   },
+   "by_class": {
+    "StaticMeshComponent": 1306,
+    "ModelComponent": 164,
+    "ParticleSystemComponent": 12,
+    "DecalComponent": 10
+   }
+  },
+  "A1_IAC_Strts1_Design_m": {
+   "prims": 358,
+   "with_cull_distance": 23,
+   "hist": {
+    "0 (never)": 335,
+    "32000-inf": 23
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 220,
+    "StaticMeshComponent": 112,
+    "ParticleSystemComponent": 23,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 3
+   }
+  },
+  "A1_IAC_Strts1_Vig_m": {
+   "prims": 550,
+   "with_cull_distance": 89,
+   "hist": {
+    "32000-inf": 89,
+    "0 (never)": 461
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 418,
+    "ParticleSystemComponent": 89,
+    "StaticMeshComponent": 43
+   }
+  },
+  "A1_IAC_Terminal1_Art_m": {
+   "prims": 422,
+   "with_cull_distance": 10,
+   "hist": {
+    "0 (never)": 412,
+    "32000-inf": 10
+   },
+   "by_class": {
+    "StaticMeshComponent": 388,
+    "ModelComponent": 24,
+    "ParticleSystemComponent": 10
+   }
+  },
+  "A1_IAC_Terminal1_Design_m": {
+   "prims": 122,
+   "with_cull_distance": 9,
+   "hist": {
+    "0 (never)": 113,
+    "32000-inf": 9
+   },
+   "by_class": {
+    "StaticMeshComponent": 78,
+    "SkeletalMeshComponent": 34,
+    "ParticleSystemComponent": 9,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "A1_IAC_Terminal1_Shared_Art_m": {
+   "prims": 377,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 377
+   },
+   "by_class": {
+    "StaticMeshComponent": 377
+   }
+  },
+  "A1_IAC_Thumper1_Design_m": {
+   "prims": 158,
+   "with_cull_distance": 18,
+   "hist": {
+    "0 (never)": 140,
+    "32000-inf": 18
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 96,
+    "StaticMeshComponent": 39,
+    "ParticleSystemComponent": 20,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 3
+   }
+  },
+  "A1_IAC_Thumper_Art_m": {
+   "prims": 1058,
+   "with_cull_distance": 14,
+   "hist": {
+    "0 (never)": 1044,
+    "32000-inf": 14
+   },
+   "by_class": {
+    "StaticMeshComponent": 1007,
+    "ModelComponent": 28,
+    "ParticleSystemComponent": 14,
+    "DecalComponent": 9
+   }
+  },
+  "A1_IAC_Thumper_Cine_m": {
+   "prims": 298,
+   "with_cull_distance": 11,
+   "hist": {
+    "32000-inf": 11,
+    "0 (never)": 287
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 273,
+    "StaticMeshComponent": 14,
+    "ParticleSystemComponent": 11
+   }
+  },
+  "A2_KON_AUDIO_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "A2_KON_AirRaid_Art_m": {
+   "prims": 2082,
+   "with_cull_distance": 44,
+   "hist": {
+    "0 (never)": 2038,
+    "32000-inf": 44
+   },
+   "by_class": {
+    "StaticMeshComponent": 1826,
+    "ModelComponent": 212,
+    "ParticleSystemComponent": 44
+   }
+  },
+  "A2_KON_AirRaid_Design_m": {
+   "prims": 143,
+   "with_cull_distance": 19,
+   "hist": {
+    "0 (never)": 124,
+    "32000-inf": 19
+   },
+   "by_class": {
+    "StaticMeshComponent": 95,
+    "SkeletalMeshComponent": 26,
+    "ParticleSystemComponent": 19,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 3
+   }
+  },
+  "A2_KON_AirRaid_Trans_Art_m": {
+   "prims": 275,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 275
+   },
+   "by_class": {
+    "StaticMeshComponent": 234,
+    "ModelComponent": 41
+   }
+  },
+  "A2_KON_AirRaid_Trans_Design_m": {
+   "prims": 89,
+   "with_cull_distance": 6,
+   "hist": {
+    "32000-inf": 6,
+    "0 (never)": 83
+   },
+   "by_class": {
+    "StaticMeshComponent": 81,
+    "ParticleSystemComponent": 6,
+    "SkeletalMeshComponent": 2
+   }
+  },
+  "A2_KON_AirRaid_Trans_Vig_m": {
+   "prims": 13,
+   "with_cull_distance": 6,
+   "hist": {
+    "32000-inf": 6,
+    "0 (never)": 7
+   },
+   "by_class": {
+    "ParticleSystemComponent": 6,
+    "StaticMeshComponent": 6,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "A2_KON_Base_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "A2_KON_City_Art_m": {
+   "prims": 2215,
+   "with_cull_distance": 2,
+   "hist": {
+    "0 (never)": 2213,
+    "32000-inf": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 1615,
+    "ModelComponent": 583,
+    "DecalComponent": 15,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "A2_KON_City_Design_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "A2_KON_City_Vig_m": {
+   "prims": 226,
+   "with_cull_distance": 64,
+   "hist": {
+    "32000-inf": 64,
+    "0 (never)": 162
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 84,
+    "StaticMeshComponent": 78,
+    "ParticleSystemComponent": 64
+   }
+  },
+  "A2_KON_Command_Art_m": {
+   "prims": 917,
+   "with_cull_distance": 4,
+   "hist": {
+    "0 (never)": 913,
+    "32000-inf": 4
+   },
+   "by_class": {
+    "StaticMeshComponent": 783,
+    "ModelComponent": 125,
+    "DecalComponent": 5,
+    "ParticleSystemComponent": 4
+   }
+  },
+  "A2_KON_Command_Design_m": {
+   "prims": 25,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 25
+   },
+   "by_class": {
+    "StaticMeshComponent": 18,
+    "SkeletalMeshComponent": 5,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2
+   }
+  },
+  "A2_KON_Courtyard2_Art_m": {
+   "prims": 506,
+   "with_cull_distance": 1,
+   "hist": {
+    "0 (never)": 505,
+    "32000-inf": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 410,
+    "ModelComponent": 91,
+    "DecalComponent": 4,
+    "ParticleSystemComponent": 1
+   }
+  },
+  "A2_KON_Courtyard2_Design_m": {
+   "prims": 52,
+   "with_cull_distance": 12,
+   "hist": {
+    "0 (never)": 40,
+    "32000-inf": 12
+   },
+   "by_class": {
+    "StaticMeshComponent": 30,
+    "ParticleSystemComponent": 12,
+    "SkeletalMeshComponent": 8,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2
+   }
+  },
+  "A2_KON_Courtyard_Art_m": {
+   "prims": 1434,
+   "with_cull_distance": 1,
+   "hist": {
+    "0 (never)": 1433,
+    "32000-inf": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 1295,
+    "ModelComponent": 138,
+    "ParticleSystemComponent": 1
+   }
+  },
+  "A2_KON_Courtyard_Design_m": {
+   "prims": 30,
+   "with_cull_distance": 5,
+   "hist": {
+    "0 (never)": 25,
+    "32000-inf": 5
+   },
+   "by_class": {
+    "StaticMeshComponent": 23,
+    "ParticleSystemComponent": 5,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "A2_KON_Courtyard_Vig_m": {
+   "prims": 206,
+   "with_cull_distance": 5,
+   "hist": {
+    "8000-16000": 4,
+    "32000-inf": 1,
+    "0 (never)": 201
+   },
+   "by_class": {
+    "StaticMeshComponent": 201,
+    "ParticleSystemComponent": 5
+   }
+  },
+  "A2_KON_DRIVE3_ART_m": {
+   "prims": 6293,
+   "with_cull_distance": 18,
+   "hist": {
+    "0 (never)": 6275,
+    "32000-inf": 18
+   },
+   "by_class": {
+    "ModelComponent": 3965,
+    "StaticMeshComponent": 2310,
+    "ParticleSystemComponent": 18
+   }
+  },
+  "A2_KON_DRIVE3_CINE_m": {
+   "prims": 19,
+   "with_cull_distance": 11,
+   "hist": {
+    "32000-inf": 11,
+    "0 (never)": 8
+   },
+   "by_class": {
+    "ParticleSystemComponent": 11,
+    "SkeletalMeshComponent": 6,
+    "StaticMeshComponent": 2
+   }
+  },
+  "A2_KON_DRIVE3_Design_m": {
+   "prims": 161,
+   "with_cull_distance": 10,
+   "hist": {
+    "0 (never)": 151,
+    "32000-inf": 10
+   },
+   "by_class": {
+    "StaticMeshComponent": 143,
+    "ParticleSystemComponent": 10,
+    "SkeletalMeshComponent": 7,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "A2_KON_DRIVE3_Trans_Art_m": {
+   "prims": 162,
+   "with_cull_distance": 3,
+   "hist": {
+    "0 (never)": 159,
+    "32000-inf": 3
+   },
+   "by_class": {
+    "StaticMeshComponent": 80,
+    "ModelComponent": 71,
+    "DecalComponent": 8,
+    "ParticleSystemComponent": 3
+   }
+  },
+  "A2_KON_DRIVE3_Trans_Design_m": {
+   "prims": 1,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1
+   },
+   "by_class": {
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "A2_KON_Dungeons2_Art_m": {
+   "prims": 2235,
+   "with_cull_distance": 6,
+   "hist": {
+    "0 (never)": 2229,
+    "32000-inf": 6
+   },
+   "by_class": {
+    "StaticMeshComponent": 1983,
+    "ModelComponent": 238,
+    "DecalComponent": 8,
+    "ParticleSystemComponent": 6
+   }
+  },
+  "A2_KON_Dungeons2_Design_m": {
+   "prims": 50,
+   "with_cull_distance": 3,
+   "hist": {
+    "0 (never)": 47,
+    "32000-inf": 3
+   },
+   "by_class": {
+    "StaticMeshComponent": 27,
+    "SkeletalMeshComponent": 12,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 8,
+    "ParticleSystemComponent": 3
+   }
+  },
+  "A2_KON_Dungeons2_Vig_m": {
+   "prims": 75,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 75
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 73,
+    "StaticMeshComponent": 2
+   }
+  },
+  "A2_KON_Dungeons_Art_m": {
+   "prims": 1511,
+   "with_cull_distance": 5,
+   "hist": {
+    "0 (never)": 1506,
+    "32000-inf": 5
+   },
+   "by_class": {
+    "StaticMeshComponent": 1348,
+    "ModelComponent": 149,
+    "DecalComponent": 9,
+    "ParticleSystemComponent": 5
+   }
+  },
+  "A2_KON_Dungeons_Design_m": {
+   "prims": 16,
+   "with_cull_distance": 6,
+   "hist": {
+    "32000-inf": 6,
+    "0 (never)": 10
+   },
+   "by_class": {
+    "StaticMeshComponent": 8,
+    "ParticleSystemComponent": 6,
+    "SkeletalMeshComponent": 2
+   }
+  },
+  "A2_KON_Dungeons_Vig_m": {
+   "prims": 35,
+   "with_cull_distance": 2,
+   "hist": {
+    "32000-inf": 2,
+    "0 (never)": 33
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 27,
+    "StaticMeshComponent": 6,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "A2_KON_GuardRoom_Art_m": {
+   "prims": 508,
+   "with_cull_distance": 2,
+   "hist": {
+    "0 (never)": 506,
+    "32000-inf": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 432,
+    "ModelComponent": 58,
+    "DecalComponent": 16,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "A2_KON_GuardRoom_Design_m": {
+   "prims": 22,
+   "with_cull_distance": 9,
+   "hist": {
+    "0 (never)": 13,
+    "32000-inf": 9
+   },
+   "by_class": {
+    "ParticleSystemComponent": 9,
+    "SkeletalMeshComponent": 6,
+    "StaticMeshComponent": 6,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "A2_KON_Hangar_Art_m": {
+   "prims": 970,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 970
+   },
+   "by_class": {
+    "StaticMeshComponent": 834,
+    "ModelComponent": 136
+   }
+  },
+  "A2_KON_Hangar_Design_m": {
+   "prims": 9,
+   "with_cull_distance": 1,
+   "hist": {
+    "0 (never)": 8,
+    "32000-inf": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 4,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2,
+    "SkeletalMeshComponent": 2,
+    "ParticleSystemComponent": 1
+   }
+  },
+  "A2_KON_IntroEntrance_Art_m": {
+   "prims": 736,
+   "with_cull_distance": 1,
+   "hist": {
+    "0 (never)": 735,
+    "32000-inf": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 630,
+    "ModelComponent": 83,
+    "DecalComponent": 22,
+    "ParticleSystemComponent": 1
+   }
+  },
+  "A2_KON_IntroEntrance_Design_m": {
+   "prims": 2,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 2
+   }
+  },
+  "A2_KON_IntroEntrance_Vig_m": {
+   "prims": 51,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 51
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 41,
+    "StaticMeshComponent": 10
+   }
+  },
+  "A2_KON_IntroFinal_Art_m": {
+   "prims": 511,
+   "with_cull_distance": 2,
+   "hist": {
+    "0 (never)": 509,
+    "32000-inf": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 455,
+    "ModelComponent": 43,
+    "DecalComponent": 11,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "A2_KON_IntroPits_Art_m": {
+   "prims": 828,
+   "with_cull_distance": 4,
+   "hist": {
+    "0 (never)": 824,
+    "32000-inf": 4
+   },
+   "by_class": {
+    "StaticMeshComponent": 589,
+    "ModelComponent": 233,
+    "ParticleSystemComponent": 4,
+    "DecalComponent": 2
+   }
+  },
+  "A2_KON_IntroPits_Design_m": {
+   "prims": 3,
+   "with_cull_distance": 1,
+   "hist": {
+    "0 (never)": 2,
+    "32000-inf": 1
+   },
+   "by_class": {
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2,
+    "ParticleSystemComponent": 1
+   }
+  },
+  "A2_KON_IntroPits_Vig_m": {
+   "prims": 172,
+   "with_cull_distance": 9,
+   "hist": {
+    "32000-inf": 9,
+    "0 (never)": 163
+   },
+   "by_class": {
+    "StaticMeshComponent": 119,
+    "SkeletalMeshComponent": 44,
+    "ParticleSystemComponent": 9
+   }
+  },
+  "A2_KON_IntroWalk_Vig_m": {
+   "prims": 188,
+   "with_cull_distance": 74,
+   "hist": {
+    "0 (never)": 114,
+    "32000-inf": 74
+   },
+   "by_class": {
+    "ParticleSystemComponent": 74,
+    "StaticMeshComponent": 63,
+    "SkeletalMeshComponent": 47,
+    "ModelComponent": 4
+   }
+  },
+  "A2_KON_Jailbreak_Art_m": {
+   "prims": 329,
+   "with_cull_distance": 3,
+   "hist": {
+    "0 (never)": 326,
+    "32000-inf": 3
+   },
+   "by_class": {
+    "StaticMeshComponent": 283,
+    "ModelComponent": 36,
+    "SkeletalMeshComponent": 7,
+    "ParticleSystemComponent": 3
+   }
+  },
+  "A2_KON_Jailbreak_Design_m": {
+   "prims": 21,
+   "with_cull_distance": 2,
+   "hist": {
+    "0 (never)": 19,
+    "32000-inf": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 13,
+    "SkeletalMeshComponent": 4,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "A2_KON_Jailbreak_Vig_m": {
+   "prims": 256,
+   "with_cull_distance": 26,
+   "hist": {
+    "32000-inf": 26,
+    "0 (never)": 230
+   },
+   "by_class": {
+    "StaticMeshComponent": 163,
+    "SkeletalMeshComponent": 67,
+    "ParticleSystemComponent": 26
+   }
+  },
+  "A2_KON_MUSIC_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "A2_KON_Megatron_Art_m": {
+   "prims": 571,
+   "with_cull_distance": 8,
+   "hist": {
+    "0 (never)": 563,
+    "32000-inf": 8
+   },
+   "by_class": {
+    "StaticMeshComponent": 527,
+    "ModelComponent": 21,
+    "DecalComponent": 15,
+    "ParticleSystemComponent": 8
+   }
+  },
+  "A2_KON_Megatron_Design_m": {
+   "prims": 52,
+   "with_cull_distance": 8,
+   "hist": {
+    "0 (never)": 44,
+    "32000-inf": 8
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 27,
+    "StaticMeshComponent": 15,
+    "ParticleSystemComponent": 8,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2
+   }
+  },
+  "A2_KON_SKYDOME_ART_m": {
+   "prims": 1,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 1
+   }
+  },
+  "A2_KON_Soundwave_Art_m": {
+   "prims": 770,
+   "with_cull_distance": 1,
+   "hist": {
+    "0 (never)": 769,
+    "32000-inf": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 653,
+    "ModelComponent": 96,
+    "DecalComponent": 20,
+    "ParticleSystemComponent": 1
+   }
+  },
+  "A2_KON_Soundwave_Design_m": {
+   "prims": 38,
+   "with_cull_distance": 12,
+   "hist": {
+    "0 (never)": 26,
+    "32000-inf": 12
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 16,
+    "ParticleSystemComponent": 12,
+    "StaticMeshComponent": 9,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "A2_KON_Soundwave_Vig_m": {
+   "prims": 157,
+   "with_cull_distance": 41,
+   "hist": {
+    "32000-inf": 41,
+    "0 (never)": 116
+   },
+   "by_class": {
+    "StaticMeshComponent": 86,
+    "ParticleSystemComponent": 41,
+    "SkeletalMeshComponent": 30
+   }
+  },
+  "A2_KON_Vents_Art_m": {
+   "prims": 1666,
+   "with_cull_distance": 14,
+   "hist": {
+    "0 (never)": 1652,
+    "32000-inf": 14
+   },
+   "by_class": {
+    "StaticMeshComponent": 1535,
+    "ModelComponent": 91,
+    "DecalComponent": 26,
+    "ParticleSystemComponent": 14
+   }
+  },
+  "A2_KON_Vents_Design_m": {
+   "prims": 21,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 21
+   },
+   "by_class": {
+    "StaticMeshComponent": 20,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "A2_KON_Vents_Vig_m": {
+   "prims": 39,
+   "with_cull_distance": 4,
+   "hist": {
+    "32000-inf": 4,
+    "0 (never)": 35
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 33,
+    "ParticleSystemComponent": 4,
+    "StaticMeshComponent": 2
+   }
+  },
+  "A2_KON_WallCrawler_Art_m": {
+   "prims": 1014,
+   "with_cull_distance": 4,
+   "hist": {
+    "0 (never)": 1010,
+    "32000-inf": 4
+   },
+   "by_class": {
+    "StaticMeshComponent": 727,
+    "ModelComponent": 279,
+    "DecalComponent": 4,
+    "ParticleSystemComponent": 4
+   }
+  },
+  "A2_KON_WallCrawler_Design_m": {
+   "prims": 287,
+   "with_cull_distance": 14,
+   "hist": {
+    "0 (never)": 273,
+    "32000-inf": 14
+   },
+   "by_class": {
+    "StaticMeshComponent": 233,
+    "SkeletalMeshComponent": 39,
+    "ParticleSystemComponent": 14,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "A3_COR_Audio_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "A3_COR_Base_m": {
+   "prims": 3,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 3
+   },
+   "by_class": {
+    "StaticMeshComponent": 2,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "A3_COR_Caves_Split_Art_m": {
+   "prims": 5147,
+   "with_cull_distance": 33,
+   "hist": {
+    "0 (never)": 5114,
+    "32000-inf": 33
+   },
+   "by_class": {
+    "StaticMeshComponent": 3448,
+    "ModelComponent": 1680,
+    "SkeletalMeshComponent": 17,
+    "DecalComponent": 2
+   }
+  },
+  "A3_COR_Caves_Split_Design_m": {
+   "prims": 358,
+   "with_cull_distance": 74,
+   "hist": {
+    "0 (never)": 284,
+    "32000-inf": 74
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 175,
+    "StaticMeshComponent": 103,
+    "ParticleSystemComponent": 74,
+    "ModelComponent": 6
+   }
+  },
+  "A3_COR_Caves_Split_Vig_m": {
+   "prims": 87,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 87
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 66,
+    "StaticMeshComponent": 21
+   }
+  },
+  "A3_COR_CoreExt_Art_m": {
+   "prims": 1359,
+   "with_cull_distance": 914,
+   "hist": {
+    "0 (never)": 445,
+    "32000-inf": 914
+   },
+   "by_class": {
+    "StaticMeshComponent": 1050,
+    "ModelComponent": 303,
+    "ParticleSystemComponent": 3,
+    "SkeletalMeshComponent": 3
+   }
+  },
+  "A3_COR_CoreExt_Design_m": {
+   "prims": 212,
+   "with_cull_distance": 52,
+   "hist": {
+    "0 (never)": 160,
+    "32000-inf": 52
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 122,
+    "StaticMeshComponent": 59,
+    "ParticleSystemComponent": 30,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "A3_COR_CoreExt_Vig_m": {
+   "prims": 288,
+   "with_cull_distance": 43,
+   "hist": {
+    "0 (never)": 245,
+    "32000-inf": 43
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 133,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 65,
+    "StaticMeshComponent": 53,
+    "ParticleSystemComponent": 37
+   }
+  },
+  "A3_COR_CoreInt_Art_m": {
+   "prims": 321,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 321
+   },
+   "by_class": {
+    "StaticMeshComponent": 309,
+    "ModelComponent": 12
+   }
+  },
+  "A3_COR_CoreInt_Cine_m": {
+   "prims": 297,
+   "with_cull_distance": 19,
+   "hist": {
+    "32000-inf": 19,
+    "0 (never)": 278
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 239,
+    "StaticMeshComponent": 39,
+    "ParticleSystemComponent": 19
+   }
+  },
+  "A3_COR_CoreInt_Design_m": {
+   "prims": 356,
+   "with_cull_distance": 85,
+   "hist": {
+    "32000-inf": 85,
+    "0 (never)": 271
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 142,
+    "StaticMeshComponent": 129,
+    "ParticleSystemComponent": 85
+   }
+  },
+  "A3_COR_Core_Trans_Art_m": {
+   "prims": 438,
+   "with_cull_distance": 4,
+   "hist": {
+    "0 (never)": 434,
+    "32000-inf": 4
+   },
+   "by_class": {
+    "StaticMeshComponent": 397,
+    "ModelComponent": 37,
+    "ParticleSystemComponent": 4
+   }
+  },
+  "A3_COR_Core_Trans_Design_m": {
+   "prims": 9,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 9
+   },
+   "by_class": {
+    "StaticMeshComponent": 7,
+    "SkeletalMeshComponent": 2
+   }
+  },
+  "A3_COR_Intro_Cine_m": {
+   "prims": 1074,
+   "with_cull_distance": 31,
+   "hist": {
+    "0 (never)": 1043,
+    "32000-inf": 31
+   },
+   "by_class": {
+    "StaticMeshComponent": 974,
+    "ModelComponent": 60,
+    "ParticleSystemComponent": 31,
+    "SkeletalMeshComponent": 9
+   }
+  },
+  "A3_COR_Music_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "A3_COR_OmegaFacility_Art_m": {
+   "prims": 3293,
+   "with_cull_distance": 4,
+   "hist": {
+    "0 (never)": 3289,
+    "32000-inf": 4
+   },
+   "by_class": {
+    "StaticMeshComponent": 2870,
+    "ModelComponent": 422,
+    "ParticleSystemComponent": 1
+   }
+  },
+  "A3_COR_OmegaFacility_Cine_m": {
+   "prims": 146,
+   "with_cull_distance": 54,
+   "hist": {
+    "32000-inf": 54,
+    "0 (never)": 92
+   },
+   "by_class": {
+    "ParticleSystemComponent": 54,
+    "SkeletalMeshComponent": 54,
+    "StaticMeshComponent": 38
+   }
+  },
+  "A3_COR_OmegaFacility_Design_m": {
+   "prims": 241,
+   "with_cull_distance": 16,
+   "hist": {
+    "0 (never)": 225,
+    "32000-inf": 16
+   },
+   "by_class": {
+    "StaticMeshComponent": 162,
+    "SkeletalMeshComponent": 59,
+    "ParticleSystemComponent": 16,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 4
+   }
+  },
+  "A3_COR_OmegaGateArt2_m": {
+   "prims": 768,
+   "with_cull_distance": 217,
+   "hist": {
+    "0 (never)": 551,
+    "32000-inf": 217
+   },
+   "by_class": {
+    "StaticMeshComponent": 768
+   }
+  },
+  "A3_COR_OmegaGate_Art_m": {
+   "prims": 2247,
+   "with_cull_distance": 254,
+   "hist": {
+    "0 (never)": 1993,
+    "32000-inf": 254
+   },
+   "by_class": {
+    "StaticMeshComponent": 1779,
+    "ModelComponent": 468
+   }
+  },
+  "A3_COR_OmegaGate_Cine_m": {
+   "prims": 25,
+   "with_cull_distance": 11,
+   "hist": {
+    "32000-inf": 10,
+    "0 (never)": 14,
+    "16000-32000": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 11,
+    "ParticleSystemComponent": 10,
+    "SkeletalMeshComponent": 4
+   }
+  },
+  "A3_COR_OmegaGate_Design_m": {
+   "prims": 305,
+   "with_cull_distance": 36,
+   "hist": {
+    "0 (never)": 269,
+    "32000-inf": 36
+   },
+   "by_class": {
+    "StaticMeshComponent": 227,
+    "SkeletalMeshComponent": 40,
+    "ParticleSystemComponent": 36,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2
+   }
+  },
+  "A3_COR_OmegaSupreme_m": {
+   "prims": 198,
+   "with_cull_distance": 48,
+   "hist": {
+    "0 (never)": 150,
+    "32000-inf": 48
+   },
+   "by_class": {
+    "StaticMeshComponent": 137,
+    "ParticleSystemComponent": 48,
+    "SkeletalMeshComponent": 8,
+    "HmLightMappedSkeletalMeshComponent": 5
+   }
+  },
+  "A3_COR_OmegaTunnel_Art_m": {
+   "prims": 510,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 510
+   },
+   "by_class": {
+    "StaticMeshComponent": 492,
+    "ModelComponent": 10,
+    "SkeletalMeshComponent": 8
+   }
+  },
+  "A3_COR_OmegaTunnel_Design_m": {
+   "prims": 39,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 39
+   },
+   "by_class": {
+    "StaticMeshComponent": 39
+   }
+  },
+  "A3_COR_Routing1_Art_m": {
+   "prims": 1954,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1954
+   },
+   "by_class": {
+    "StaticMeshComponent": 1773,
+    "ModelComponent": 181
+   }
+  },
+  "A3_COR_Routing1_Design_m": {
+   "prims": 61,
+   "with_cull_distance": 17,
+   "hist": {
+    "32000-inf": 17,
+    "0 (never)": 44
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 36,
+    "ParticleSystemComponent": 17,
+    "StaticMeshComponent": 8
+   }
+  },
+  "A3_COR_Routing2B_Art_m": {
+   "prims": 1246,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1246
+   },
+   "by_class": {
+    "StaticMeshComponent": 1109,
+    "ModelComponent": 130,
+    "SkeletalMeshComponent": 7
+   }
+  },
+  "A3_COR_Routing2B_Design_m": {
+   "prims": 268,
+   "with_cull_distance": 21,
+   "hist": {
+    "0 (never)": 247,
+    "32000-inf": 21
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 134,
+    "StaticMeshComponent": 101,
+    "ParticleSystemComponent": 21,
+    "ModelComponent": 12
+   }
+  },
+  "A3_COR_Routing2C_Art_m": {
+   "prims": 962,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 962
+   },
+   "by_class": {
+    "StaticMeshComponent": 893,
+    "ModelComponent": 67,
+    "SkeletalMeshComponent": 2
+   }
+  },
+  "A3_COR_Routing2C_Design_m": {
+   "prims": 260,
+   "with_cull_distance": 25,
+   "hist": {
+    "32000-inf": 25,
+    "0 (never)": 235
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 204,
+    "StaticMeshComponent": 31,
+    "ParticleSystemComponent": 25
+   }
+  },
+  "A3_COR_Routing2Global_Art_m": {
+   "prims": 680,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 680
+   },
+   "by_class": {
+    "ModelComponent": 341,
+    "StaticMeshComponent": 337,
+    "DecalComponent": 2
+   }
+  },
+  "A3_COR_Routing2_Art_m": {
+   "prims": 1258,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1258
+   },
+   "by_class": {
+    "StaticMeshComponent": 1118,
+    "ModelComponent": 132,
+    "SkeletalMeshComponent": 5,
+    "DecalComponent": 3
+   }
+  },
+  "A3_COR_Routing3B_ART_m": {
+   "prims": 1583,
+   "with_cull_distance": 9,
+   "hist": {
+    "0 (never)": 1574,
+    "32000-inf": 9
+   },
+   "by_class": {
+    "StaticMeshComponent": 1450,
+    "ModelComponent": 124,
+    "ParticleSystemComponent": 9
+   }
+  },
+  "A3_COR_Routing3B_Design_m": {
+   "prims": 331,
+   "with_cull_distance": 21,
+   "hist": {
+    "0 (never)": 310,
+    "32000-inf": 21
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 293,
+    "ParticleSystemComponent": 21,
+    "StaticMeshComponent": 11,
+    "ModelComponent": 6
+   }
+  },
+  "A3_COR_Routing3C_ART_m": {
+   "prims": 789,
+   "with_cull_distance": 5,
+   "hist": {
+    "0 (never)": 784,
+    "32000-inf": 5
+   },
+   "by_class": {
+    "StaticMeshComponent": 683,
+    "ModelComponent": 101,
+    "ParticleSystemComponent": 5
+   }
+  },
+  "A3_COR_Routing3C_ArtPart2_m": {
+   "prims": 1512,
+   "with_cull_distance": 3,
+   "hist": {
+    "0 (never)": 1509,
+    "32000-inf": 3
+   },
+   "by_class": {
+    "StaticMeshComponent": 1436,
+    "ModelComponent": 73,
+    "ParticleSystemComponent": 3
+   }
+  },
+  "A3_COR_Routing3C_ArtPart3_m": {
+   "prims": 1141,
+   "with_cull_distance": 8,
+   "hist": {
+    "0 (never)": 1133,
+    "32000-inf": 8
+   },
+   "by_class": {
+    "StaticMeshComponent": 1055,
+    "ModelComponent": 78,
+    "ParticleSystemComponent": 8
+   }
+  },
+  "A3_COR_Routing3C_DesignPart2_m": {
+   "prims": 156,
+   "with_cull_distance": 4,
+   "hist": {
+    "32000-inf": 4,
+    "0 (never)": 152
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 135,
+    "StaticMeshComponent": 17,
+    "ParticleSystemComponent": 4
+   }
+  },
+  "A3_COR_Routing3C_DesignPart3_m": {
+   "prims": 109,
+   "with_cull_distance": 12,
+   "hist": {
+    "32000-inf": 11,
+    "0 (never)": 97,
+    "16000-32000": 1
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 96,
+    "ParticleSystemComponent": 11,
+    "StaticMeshComponent": 2
+   }
+  },
+  "A3_COR_Routing3C_Design_m": {
+   "prims": 129,
+   "with_cull_distance": 10,
+   "hist": {
+    "32000-inf": 10,
+    "0 (never)": 119
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 113,
+    "ParticleSystemComponent": 10,
+    "StaticMeshComponent": 6
+   }
+  },
+  "A3_COR_Routing3D_ART_m": {
+   "prims": 636,
+   "with_cull_distance": 9,
+   "hist": {
+    "0 (never)": 627,
+    "32000-inf": 9
+   },
+   "by_class": {
+    "StaticMeshComponent": 502,
+    "ModelComponent": 125,
+    "ParticleSystemComponent": 9
+   }
+  },
+  "A3_COR_Routing3D_Cine_m": {
+   "prims": 61,
+   "with_cull_distance": 23,
+   "hist": {
+    "32000-inf": 23,
+    "0 (never)": 38
+   },
+   "by_class": {
+    "StaticMeshComponent": 28,
+    "ParticleSystemComponent": 23,
+    "SkeletalMeshComponent": 10
+   }
+  },
+  "A3_COR_Routing3D_Design_m": {
+   "prims": 8,
+   "with_cull_distance": 1,
+   "hist": {
+    "0 (never)": 7,
+    "32000-inf": 1
+   },
+   "by_class": {
+    "ModelComponent": 6,
+    "ParticleSystemComponent": 1,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "A3_COR_Routing3_Art_m": {
+   "prims": 1225,
+   "with_cull_distance": 5,
+   "hist": {
+    "0 (never)": 1220,
+    "32000-inf": 5
+   },
+   "by_class": {
+    "StaticMeshComponent": 974,
+    "ModelComponent": 246,
+    "ParticleSystemComponent": 5
+   }
+  },
+  "A3_COR_Routing3_Cine_m": {
+   "prims": 34,
+   "with_cull_distance": 11,
+   "hist": {
+    "32000-inf": 11,
+    "0 (never)": 23
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 19,
+    "ParticleSystemComponent": 11,
+    "StaticMeshComponent": 4
+   }
+  },
+  "A3_COR_Routing3_Design_m": {
+   "prims": 215,
+   "with_cull_distance": 5,
+   "hist": {
+    "0 (never)": 210,
+    "32000-inf": 5
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 170,
+    "StaticMeshComponent": 25,
+    "ModelComponent": 15,
+    "ParticleSystemComponent": 5
+   }
+  },
+  "A3_COR_Routing_2_Design_m": {
+   "prims": 147,
+   "with_cull_distance": 18,
+   "hist": {
+    "32000-inf": 18,
+    "0 (never)": 129
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 114,
+    "ParticleSystemComponent": 18,
+    "StaticMeshComponent": 15
+   }
+  },
+  "A4_ORB_AmmoRoom_ART_m": {
+   "prims": 892,
+   "with_cull_distance": 25,
+   "hist": {
+    "0 (never)": 867,
+    "32000-inf": 25
+   },
+   "by_class": {
+    "StaticMeshComponent": 660,
+    "ModelComponent": 188,
+    "ParticleSystemComponent": 25,
+    "HmLightMappedSkeletalMeshComponent": 11,
+    "SkeletalMeshComponent": 8
+   }
+  },
+  "A4_ORB_AmmoRoom_DSN_m": {
+   "prims": 195,
+   "with_cull_distance": 108,
+   "hist": {
+    "32000-inf": 108,
+    "0 (never)": 87
+   },
+   "by_class": {
+    "ParticleSystemComponent": 108,
+    "StaticMeshComponent": 58,
+    "SkeletalMeshComponent": 29
+   }
+  },
+  "A4_ORB_Audio_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "A4_ORB_Base_m": {
+   "prims": 1,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 1
+   }
+  },
+  "A4_ORB_CineIntro_m": {
+   "prims": 219,
+   "with_cull_distance": 52,
+   "hist": {
+    "32000-inf": 52,
+    "0 (never)": 167
+   },
+   "by_class": {
+    "StaticMeshComponent": 160,
+    "ParticleSystemComponent": 52,
+    "SkeletalMeshComponent": 7
+   }
+  },
+  "A4_ORB_CogRoomVol_DSN_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "A4_ORB_CogRoom_ART_m": {
+   "prims": 574,
+   "with_cull_distance": 28,
+   "hist": {
+    "0 (never)": 546,
+    "32000-inf": 28
+   },
+   "by_class": {
+    "StaticMeshComponent": 506,
+    "ModelComponent": 34,
+    "ParticleSystemComponent": 28,
+    "HmLightMappedSkeletalMeshComponent": 6
+   }
+  },
+  "A4_ORB_CogRoom_CINE_m": {
+   "prims": 366,
+   "with_cull_distance": 51,
+   "hist": {
+    "32000-inf": 51,
+    "0 (never)": 315
+   },
+   "by_class": {
+    "StaticMeshComponent": 310,
+    "ParticleSystemComponent": 43,
+    "SkeletalMeshComponent": 13
+   }
+  },
+  "A4_ORB_CogRoom_DSN_m": {
+   "prims": 269,
+   "with_cull_distance": 62,
+   "hist": {
+    "32000-inf": 62,
+    "0 (never)": 207
+   },
+   "by_class": {
+    "StaticMeshComponent": 199,
+    "ParticleSystemComponent": 64,
+    "SkeletalMeshComponent": 6
+   }
+  },
+  "A4_ORB_CogRoom_VIG_m": {
+   "prims": 37,
+   "with_cull_distance": 19,
+   "hist": {
+    "16000-32000": 6,
+    "2000-4000": 5,
+    "8000-16000": 3,
+    "32000-inf": 5,
+    "0 (never)": 18
+   },
+   "by_class": {
+    "ParticleSystemComponent": 19,
+    "StaticMeshComponent": 18
+   }
+  },
+  "A4_ORB_CommandRoomCQC_DSN_m": {
+   "prims": 21,
+   "with_cull_distance": 8,
+   "hist": {
+    "32000-inf": 8,
+    "0 (never)": 13
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 13,
+    "ParticleSystemComponent": 8
+   }
+  },
+  "A4_ORB_DebrisIntro_Art_m": {
+   "prims": 529,
+   "with_cull_distance": 180,
+   "hist": {
+    "0 (never)": 349,
+    "32000-inf": 180
+   },
+   "by_class": {
+    "StaticMeshComponent": 517,
+    "DecalComponent": 6,
+    "ParticleSystemComponent": 6
+   }
+  },
+  "A4_ORB_DebrisIntro_DSN_m": {
+   "prims": 236,
+   "with_cull_distance": 143,
+   "hist": {
+    "32000-inf": 143,
+    "0 (never)": 93
+   },
+   "by_class": {
+    "ParticleSystemComponent": 138,
+    "StaticMeshComponent": 83,
+    "SkeletalMeshComponent": 15
+   }
+  },
+  "A4_ORB_FallingTryp_ART_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "A4_ORB_FallingTryp_CINE_m": {
+   "prims": 20,
+   "with_cull_distance": 10,
+   "hist": {
+    "32000-inf": 10,
+    "0 (never)": 10
+   },
+   "by_class": {
+    "ParticleSystemComponent": 10,
+    "SkeletalMeshComponent": 9,
+    "StaticMeshComponent": 1
+   }
+  },
+  "A4_ORB_FallingTryp_DSN_m": {
+   "prims": 86,
+   "with_cull_distance": 20,
+   "hist": {
+    "32000-inf": 20,
+    "0 (never)": 66
+   },
+   "by_class": {
+    "StaticMeshComponent": 51,
+    "ParticleSystemComponent": 19,
+    "SkeletalMeshComponent": 16
+   }
+  },
+  "A4_ORB_Flying2Start_DSN_m": {
+   "prims": 162,
+   "with_cull_distance": 50,
+   "hist": {
+    "0 (never)": 112,
+    "32000-inf": 49,
+    "16000-32000": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 121,
+    "ParticleSystemComponent": 21,
+    "SkeletalMeshComponent": 20
+   }
+  },
+  "A4_ORB_Flying2Station_ART_m": {
+   "prims": 419,
+   "with_cull_distance": 75,
+   "hist": {
+    "32000-inf": 64,
+    "0 (never)": 344,
+    "4000-8000": 11
+   },
+   "by_class": {
+    "StaticMeshComponent": 418,
+    "ParticleSystemComponent": 1
+   }
+  },
+  "A4_ORB_Flying2_Art_m": {
+   "prims": 900,
+   "with_cull_distance": 322,
+   "hist": {
+    "32000-inf": 322,
+    "0 (never)": 578
+   },
+   "by_class": {
+    "StaticMeshComponent": 898,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "A4_ORB_Flying2_DSN_m": {
+   "prims": 74,
+   "with_cull_distance": 7,
+   "hist": {
+    "0 (never)": 67,
+    "32000-inf": 7
+   },
+   "by_class": {
+    "StaticMeshComponent": 63,
+    "SkeletalMeshComponent": 10,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "A4_ORB_Flying2_Vig_m": {
+   "prims": 7,
+   "with_cull_distance": 4,
+   "hist": {
+    "32000-inf": 4,
+    "0 (never)": 3
+   },
+   "by_class": {
+    "ParticleSystemComponent": 4,
+    "StaticMeshComponent": 3
+   }
+  },
+  "A4_ORB_Global_Art_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "A4_ORB_HoloRoom_ART_m": {
+   "prims": 914,
+   "with_cull_distance": 3,
+   "hist": {
+    "0 (never)": 911,
+    "32000-inf": 3
+   },
+   "by_class": {
+    "StaticMeshComponent": 893,
+    "ModelComponent": 18,
+    "ParticleSystemComponent": 3
+   }
+  },
+  "A4_ORB_IntroCave_Art_m": {
+   "prims": 386,
+   "with_cull_distance": 53,
+   "hist": {
+    "0 (never)": 333,
+    "32000-inf": 53
+   },
+   "by_class": {
+    "StaticMeshComponent": 225,
+    "ModelComponent": 140,
+    "ParticleSystemComponent": 14,
+    "DecalComponent": 7
+   }
+  },
+  "A4_ORB_IntroCave_DSN_m": {
+   "prims": 11,
+   "with_cull_distance": 8,
+   "hist": {
+    "32000-inf": 8,
+    "0 (never)": 3
+   },
+   "by_class": {
+    "ParticleSystemComponent": 8,
+    "StaticMeshComponent": 3
+   }
+  },
+  "A4_ORB_Intro_VIG_m": {
+   "prims": 83,
+   "with_cull_distance": 49,
+   "hist": {
+    "32000-inf": 49,
+    "0 (never)": 34
+   },
+   "by_class": {
+    "ParticleSystemComponent": 49,
+    "StaticMeshComponent": 34
+   }
+  },
+  "A4_ORB_Music_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "A4_ORB_NerveCenter_ART_m": {
+   "prims": 1422,
+   "with_cull_distance": 30,
+   "hist": {
+    "0 (never)": 1392,
+    "32000-inf": 30
+   },
+   "by_class": {
+    "StaticMeshComponent": 1128,
+    "ModelComponent": 285,
+    "ParticleSystemComponent": 9
+   }
+  },
+  "A4_ORB_NerveCenter_CINE_m": {
+   "prims": 201,
+   "with_cull_distance": 31,
+   "hist": {
+    "32000-inf": 31,
+    "0 (never)": 170
+   },
+   "by_class": {
+    "StaticMeshComponent": 162,
+    "ParticleSystemComponent": 28,
+    "SkeletalMeshComponent": 11
+   }
+  },
+  "A4_ORB_NerveCenter_DSN_m": {
+   "prims": 208,
+   "with_cull_distance": 17,
+   "hist": {
+    "0 (never)": 191,
+    "32000-inf": 17
+   },
+   "by_class": {
+    "StaticMeshComponent": 172,
+    "ParticleSystemComponent": 17,
+    "SkeletalMeshComponent": 13,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 6
+   }
+  },
+  "A4_ORB_PreRelay1_ART_m": {
+   "prims": 446,
+   "with_cull_distance": 15,
+   "hist": {
+    "0 (never)": 431,
+    "32000-inf": 15
+   },
+   "by_class": {
+    "StaticMeshComponent": 441,
+    "ModelComponent": 5
+   }
+  },
+  "A4_ORB_PreRelay1_DSN_m": {
+   "prims": 384,
+   "with_cull_distance": 101,
+   "hist": {
+    "0 (never)": 283,
+    "32000-inf": 100,
+    "16000-32000": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 223,
+    "ParticleSystemComponent": 101,
+    "ModelComponent": 35,
+    "SkeletalMeshComponent": 14,
+    "HmLightMappedSkeletalMeshComponent": 11
+   }
+  },
+  "A4_ORB_Relay1Int_Art_m": {
+   "prims": 2637,
+   "with_cull_distance": 62,
+   "hist": {
+    "0 (never)": 2575,
+    "32000-inf": 62
+   },
+   "by_class": {
+    "StaticMeshComponent": 1681,
+    "ModelComponent": 856,
+    "ParticleSystemComponent": 62,
+    "HmLightMappedSkeletalMeshComponent": 20,
+    "SkeletalMeshComponent": 18
+   }
+  },
+  "A4_ORB_Relay1Int_DSN_m": {
+   "prims": 607,
+   "with_cull_distance": 100,
+   "hist": {
+    "0 (never)": 507,
+    "32000-inf": 100
+   },
+   "by_class": {
+    "StaticMeshComponent": 470,
+    "ParticleSystemComponent": 100,
+    "SkeletalMeshComponent": 17,
+    "HmLightMappedSkeletalMeshComponent": 12,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 8
+   }
+  },
+  "A4_ORB_Relay2Int_Art_m": {
+   "prims": 879,
+   "with_cull_distance": 28,
+   "hist": {
+    "0 (never)": 851,
+    "32000-inf": 28
+   },
+   "by_class": {
+    "StaticMeshComponent": 699,
+    "ModelComponent": 152,
+    "ParticleSystemComponent": 28
+   }
+  },
+  "A4_ORB_Relay2Int_DSN_m": {
+   "prims": 182,
+   "with_cull_distance": 33,
+   "hist": {
+    "0 (never)": 149,
+    "32000-inf": 33
+   },
+   "by_class": {
+    "StaticMeshComponent": 140,
+    "ParticleSystemComponent": 33,
+    "SkeletalMeshComponent": 8,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "A4_ORB_Relay2Int_VIG_m": {
+   "prims": 124,
+   "with_cull_distance": 106,
+   "hist": {
+    "32000-inf": 106,
+    "0 (never)": 18
+   },
+   "by_class": {
+    "ParticleSystemComponent": 106,
+    "SkeletalMeshComponent": 10,
+    "StaticMeshComponent": 8
+   }
+  },
+  "A4_ORB_Relay2_Tunnel_ART_m": {
+   "prims": 1515,
+   "with_cull_distance": 4,
+   "hist": {
+    "0 (never)": 1511,
+    "32000-inf": 4
+   },
+   "by_class": {
+    "StaticMeshComponent": 1061,
+    "ModelComponent": 446,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 4,
+    "ParticleSystemComponent": 4
+   }
+  },
+  "A4_ORB_Relay2_Tunnel_DSN_m": {
+   "prims": 95,
+   "with_cull_distance": 74,
+   "hist": {
+    "32000-inf": 74,
+    "0 (never)": 21
+   },
+   "by_class": {
+    "ParticleSystemComponent": 74,
+    "StaticMeshComponent": 20,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "A4_ORB_RelayCmdRoom_ART_m": {
+   "prims": 1222,
+   "with_cull_distance": 19,
+   "hist": {
+    "0 (never)": 1203,
+    "32000-inf": 19
+   },
+   "by_class": {
+    "StaticMeshComponent": 945,
+    "ModelComponent": 258,
+    "ParticleSystemComponent": 19
+   }
+  },
+  "A4_ORB_RelayCmdRoom_DSN_m": {
+   "prims": 170,
+   "with_cull_distance": 22,
+   "hist": {
+    "0 (never)": 148,
+    "32000-inf": 22
+   },
+   "by_class": {
+    "StaticMeshComponent": 127,
+    "ParticleSystemComponent": 22,
+    "SkeletalMeshComponent": 15,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 3,
+    "ModelComponent": 3
+   }
+  },
+  "A4_ORB_RelayIntro_CINE_m": {
+   "prims": 23,
+   "with_cull_distance": 14,
+   "hist": {
+    "32000-inf": 14,
+    "0 (never)": 9
+   },
+   "by_class": {
+    "ParticleSystemComponent": 14,
+    "SkeletalMeshComponent": 6,
+    "StaticMeshComponent": 3
+   }
+  },
+  "A4_ORB_Track1_Global_Art_m": {
+   "prims": 14,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 14
+   },
+   "by_class": {
+    "StaticMeshComponent": 14
+   }
+  },
+  "A4_ORB_Track2_Global_Art_m": {
+   "prims": 67,
+   "with_cull_distance": 4,
+   "hist": {
+    "0 (never)": 63,
+    "32000-inf": 4
+   },
+   "by_class": {
+    "StaticMeshComponent": 67
+   }
+  },
+  "A4_ORB_TrypFlyingIntro_Art_m": {
+   "prims": 1013,
+   "with_cull_distance": 24,
+   "hist": {
+    "0 (never)": 989,
+    "32000-inf": 24
+   },
+   "by_class": {
+    "StaticMeshComponent": 838,
+    "ModelComponent": 160,
+    "ParticleSystemComponent": 15
+   }
+  },
+  "A4_ORB_TrypFlyingIntro_DSN_m": {
+   "prims": 592,
+   "with_cull_distance": 35,
+   "hist": {
+    "32000-inf": 35,
+    "0 (never)": 557
+   },
+   "by_class": {
+    "StaticMeshComponent": 546,
+    "ParticleSystemComponent": 35,
+    "SkeletalMeshComponent": 11
+   }
+  },
+  "A5_TRY_Audio_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "A5_TRY_Background_ART_m": {
+   "prims": 436,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 436
+   },
+   "by_class": {
+    "StaticMeshComponent": 436
+   }
+  },
+  "A5_TRY_Base_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "A5_TRY_CraterLower_ART_m": {
+   "prims": 845,
+   "with_cull_distance": 3,
+   "hist": {
+    "0 (never)": 842,
+    "32000-inf": 3
+   },
+   "by_class": {
+    "StaticMeshComponent": 837,
+    "DecalComponent": 5,
+    "ParticleSystemComponent": 3
+   }
+  },
+  "A5_TRY_CraterTop_ART_m": {
+   "prims": 96,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 96
+   },
+   "by_class": {
+    "StaticMeshComponent": 96
+   }
+  },
+  "A5_TRY_Crater_ART_m": {
+   "prims": 776,
+   "with_cull_distance": 32,
+   "hist": {
+    "0 (never)": 744,
+    "32000-inf": 32
+   },
+   "by_class": {
+    "StaticMeshComponent": 683,
+    "ModelComponent": 61,
+    "ParticleSystemComponent": 32
+   }
+  },
+  "A5_TRY_DSN_m": {
+   "prims": 546,
+   "with_cull_distance": 140,
+   "hist": {
+    "0 (never)": 406,
+    "32000-inf": 140
+   },
+   "by_class": {
+    "StaticMeshComponent": 284,
+    "ParticleSystemComponent": 146,
+    "SkeletalMeshComponent": 105,
+    "ModelComponent": 11
+   }
+  },
+  "A5_TRY_FX_m": {
+   "prims": 14,
+   "with_cull_distance": 14,
+   "hist": {
+    "32000-inf": 14
+   },
+   "by_class": {
+    "ParticleSystemComponent": 14
+   }
+  },
+  "A5_TRY_Impact_ART_m": {
+   "prims": 422,
+   "with_cull_distance": 13,
+   "hist": {
+    "32000-inf": 13,
+    "0 (never)": 409
+   },
+   "by_class": {
+    "StaticMeshComponent": 409,
+    "ParticleSystemComponent": 13
+   }
+  },
+  "A5_TRY_Intro_CINE_m": {
+   "prims": 56,
+   "with_cull_distance": 29,
+   "hist": {
+    "32000-inf": 29,
+    "0 (never)": 27
+   },
+   "by_class": {
+    "ParticleSystemComponent": 30,
+    "SkeletalMeshComponent": 19,
+    "StaticMeshComponent": 7
+   }
+  },
+  "A5_TRY_Outro_CINE_m": {
+   "prims": 48,
+   "with_cull_distance": 15,
+   "hist": {
+    "32000-inf": 15,
+    "0 (never)": 33
+   },
+   "by_class": {
+    "StaticMeshComponent": 18,
+    "ParticleSystemComponent": 15,
+    "SkeletalMeshComponent": 15
+   }
+  },
+  "A5_TRY_StreetsEnd_ART_m": {
+   "prims": 133,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 133
+   },
+   "by_class": {
+    "StaticMeshComponent": 133
+   }
+  },
+  "A5_TRY_Streets_ART_m": {
+   "prims": 791,
+   "with_cull_distance": 2,
+   "hist": {
+    "0 (never)": 789,
+    "32000-inf": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 746,
+    "ModelComponent": 43,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "A5_TRY_Vig_m": {
+   "prims": 218,
+   "with_cull_distance": 49,
+   "hist": {
+    "0 (never)": 169,
+    "32000-inf": 49
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 119,
+    "ParticleSystemComponent": 49,
+    "StaticMeshComponent": 49,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D1_ORB_Assmebly1_ART_m": {
+   "prims": 1474,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1474
+   },
+   "by_class": {
+    "StaticMeshComponent": 1271,
+    "ModelComponent": 203
+   }
+  },
+  "D1_ORB_Assmebly1_DGN_m": {
+   "prims": 47,
+   "with_cull_distance": 13,
+   "hist": {
+    "0 (never)": 34,
+    "32000-inf": 13
+   },
+   "by_class": {
+    "StaticMeshComponent": 30,
+    "ParticleSystemComponent": 13,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2,
+    "SkeletalMeshComponent": 2
+   }
+  },
+  "D1_ORB_Assmebly2_ART_m": {
+   "prims": 1149,
+   "with_cull_distance": 14,
+   "hist": {
+    "0 (never)": 1135,
+    "32000-inf": 14
+   },
+   "by_class": {
+    "StaticMeshComponent": 923,
+    "ModelComponent": 165,
+    "SkeletalMeshComponent": 36,
+    "ParticleSystemComponent": 14,
+    "DecalComponent": 11
+   }
+  },
+  "D1_ORB_Assmebly2_DGN_m": {
+   "prims": 75,
+   "with_cull_distance": 24,
+   "hist": {
+    "0 (never)": 51,
+    "32000-inf": 24
+   },
+   "by_class": {
+    "StaticMeshComponent": 38,
+    "ParticleSystemComponent": 24,
+    "SkeletalMeshComponent": 7,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 6
+   }
+  },
+  "D1_ORB_Assmebly_VIG_m": {
+   "prims": 89,
+   "with_cull_distance": 26,
+   "hist": {
+    "32000-inf": 26,
+    "0 (never)": 63
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 36,
+    "StaticMeshComponent": 27,
+    "ParticleSystemComponent": 26
+   }
+  },
+  "D1_ORB_Audio_m": {
+   "prims": 1,
+   "with_cull_distance": 1,
+   "hist": {
+    "32000-inf": 1
+   },
+   "by_class": {
+    "ParticleSystemComponent": 1
+   }
+  },
+  "D1_ORB_Base_m": {
+   "prims": 28,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 28
+   },
+   "by_class": {
+    "StaticMeshComponent": 28
+   }
+  },
+  "D1_ORB_Crash1B_ART_m": {
+   "prims": 1199,
+   "with_cull_distance": 8,
+   "hist": {
+    "0 (never)": 1191,
+    "32000-inf": 8
+   },
+   "by_class": {
+    "StaticMeshComponent": 1124,
+    "ModelComponent": 43,
+    "DecalComponent": 24,
+    "ParticleSystemComponent": 8
+   }
+  },
+  "D1_ORB_Crash1B_DGN_m": {
+   "prims": 61,
+   "with_cull_distance": 2,
+   "hist": {
+    "0 (never)": 59,
+    "32000-inf": 2
+   },
+   "by_class": {
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 31,
+    "StaticMeshComponent": 15,
+    "SkeletalMeshComponent": 13,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "D1_ORB_Crash1B_VIG_m": {
+   "prims": 29,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 29
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 23,
+    "StaticMeshComponent": 6
+   }
+  },
+  "D1_ORB_Crash1_ART_m": {
+   "prims": 1279,
+   "with_cull_distance": 16,
+   "hist": {
+    "0 (never)": 1263,
+    "32000-inf": 16
+   },
+   "by_class": {
+    "StaticMeshComponent": 1030,
+    "ModelComponent": 198,
+    "DecalComponent": 35,
+    "ParticleSystemComponent": 16
+   }
+  },
+  "D1_ORB_Crash1_DGN_m": {
+   "prims": 72,
+   "with_cull_distance": 22,
+   "hist": {
+    "32000-inf": 22,
+    "0 (never)": 50
+   },
+   "by_class": {
+    "StaticMeshComponent": 43,
+    "ParticleSystemComponent": 22,
+    "SkeletalMeshComponent": 7
+   }
+  },
+  "D1_ORB_Crash1_VIG_m": {
+   "prims": 252,
+   "with_cull_distance": 38,
+   "hist": {
+    "0 (never)": 214,
+    "32000-inf": 38
+   },
+   "by_class": {
+    "StaticMeshComponent": 170,
+    "SkeletalMeshComponent": 41,
+    "ParticleSystemComponent": 38,
+    "ModelComponent": 3
+   }
+  },
+  "D1_ORB_Crash2A_VIG_m": {
+   "prims": 117,
+   "with_cull_distance": 38,
+   "hist": {
+    "32000-inf": 38,
+    "0 (never)": 79
+   },
+   "by_class": {
+    "StaticMeshComponent": 61,
+    "ParticleSystemComponent": 38,
+    "SkeletalMeshComponent": 18
+   }
+  },
+  "D1_ORB_Crash2B_ART_m": {
+   "prims": 1525,
+   "with_cull_distance": 15,
+   "hist": {
+    "0 (never)": 1510,
+    "32000-inf": 15
+   },
+   "by_class": {
+    "StaticMeshComponent": 1290,
+    "ModelComponent": 199,
+    "DecalComponent": 21,
+    "ParticleSystemComponent": 15
+   }
+  },
+  "D1_ORB_Crash2B_CINE_m": {
+   "prims": 52,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 52
+   },
+   "by_class": {
+    "StaticMeshComponent": 30,
+    "SkeletalMeshComponent": 22
+   }
+  },
+  "D1_ORB_Crash2B_DGN_m": {
+   "prims": 141,
+   "with_cull_distance": 11,
+   "hist": {
+    "0 (never)": 130,
+    "32000-inf": 11
+   },
+   "by_class": {
+    "StaticMeshComponent": 97,
+    "SkeletalMeshComponent": 31,
+    "ParticleSystemComponent": 11,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2
+   }
+  },
+  "D1_ORB_Crash2B_VIG_m": {
+   "prims": 157,
+   "with_cull_distance": 29,
+   "hist": {
+    "32000-inf": 29,
+    "0 (never)": 128
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 88,
+    "StaticMeshComponent": 40,
+    "ParticleSystemComponent": 29
+   }
+  },
+  "D1_ORB_Crash2C_ART_m": {
+   "prims": 1431,
+   "with_cull_distance": 10,
+   "hist": {
+    "0 (never)": 1421,
+    "32000-inf": 10
+   },
+   "by_class": {
+    "StaticMeshComponent": 1388,
+    "ModelComponent": 21,
+    "DecalComponent": 12,
+    "ParticleSystemComponent": 10
+   }
+  },
+  "D1_ORB_Crash2D_ART_m": {
+   "prims": 2076,
+   "with_cull_distance": 26,
+   "hist": {
+    "0 (never)": 2050,
+    "32000-inf": 26
+   },
+   "by_class": {
+    "StaticMeshComponent": 1599,
+    "ModelComponent": 397,
+    "DecalComponent": 54,
+    "ParticleSystemComponent": 26
+   }
+  },
+  "D1_ORB_Crash2E_ART_m": {
+   "prims": 1673,
+   "with_cull_distance": 14,
+   "hist": {
+    "0 (never)": 1659,
+    "32000-inf": 14
+   },
+   "by_class": {
+    "StaticMeshComponent": 1360,
+    "ModelComponent": 264,
+    "DecalComponent": 35,
+    "ParticleSystemComponent": 14
+   }
+  },
+  "D1_ORB_Crash2_ART_m": {
+   "prims": 1198,
+   "with_cull_distance": 12,
+   "hist": {
+    "0 (never)": 1186,
+    "32000-inf": 12
+   },
+   "by_class": {
+    "StaticMeshComponent": 841,
+    "ModelComponent": 304,
+    "DecalComponent": 41,
+    "ParticleSystemComponent": 12
+   }
+  },
+  "D1_ORB_Crash2_DGN_m": {
+   "prims": 51,
+   "with_cull_distance": 2,
+   "hist": {
+    "0 (never)": 49,
+    "32000-inf": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 39,
+    "SkeletalMeshComponent": 6,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 4,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "D1_ORB_Crash2_VIG_m": {
+   "prims": 55,
+   "with_cull_distance": 21,
+   "hist": {
+    "32000-inf": 21,
+    "0 (never)": 34
+   },
+   "by_class": {
+    "StaticMeshComponent": 22,
+    "ParticleSystemComponent": 21,
+    "SkeletalMeshComponent": 12
+   }
+  },
+  "D1_ORB_CrashHack_DGN": {
+   "prims": 70,
+   "with_cull_distance": 11,
+   "hist": {
+    "0 (never)": 59,
+    "32000-inf": 11
+   },
+   "by_class": {
+    "StaticMeshComponent": 51,
+    "ParticleSystemComponent": 11,
+    "SkeletalMeshComponent": 7,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D1_ORB_Cybertron_ART_m": {
+   "prims": 11,
+   "with_cull_distance": 2,
+   "hist": {
+    "32000-inf": 2,
+    "0 (never)": 9
+   },
+   "by_class": {
+    "StaticMeshComponent": 9,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "D1_ORB_DETrans_ART_m": {
+   "prims": 1039,
+   "with_cull_distance": 2,
+   "hist": {
+    "0 (never)": 1037,
+    "32000-inf": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 1030,
+    "ModelComponent": 4,
+    "DecalComponent": 3,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "D1_ORB_DETrans_DGN_m": {
+   "prims": 12,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 12
+   },
+   "by_class": {
+    "StaticMeshComponent": 6,
+    "SkeletalMeshComponent": 4,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2
+   }
+  },
+  "D1_ORB_DarkEnergon_ART_m": {
+   "prims": 2530,
+   "with_cull_distance": 2,
+   "hist": {
+    "0 (never)": 2528,
+    "32000-inf": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 2061,
+    "ModelComponent": 465,
+    "DecalComponent": 2,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "D1_ORB_DarkEnergon_CINE_m": {
+   "prims": 117,
+   "with_cull_distance": 43,
+   "hist": {
+    "32000-inf": 43,
+    "0 (never)": 74
+   },
+   "by_class": {
+    "StaticMeshComponent": 54,
+    "ParticleSystemComponent": 43,
+    "SkeletalMeshComponent": 20
+   }
+  },
+  "D1_ORB_DarkEnergon_DGN_m": {
+   "prims": 125,
+   "with_cull_distance": 59,
+   "hist": {
+    "0 (never)": 66,
+    "32000-inf": 59
+   },
+   "by_class": {
+    "ParticleSystemComponent": 59,
+    "StaticMeshComponent": 47,
+    "SkeletalMeshComponent": 16,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 3
+   }
+  },
+  "D1_ORB_DarkEnergon_VIG_m": {
+   "prims": 302,
+   "with_cull_distance": 7,
+   "hist": {
+    "0 (never)": 295,
+    "32000-inf": 7
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 187,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 108,
+    "ParticleSystemComponent": 7
+   }
+  },
+  "D1_ORB_DataCenter2_ART_m": {
+   "prims": 1081,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1081
+   },
+   "by_class": {
+    "StaticMeshComponent": 994,
+    "ModelComponent": 74,
+    "DecalComponent": 13
+   }
+  },
+  "D1_ORB_DataCenter2b_ART_m": {
+   "prims": 1987,
+   "with_cull_distance": 1,
+   "hist": {
+    "0 (never)": 1986,
+    "32000-inf": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 1822,
+    "ModelComponent": 143,
+    "DecalComponent": 18,
+    "SkeletalMeshComponent": 3,
+    "ParticleSystemComponent": 1
+   }
+  },
+  "D1_ORB_DataCenter3_ART_m": {
+   "prims": 1128,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1128
+   },
+   "by_class": {
+    "StaticMeshComponent": 976,
+    "ModelComponent": 135,
+    "DecalComponent": 17
+   }
+  },
+  "D1_ORB_DataCenter_ART_m": {
+   "prims": 2428,
+   "with_cull_distance": 2,
+   "hist": {
+    "0 (never)": 2426,
+    "32000-inf": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 2280,
+    "ModelComponent": 123,
+    "DecalComponent": 23,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "D1_ORB_DataCenter_CINE_m": {
+   "prims": 15,
+   "with_cull_distance": 3,
+   "hist": {
+    "32000-inf": 3,
+    "0 (never)": 12
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 10,
+    "ParticleSystemComponent": 3,
+    "StaticMeshComponent": 2
+   }
+  },
+  "D1_ORB_DataCenter_DGN_m": {
+   "prims": 714,
+   "with_cull_distance": 52,
+   "hist": {
+    "0 (never)": 662,
+    "32000-inf": 52
+   },
+   "by_class": {
+    "StaticMeshComponent": 421,
+    "SkeletalMeshComponent": 130,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 103,
+    "ParticleSystemComponent": 52,
+    "HmLightMappedSkeletalMeshComponent": 8
+   }
+  },
+  "D1_ORB_DataCenter_VIG_m": {
+   "prims": 106,
+   "with_cull_distance": 26,
+   "hist": {
+    "32000-inf": 26,
+    "0 (never)": 80
+   },
+   "by_class": {
+    "StaticMeshComponent": 68,
+    "ParticleSystemComponent": 26,
+    "SkeletalMeshComponent": 12
+   }
+  },
+  "D1_ORB_Exterior1_ART_m": {
+   "prims": 1171,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1171
+   },
+   "by_class": {
+    "StaticMeshComponent": 1023,
+    "ModelComponent": 98,
+    "DecalComponent": 50
+   }
+  },
+  "D1_ORB_Exterior1_DGN_m": {
+   "prims": 59,
+   "with_cull_distance": 24,
+   "hist": {
+    "32000-inf": 24,
+    "0 (never)": 35
+   },
+   "by_class": {
+    "StaticMeshComponent": 29,
+    "ParticleSystemComponent": 24,
+    "SkeletalMeshComponent": 6
+   }
+  },
+  "D1_ORB_Exterior2_ART_m": {
+   "prims": 383,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 383
+   },
+   "by_class": {
+    "StaticMeshComponent": 367,
+    "ModelComponent": 16
+   }
+  },
+  "D1_ORB_Exterior2_DGN_m": {
+   "prims": 23,
+   "with_cull_distance": 1,
+   "hist": {
+    "0 (never)": 22,
+    "32000-inf": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 20,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1,
+    "ParticleSystemComponent": 1,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "D1_ORB_Exterior3_DGN_m": {
+   "prims": 33,
+   "with_cull_distance": 10,
+   "hist": {
+    "32000-inf": 10,
+    "0 (never)": 23
+   },
+   "by_class": {
+    "StaticMeshComponent": 21,
+    "ParticleSystemComponent": 10,
+    "SkeletalMeshComponent": 2
+   }
+  },
+  "D1_ORB_GLB_Doors_m": {
+   "prims": 25,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 25
+   },
+   "by_class": {
+    "StaticMeshComponent": 16,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 9
+   }
+  },
+  "D1_ORB_HalfMoon_ART_m": {
+   "prims": 820,
+   "with_cull_distance": 4,
+   "hist": {
+    "0 (never)": 816,
+    "32000-inf": 4
+   },
+   "by_class": {
+    "StaticMeshComponent": 693,
+    "ModelComponent": 115,
+    "DecalComponent": 8,
+    "ParticleSystemComponent": 4
+   }
+  },
+  "D1_ORB_Music_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "D1_ORB_ScienceLabs_ART_m": {
+   "prims": 1520,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1520
+   },
+   "by_class": {
+    "StaticMeshComponent": 1263,
+    "ModelComponent": 253,
+    "DecalComponent": 4
+   }
+  },
+  "D1_ORB_ScienceLabs_CINE_m": {
+   "prims": 52,
+   "with_cull_distance": 32,
+   "hist": {
+    "32000-inf": 32,
+    "0 (never)": 20
+   },
+   "by_class": {
+    "ParticleSystemComponent": 32,
+    "SkeletalMeshComponent": 11,
+    "StaticMeshComponent": 9
+   }
+  },
+  "D1_ORB_ScienceLabs_DGN_m": {
+   "prims": 38,
+   "with_cull_distance": 8,
+   "hist": {
+    "0 (never)": 30,
+    "32000-inf": 8
+   },
+   "by_class": {
+    "StaticMeshComponent": 21,
+    "ParticleSystemComponent": 8,
+    "SkeletalMeshComponent": 8,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D1_ORB_Space_VIG_m": {
+   "prims": 218,
+   "with_cull_distance": 143,
+   "hist": {
+    "0 (never)": 75,
+    "32000-inf": 143
+   },
+   "by_class": {
+    "ParticleSystemComponent": 143,
+    "StaticMeshComponent": 69,
+    "ModelComponent": 6
+   }
+  },
+  "D1_ORB_StationExterior2_ART_m": {
+   "prims": 657,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 657
+   },
+   "by_class": {
+    "ModelComponent": 439,
+    "StaticMeshComponent": 218
+   }
+  },
+  "D1_ORB_StationExterior_ART_m": {
+   "prims": 909,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 909
+   },
+   "by_class": {
+    "ModelComponent": 801,
+    "StaticMeshComponent": 108
+   }
+  },
+  "D1_ORB_Vent1_ART_m": {
+   "prims": 3845,
+   "with_cull_distance": 3,
+   "hist": {
+    "0 (never)": 3842,
+    "32000-inf": 3
+   },
+   "by_class": {
+    "StaticMeshComponent": 2343,
+    "ModelComponent": 1437,
+    "DecalComponent": 62,
+    "ParticleSystemComponent": 3
+   }
+  },
+  "D1_ORB_Vent1_DGN_m": {
+   "prims": 228,
+   "with_cull_distance": 33,
+   "hist": {
+    "32000-inf": 33,
+    "0 (never)": 195
+   },
+   "by_class": {
+    "StaticMeshComponent": 195,
+    "ParticleSystemComponent": 33
+   }
+  },
+  "D2_COR_Audio_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "D2_COR_Base_m": {
+   "prims": 6,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 6
+   },
+   "by_class": {
+    "StaticMeshComponent": 5,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "D2_COR_Cave_Art2B_m": {
+   "prims": 2617,
+   "with_cull_distance": 19,
+   "hist": {
+    "0 (never)": 2598,
+    "32000-inf": 19
+   },
+   "by_class": {
+    "StaticMeshComponent": 2181,
+    "ModelComponent": 417,
+    "ParticleSystemComponent": 19
+   }
+  },
+  "D2_COR_Cave_Art2C_m": {
+   "prims": 880,
+   "with_cull_distance": 34,
+   "hist": {
+    "0 (never)": 846,
+    "32000-inf": 34
+   },
+   "by_class": {
+    "StaticMeshComponent": 662,
+    "ModelComponent": 184,
+    "ParticleSystemComponent": 34
+   }
+  },
+  "D2_COR_Cave_Art2_m": {
+   "prims": 1967,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1967
+   },
+   "by_class": {
+    "StaticMeshComponent": 1547,
+    "ModelComponent": 420
+   }
+  },
+  "D2_COR_Cave_ArtB_m": {
+   "prims": 1677,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1677
+   },
+   "by_class": {
+    "StaticMeshComponent": 1461,
+    "ModelComponent": 216
+   }
+  },
+  "D2_COR_Cave_Art_m": {
+   "prims": 1102,
+   "with_cull_distance": 6,
+   "hist": {
+    "0 (never)": 1096,
+    "32000-inf": 6
+   },
+   "by_class": {
+    "StaticMeshComponent": 1036,
+    "ModelComponent": 60,
+    "ParticleSystemComponent": 6
+   }
+  },
+  "D2_COR_Cave_Design2B_m": {
+   "prims": 63,
+   "with_cull_distance": 10,
+   "hist": {
+    "32000-inf": 10,
+    "0 (never)": 53
+   },
+   "by_class": {
+    "StaticMeshComponent": 52,
+    "ParticleSystemComponent": 10,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "D2_COR_Cave_Design2_m": {
+   "prims": 168,
+   "with_cull_distance": 13,
+   "hist": {
+    "0 (never)": 155,
+    "32000-inf": 13
+   },
+   "by_class": {
+    "StaticMeshComponent": 107,
+    "SkeletalMeshComponent": 45,
+    "ParticleSystemComponent": 13,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 3
+   }
+  },
+  "D2_COR_Cave_DesignB_m": {
+   "prims": 171,
+   "with_cull_distance": 21,
+   "hist": {
+    "0 (never)": 150,
+    "32000-inf": 21
+   },
+   "by_class": {
+    "StaticMeshComponent": 134,
+    "ParticleSystemComponent": 21,
+    "SkeletalMeshComponent": 12,
+    "ModelComponent": 4
+   }
+  },
+  "D2_COR_Cave_Design_m": {
+   "prims": 14,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 14
+   },
+   "by_class": {
+    "StaticMeshComponent": 10,
+    "SkeletalMeshComponent": 4
+   }
+  },
+  "D2_COR_Chamber_Art_m": {
+   "prims": 1456,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1456
+   },
+   "by_class": {
+    "StaticMeshComponent": 1136,
+    "ModelComponent": 320
+   }
+  },
+  "D2_COR_Chamber_Design_m": {
+   "prims": 387,
+   "with_cull_distance": 69,
+   "hist": {
+    "32000-inf": 69,
+    "0 (never)": 318
+   },
+   "by_class": {
+    "StaticMeshComponent": 253,
+    "ParticleSystemComponent": 69,
+    "SkeletalMeshComponent": 65
+   }
+  },
+  "D2_COR_Gorge_01_ART_m": {
+   "prims": 1268,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1268
+   },
+   "by_class": {
+    "StaticMeshComponent": 926,
+    "ModelComponent": 342
+   }
+  },
+  "D2_COR_Gorge_01_Design_m": {
+   "prims": 455,
+   "with_cull_distance": 124,
+   "hist": {
+    "0 (never)": 331,
+    "32000-inf": 124
+   },
+   "by_class": {
+    "StaticMeshComponent": 265,
+    "ParticleSystemComponent": 131,
+    "SkeletalMeshComponent": 58,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D2_COR_Gorge_01_VIG_m": {
+   "prims": 218,
+   "with_cull_distance": 47,
+   "hist": {
+    "32000-inf": 47,
+    "0 (never)": 171
+   },
+   "by_class": {
+    "StaticMeshComponent": 119,
+    "SkeletalMeshComponent": 52,
+    "ParticleSystemComponent": 47
+   }
+  },
+  "D2_COR_Gorge_02_ART_m": {
+   "prims": 384,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 384
+   },
+   "by_class": {
+    "StaticMeshComponent": 328,
+    "ModelComponent": 56
+   }
+  },
+  "D2_COR_Gorge_02_Design_m": {
+   "prims": 18,
+   "with_cull_distance": 1,
+   "hist": {
+    "32000-inf": 1,
+    "0 (never)": 17
+   },
+   "by_class": {
+    "StaticMeshComponent": 15,
+    "SkeletalMeshComponent": 2,
+    "ParticleSystemComponent": 1
+   }
+  },
+  "D2_COR_Gorge_02_VIG_m": {
+   "prims": 9,
+   "with_cull_distance": 2,
+   "hist": {
+    "32000-inf": 2,
+    "0 (never)": 7
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 5,
+    "ParticleSystemComponent": 2,
+    "StaticMeshComponent": 2
+   }
+  },
+  "D2_COR_Gorge_03_ART_m": {
+   "prims": 1625,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1625
+   },
+   "by_class": {
+    "StaticMeshComponent": 1346,
+    "ModelComponent": 279
+   }
+  },
+  "D2_COR_Gorge_03_Design_m": {
+   "prims": 201,
+   "with_cull_distance": 25,
+   "hist": {
+    "32000-inf": 25,
+    "0 (never)": 176
+   },
+   "by_class": {
+    "StaticMeshComponent": 163,
+    "ParticleSystemComponent": 25,
+    "SkeletalMeshComponent": 13
+   }
+  },
+  "D2_COR_Gorge_1B_Art_m": {
+   "prims": 596,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 596
+   },
+   "by_class": {
+    "StaticMeshComponent": 482,
+    "ModelComponent": 114
+   }
+  },
+  "D2_COR_Gorge_1B_Design_m": {
+   "prims": 5,
+   "with_cull_distance": 1,
+   "hist": {
+    "32000-inf": 1,
+    "0 (never)": 4
+   },
+   "by_class": {
+    "StaticMeshComponent": 3,
+    "ParticleSystemComponent": 1,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "D2_COR_IntroGorge_ART_m": {
+   "prims": 1266,
+   "with_cull_distance": 1,
+   "hist": {
+    "0 (never)": 1265,
+    "32000-inf": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 1091,
+    "ModelComponent": 174,
+    "ParticleSystemComponent": 1
+   }
+  },
+  "D2_COR_IntroGorge_Design_m": {
+   "prims": 109,
+   "with_cull_distance": 8,
+   "hist": {
+    "32000-inf": 8,
+    "0 (never)": 101
+   },
+   "by_class": {
+    "StaticMeshComponent": 99,
+    "ParticleSystemComponent": 8,
+    "SkeletalMeshComponent": 2
+   }
+  },
+  "D2_COR_IntroGorge_VIG_m": {
+   "prims": 248,
+   "with_cull_distance": 31,
+   "hist": {
+    "32000-inf": 31,
+    "0 (never)": 217
+   },
+   "by_class": {
+    "StaticMeshComponent": 214,
+    "ParticleSystemComponent": 31,
+    "SkeletalMeshComponent": 3
+   }
+  },
+  "D2_COR_Music_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "D2_COR_Shaft_01_Art_m": {
+   "prims": 935,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 935
+   },
+   "by_class": {
+    "StaticMeshComponent": 860,
+    "ModelComponent": 75
+   }
+  },
+  "D2_COR_Shaft_01_Design_m": {
+   "prims": 258,
+   "with_cull_distance": 39,
+   "hist": {
+    "0 (never)": 219,
+    "32000-inf": 39
+   },
+   "by_class": {
+    "StaticMeshComponent": 198,
+    "ParticleSystemComponent": 39,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 18,
+    "SkeletalMeshComponent": 3
+   }
+  },
+  "D2_COR_Surface_Art_m": {
+   "prims": 1291,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1291
+   },
+   "by_class": {
+    "StaticMeshComponent": 1119,
+    "ModelComponent": 172
+   }
+  },
+  "D2_COR_Surface_Design_m": {
+   "prims": 63,
+   "with_cull_distance": 38,
+   "hist": {
+    "32000-inf": 38,
+    "0 (never)": 25
+   },
+   "by_class": {
+    "ParticleSystemComponent": 38,
+    "StaticMeshComponent": 17,
+    "SkeletalMeshComponent": 8
+   }
+  },
+  "D2_COR_TNL1_Art_m": {
+   "prims": 1686,
+   "with_cull_distance": 9,
+   "hist": {
+    "0 (never)": 1677,
+    "32000-inf": 9
+   },
+   "by_class": {
+    "StaticMeshComponent": 1425,
+    "ModelComponent": 252,
+    "ParticleSystemComponent": 9
+   }
+  },
+  "D2_COR_TNL1_Design_m": {
+   "prims": 47,
+   "with_cull_distance": 9,
+   "hist": {
+    "32000-inf": 9,
+    "0 (never)": 38
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 23,
+    "StaticMeshComponent": 15,
+    "ParticleSystemComponent": 9
+   }
+  },
+  "D2_COR_TNL2_Art_m": {
+   "prims": 2432,
+   "with_cull_distance": 11,
+   "hist": {
+    "0 (never)": 2421,
+    "32000-inf": 11
+   },
+   "by_class": {
+    "StaticMeshComponent": 2213,
+    "ModelComponent": 208,
+    "ParticleSystemComponent": 11
+   }
+  },
+  "D2_COR_TNL2_Design_m": {
+   "prims": 129,
+   "with_cull_distance": 25,
+   "hist": {
+    "32000-inf": 25,
+    "0 (never)": 104
+   },
+   "by_class": {
+    "StaticMeshComponent": 86,
+    "ParticleSystemComponent": 25,
+    "SkeletalMeshComponent": 18
+   }
+  },
+  "D2_COR_TNL3_Art_m": {
+   "prims": 1568,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1568
+   },
+   "by_class": {
+    "StaticMeshComponent": 1356,
+    "ModelComponent": 212
+   }
+  },
+  "D2_COR_TNL3_Design_m": {
+   "prims": 91,
+   "with_cull_distance": 10,
+   "hist": {
+    "32000-inf": 10,
+    "0 (never)": 81
+   },
+   "by_class": {
+    "StaticMeshComponent": 52,
+    "SkeletalMeshComponent": 29,
+    "ParticleSystemComponent": 10
+   }
+  },
+  "D2_COR_TNL4_Art_m": {
+   "prims": 590,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 590
+   },
+   "by_class": {
+    "StaticMeshComponent": 487,
+    "ModelComponent": 103
+   }
+  },
+  "D2_COR_TNL4_Design_m": {
+   "prims": 27,
+   "with_cull_distance": 1,
+   "hist": {
+    "32000-inf": 1,
+    "0 (never)": 26
+   },
+   "by_class": {
+    "StaticMeshComponent": 23,
+    "SkeletalMeshComponent": 3,
+    "ParticleSystemComponent": 1
+   }
+  },
+  "D2_COR_TNLMR_Art_m": {
+   "prims": 1521,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 1521
+   },
+   "by_class": {
+    "StaticMeshComponent": 1236,
+    "ModelComponent": 285
+   }
+  },
+  "D2_COR_TNLMR_Design_m": {
+   "prims": 168,
+   "with_cull_distance": 16,
+   "hist": {
+    "32000-inf": 16,
+    "0 (never)": 152
+   },
+   "by_class": {
+    "StaticMeshComponent": 139,
+    "ParticleSystemComponent": 16,
+    "SkeletalMeshComponent": 13
+   }
+  },
+  "D2_COR_TrioBss_Art_m": {
+   "prims": 2529,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 2529
+   },
+   "by_class": {
+    "StaticMeshComponent": 2235,
+    "ModelComponent": 294
+   }
+  },
+  "D2_COR_TrioBss_Design_m": {
+   "prims": 249,
+   "with_cull_distance": 49,
+   "hist": {
+    "0 (never)": 200,
+    "32000-inf": 49
+   },
+   "by_class": {
+    "StaticMeshComponent": 175,
+    "ParticleSystemComponent": 49,
+    "SkeletalMeshComponent": 22,
+    "ModelComponent": 3
+   }
+  },
+  "D3A_IAC_AUDIO_m": {
+   "prims": 2,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 2
+   }
+  },
+  "D3A_IAC_Alley1_ART": {
+   "prims": 1505,
+   "with_cull_distance": 43,
+   "hist": {
+    "0 (never)": 1462,
+    "32000-inf": 31,
+    "16000-32000": 12
+   },
+   "by_class": {
+    "StaticMeshComponent": 1311,
+    "ModelComponent": 136,
+    "ParticleSystemComponent": 31,
+    "DecalComponent": 27
+   }
+  },
+  "D3A_IAC_Alley1_DESIGN": {
+   "prims": 183,
+   "with_cull_distance": 48,
+   "hist": {
+    "0 (never)": 135,
+    "32000-inf": 48
+   },
+   "by_class": {
+    "StaticMeshComponent": 112,
+    "ParticleSystemComponent": 48,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 12,
+    "SkeletalMeshComponent": 7,
+    "HmLightMappedSkeletalMeshComponent": 4
+   }
+  },
+  "D3A_IAC_Alley1_VIG_m": {
+   "prims": 284,
+   "with_cull_distance": 73,
+   "hist": {
+    "0 (never)": 211,
+    "32000-inf": 73
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 102,
+    "StaticMeshComponent": 94,
+    "ParticleSystemComponent": 73,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 15
+   }
+  },
+  "D3A_IAC_Base_m": {
+   "prims": 5,
+   "with_cull_distance": 1,
+   "hist": {
+    "16000-32000": 1,
+    "0 (never)": 4
+   },
+   "by_class": {
+    "StaticMeshComponent": 5
+   }
+  },
+  "D3A_IAC_City1_ART_m": {
+   "prims": 396,
+   "with_cull_distance": 210,
+   "hist": {
+    "0 (never)": 186,
+    "32000-inf": 7,
+    "16000-32000": 203
+   },
+   "by_class": {
+    "StaticMeshComponent": 265,
+    "ModelComponent": 100,
+    "DecalComponent": 23,
+    "ParticleSystemComponent": 7,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D3A_IAC_City1_CINE_m": {
+   "prims": 163,
+   "with_cull_distance": 30,
+   "hist": {
+    "32000-inf": 30,
+    "0 (never)": 133
+   },
+   "by_class": {
+    "StaticMeshComponent": 114,
+    "ParticleSystemComponent": 30,
+    "SkeletalMeshComponent": 19
+   }
+  },
+  "D3A_IAC_City1_DESIGN_m": {
+   "prims": 92,
+   "with_cull_distance": 56,
+   "hist": {
+    "0 (never)": 36,
+    "32000-inf": 6,
+    "16000-32000": 50
+   },
+   "by_class": {
+    "StaticMeshComponent": 79,
+    "ParticleSystemComponent": 6,
+    "SkeletalMeshComponent": 6,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D3A_IAC_City1_VIG_m": {
+   "prims": 63,
+   "with_cull_distance": 18,
+   "hist": {
+    "32000-inf": 9,
+    "0 (never)": 45,
+    "16000-32000": 9
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 39,
+    "StaticMeshComponent": 15,
+    "ParticleSystemComponent": 9
+   }
+  },
+  "D3A_IAC_City2B_DESIGN_m": {
+   "prims": 27,
+   "with_cull_distance": 9,
+   "hist": {
+    "0 (never)": 18,
+    "32000-inf": 8,
+    "16000-32000": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 17,
+    "ParticleSystemComponent": 8,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "D3A_IAC_City2B_VIG_m": {
+   "prims": 80,
+   "with_cull_distance": 35,
+   "hist": {
+    "32000-inf": 35,
+    "0 (never)": 45
+   },
+   "by_class": {
+    "ParticleSystemComponent": 35,
+    "StaticMeshComponent": 27,
+    "SkeletalMeshComponent": 18
+   }
+  },
+  "D3A_IAC_City2_ART_m": {
+   "prims": 1894,
+   "with_cull_distance": 978,
+   "hist": {
+    "0 (never)": 916,
+    "16000-32000": 969,
+    "32000-inf": 9
+   },
+   "by_class": {
+    "StaticMeshComponent": 1415,
+    "ModelComponent": 433,
+    "DecalComponent": 33,
+    "ParticleSystemComponent": 9,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 4
+   }
+  },
+  "D3A_IAC_City2_CINE_m": {
+   "prims": 28,
+   "with_cull_distance": 12,
+   "hist": {
+    "32000-inf": 10,
+    "0 (never)": 16,
+    "16000-32000": 2
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 11,
+    "ParticleSystemComponent": 10,
+    "StaticMeshComponent": 7
+   }
+  },
+  "D3A_IAC_City2_DESIGN_m": {
+   "prims": 449,
+   "with_cull_distance": 292,
+   "hist": {
+    "0 (never)": 157,
+    "32000-inf": 27,
+    "16000-32000": 265
+   },
+   "by_class": {
+    "StaticMeshComponent": 408,
+    "ParticleSystemComponent": 27,
+    "SkeletalMeshComponent": 12,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2
+   }
+  },
+  "D3A_IAC_City2_VIG_m": {
+   "prims": 282,
+   "with_cull_distance": 98,
+   "hist": {
+    "0 (never)": 184,
+    "32000-inf": 44,
+    "16000-32000": 54
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 109,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 95,
+    "ParticleSystemComponent": 44,
+    "StaticMeshComponent": 34
+   }
+  },
+  "D3A_IAC_CityTank_ART_m": {
+   "prims": 562,
+   "with_cull_distance": 353,
+   "hist": {
+    "0 (never)": 209,
+    "16000-32000": 304,
+    "32000-inf": 49
+   },
+   "by_class": {
+    "StaticMeshComponent": 368,
+    "ModelComponent": 131,
+    "ParticleSystemComponent": 49,
+    "DecalComponent": 14
+   }
+  },
+  "D3A_IAC_CityTank_CINE_m": {
+   "prims": 25,
+   "with_cull_distance": 9,
+   "hist": {
+    "32000-inf": 9,
+    "0 (never)": 16
+   },
+   "by_class": {
+    "StaticMeshComponent": 10,
+    "ParticleSystemComponent": 9,
+    "SkeletalMeshComponent": 6
+   }
+  },
+  "D3A_IAC_CityTank_DESIGN_m": {
+   "prims": 489,
+   "with_cull_distance": 341,
+   "hist": {
+    "32000-inf": 20,
+    "0 (never)": 148,
+    "16000-32000": 321
+   },
+   "by_class": {
+    "StaticMeshComponent": 350,
+    "SkeletalMeshComponent": 119,
+    "ParticleSystemComponent": 20
+   }
+  },
+  "D3A_IAC_CityTank_VIG_m": {
+   "prims": 57,
+   "with_cull_distance": 10,
+   "hist": {
+    "0 (never)": 47,
+    "32000-inf": 7,
+    "16000-32000": 3
+   },
+   "by_class": {
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 20,
+    "StaticMeshComponent": 20,
+    "SkeletalMeshComponent": 10,
+    "ParticleSystemComponent": 7
+   }
+  },
+  "D3A_IAC_CityTrans_ART_m": {
+   "prims": 992,
+   "with_cull_distance": 475,
+   "hist": {
+    "0 (never)": 517,
+    "16000-32000": 464,
+    "32000-inf": 11
+   },
+   "by_class": {
+    "StaticMeshComponent": 770,
+    "ModelComponent": 198,
+    "DecalComponent": 11,
+    "ParticleSystemComponent": 11,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2
+   }
+  },
+  "D3A_IAC_CityTrans_DESIGN_m": {
+   "prims": 97,
+   "with_cull_distance": 78,
+   "hist": {
+    "0 (never)": 19,
+    "32000-inf": 5,
+    "16000-32000": 73
+   },
+   "by_class": {
+    "StaticMeshComponent": 83,
+    "SkeletalMeshComponent": 7,
+    "ParticleSystemComponent": 5,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2
+   }
+  },
+  "D3A_IAC_CourtNew_ART_m": {
+   "prims": 2192,
+   "with_cull_distance": 35,
+   "hist": {
+    "0 (never)": 2157,
+    "32000-inf": 35
+   },
+   "by_class": {
+    "StaticMeshComponent": 1845,
+    "ModelComponent": 256,
+    "DecalComponent": 56,
+    "ParticleSystemComponent": 35
+   }
+  },
+  "D3A_IAC_CourtNew_DESIGN_m": {
+   "prims": 305,
+   "with_cull_distance": 22,
+   "hist": {
+    "0 (never)": 283,
+    "32000-inf": 22
+   },
+   "by_class": {
+    "StaticMeshComponent": 161,
+    "SkeletalMeshComponent": 110,
+    "ParticleSystemComponent": 22,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 12
+   }
+  },
+  "D3A_IAC_CourtTrans_ART_m": {
+   "prims": 629,
+   "with_cull_distance": 8,
+   "hist": {
+    "0 (never)": 621,
+    "32000-inf": 8
+   },
+   "by_class": {
+    "StaticMeshComponent": 550,
+    "ModelComponent": 53,
+    "DecalComponent": 18,
+    "ParticleSystemComponent": 8
+   }
+  },
+  "D3A_IAC_CourtTrans_DESIGN_m": {
+   "prims": 324,
+   "with_cull_distance": 47,
+   "hist": {
+    "0 (never)": 277,
+    "32000-inf": 47
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 129,
+    "StaticMeshComponent": 103,
+    "ParticleSystemComponent": 47,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 42,
+    "DecalComponent": 3
+   }
+  },
+  "D3A_IAC_CourtTrans_VIG_m": {
+   "prims": 65,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 65
+   },
+   "by_class": {
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 64,
+    "HmLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D3A_IAC_CourtVista_ART_m": {
+   "prims": 681,
+   "with_cull_distance": 11,
+   "hist": {
+    "0 (never)": 670,
+    "32000-inf": 11
+   },
+   "by_class": {
+    "StaticMeshComponent": 658,
+    "ModelComponent": 12,
+    "ParticleSystemComponent": 11
+   }
+  },
+  "D3A_IAC_Court_CINE_m": {
+   "prims": 67,
+   "with_cull_distance": 25,
+   "hist": {
+    "32000-inf": 25,
+    "0 (never)": 42
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 32,
+    "ParticleSystemComponent": 25,
+    "StaticMeshComponent": 10
+   }
+  },
+  "D3A_IAC_Court_VIG_m": {
+   "prims": 357,
+   "with_cull_distance": 172,
+   "hist": {
+    "32000-inf": 172,
+    "0 (never)": 185
+   },
+   "by_class": {
+    "ParticleSystemComponent": 172,
+    "StaticMeshComponent": 152,
+    "SkeletalMeshComponent": 33
+   }
+  },
+  "D3A_IAC_Drive1_ART_m": {
+   "prims": 1915,
+   "with_cull_distance": 1042,
+   "hist": {
+    "0 (never)": 873,
+    "32000-inf": 1042
+   },
+   "by_class": {
+    "StaticMeshComponent": 1273,
+    "ModelComponent": 635,
+    "DecalComponent": 4,
+    "ParticleSystemComponent": 3
+   }
+  },
+  "D3A_IAC_Drive1_DESIGN_m": {
+   "prims": 100,
+   "with_cull_distance": 26,
+   "hist": {
+    "0 (never)": 74,
+    "32000-inf": 26
+   },
+   "by_class": {
+    "StaticMeshComponent": 58,
+    "ParticleSystemComponent": 26,
+    "SkeletalMeshComponent": 12,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 4
+   }
+  },
+  "D3A_IAC_Drive1_VIG_m": {
+   "prims": 147,
+   "with_cull_distance": 67,
+   "hist": {
+    "32000-inf": 67,
+    "0 (never)": 80
+   },
+   "by_class": {
+    "StaticMeshComponent": 80,
+    "ParticleSystemComponent": 67
+   }
+  },
+  "D3A_IAC_Drive2_ART_m": {
+   "prims": 1819,
+   "with_cull_distance": 987,
+   "hist": {
+    "0 (never)": 832,
+    "32000-inf": 987
+   },
+   "by_class": {
+    "StaticMeshComponent": 1245,
+    "ModelComponent": 552,
+    "ParticleSystemComponent": 14,
+    "DecalComponent": 8
+   }
+  },
+  "D3A_IAC_Drive2_DESIGN_m": {
+   "prims": 130,
+   "with_cull_distance": 34,
+   "hist": {
+    "0 (never)": 96,
+    "32000-inf": 34
+   },
+   "by_class": {
+    "StaticMeshComponent": 74,
+    "ParticleSystemComponent": 34,
+    "SkeletalMeshComponent": 17,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 5
+   }
+  },
+  "D3A_IAC_DriveTrans_ART_m": {
+   "prims": 916,
+   "with_cull_distance": 9,
+   "hist": {
+    "0 (never)": 907,
+    "32000-inf": 9
+   },
+   "by_class": {
+    "StaticMeshComponent": 715,
+    "ModelComponent": 157,
+    "DecalComponent": 35,
+    "ParticleSystemComponent": 9
+   }
+  },
+  "D3A_IAC_DriveTrans_DESIGN_m": {
+   "prims": 188,
+   "with_cull_distance": 35,
+   "hist": {
+    "0 (never)": 153,
+    "32000-inf": 35
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 77,
+    "StaticMeshComponent": 53,
+    "ParticleSystemComponent": 35,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 13,
+    "HmLightMappedSkeletalMeshComponent": 8,
+    "DecalComponent": 2
+   }
+  },
+  "D3A_IAC_MUSIC_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "D3A_IAC_Planet1_ART_m": {
+   "prims": 375,
+   "with_cull_distance": 6,
+   "hist": {
+    "0 (never)": 369,
+    "32000-inf": 6
+   },
+   "by_class": {
+    "StaticMeshComponent": 356,
+    "ModelComponent": 12,
+    "ParticleSystemComponent": 6,
+    "DecalComponent": 1
+   }
+  },
+  "D3A_IAC_Planet1_CINE_m": {
+   "prims": 72,
+   "with_cull_distance": 29,
+   "hist": {
+    "32000-inf": 29,
+    "0 (never)": 43
+   },
+   "by_class": {
+    "StaticMeshComponent": 32,
+    "ParticleSystemComponent": 29,
+    "SkeletalMeshComponent": 11
+   }
+  },
+  "D3A_IAC_Planet1_DESIGN_m": {
+   "prims": 95,
+   "with_cull_distance": 14,
+   "hist": {
+    "0 (never)": 81,
+    "32000-inf": 14
+   },
+   "by_class": {
+    "StaticMeshComponent": 41,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 26,
+    "ParticleSystemComponent": 16,
+    "SkeletalMeshComponent": 12
+   }
+  },
+  "D3A_IAC_Sentinel_ART_m": {
+   "prims": 320,
+   "with_cull_distance": 7,
+   "hist": {
+    "0 (never)": 313,
+    "32000-inf": 7
+   },
+   "by_class": {
+    "StaticMeshComponent": 289,
+    "ModelComponent": 24,
+    "ParticleSystemComponent": 7
+   }
+  },
+  "D3A_IAC_Sentinel_DESIGN_m": {
+   "prims": 200,
+   "with_cull_distance": 63,
+   "hist": {
+    "0 (never)": 137,
+    "32000-inf": 63
+   },
+   "by_class": {
+    "StaticMeshComponent": 72,
+    "ParticleSystemComponent": 63,
+    "SkeletalMeshComponent": 48,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 16,
+    "HmLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D3A_IAC_Shared_ART_m": {
+   "prims": 9,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 9
+   },
+   "by_class": {
+    "StaticMeshComponent": 9
+   }
+  },
+  "D3A_IAC_Vaults_ART_m": {
+   "prims": 522,
+   "with_cull_distance": 6,
+   "hist": {
+    "0 (never)": 516,
+    "32000-inf": 4,
+    "16000-32000": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 345,
+    "ModelComponent": 173,
+    "ParticleSystemComponent": 4
+   }
+  },
+  "D3A_IAC_Vaults_DESIGN_m": {
+   "prims": 56,
+   "with_cull_distance": 14,
+   "hist": {
+    "0 (never)": 42,
+    "32000-inf": 13,
+    "16000-32000": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 28,
+    "ParticleSystemComponent": 13,
+    "SkeletalMeshComponent": 13,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2
+   }
+  },
+  "D3A_IAC_Vent_ART_m": {
+   "prims": 1006,
+   "with_cull_distance": 20,
+   "hist": {
+    "0 (never)": 986,
+    "32000-inf": 20
+   },
+   "by_class": {
+    "StaticMeshComponent": 821,
+    "ModelComponent": 165,
+    "ParticleSystemComponent": 20
+   }
+  },
+  "D3A_IAC_Vent_DESIGN_m": {
+   "prims": 63,
+   "with_cull_distance": 24,
+   "hist": {
+    "0 (never)": 39,
+    "32000-inf": 24
+   },
+   "by_class": {
+    "StaticMeshComponent": 35,
+    "ParticleSystemComponent": 24,
+    "SkeletalMeshComponent": 3,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D3B_IAC_BL2Exterior_ART_m": {
+   "prims": 7,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 7
+   },
+   "by_class": {
+    "StaticMeshComponent": 7
+   }
+  },
+  "D3B_IAC_BS1Exterior_ART_m": {
+   "prims": 156,
+   "with_cull_distance": 4,
+   "hist": {
+    "0 (never)": 152,
+    "32000-inf": 4
+   },
+   "by_class": {
+    "StaticMeshComponent": 121,
+    "ModelComponent": 24,
+    "ParticleSystemComponent": 8,
+    "DecalComponent": 3
+   }
+  },
+  "D3B_IAC_BS2Exterior_ART_m": {
+   "prims": 12,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 12
+   },
+   "by_class": {
+    "StaticMeshComponent": 12
+   }
+  },
+  "D3B_IAC_Balcony_ART_m": {
+   "prims": 714,
+   "with_cull_distance": 6,
+   "hist": {
+    "0 (never)": 708,
+    "32000-inf": 6
+   },
+   "by_class": {
+    "StaticMeshComponent": 691,
+    "DecalComponent": 12,
+    "ParticleSystemComponent": 6,
+    "ModelComponent": 5
+   }
+  },
+  "D3B_IAC_Balcony_DSN_m": {
+   "prims": 197,
+   "with_cull_distance": 44,
+   "hist": {
+    "0 (never)": 153,
+    "32000-inf": 44
+   },
+   "by_class": {
+    "StaticMeshComponent": 118,
+    "ParticleSystemComponent": 45,
+    "SkeletalMeshComponent": 33,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D3B_IAC_Balcony_VIG_m": {
+   "prims": 9,
+   "with_cull_distance": 6,
+   "hist": {
+    "32000-inf": 6,
+    "0 (never)": 3
+   },
+   "by_class": {
+    "ParticleSystemComponent": 6,
+    "SkeletalMeshComponent": 3
+   }
+  },
+  "D3B_IAC_Base_m": {
+   "prims": 17,
+   "with_cull_distance": 1,
+   "hist": {
+    "0 (never)": 16,
+    "32000-inf": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 15,
+    "SkeletalMeshComponent": 2
+   }
+  },
+  "D3B_IAC_BottomInt_ART_m": {
+   "prims": 317,
+   "with_cull_distance": 3,
+   "hist": {
+    "0 (never)": 314,
+    "32000-inf": 3
+   },
+   "by_class": {
+    "StaticMeshComponent": 240,
+    "ModelComponent": 69,
+    "DecalComponent": 5,
+    "ParticleSystemComponent": 3
+   }
+  },
+  "D3B_IAC_BottomInt_DSN_m": {
+   "prims": 56,
+   "with_cull_distance": 25,
+   "hist": {
+    "0 (never)": 31,
+    "32000-inf": 25
+   },
+   "by_class": {
+    "StaticMeshComponent": 26,
+    "ParticleSystemComponent": 25,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 3,
+    "HmLightMappedSkeletalMeshComponent": 1,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "D3B_IAC_BottomInt_VIG_m": {
+   "prims": 64,
+   "with_cull_distance": 19,
+   "hist": {
+    "0 (never)": 45,
+    "32000-inf": 19
+   },
+   "by_class": {
+    "StaticMeshComponent": 28,
+    "ParticleSystemComponent": 19,
+    "SkeletalMeshComponent": 16,
+    "HmLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D3B_IAC_BottomLedge_ART_m": {
+   "prims": 521,
+   "with_cull_distance": 16,
+   "hist": {
+    "0 (never)": 505,
+    "32000-inf": 16
+   },
+   "by_class": {
+    "StaticMeshComponent": 488,
+    "ParticleSystemComponent": 16,
+    "DecalComponent": 12,
+    "ModelComponent": 5
+   }
+  },
+  "D3B_IAC_BottomLedge_DSN_m": {
+   "prims": 252,
+   "with_cull_distance": 40,
+   "hist": {
+    "0 (never)": 212,
+    "32000-inf": 40
+   },
+   "by_class": {
+    "StaticMeshComponent": 118,
+    "SkeletalMeshComponent": 64,
+    "ParticleSystemComponent": 40,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 18,
+    "HmLightMappedSkeletalMeshComponent": 12
+   }
+  },
+  "D3B_IAC_BottomLedge_VIG_m": {
+   "prims": 171,
+   "with_cull_distance": 77,
+   "hist": {
+    "0 (never)": 94,
+    "32000-inf": 76,
+    "16000-32000": 1
+   },
+   "by_class": {
+    "ParticleSystemComponent": 76,
+    "StaticMeshComponent": 74,
+    "SkeletalMeshComponent": 18,
+    "HmLightMappedSkeletalMeshComponent": 3
+   }
+  },
+  "D3B_IAC_BottomLift1_ART_m": {
+   "prims": 289,
+   "with_cull_distance": 2,
+   "hist": {
+    "0 (never)": 287,
+    "32000-inf": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 242,
+    "ModelComponent": 44,
+    "ParticleSystemComponent": 2,
+    "DecalComponent": 1
+   }
+  },
+  "D3B_IAC_BottomLift1_DSN_m": {
+   "prims": 22,
+   "with_cull_distance": 1,
+   "hist": {
+    "0 (never)": 21,
+    "32000-inf": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 16,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 4,
+    "ParticleSystemComponent": 1,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "D3B_IAC_BottomLift2_ART_m": {
+   "prims": 502,
+   "with_cull_distance": 10,
+   "hist": {
+    "0 (never)": 492,
+    "32000-inf": 10
+   },
+   "by_class": {
+    "StaticMeshComponent": 447,
+    "ModelComponent": 28,
+    "DecalComponent": 17,
+    "ParticleSystemComponent": 10
+   }
+  },
+  "D3B_IAC_BottomLift2_DSN_m": {
+   "prims": 28,
+   "with_cull_distance": 2,
+   "hist": {
+    "0 (never)": 26,
+    "32000-inf": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 17,
+    "SkeletalMeshComponent": 8,
+    "ParticleSystemComponent": 2,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D3B_IAC_BottomLift2_VIG_m": {
+   "prims": 37,
+   "with_cull_distance": 15,
+   "hist": {
+    "32000-inf": 15,
+    "0 (never)": 22
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 20,
+    "ParticleSystemComponent": 15,
+    "StaticMeshComponent": 2
+   }
+  },
+  "D3B_IAC_BridgeStation1_ART_m": {
+   "prims": 607,
+   "with_cull_distance": 14,
+   "hist": {
+    "0 (never)": 593,
+    "32000-inf": 14
+   },
+   "by_class": {
+    "StaticMeshComponent": 487,
+    "ModelComponent": 99,
+    "ParticleSystemComponent": 14,
+    "DecalComponent": 7
+   }
+  },
+  "D3B_IAC_BridgeStation1_DSN_m": {
+   "prims": 103,
+   "with_cull_distance": 6,
+   "hist": {
+    "0 (never)": 97,
+    "32000-inf": 6
+   },
+   "by_class": {
+    "StaticMeshComponent": 64,
+    "SkeletalMeshComponent": 25,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 8,
+    "ParticleSystemComponent": 6
+   }
+  },
+  "D3B_IAC_BridgeStation2_ART_m": {
+   "prims": 266,
+   "with_cull_distance": 2,
+   "hist": {
+    "0 (never)": 264,
+    "32000-inf": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 241,
+    "ModelComponent": 23,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "D3B_IAC_BridgeStation2_DSN_m": {
+   "prims": 13,
+   "with_cull_distance": 6,
+   "hist": {
+    "0 (never)": 7,
+    "32000-inf": 6
+   },
+   "by_class": {
+    "ParticleSystemComponent": 6,
+    "StaticMeshComponent": 5,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "D3B_IAC_BridgeTrans_ART_m": {
+   "prims": 63,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 63
+   },
+   "by_class": {
+    "StaticMeshComponent": 63
+   }
+  },
+  "D3B_IAC_BridgeTrans_DSN_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "D3B_IAC_BridgeTube_ART_m": {
+   "prims": 391,
+   "with_cull_distance": 5,
+   "hist": {
+    "0 (never)": 386,
+    "32000-inf": 5
+   },
+   "by_class": {
+    "StaticMeshComponent": 358,
+    "ModelComponent": 27,
+    "ParticleSystemComponent": 5,
+    "DecalComponent": 1
+   }
+  },
+  "D3B_IAC_BridgeTube_DSN_m": {
+   "prims": 101,
+   "with_cull_distance": 44,
+   "hist": {
+    "0 (never)": 57,
+    "32000-inf": 44
+   },
+   "by_class": {
+    "StaticMeshComponent": 53,
+    "ParticleSystemComponent": 44,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2,
+    "SkeletalMeshComponent": 2
+   }
+  },
+  "D3B_IAC_GLB_ART_m": {
+   "prims": 1498,
+   "with_cull_distance": 1,
+   "hist": {
+    "0 (never)": 1497,
+    "32000-inf": 1
+   },
+   "by_class": {
+    "StaticMeshComponent": 1261,
+    "ModelComponent": 213,
+    "DecalComponent": 23,
+    "ParticleSystemComponent": 1
+   }
+  },
+  "D3B_IAC_GLB_AUD_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "D3B_IAC_GLB_DSN_m": {
+   "prims": 63,
+   "with_cull_distance": 51,
+   "hist": {
+    "32000-inf": 51,
+    "0 (never)": 12
+   },
+   "by_class": {
+    "ParticleSystemComponent": 51,
+    "SkeletalMeshComponent": 7,
+    "StaticMeshComponent": 5
+   }
+  },
+  "D3B_IAC_GLB_VIG_m": {
+   "prims": 116,
+   "with_cull_distance": 85,
+   "hist": {
+    "32000-inf": 85,
+    "0 (never)": 31
+   },
+   "by_class": {
+    "ParticleSystemComponent": 85,
+    "StaticMeshComponent": 31
+   }
+  },
+  "D3B_IAC_LedgeDrive_ART_m": {
+   "prims": 458,
+   "with_cull_distance": 4,
+   "hist": {
+    "0 (never)": 454,
+    "32000-inf": 4
+   },
+   "by_class": {
+    "StaticMeshComponent": 451,
+    "ParticleSystemComponent": 4,
+    "DecalComponent": 3
+   }
+  },
+  "D3B_IAC_LedgeDrive_DSN_m": {
+   "prims": 98,
+   "with_cull_distance": 18,
+   "hist": {
+    "0 (never)": 80,
+    "32000-inf": 18
+   },
+   "by_class": {
+    "StaticMeshComponent": 79,
+    "ParticleSystemComponent": 18,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D3B_IAC_LevelIntro_CINE_m": {
+   "prims": 238,
+   "with_cull_distance": 34,
+   "hist": {
+    "32000-inf": 34,
+    "0 (never)": 204
+   },
+   "by_class": {
+    "StaticMeshComponent": 196,
+    "ParticleSystemComponent": 34,
+    "SkeletalMeshComponent": 8
+   }
+  },
+  "D3B_IAC_LevelOutro_CINE_m": {
+   "prims": 23,
+   "with_cull_distance": 13,
+   "hist": {
+    "32000-inf": 13,
+    "0 (never)": 10
+   },
+   "by_class": {
+    "ParticleSystemComponent": 13,
+    "SkeletalMeshComponent": 5,
+    "StaticMeshComponent": 5
+   }
+  },
+  "D3B_IAC_Lift1B_ART_m": {
+   "prims": 458,
+   "with_cull_distance": 17,
+   "hist": {
+    "0 (never)": 441,
+    "32000-inf": 17
+   },
+   "by_class": {
+    "StaticMeshComponent": 440,
+    "ParticleSystemComponent": 17,
+    "DecalComponent": 1
+   }
+  },
+  "D3B_IAC_Lift1B_DSN_m": {
+   "prims": 34,
+   "with_cull_distance": 15,
+   "hist": {
+    "0 (never)": 19,
+    "32000-inf": 15
+   },
+   "by_class": {
+    "StaticMeshComponent": 16,
+    "ParticleSystemComponent": 15,
+    "SkeletalMeshComponent": 2,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D3B_IAC_Lift1_ART_m": {
+   "prims": 209,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 209
+   },
+   "by_class": {
+    "StaticMeshComponent": 209
+   }
+  },
+  "D3B_IAC_Lift1_DSN_m": {
+   "prims": 149,
+   "with_cull_distance": 34,
+   "hist": {
+    "32000-inf": 34,
+    "0 (never)": 115
+   },
+   "by_class": {
+    "StaticMeshComponent": 78,
+    "SkeletalMeshComponent": 37,
+    "ParticleSystemComponent": 34
+   }
+  },
+  "D3B_IAC_Lift1_VIG_m": {
+   "prims": 78,
+   "with_cull_distance": 36,
+   "hist": {
+    "0 (never)": 42,
+    "32000-inf": 36
+   },
+   "by_class": {
+    "ParticleSystemComponent": 36,
+    "StaticMeshComponent": 35,
+    "SkeletalMeshComponent": 6,
+    "HmLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D3B_IAC_Lift2_ART_m": {
+   "prims": 157,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 157
+   },
+   "by_class": {
+    "StaticMeshComponent": 157
+   }
+  },
+  "D3B_IAC_Lift2_DSN_m": {
+   "prims": 79,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 79
+   },
+   "by_class": {
+    "StaticMeshComponent": 76,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 2,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "D3B_IAC_MiddleDome_ART_m": {
+   "prims": 369,
+   "with_cull_distance": 4,
+   "hist": {
+    "32000-inf": 4,
+    "0 (never)": 365
+   },
+   "by_class": {
+    "StaticMeshComponent": 365,
+    "ParticleSystemComponent": 4
+   }
+  },
+  "D3B_IAC_MiddleDome_DSN_m": {
+   "prims": 3,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 3
+   },
+   "by_class": {
+    "StaticMeshComponent": 3
+   }
+  },
+  "D3B_IAC_MiddleDome_VIG_m": {
+   "prims": 57,
+   "with_cull_distance": 22,
+   "hist": {
+    "0 (never)": 35,
+    "32000-inf": 22
+   },
+   "by_class": {
+    "StaticMeshComponent": 33,
+    "ParticleSystemComponent": 22,
+    "HmLightMappedSkeletalMeshComponent": 1,
+    "SkeletalMeshComponent": 1
+   }
+  },
+  "D3B_IAC_MiddleInt1_ART_m": {
+   "prims": 445,
+   "with_cull_distance": 9,
+   "hist": {
+    "0 (never)": 436,
+    "32000-inf": 9
+   },
+   "by_class": {
+    "StaticMeshComponent": 428,
+    "ParticleSystemComponent": 9,
+    "DecalComponent": 8
+   }
+  },
+  "D3B_IAC_MiddleInt1_DSN_m": {
+   "prims": 209,
+   "with_cull_distance": 41,
+   "hist": {
+    "0 (never)": 168,
+    "32000-inf": 41
+   },
+   "by_class": {
+    "StaticMeshComponent": 105,
+    "SkeletalMeshComponent": 55,
+    "ParticleSystemComponent": 41,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 8
+   }
+  },
+  "D3B_IAC_MiddleInt1_VIG_m": {
+   "prims": 49,
+   "with_cull_distance": 10,
+   "hist": {
+    "32000-inf": 10,
+    "0 (never)": 39
+   },
+   "by_class": {
+    "StaticMeshComponent": 22,
+    "SkeletalMeshComponent": 17,
+    "ParticleSystemComponent": 10
+   }
+  },
+  "D3B_IAC_MiddleInt2_ART_m": {
+   "prims": 1060,
+   "with_cull_distance": 4,
+   "hist": {
+    "0 (never)": 1056,
+    "32000-inf": 4
+   },
+   "by_class": {
+    "StaticMeshComponent": 938,
+    "ModelComponent": 95,
+    "DecalComponent": 23,
+    "ParticleSystemComponent": 4
+   }
+  },
+  "D3B_IAC_MiddleInt2_CINE_m": {
+   "prims": 67,
+   "with_cull_distance": 27,
+   "hist": {
+    "32000-inf": 27,
+    "0 (never)": 40
+   },
+   "by_class": {
+    "ParticleSystemComponent": 27,
+    "StaticMeshComponent": 24,
+    "SkeletalMeshComponent": 16
+   }
+  },
+  "D3B_IAC_MiddleInt2_Chasm_ART_m": {
+   "prims": 3,
+   "with_cull_distance": 0,
+   "hist": {
+    "0 (never)": 3
+   },
+   "by_class": {
+    "StaticMeshComponent": 3
+   }
+  },
+  "D3B_IAC_MiddleInt2_DSN_m": {
+   "prims": 113,
+   "with_cull_distance": 8,
+   "hist": {
+    "0 (never)": 105,
+    "32000-inf": 8
+   },
+   "by_class": {
+    "StaticMeshComponent": 76,
+    "SkeletalMeshComponent": 25,
+    "ParticleSystemComponent": 8,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 4
+   }
+  },
+  "D3B_IAC_Music_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "D3B_IAC_TunnelDrop_ART_m": {
+   "prims": 928,
+   "with_cull_distance": 6,
+   "hist": {
+    "0 (never)": 922,
+    "32000-inf": 6
+   },
+   "by_class": {
+    "StaticMeshComponent": 777,
+    "ModelComponent": 137,
+    "DecalComponent": 8,
+    "ParticleSystemComponent": 6
+   }
+  },
+  "D3B_IAC_TunnelDrop_DSN_m": {
+   "prims": 222,
+   "with_cull_distance": 72,
+   "hist": {
+    "0 (never)": 150,
+    "32000-inf": 72
+   },
+   "by_class": {
+    "StaticMeshComponent": 126,
+    "ParticleSystemComponent": 72,
+    "SkeletalMeshComponent": 19,
+    "HmLightMappedSkeletalMeshComponent": 4,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D5_OME_ART_m": {
+   "prims": 1213,
+   "with_cull_distance": 2,
+   "hist": {
+    "0 (never)": 1211,
+    "32000-inf": 2
+   },
+   "by_class": {
+    "StaticMeshComponent": 1076,
+    "ModelComponent": 135,
+    "ParticleSystemComponent": 2
+   }
+  },
+  "D5_OME_AUDIO_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "D5_OME_BASE_m": {
+   "prims": 3,
+   "with_cull_distance": 1,
+   "hist": {
+    "32000-inf": 1,
+    "0 (never)": 2
+   },
+   "by_class": {
+    "ParticleSystemComponent": 1,
+    "SkeletalMeshComponent": 1,
+    "StaticMeshComponent": 1
+   }
+  },
+  "D5_OME_CINE_LevelIntro_m": {
+   "prims": 41,
+   "with_cull_distance": 15,
+   "hist": {
+    "32000-inf": 15,
+    "0 (never)": 26
+   },
+   "by_class": {
+    "StaticMeshComponent": 21,
+    "ParticleSystemComponent": 15,
+    "SkeletalMeshComponent": 5
+   }
+  },
+  "D5_OME_CINE_Outro_m": {
+   "prims": 31,
+   "with_cull_distance": 9,
+   "hist": {
+    "32000-inf": 9,
+    "0 (never)": 22
+   },
+   "by_class": {
+    "SkeletalMeshComponent": 11,
+    "StaticMeshComponent": 11,
+    "ParticleSystemComponent": 9
+   }
+  },
+  "D5_OME_DSN_m": {
+   "prims": 124,
+   "with_cull_distance": 36,
+   "hist": {
+    "0 (never)": 88,
+    "32000-inf": 36
+   },
+   "by_class": {
+    "StaticMeshComponent": 60,
+    "ParticleSystemComponent": 39,
+    "SkeletalMeshComponent": 24,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 1
+   }
+  },
+  "D5_OME_GLB_ART_m": {
+   "prims": 372,
+   "with_cull_distance": 1,
+   "hist": {
+    "32000-inf": 1,
+    "0 (never)": 371
+   },
+   "by_class": {
+    "StaticMeshComponent": 371,
+    "ParticleSystemComponent": 1
+   }
+  },
+  "D5_OME_GLB_AUD_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "D5_OME_Music_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "GLB_Audio_m": {
+   "prims": 0,
+   "with_cull_distance": 0,
+   "hist": {},
+   "by_class": {}
+  },
+  "MP_ESC_BrokenHope_ART_m": {
+   "prims": 2908,
+   "with_cull_distance": 12,
+   "hist": {
+    "0 (never)": 2896,
+    "32000-inf": 12
+   },
+   "by_class": {
+    "StaticMeshComponent": 2390,
+    "ModelComponent": 484,
+    "DecalComponent": 22,
+    "ParticleSystemComponent": 12
+   }
+  },
+  "MP_ESC_BrokenHope_Base_m": {
+   "prims": 251,
+   "with_cull_distance": 27,
+   "hist": {
+    "0 (never)": 224,
+    "32000-inf": 27
+   },
+   "by_class": {
+    "StaticMeshComponent": 125,
+    "SkeletalMeshComponent": 42,
+    "HmLightMappedSkeletalMeshComponent": 36,
+    "ParticleSystemComponent": 30,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 18
+   }
+  },
+  "MP_ESC_Remnant_ART_m": {
+   "prims": 5569,
+   "with_cull_distance": 40,
+   "hist": {
+    "0 (never)": 5529,
+    "32000-inf": 40
+   },
+   "by_class": {
+    "StaticMeshComponent": 4338,
+    "ModelComponent": 1174,
+    "ParticleSystemComponent": 40,
+    "DecalComponent": 17
+   }
+  },
+  "MP_ESC_Remnant_BASE_m": {
+   "prims": 134,
+   "with_cull_distance": 31,
+   "hist": {
+    "0 (never)": 103,
+    "32000-inf": 31
+   },
+   "by_class": {
+    "ParticleSystemComponent": 37,
+    "HmLightMappedSkeletalMeshComponent": 35,
+    "StaticMeshComponent": 28,
+    "SkeletalMeshComponent": 21,
+    "HmInterpolatedLightMappedSkeletalMeshComponent": 12,
+    "DecalComponent": 1
+   }
+  }
+ },
+ "cull_distance_volumes": [
+  {
+   "volume": "A3_COR_CoreExt_Art_m.TheWorld.PersistentLevel.CullDistanceVolume_12757",
+   "CullDistances": [
+    {
+     "Size": 1000.0,
+     "CullDistance": 40000.0
+    }
+   ],
+   "bEnabled": true
+  },
+  {
+   "volume": "D3A_IAC_CityTrans_ART_m.TheWorld.PersistentLevel.CullDistanceVolume_12145",
+   "CullDistances": [
+    {
+     "Size": 1800.0,
+     "CullDistance": 19000.0
+    },
+    {
+     "Size": 3500.0,
+     "CullDistance": 0.0
+    }
+   ],
+   "bEnabled": true
+  },
+  {
+   "volume": "Engine.Default__CullDistanceVolume",
+   "CullDistances": [
+    {
+     "Size": 0.0,
+     "CullDistance": 0.0
+    },
+    {
+     "Size": 10000.0,
+     "CullDistance": 0.0
+    }
+   ],
+   "bEnabled": true
+  }
+ ],
+ "skeletal_multi_lod": [],
+ "hidden_at_load": {
+  "A1_IAC_Audio_m": {
+   "SeqAct_PlayPlayerPositionalSound": 175,
+   "SeqEvent_Touch": 108,
+   "SeqAct_AmbientAudioZone": 61,
+   "SeqAct_PlaySound": 58,
+   "SeqEvent_RemoteEvent": 55,
+   "SeqAct_PlayFlybySound": 53,
+   "SeqAct_ActivateRemoteEvent": 15,
+   "SeqAct_DialogGroup": 11
+  },
+  "A1_IAC_Base_m": {
+   "SeqAct_ActivateRemoteEvent": 117,
+   "SeqEvent_RemoteEvent": 52,
+   "SeqAct_SetActiveCheckpoint": 21,
+   "SeqAct_SetStreamingState": 19,
+   "SeqAct_TnSetCurrentObjective": 14,
+   "SeqAct_Gate": 10,
+   "SeqAct_TnAddMarker": 9,
+   "SeqAct_TnRemoveMarker": 9
+  },
+  "A1_IAC_DecoEnd_Art_m": {
+   "SeqAct_ToggleHidden": 1
+  },
+  "A1_IAC_DecoEnd_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 19,
+   "SeqAct_Toggle": 9,
+   "SeqAct_Delay": 7,
+   "SeqAct_Interp": 7,
+   "SkeletalMeshActor": 7,
+   "SeqAct_Conversation": 5,
+   "SeqEvent_RemoteEvent": 5,
+   "SeqAct_ToggleHidden": 4
+  },
+  "A1_IAC_DecoFoyer_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 27,
+   "SkeletalMeshActor": 9,
+   "SeqAct_Delay": 5,
+   "SeqAct_Conversation": 4,
+   "SeqAct_Interp": 4,
+   "SeqEvent_RemoteEvent": 4,
+   "SeqEvent_Touch": 4,
+   "SeqAct_Destroy": 3
+  },
+  "A1_IAC_DecoInt_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 54,
+   "SeqAct_Delay": 21,
+   "SeqAct_Toggle": 21,
+   "SeqAct_PlaySound": 17,
+   "SeqAct_Log": 8,
+   "SeqAct_Gate": 5,
+   "SeqEvent_RemoteEvent": 5,
+   "SeqAct_SetFloat": 4
+  },
+  "A1_IAC_DecoPlaza_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 4,
+   "SeqAct_Log": 2,
+   "SeqAct_SubtractInt": 2,
+   "SeqAct_Delay": 1,
+   "SeqEvent_Touch": 1
+  },
+  "A1_IAC_DecoPlaza_Vig_m": {
+   "SeqAct_Interp": 76,
+   "SeqAct_Toggle": 59,
+   "SeqEvent_Touch": 45,
+   "SeqAct_Delay": 34,
+   "SeqEvent_RemoteEvent": 23,
+   "StaticInterpActor": 20,
+   "SeqAct_PlaySound": 12,
+   "SeqAct_ToggleHidden": 12
+  },
+  "A1_IAC_Elevator_Design_m": {
+   "SeqEvent_RemoteEvent": 51,
+   "SeqAct_ActivateRemoteEvent": 47,
+   "StaticInterpActor": 25,
+   "SeqAct_Delay": 22,
+   "SeqAct_Conversation": 14,
+   "SeqAct_Toggle": 14,
+   "SeqEvent_Touch": 14,
+   "SeqAct_Gate": 10
+  },
+  "A1_IAC_HGHWY2_Art_m": {
+   "SeqAct_PlaySound": 16
+  },
+  "A1_IAC_HGHWY2_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 68,
+   "SeqEvent_Touch": 36,
+   "SeqAct_Delay": 34,
+   "SeqAct_CauseDamage": 21,
+   "SeqAct_TnPawnFactory": 19,
+   "SeqAct_TnAiMoveToActor": 17,
+   "SeqEvent_RemoteEvent": 12,
+   "SeqAct_TnAiSetMoveToObjective": 8
+  },
+  "A1_IAC_HGHWY3_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 6,
+   "SeqEvent_Touch": 5,
+   "SeqAct_Delay": 3,
+   "SeqAct_TnAiMoveToActor": 2,
+   "SeqAct_Toggle": 2,
+   "SeqEvent_RemoteEvent": 2,
+   "SeqAct_Conversation": 1,
+   "SeqAct_Switch": 1
+  },
+  "A1_IAC_HalfPipe_Vig_m": {
+   "StaticInterpActor": 55,
+   "SeqAct_CauseDamage": 29,
+   "SeqAct_Interp": 25,
+   "SeqEvent_Touch": 24,
+   "SeqAct_Delay": 18,
+   "SeqAct_ToggleHidden": 17,
+   "SeqAct_Toggle": 11,
+   "SeqEvent_RemoteEvent": 9
+  },
+  "A1_IAC_Intr1_Design_m": {
+   "SeqEvent_RemoteEvent": 26,
+   "SeqAct_ActivateRemoteEvent": 25,
+   "SeqAct_Delay": 11,
+   "SeqAct_Interp": 11,
+   "SeqEvent_Touch": 11,
+   "SeqAct_Toggle": 9,
+   "SeqAct_CauseDamage": 8,
+   "SeqAct_ToggleHidden": 8
+  },
+  "A1_IAC_Intr1_Trans_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 25,
+   "SeqEvent_RemoteEvent": 16,
+   "SeqAct_Toggle": 11,
+   "SeqAct_Delay": 8,
+   "SeqAct_CameraShake": 7,
+   "SeqAct_ForceFeedback": 7,
+   "SeqEvent_Touch": 7,
+   "SeqAct_Interp": 6
+  },
+  "A1_IAC_Intr1_Vig_m": {
+   "SeqAct_Toggle": 118,
+   "StaticInterpActor": 57,
+   "SeqAct_Interp": 54,
+   "SeqEvent_RemoteEvent": 43,
+   "SeqAct_ToggleHidden": 42,
+   "SeqEvent_Touch": 27,
+   "SkeletalMeshActor": 26,
+   "SeqAct_ActivateRemoteEvent": 23
+  },
+  "A1_IAC_IntroVista_Vig_m": {
+   "SeqAct_Toggle": 93,
+   "SeqAct_Interp": 59,
+   "SeqEvent_RemoteEvent": 50,
+   "StaticInterpActor": 41,
+   "SeqAct_ToggleHidden": 28,
+   "SeqAct_ActivateRemoteEvent": 27,
+   "SeqEvent_Touch": 27,
+   "SeqAct_Delay": 19
+  },
+  "A1_IAC_Music_m": {
+   "SeqEvent_RemoteEvent": 83,
+   "SeqAct_PlayMusic": 51,
+   "SeqAct_PlayStinger": 17,
+   "SeqAct_Delay": 14,
+   "SeqAct_Gate": 1,
+   "SeqAct_StopMusic": 1
+  },
+  "A1_IAC_SideAlley_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 30,
+   "SeqAct_Delay": 23,
+   "SeqEvent_Touch": 23,
+   "SeqAct_CauseDamage": 17,
+   "SeqEvent_RemoteEvent": 15,
+   "SeqAct_Interp": 12,
+   "SeqAct_TnPawnFactory": 11,
+   "SeqAct_Gate": 8
+  },
+  "A1_IAC_SideAlley_Vig_m": {
+   "StaticInterpActor": 39,
+   "SeqEvent_RemoteEvent": 21,
+   "SeqAct_Interp": 20,
+   "SeqAct_Toggle": 20,
+   "SeqAct_ToggleHidden": 9,
+   "SeqEvent_Touch": 9,
+   "SeqAct_Delay": 6,
+   "SeqAct_Destroy": 3
+  },
+  "A1_IAC_Strts0_Design_m": {
+   "StaticInterpActor": 74,
+   "SeqAct_ActivateRemoteEvent": 55,
+   "SeqEvent_Touch": 53,
+   "SeqAct_ToggleHidden": 48,
+   "SeqAct_Delay": 47,
+   "SeqAct_Toggle": 39,
+   "SeqAct_Interp": 27,
+   "SeqAct_TnPawnFactory": 23
+  },
+  "A1_IAC_Strts1_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 40,
+   "SeqEvent_Touch": 29,
+   "SeqAct_Delay": 26,
+   "SeqEvent_RemoteEvent": 24,
+   "SeqAct_Interp": 17,
+   "SeqAct_CauseDamage": 15,
+   "SeqAct_TnPawnFactory": 11,
+   "SeqAct_TnAiMoveToActor": 10
+  },
+  "A1_IAC_Strts1_Vig_m": {
+   "StaticInterpActor": 36,
+   "SeqAct_Toggle": 26,
+   "SeqEvent_Touch": 26,
+   "SeqAct_CauseDamage": 19,
+   "SeqAct_Interp": 18,
+   "SeqAct_Delay": 16,
+   "SeqAct_ToggleHidden": 8,
+   "SeqEvent_RemoteEvent": 8
+  },
+  "A1_IAC_Terminal1_Design_m": {
+   "StaticInterpActor": 18,
+   "HmSkeletalMeshActor": 7,
+   "SeqAct_ToggleHidden": 7,
+   "SeqAct_SetActorMatInstScalarParam": 5,
+   "SeqAct_Interp": 4,
+   "SeqAct_ActivateRemoteEvent": 3,
+   "SeqAct_Destroy": 3,
+   "SeqEvent_RemoteEvent": 3
+  },
+  "A1_IAC_Thumper1_Design_m": {
+   "SeqEvent_RemoteEvent": 55,
+   "SeqAct_ActivateRemoteEvent": 43,
+   "SeqAct_CauseDamage": 42,
+   "SeqAct_Delay": 34,
+   "SeqAct_Interp": 27,
+   "SeqEvent_SequenceActivated": 21,
+   "SeqAct_TnAiMoveToActor": 16,
+   "SeqAct_ToggleHidden": 14
+  },
+  "A1_IAC_Thumper_Cine_m": {
+   "SeqAct_CauseDamage": 24,
+   "SeqAct_Delay": 17,
+   "SeqEvent_SequenceActivated": 16,
+   "SeqAct_ActivateRemoteEvent": 15,
+   "SeqEvent_RemoteEvent": 11,
+   "SkeletalMeshActor": 9,
+   "SeqAct_ToggleHidden": 8,
+   "SeqAct_Toggle": 5
+  },
+  "A2_KON_AUDIO_m": {
+   "SeqAct_ActivateRemoteEvent": 124,
+   "SeqEvent_RemoteEvent": 108,
+   "SeqAct_PlayPlayerPositionalSound": 72,
+   "SeqEvent_Touch": 72,
+   "SeqAct_AmbientAudioZone": 45,
+   "SeqAct_PlaySound": 23,
+   "SeqAct_Delay": 22,
+   "SeqEvent_SequenceActivated": 22
+  },
+  "A2_KON_AirRaid_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 43,
+   "SeqEvent_RemoteEvent": 28,
+   "SeqAct_Delay": 12,
+   "SeqAct_ToggleHidden": 10,
+   "SeqAct_PlaySound": 8,
+   "SeqAct_Interp": 7,
+   "HmSkeletalMeshActor": 6,
+   "SeqAct_Toggle": 6
+  },
+  "A2_KON_AirRaid_Trans_Design_m": {
+   "InterpActor": 10,
+   "SeqAct_PlaySound": 4,
+   "SeqAct_Delay": 3,
+   "SeqAct_TnAiSetMoveToObjective": 2,
+   "SeqEvent_RemoteEvent": 2,
+   "SeqAct_ForceFeedback": 1,
+   "SeqAct_Toggle": 1,
+   "SeqAct_ToggleNavGate": 1
+  },
+  "A2_KON_AirRaid_Trans_Vig_m": {
+   "SeqAct_Interp": 6,
+   "SeqAct_PlaySound": 6,
+   "SeqAct_Delay": 5,
+   "SeqEvent_Touch": 1
+  },
+  "A2_KON_City_Vig_m": {
+   "HmSkeletalMeshActor": 17,
+   "SeqAct_Toggle": 8,
+   "SeqAct_ToggleHidden": 7,
+   "SeqAct_Delay": 6,
+   "StaticInterpActor": 2
+  },
+  "A2_KON_Command_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 12,
+   "SeqEvent_RemoteEvent": 8,
+   "SeqAct_Delay": 6,
+   "SeqAct_TnAiSetMoveToObjective": 6,
+   "SeqAct_PlaySound": 5,
+   "SeqAct_Gate": 2,
+   "InterpActor": 1,
+   "SeqAct_Toggle": 1
+  },
+  "A2_KON_Courtyard2_Design_m": {
+   "SeqAct_PlaySound": 10,
+   "SeqAct_Delay": 8,
+   "SeqAct_Toggle": 8,
+   "SeqEvent_RemoteEvent": 8,
+   "SeqAct_Gate": 5,
+   "StaticInterpActor": 5,
+   "SeqAct_ActivateRemoteEvent": 4,
+   "SeqAct_Interp": 4
+  },
+  "A2_KON_Courtyard_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 31,
+   "SeqAct_TnAiSetMoveToObjective": 4,
+   "SeqEvent_RemoteEvent": 4,
+   "SeqAct_Delay": 3,
+   "SeqAct_PlaySound": 2,
+   "SeqCond_Increment": 2,
+   "SeqAct_Gate": 1
+  },
+  "A2_KON_Courtyard_Vig_m": {
+   "SeqAct_Toggle": 4,
+   "SeqAct_Delay": 3
+  },
+  "A2_KON_DRIVE3_CINE_m": {
+   "SeqAct_PlaySound": 7,
+   "SeqAct_CameraShake": 5,
+   "SeqAct_ToggleHidden": 4,
+   "SkeletalMeshActorMAT": 4,
+   "SeqAct_Interp": 3,
+   "SeqAct_ToggleCinematicMode": 3,
+   "HmSkeletalMeshActor": 2,
+   "CameraActor": 1
+  },
+  "A2_KON_DRIVE3_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 52,
+   "SeqAct_TnPawnFactory": 5,
+   "SeqEvent_Touch": 5,
+   "SeqAct_Delay": 4,
+   "SeqAct_CameraShake": 2,
+   "SeqAct_PlaySound": 2,
+   "InterpActor": 1
+  },
+  "A2_KON_DRIVE3_Trans_Design_m": {
+   "SeqAct_PlaySound": 2
+  },
+  "A2_KON_Dungeons2_Design_m": {
+   "SeqAct_Toggle": 19,
+   "SeqAct_PlaySound": 17,
+   "SeqAct_ActivateRemoteEvent": 16,
+   "SeqAct_Delay": 14,
+   "SeqAct_TnAiSetMoveToObjective": 9,
+   "SeqEvent_RemoteEvent": 7,
+   "SeqEvent_Touch": 5,
+   "SkeletalMeshActor": 4
+  },
+  "A2_KON_Dungeons2_Vig_m": {
+   "SeqAct_Gate": 46,
+   "SeqAct_Interp": 23,
+   "SeqEvent_RemoteEvent": 23,
+   "SkeletalMeshActorMAT": 23,
+   "SkeletalMeshActor": 21,
+   "HmSkeletalMeshActor": 6,
+   "SeqAct_ToggleHidden": 5,
+   "SeqEvent_Touch": 1
+  },
+  "A2_KON_Dungeons_Design_m": {
+   "SeqAct_PlaySound": 5,
+   "SeqAct_TnAiSetMoveToObjective": 4,
+   "SeqAct_ActivateRemoteEvent": 2,
+   "SeqEvent_Touch": 2,
+   "SeqAct_Delay": 1,
+   "SeqAct_ToggleCinematicMode": 1,
+   "SeqEvent_RemoteEvent": 1
+  },
+  "A2_KON_Dungeons_Vig_m": {
+   "SeqAct_ActivateRemoteEvent": 4,
+   "SeqAct_ToggleHidden": 2,
+   "SkeletalMeshActorMAT": 2
+  },
+  "A2_KON_GuardRoom_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 17,
+   "SeqAct_Delay": 6,
+   "SeqAct_PlaySound": 4,
+   "SeqEvent_RemoteEvent": 4,
+   "SeqAct_TnAiSetMoveToObjective": 2,
+   "SeqAct_TnPawnFactory": 1,
+   "SeqAct_ToggleNavGate": 1
+  },
+  "A2_KON_Hangar_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 21,
+   "SeqAct_PlaySound": 8,
+   "SeqAct_TnAiSetMoveToObjective": 7,
+   "SeqEvent_RemoteEvent": 7,
+   "SeqAct_Delay": 5,
+   "SeqAct_ToggleNavGate": 1,
+   "SeqEvent_Touch": 1,
+   "TnSeqAct_TransformWorldProp": 1
+  },
+  "A2_KON_IntroEntrance_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 1,
+   "SeqAct_PlaySound": 1
+  },
+  "A2_KON_IntroPits_Design_m": {
+   "SeqAct_PlaySound": 8,
+   "SeqAct_Delay": 2,
+   "SeqAct_TnAiSetMoveToObjective": 2,
+   "SeqEvent_SequenceActivated": 2,
+   "SeqAct_ToggleHidden": 1
+  },
+  "A2_KON_IntroPits_Vig_m": {
+   "SeqAct_Toggle": 3,
+   "SeqAct_Interp": 1,
+   "SeqAct_ToggleHidden": 1,
+   "SkeletalMeshActor": 1
+  },
+  "A2_KON_IntroWalk_Vig_m": {
+   "SeqAct_ToggleHidden": 12,
+   "StaticInterpActor": 12,
+   "SeqAct_PlaySound": 10,
+   "SeqAct_Toggle": 9,
+   "SkeletalMeshActorMAT": 9,
+   "SeqAct_ActivateRemoteEvent": 8,
+   "SeqAct_Delay": 7,
+   "SeqAct_ForceFeedback": 6
+  },
+  "A2_KON_Jailbreak_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 19,
+   "SeqAct_PlaySound": 10,
+   "SeqEvent_RemoteEvent": 4,
+   "SeqAct_Delay": 3,
+   "SeqAct_TnAiSetMoveToObjective": 3,
+   "SeqCond_CompareInt": 1,
+   "TnSeqAct_TransformWorldProp": 1
+  },
+  "A2_KON_Jailbreak_Vig_m": {
+   "SkeletalMeshActor": 32,
+   "SeqAct_ToggleHidden": 11,
+   "HmSkeletalMeshActor": 7,
+   "SeqAct_Delay": 4,
+   "SeqAct_ActivateRemoteEvent": 2,
+   "SeqAct_Interp": 2,
+   "SeqAct_ToggleCinematicMode": 2,
+   "SeqAct_CameraShake": 1
+  },
+  "A2_KON_MUSIC_m": {
+   "SeqEvent_RemoteEvent": 86,
+   "SeqAct_PlayMusic": 41,
+   "SeqAct_PlayStinger": 24,
+   "SeqAct_StopMusic": 14,
+   "SeqAct_Delay": 7,
+   "SeqAct_PlaySound": 2,
+   "SeqEvent_Touch": 2,
+   "SeqAct_Gate": 1
+  },
+  "A2_KON_Megatron_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 36,
+   "SeqEvent_RemoteEvent": 20,
+   "SeqAct_Delay": 17,
+   "SeqAct_Log": 9,
+   "StaticInterpActor": 8,
+   "SeqAct_Gate": 5,
+   "SeqAct_PlaySound": 5,
+   "SkeletalMeshActor": 5
+  },
+  "A2_KON_Soundwave_Design_m": {
+   "SeqAct_Delay": 28,
+   "SeqEvent_RemoteEvent": 8,
+   "SeqAct_ActivateRemoteEvent": 5,
+   "SkeletalMeshActor": 4,
+   "SeqAct_Conversation": 3,
+   "HmSkeletalMeshActor": 2,
+   "SeqAct_PlaySound": 2,
+   "SeqAct_ToggleHidden": 2
+  },
+  "A2_KON_Soundwave_Vig_m": {
+   "SkeletalMeshActor": 23,
+   "SeqAct_ToggleHidden": 19,
+   "SeqAct_ActivateRemoteEvent": 13,
+   "SeqAct_ToggleCinematicMode": 9,
+   "SeqAct_CameraShake": 8,
+   "StaticInterpActor": 7,
+   "HmSkeletalMeshActor": 5,
+   "SeqAct_ForceFeedback": 4
+  },
+  "A2_KON_Vents_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 11,
+   "SeqEvent_Touch": 11,
+   "SeqAct_Delay": 8,
+   "SeqEvent_HmDestructibleStateNotification": 7,
+   "SeqAct_Gate": 6,
+   "SeqAct_CauseDamage": 5,
+   "SeqAct_Conversation": 5,
+   "SeqEvent_RemoteEvent": 5
+  },
+  "A2_KON_Vents_Vig_m": {
+   "SeqAct_Interp": 3,
+   "SeqAct_Delay": 2,
+   "HmSkeletalMeshActor": 1,
+   "SeqAct_Toggle": 1,
+   "SeqAct_ToggleHidden": 1,
+   "SeqEvent_Touch": 1
+  },
+  "A2_KON_WallCrawler_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 22,
+   "SeqAct_Delay": 11,
+   "SeqEvent_RemoteEvent": 11,
+   "SeqAct_TnAiSetMoveToObjective": 6,
+   "SeqAct_PlaySound": 4,
+   "SeqEvent_Touch": 4,
+   "SeqAct_Conversation": 3,
+   "SeqEvent_SequenceActivated": 3
+  },
+  "A3_COR_Audio_m": {
+   "SeqEvent_RemoteEvent": 142,
+   "SeqAct_PlayPlayerPositionalSound": 99,
+   "SeqAct_ActivateRemoteEvent": 97,
+   "SeqEvent_SequenceActivated": 67,
+   "SeqEvent_Touch": 40,
+   "SeqAct_AmbientAudioZone": 34,
+   "SeqAct_PlaySound": 25,
+   "SeqAct_Delay": 23
+  },
+  "A3_COR_Base_m": {
+   "SeqEvent_RemoteEvent": 89,
+   "SeqAct_ActivateRemoteEvent": 49,
+   "SeqAct_TnAddMarker": 32,
+   "SeqAct_TnRemoveMarker": 27,
+   "SeqAct_SetStreamingState": 20,
+   "SeqEvent_Touch": 11,
+   "SeqAct_TnSetCurrentObjective": 8,
+   "SeqAct_SetActiveCheckpoint": 6
+  },
+  "A3_COR_Caves_Split_Design_m": {
+   "SeqEvent_RemoteEvent": 152,
+   "SeqAct_ActivateRemoteEvent": 115,
+   "SeqAct_Gate": 97,
+   "SeqAct_Delay": 86,
+   "SeqAct_Toggle": 38,
+   "SeqAct_Interp": 35,
+   "SeqEvent_Touch": 33,
+   "SeqEvent_HmDestructibleStateNotification": 21
+  },
+  "A3_COR_Caves_Split_Vig_m": {
+   "SeqAct_Delay": 6,
+   "SeqAct_ToggleHidden": 1
+  },
+  "A3_COR_CoreExt_Design_m": {
+   "SeqAct_Toggle": 17,
+   "SeqAct_Interp": 14,
+   "SeqAct_Gate": 12,
+   "SeqAct_CauseDamage": 10,
+   "SeqAct_TnAiUseInteract": 10,
+   "SeqEvent_HmDestructibleStateNotification": 9,
+   "SeqAct_CameraShake": 7,
+   "SeqAct_Delay": 7
+  },
+  "A3_COR_CoreExt_Vig_m": {
+   "TnTransformingWorldActor": 31,
+   "SeqAct_CauseDamage": 18,
+   "SeqAct_ToggleHidden": 14,
+   "SeqAct_Delay": 12,
+   "SkeletalMeshActor": 2,
+   "StaticInterpActor": 2,
+   "InterpActor": 1,
+   "SeqAct_CameraShake": 1
+  },
+  "A3_COR_CoreInt_Cine_m": {
+   "HmSkeletalMeshActor": 191,
+   "SkeletalMeshActor": 37,
+   "SeqAct_ToggleHidden": 35,
+   "SeqAct_Delay": 22,
+   "SeqAct_CameraShake": 8,
+   "SeqAct_ForceFeedback": 6,
+   "SeqAct_Gate": 3,
+   "SeqAct_PlaySound": 3
+  },
+  "A3_COR_CoreInt_Design_m": {
+   "SeqEvent_RemoteEvent": 66,
+   "StaticInterpActor": 45,
+   "SeqAct_Gate": 39,
+   "SeqAct_Toggle": 38,
+   "SeqAct_ActivateRemoteEvent": 37,
+   "SeqEvent_HmDestructibleStateNotification": 36,
+   "SeqAct_CauseDamage": 35,
+   "SeqAct_ToggleHidden": 27
+  },
+  "A3_COR_Core_Trans_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 8,
+   "SeqAct_Delay": 4,
+   "SeqAct_Interp": 4,
+   "SeqEvent_RemoteEvent": 4,
+   "SeqAct_TnAiUseInteract": 2,
+   "SeqEvent_Touch": 2,
+   "SeqAct_Gate": 1,
+   "SeqAct_PlaySound": 1
+  },
+  "A3_COR_Intro_Cine_m": {
+   "SeqAct_CameraShake": 8,
+   "SeqAct_ToggleHidden": 7,
+   "SeqAct_ActivateRemoteEvent": 6,
+   "SeqAct_ForceFeedback": 4,
+   "SkeletalMeshActor": 3,
+   "SeqAct_Toggle": 2,
+   "SeqAct_ToggleCinematicMode": 2
+  },
+  "A3_COR_Music_m": {
+   "SeqEvent_RemoteEvent": 87,
+   "SeqAct_PlayMusic": 52,
+   "SeqAct_PlayStinger": 18,
+   "SeqAct_Delay": 16,
+   "SeqAct_StopMusic": 14,
+   "SeqAct_ActivateRemoteEvent": 13,
+   "SeqAct_PlaySound": 9,
+   "SeqEvent_Touch": 2
+  },
+  "A3_COR_OmegaFacility_Cine_m": {
+   "SeqAct_ToggleHidden": 16,
+   "SkeletalMeshActor": 8,
+   "SeqAct_Toggle": 5,
+   "SeqAct_Delay": 2,
+   "SeqAct_PlaySound": 2,
+   "SkeletalMeshActorMAT": 2
+  },
+  "A3_COR_OmegaFacility_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 111,
+   "SeqEvent_RemoteEvent": 89,
+   "SeqAct_Toggle": 39,
+   "SeqAct_Delay": 36,
+   "SeqEvent_Touch": 26,
+   "SeqAct_Gate": 24,
+   "SeqEvent_HmDestructibleStateNotification": 24,
+   "SeqAct_TnPawnFactory": 21
+  },
+  "A3_COR_OmegaGate_Cine_m": {
+   "SeqAct_ToggleHidden": 6,
+   "SeqAct_ForceFeedback": 5,
+   "HmSkeletalMeshActor": 3,
+   "SeqAct_ActivateRemoteEvent": 2,
+   "SeqAct_ToggleCinematicMode": 2,
+   "SeqAct_Gate": 1,
+   "SeqEvent_RemoteEvent": 1,
+   "SkeletalMeshActor": 1
+  },
+  "A3_COR_OmegaGate_Design_m": {
+   "SeqEvent_RemoteEvent": 137,
+   "SeqAct_ActivateRemoteEvent": 97,
+   "SeqAct_Delay": 75,
+   "SeqAct_Gate": 45,
+   "SeqAct_Interp": 42,
+   "SeqAct_Toggle": 35,
+   "SeqAct_Conversation": 25,
+   "SeqAct_TnPawnFactory": 21
+  },
+  "A3_COR_OmegaSupreme_m": {
+   "SeqAct_ForceFeedback": 12,
+   "SeqAct_ToggleHidden": 12,
+   "SeqAct_CameraShake": 8,
+   "SeqAct_Delay": 4,
+   "SeqAct_ToggleCinematicMode": 4,
+   "SeqAct_Interp": 3,
+   "SeqAct_Toggle": 3,
+   "SeqEvent_RemoteEvent": 3
+  },
+  "A3_COR_OmegaTunnel_Design_m": {
+   "StaticInterpActor": 38,
+   "SeqEvent_RemoteEvent": 3,
+   "SeqAct_ActivateRemoteEvent": 1,
+   "SeqAct_ToggleHidden": 1,
+   "SeqEvent_Touch": 1
+  },
+  "A3_COR_Routing1_Design_m": {
+   "SeqEvent_Touch": 8,
+   "SeqAct_ActivateRemoteEvent": 3,
+   "SeqAct_CameraShake": 3,
+   "SeqAct_ForceFeedback": 3,
+   "SeqAct_Toggle": 3,
+   "SeqEvent_SequenceActivated": 3,
+   "SeqEvent_RemoteEvent": 2,
+   "SeqAct_CauseDamage": 1
+  },
+  "A3_COR_Routing2B_Design_m": {
+   "SeqAct_CauseDamage": 24,
+   "SeqEvent_Touch": 21,
+   "SeqAct_Delay": 13,
+   "SeqAct_ForceFeedback": 11,
+   "SeqAct_Toggle": 10,
+   "SeqAct_Gate": 6,
+   "SeqAct_ActivateRemoteEvent": 4,
+   "SeqAct_CameraShake": 3
+  },
+  "A3_COR_Routing2C_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 53,
+   "SeqAct_Delay": 32,
+   "SeqEvent_RemoteEvent": 20,
+   "SeqAct_CauseDamage": 19,
+   "SeqAct_Gate": 16,
+   "SeqAct_Interp": 14,
+   "SeqEvent_Touch": 11,
+   "SkeletalMeshActor": 11
+  },
+  "A3_COR_Routing3B_Design_m": {
+   "SeqEvent_Touch": 28,
+   "SeqAct_CauseDamage": 21,
+   "SeqAct_Delay": 21,
+   "SeqAct_TnPawnFactory": 21,
+   "SeqAct_TnAssignTacticalVolume": 16,
+   "SeqAct_ForceFeedback": 8,
+   "SeqAct_Gate": 7,
+   "SeqAct_Interp": 7
+  },
+  "A3_COR_Routing3C_DesignPart2_m": {
+   "SeqAct_CauseDamage": 13,
+   "SeqEvent_Touch": 13,
+   "SeqAct_Delay": 9,
+   "SeqAct_TnPawnFactory": 8,
+   "SeqEvent_RemoteEvent": 8,
+   "SeqAct_ActivateRemoteEvent": 6,
+   "SeqAct_TnAssignTacticalVolume": 5,
+   "SeqAct_Gate": 4
+  },
+  "A3_COR_Routing3C_DesignPart3_m": {
+   "SeqAct_CauseDamage": 4,
+   "SeqAct_Delay": 4,
+   "SeqAct_Interp": 4,
+   "SeqEvent_Touch": 4,
+   "SeqAct_ForceFeedback": 3,
+   "SeqEvent_RemoteEvent": 3,
+   "SeqAct_ToggleHidden": 2,
+   "HmSkeletalMeshActor": 1
+  },
+  "A3_COR_Routing3C_Design_m": {
+   "SeqAct_Delay": 13,
+   "SeqAct_PlaySound": 7,
+   "SeqAct_CauseDamage": 6,
+   "SeqAct_TnAssignTacticalVolume": 6,
+   "SeqAct_TnPawnFactory": 6,
+   "SeqAct_Toggle": 6,
+   "SeqAct_ActivateRemoteEvent": 5,
+   "SeqAct_Interp": 5
+  },
+  "A3_COR_Routing3D_ART_m": {
+   "SeqAct_ToggleHidden": 1
+  },
+  "A3_COR_Routing3D_Cine_m": {
+   "SkeletalMeshActorMAT": 6,
+   "SeqAct_ForceFeedback": 4,
+   "SkeletalMeshActor": 4,
+   "SeqAct_ActivateRemoteEvent": 2,
+   "SeqAct_CameraShake": 2,
+   "SeqAct_ToggleCinematicMode": 1,
+   "SeqEvent_Console": 1,
+   "SeqEvent_RemoteEvent": 1
+  },
+  "A3_COR_Routing3D_Design_m": {
+   "SeqAct_CrowdSpawner": 3,
+   "SeqAct_Interp": 2,
+   "SeqEvent_RemoteEvent": 2,
+   "SeqAct_CameraShake": 1,
+   "SeqAct_Conversation": 1,
+   "SeqAct_Delay": 1,
+   "SeqAct_ForceFeedback": 1
+  },
+  "A3_COR_Routing3_Cine_m": {
+   "SkeletalMeshActorMAT": 6,
+   "SeqAct_ActivateRemoteEvent": 4,
+   "SeqAct_ToggleHidden": 4,
+   "SkeletalMeshActor": 3,
+   "CameraActor": 2,
+   "SeqAct_CameraShake": 2,
+   "SeqAct_ToggleCinematicMode": 2,
+   "SeqAct_ForceFeedback": 1
+  },
+  "A3_COR_Routing3_Design_m": {
+   "SeqEvent_RemoteEvent": 47,
+   "SeqAct_ActivateRemoteEvent": 41,
+   "SeqEvent_Touch": 19,
+   "SeqAct_CauseDamage": 14,
+   "SeqAct_Delay": 13,
+   "SeqAct_Interp": 12,
+   "SeqEvent_SequenceActivated": 11,
+   "SeqAct_Gate": 10
+  },
+  "A3_COR_Routing_2_Design_m": {
+   "SeqEvent_Touch": 21,
+   "SeqAct_Interp": 20,
+   "SeqAct_CauseDamage": 18,
+   "SeqAct_Delay": 18,
+   "SeqAct_Toggle": 18,
+   "SeqAct_ActivateRemoteEvent": 14,
+   "SeqAct_Gate": 10,
+   "SeqEvent_RemoteEvent": 10
+  },
+  "A4_ORB_AmmoRoom_DSN_m": {
+   "SeqAct_Delay": 19,
+   "SeqAct_PlaySound": 17,
+   "SeqAct_ActivateRemoteEvent": 13,
+   "SeqAct_Interp": 13,
+   "SeqEvent_RemoteEvent": 12,
+   "SeqAct_CameraShake": 9,
+   "SeqAct_Gate": 9,
+   "SeqCond_CompareFloat": 9
+  },
+  "A4_ORB_Audio_m": {
+   "SeqEvent_RemoteEvent": 73,
+   "SeqAct_AmbientAudioZone": 35,
+   "SeqAct_PlayPlayerPositionalSound": 35,
+   "SeqEvent_Touch": 34,
+   "SeqEvent_SequenceActivated": 29,
+   "SeqAct_PlaySound": 27,
+   "SeqAct_ActivateRemoteEvent": 25,
+   "SeqAct_Delay": 13
+  },
+  "A4_ORB_Base_m": {
+   "SeqAct_ActivateRemoteEvent": 49,
+   "SeqAct_Delay": 24,
+   "SeqEvent_RemoteEvent": 13,
+   "SeqAct_Gate": 10,
+   "TnSeqAct_ForceIntoForm": 10,
+   "SeqCond_CompareFloat": 6,
+   "SeqAct_SetActiveCheckpoint": 3,
+   "TnSeqAct_ActivateTogethernessVolume": 3
+  },
+  "A4_ORB_CineIntro_m": {
+   "SeqAct_ToggleHidden": 6,
+   "SeqAct_ForceFeedback": 4,
+   "SeqAct_Gate": 4,
+   "StaticMeshActor": 4,
+   "SeqAct_CameraShake": 3,
+   "SeqAct_PlaySound": 3,
+   "SeqAct_ActivateRemoteEvent": 2,
+   "SeqAct_ToggleCinematicMode": 2
+  },
+  "A4_ORB_CogRoom_CINE_m": {
+   "StaticMeshActor": 130,
+   "StaticInterpActor": 78,
+   "SeqAct_ActivateRemoteEvent": 13,
+   "SeqEvent_RemoteEvent": 13,
+   "SeqAct_PlaySound": 12,
+   "SkeletalMeshActor": 9,
+   "SeqAct_Interp": 8,
+   "SeqAct_ToggleHidden": 8
+  },
+  "A4_ORB_CogRoom_DSN_m": {
+   "SeqAct_ActivateRemoteEvent": 31,
+   "SeqAct_Delay": 14,
+   "SeqAct_CauseDamage": 13,
+   "SeqAct_TnPawnFactory": 13,
+   "SeqAct_Toggle": 12,
+   "SeqEvent_HmDestructibleStateNotification": 12,
+   "SeqAct_PlaySound": 11,
+   "SeqAct_Interp": 7
+  },
+  "A4_ORB_CogRoom_VIG_m": {
+   "SeqAct_ToggleHidden": 1
+  },
+  "A4_ORB_CommandRoomCQC_DSN_m": {
+   "SkeletalMeshActor": 13,
+   "SeqAct_ActivateRemoteEvent": 12,
+   "SeqEvent_RemoteEvent": 8,
+   "SeqAct_Interp": 7,
+   "SeqAct_Delay": 4,
+   "SeqAct_Gate": 3,
+   "SeqAct_PlaySound": 2,
+   "SeqAct_ToggleHidden": 2
+  },
+  "A4_ORB_DebrisIntro_DSN_m": {
+   "SeqAct_Toggle": 47,
+   "SeqAct_PlaySound": 36,
+   "SeqAct_Delay": 34,
+   "SeqAct_ToggleHidden": 21,
+   "SeqAct_Destroy": 16,
+   "SeqAct_Gate": 16,
+   "SeqEvent_HmDestructibleStateNotification": 16,
+   "SeqEvent_Touch": 13
+  },
+  "A4_ORB_FallingTryp_CINE_m": {
+   "SeqAct_PlaySound": 7,
+   "SeqEvent_RemoteEvent": 7,
+   "HmSkeletalMeshActor": 5,
+   "SeqAct_ActivateRemoteEvent": 5,
+   "SeqAct_Toggle": 4,
+   "SkeletalMeshActor": 4,
+   "SeqAct_CameraShake": 3,
+   "SeqAct_ForceFeedback": 3
+  },
+  "A4_ORB_FallingTryp_DSN_m": {
+   "SeqAct_ActivateRemoteEvent": 87,
+   "SeqEvent_RemoteEvent": 38,
+   "SeqAct_Delay": 18,
+   "SeqAct_Conversation": 15,
+   "SeqAct_Gate": 15,
+   "SeqAct_Interp": 13,
+   "SeqAct_Toggle": 12,
+   "SeqAct_PlaySound": 10
+  },
+  "A4_ORB_Flying2Start_DSN_m": {
+   "SeqAct_ActivateRemoteEvent": 154,
+   "SeqAct_Delay": 89,
+   "SeqAct_Gate": 85,
+   "SeqEvent_RemoteEvent": 74,
+   "SeqCond_CompareFloat": 30,
+   "SeqAct_SetInt": 20,
+   "SeqAct_CauseDamage": 10,
+   "SeqAct_ScalarValueRamp": 10
+  },
+  "A4_ORB_Flying2_DSN_m": {
+   "SeqAct_ActivateRemoteEvent": 51,
+   "SeqAct_Delay": 15,
+   "SeqEvent_RemoteEvent": 7,
+   "SeqAct_Gate": 5,
+   "SeqAct_Interp": 5,
+   "SeqAct_TnPawnFactory": 5,
+   "SeqAct_Conversation": 4,
+   "SeqAct_Log": 4
+  },
+  "A4_ORB_Flying2_Vig_m": {
+   "SeqAct_Delay": 4,
+   "SeqAct_Gate": 1,
+   "SeqAct_Interp": 1,
+   "SeqEvent_RemoteEvent": 1
+  },
+  "A4_ORB_Global_Art_m": {
+   "SeqAct_Interp": 1
+  },
+  "A4_ORB_IntroCave_DSN_m": {
+   "SeqAct_Delay": 7,
+   "SeqAct_Conversation": 1,
+   "SeqEvent_Touch": 1
+  },
+  "A4_ORB_Intro_VIG_m": {
+   "SeqAct_PlaySound": 2,
+   "SeqAct_Gate": 1
+  },
+  "A4_ORB_Music_m": {
+   "SeqEvent_RemoteEvent": 71,
+   "SeqAct_PlayMusic": 40,
+   "SeqAct_Delay": 15,
+   "SeqAct_PlayStinger": 15,
+   "SeqAct_StopMusic": 1,
+   "SeqAct_Switch": 1
+  },
+  "A4_ORB_NerveCenter_CINE_m": {
+   "SeqAct_ActivateRemoteEvent": 41,
+   "StaticInterpActor": 25,
+   "SeqAct_ForceFeedback": 11,
+   "SeqEvent_RemoteEvent": 10,
+   "SeqAct_ToggleHidden": 9,
+   "SeqAct_CameraShake": 8,
+   "SeqAct_Toggle": 6,
+   "SkeletalMeshActor": 6
+  },
+  "A4_ORB_NerveCenter_DSN_m": {
+   "SeqAct_ActivateRemoteEvent": 147,
+   "SeqAct_Delay": 31,
+   "SeqAct_Gate": 19,
+   "SeqEvent_RemoteEvent": 13,
+   "SeqAct_TnAiMoveToActor": 8,
+   "SeqAct_Toggle": 8,
+   "SeqAct_Interp": 6,
+   "SeqAct_TnPawnFactory": 6
+  },
+  "A4_ORB_PreRelay1_ART_m": {
+   "SeqAct_Interp": 1,
+   "SeqEvent_RemoteEvent": 1,
+   "StaticInterpActor": 1
+  },
+  "A4_ORB_PreRelay1_DSN_m": {
+   "SeqAct_ActivateRemoteEvent": 88,
+   "SeqEvent_RemoteEvent": 76,
+   "SeqAct_Delay": 75,
+   "SeqAct_Toggle": 47,
+   "SeqAct_Gate": 42,
+   "SeqAct_Interp": 30,
+   "SeqAct_PlaySound": 18,
+   "SeqAct_TnAiMoveToActor": 18
+  },
+  "A4_ORB_Relay1Int_DSN_m": {
+   "SeqAct_ActivateRemoteEvent": 87,
+   "SeqAct_Delay": 69,
+   "SeqAct_Toggle": 54,
+   "SeqEvent_RemoteEvent": 24,
+   "SeqAct_Gate": 20,
+   "SeqAct_TnPawnFactory": 16,
+   "SeqAct_Interp": 14,
+   "SeqAct_CameraShake": 9
+  },
+  "A4_ORB_Relay2Int_DSN_m": {
+   "SeqAct_Delay": 27,
+   "SeqAct_ActivateRemoteEvent": 22,
+   "SeqAct_Gate": 12,
+   "SeqEvent_RemoteEvent": 10,
+   "SeqAct_Conversation": 7,
+   "SeqAct_Toggle": 6,
+   "TnSeqAct_AttackFromActor": 6,
+   "SeqAct_Interp": 3
+  },
+  "A4_ORB_Relay2Int_VIG_m": {
+   "SeqAct_ToggleHidden": 7,
+   "SeqAct_ActivateRemoteEvent": 5,
+   "SeqAct_Delay": 5,
+   "SeqAct_Gate": 5,
+   "SeqAct_Interp": 4,
+   "SeqEvent_Touch": 4,
+   "SkeletalMeshActorMAT": 4,
+   "SeqAct_PlaySound": 3
+  },
+  "A4_ORB_Relay2_Tunnel_DSN_m": {
+   "SeqAct_Gate": 12,
+   "SeqAct_CameraShake": 9,
+   "SeqAct_Delay": 7,
+   "SeqCond_CompareFloat": 6,
+   "SeqEvent_RemoteEvent": 6,
+   "SeqAct_ActivateRemoteEvent": 5,
+   "SeqEvent_Touch": 5,
+   "SeqAct_Interp": 3
+  },
+  "A4_ORB_RelayCmdRoom_DSN_m": {
+   "SeqAct_ActivateRemoteEvent": 120,
+   "SeqAct_Delay": 26,
+   "SeqAct_TnPawnFactory": 20,
+   "SeqAct_TnAssignTacticalVolume": 19,
+   "SeqAct_TnAiMoveToActor": 18,
+   "SeqAct_Gate": 13,
+   "SeqEvent_RemoteEvent": 10,
+   "SeqAct_PlaySound": 8
+  },
+  "A4_ORB_RelayIntro_CINE_m": {
+   "SeqAct_ActivateRemoteEvent": 8,
+   "SeqAct_PlaySound": 7,
+   "SeqAct_ToggleHidden": 5,
+   "SeqAct_Toggle": 4,
+   "SkeletalMeshActorMAT": 4,
+   "SeqAct_Delay": 3,
+   "SeqAct_CameraShake": 2,
+   "SeqAct_ToggleCinematicMode": 2
+  },
+  "A4_ORB_Track1_Global_Art_m": {
+   "SeqEvent_RemoteEvent": 2,
+   "SeqAct_Delay": 1,
+   "SeqAct_Log": 1,
+   "SeqAct_Toggle": 1
+  },
+  "A4_ORB_TrypFlyingIntro_DSN_m": {
+   "SeqAct_ActivateRemoteEvent": 43,
+   "SeqEvent_RemoteEvent": 16,
+   "StaticInterpActor": 12,
+   "SeqAct_Delay": 11,
+   "SeqAct_PlaySound": 8,
+   "SeqAct_Toggle": 8,
+   "SeqAct_Gate": 7,
+   "SeqAct_Interp": 4
+  },
+  "A5_TRY_Audio_m": {
+   "SeqEvent_RemoteEvent": 27,
+   "SeqAct_PlayPlayerPositionalSound": 17,
+   "SeqAct_PlayMusic": 9,
+   "SeqAct_PlayStinger": 9,
+   "SeqAct_StopMusic": 7,
+   "SeqAct_PlaySound": 6,
+   "SeqAct_AmbientAudioZone": 5,
+   "SeqEvent_Touch": 5
+  },
+  "A5_TRY_DSN_m": {
+   "SeqAct_Delay": 292,
+   "SeqEvent_RemoteEvent": 225,
+   "SeqAct_CauseDamage": 175,
+   "SeqAct_ActivateRemoteEvent": 125,
+   "SeqAct_Interp": 64,
+   "SeqAct_Gate": 52,
+   "SeqEvent_SequenceActivated": 48,
+   "SeqEvent_HmDestructibleStateNotification": 46
+  },
+  "A5_TRY_FX_m": {
+   "SeqEvent_RemoteEvent": 9,
+   "SeqAct_Interp": 7,
+   "SeqAct_Delay": 5
+  },
+  "A5_TRY_Intro_CINE_m": {
+   "SeqAct_ActivateRemoteEvent": 5,
+   "SeqAct_CameraShake": 5,
+   "SeqAct_ToggleHidden": 5,
+   "HmSkeletalMeshActor": 3,
+   "SeqEvent_RemoteEvent": 3,
+   "SkeletalMeshActorMAT": 3,
+   "SeqAct_Interp": 2,
+   "SeqAct_ToggleCinematicMode": 2
+  },
+  "A5_TRY_Outro_CINE_m": {
+   "HmSkeletalMeshActor": 8,
+   "StaticMeshActor": 7,
+   "SeqAct_ToggleHidden": 5,
+   "SeqAct_ForceFeedback": 4,
+   "SeqAct_Toggle": 4,
+   "SeqAct_ForceMatineeMipsResident": 1,
+   "SeqAct_ToggleCinematicMode": 1
+  },
+  "A5_TRY_Vig_m": {
+   "SeqAct_Interp": 58,
+   "SkeletalMeshActor": 49,
+   "SeqAct_Destroy": 16,
+   "SeqEvent_Touch": 16,
+   "SeqEvent_RemoteEvent": 14,
+   "SeqAct_PlaySound": 13,
+   "SeqAct_Delay": 11,
+   "SeqAct_Toggle": 10
+  },
+  "D1_ORB_Assmebly1_DGN_m": {
+   "SeqAct_Delay": 34,
+   "SeqEvent_Touch": 19,
+   "SeqAct_Toggle": 15,
+   "SeqEvent_RemoteEvent": 14,
+   "SeqAct_ActivateRemoteEvent": 12,
+   "TnSeqAct_AttackFromActor": 12,
+   "TnSeqAct_SetSniperSearchLocations": 12,
+   "SeqAct_Gate": 11
+  },
+  "D1_ORB_Assmebly2_DGN_m": {
+   "SeqAct_Toggle": 17,
+   "SeqEvent_Touch": 17,
+   "SeqAct_ActivateRemoteEvent": 12,
+   "SeqAct_Delay": 12,
+   "SeqAct_TnAiSetMoveToObjective": 12,
+   "StaticInterpActor": 10,
+   "SeqEvent_RemoteEvent": 7,
+   "SeqAct_ForceFeedback": 6
+  },
+  "D1_ORB_Assmebly_VIG_m": {
+   "HmSkeletalMeshActor": 13,
+   "SeqAct_ToggleHidden": 10,
+   "SeqEvent_RemoteEvent": 8,
+   "SeqAct_Delay": 4,
+   "SeqAct_Toggle": 4,
+   "SeqAct_PlaySound": 2,
+   "SeqEvent_Touch": 2
+  },
+  "D1_ORB_Audio_m": {
+   "SeqEvent_SequenceActivated": 78,
+   "SeqAct_PlayPlayerPositionalSound": 46,
+   "SeqEvent_RemoteEvent": 40,
+   "SeqEvent_Touch": 40,
+   "SeqAct_AmbientAudioZone": 39,
+   "SeqAct_PlaySound": 8,
+   "SeqAct_Delay": 7,
+   "SeqAct_ActivateRemoteEvent": 5
+  },
+  "D1_ORB_Base_m": {
+   "SeqAct_ActivateRemoteEvent": 126,
+   "SeqEvent_RemoteEvent": 75,
+   "SeqEvent_Touch": 51,
+   "SeqAct_Delay": 25,
+   "TnSeqAct_ActivateTogethernessVolume": 23,
+   "SeqAct_SetActiveCheckpoint": 21,
+   "SeqAct_SetStreamingState": 20,
+   "SeqAct_FlushLevelStreaming": 16
+  },
+  "D1_ORB_Crash1B_DGN_m": {
+   "SeqAct_Delay": 18,
+   "SeqAct_Toggle": 17,
+   "SeqEvent_Touch": 8,
+   "SeqAct_ActivateRemoteEvent": 5,
+   "SeqAct_TnPawnFactory": 4,
+   "SeqEvent_RemoteEvent": 4,
+   "SeqAct_CauseDamage": 3,
+   "SeqAct_Conversation": 3
+  },
+  "D1_ORB_Crash1B_VIG_m": {
+   "SeqAct_Delay": 4,
+   "SeqEvent_Touch": 1
+  },
+  "D1_ORB_Crash1_DGN_m": {
+   "SeqAct_ActivateRemoteEvent": 26,
+   "SeqAct_Delay": 21,
+   "SeqEvent_RemoteEvent": 20,
+   "SeqAct_TnPawnFactory": 17,
+   "SeqAct_Interp": 15,
+   "SeqAct_Toggle": 13,
+   "StaticInterpActor": 10,
+   "SeqAct_PlaySound": 9
+  },
+  "D1_ORB_Crash1_VIG_m": {
+   "SeqAct_ActivateRemoteEvent": 16,
+   "SeqAct_ToggleHidden": 14,
+   "SeqAct_Interp": 13,
+   "SeqAct_CauseDamage": 10,
+   "SkeletalMeshActorMAT": 10,
+   "SeqAct_Toggle": 8,
+   "SeqAct_Delay": 7,
+   "SeqEvent_Touch": 6
+  },
+  "D1_ORB_Crash2A_VIG_m": {
+   "SeqAct_Delay": 7,
+   "SeqAct_CauseDamage": 6,
+   "SeqAct_ToggleHidden": 6,
+   "SeqAct_ForceFeedback": 1,
+   "SeqAct_Interp": 1,
+   "SeqAct_PlaySound": 1,
+   "SeqAct_Toggle": 1,
+   "SeqEvent_Touch": 1
+  },
+  "D1_ORB_Crash2B_CINE_m": {
+   "SeqAct_ActivateRemoteEvent": 10,
+   "SeqAct_ToggleHidden": 7,
+   "SeqAct_Delay": 5,
+   "SeqAct_Interp": 5,
+   "SeqAct_Toggle": 5,
+   "SeqEvent_RemoteEvent": 5,
+   "HmSkeletalMeshActor": 3,
+   "SeqEvent_Touch": 3
+  },
+  "D1_ORB_Crash2B_DGN_m": {
+   "SeqAct_ActivateRemoteEvent": 103,
+   "SeqAct_Delay": 44,
+   "SeqAct_TnPawnFactory": 34,
+   "SeqEvent_RemoteEvent": 33,
+   "SeqEvent_Touch": 31,
+   "SeqEvent_TakeDamage": 15,
+   "SeqAct_ToggleHidden": 14,
+   "SeqAct_Toggle": 11
+  },
+  "D1_ORB_Crash2B_VIG_m": {
+   "SeqAct_PlayDialog": 51,
+   "SeqAct_Interp": 46,
+   "SeqAct_ActivateRemoteEvent": 29,
+   "SeqAct_Delay": 26,
+   "SeqAct_RandomSwitch": 25,
+   "SeqEvent_Touch": 24,
+   "SeqAct_Toggle": 22,
+   "SeqEvent_RemoteEvent": 19
+  },
+  "D1_ORB_Crash2C_ART_m": {
+   "SeqEvent_RemoteEvent": 2
+  },
+  "D1_ORB_Crash2D_ART_m": {
+   "SeqAct_Interp": 2
+  },
+  "D1_ORB_Crash2_DGN_m": {
+   "SeqAct_ActivateRemoteEvent": 27,
+   "SeqEvent_RemoteEvent": 19,
+   "SeqAct_Delay": 17,
+   "SeqAct_Toggle": 16,
+   "SeqAct_TnAiSetMoveToObjective": 10,
+   "SeqAct_TnPawnFactory": 6,
+   "SeqAct_Conversation": 5,
+   "InterpActor": 4
+  },
+  "D1_ORB_Crash2_VIG_m": {
+   "SeqAct_ToggleHidden": 10,
+   "SeqEvent_RemoteEvent": 9,
+   "SeqAct_Delay": 8,
+   "SeqAct_Toggle": 5,
+   "SkeletalMeshActorMAT": 4,
+   "HmSkeletalMeshActor": 3,
+   "SeqAct_CameraShake": 3,
+   "SeqAct_Interp": 3
+  },
+  "D1_ORB_CrashHack_DGN": {
+   "SeqAct_ActivateRemoteEvent": 14,
+   "SeqEvent_RemoteEvent": 8,
+   "SeqAct_TnAiSetMoveToObjective": 6,
+   "SeqAct_Conversation": 5,
+   "SeqAct_PlaySound": 5,
+   "SeqAct_ToggleHidden": 5,
+   "SeqEvent_Touch": 5,
+   "SeqAct_Delay": 3
+  },
+  "D1_ORB_DETrans_DGN_m": {
+   "SeqAct_ActivateRemoteEvent": 7,
+   "SeqEvent_RemoteEvent": 4,
+   "SeqAct_TnAiSetMoveToObjective": 2,
+   "SeqAct_Toggle": 2,
+   "SeqAct_TnAddMarker": 1,
+   "SeqAct_TnAssignTacticalVolume": 1,
+   "SeqAct_TnPawnFactory": 1,
+   "SeqEvent_Touch": 1
+  },
+  "D1_ORB_DarkEnergon_CINE_m": {
+   "SeqAct_ActivateRemoteEvent": 24,
+   "SeqAct_ToggleHidden": 18,
+   "StaticInterpActor": 13,
+   "SeqAct_Interp": 11,
+   "HmSkeletalMeshActor": 8,
+   "SeqAct_Delay": 8,
+   "SeqAct_ForceFeedback": 8,
+   "SkeletalMeshActorMAT": 7
+  },
+  "D1_ORB_DarkEnergon_DGN_m": {
+   "SeqAct_ActivateRemoteEvent": 67,
+   "SeqAct_Delay": 50,
+   "SeqAct_Toggle": 48,
+   "SeqAct_PlaySound": 35,
+   "SeqAct_Interp": 31,
+   "SeqAct_TnPawnFactory": 27,
+   "SeqEvent_RemoteEvent": 26,
+   "SeqAct_TnAiSetMoveToObjective": 21
+  },
+  "D1_ORB_DarkEnergon_VIG_m": {
+   "TnTransformingWorldActor": 108,
+   "SeqAct_CauseDamage": 49,
+   "SeqAct_Delay": 48,
+   "SeqAct_Toggle": 15,
+   "SeqAct_ToggleHidden": 13,
+   "SeqAct_Interp": 12,
+   "SeqEvent_RemoteEvent": 8,
+   "HmSkeletalMeshActor": 6
+  },
+  "D1_ORB_DataCenter_CINE_m": {
+   "HmSkeletalMeshActor": 4,
+   "SeqAct_ToggleHidden": 4,
+   "SkeletalMeshActorMAT": 4,
+   "SeqAct_ActivateRemoteEvent": 2,
+   "SeqAct_ToggleCinematicMode": 2,
+   "SeqAct_CameraShake": 1,
+   "SeqAct_Delay": 1,
+   "SeqAct_ForceFeedback": 1
+  },
+  "D1_ORB_DataCenter_DGN_m": {
+   "SeqAct_ActivateRemoteEvent": 191,
+   "SeqAct_Delay": 102,
+   "SeqAct_Toggle": 84,
+   "SeqEvent_RemoteEvent": 49,
+   "SeqAct_TnPawnFactory": 47,
+   "SeqAct_ToggleHidden": 43,
+   "SeqEvent_Touch": 41,
+   "SeqAct_Interp": 30
+  },
+  "D1_ORB_DataCenter_VIG_m": {
+   "SeqAct_Delay": 3,
+   "SeqAct_Toggle": 3,
+   "SeqAct_ToggleHidden": 3
+  },
+  "D1_ORB_Exterior1_DGN_m": {
+   "SeqAct_ActivateRemoteEvent": 12,
+   "SeqAct_Interp": 12,
+   "SeqEvent_Touch": 7,
+   "HmSkeletalMeshActor": 6,
+   "SeqAct_TnPawnFactory": 6,
+   "SeqAct_TnAiMoveToActor": 5,
+   "SeqAct_TnAssignTacticalVolume": 2,
+   "SeqEvent_RemoteEvent": 2
+  },
+  "D1_ORB_Exterior2_DGN_m": {
+   "SeqAct_ActivateRemoteEvent": 21,
+   "SeqAct_Delay": 12,
+   "SeqAct_TnPawnFactory": 10,
+   "SeqEvent_RemoteEvent": 9,
+   "SeqAct_ToggleHidden": 7,
+   "SeqEvent_Touch": 6,
+   "SeqAct_Toggle": 5,
+   "SeqAct_TnAiMoveToActor": 4
+  },
+  "D1_ORB_Exterior3_DGN_m": {
+   "SeqAct_ActivateRemoteEvent": 36,
+   "SeqAct_TnPawnFactory": 11,
+   "SeqAct_Interp": 7,
+   "SeqEvent_Touch": 7,
+   "SeqAct_Delay": 6,
+   "SeqAct_Toggle": 6,
+   "SeqAct_PlaySound": 3,
+   "SeqEvent_RemoteEvent": 3
+  },
+  "D1_ORB_GLB_Doors_m": {
+   "SeqAct_ActivateRemoteEvent": 14,
+   "SeqAct_Toggle": 11,
+   "SeqEvent_RemoteEvent": 11,
+   "SeqAct_Delay": 8,
+   "SeqEvent_Touch": 5,
+   "SeqAct_Gate": 1,
+   "SeqAct_ToggleHidden": 1
+  },
+  "D1_ORB_Music_m": {
+   "SeqEvent_RemoteEvent": 76,
+   "SeqAct_PlayMusic": 46,
+   "SeqAct_PlayStinger": 23,
+   "SeqAct_Delay": 18,
+   "SeqEvent_Touch": 7,
+   "SeqAct_ActivateRemoteEvent": 6,
+   "SeqAct_StopMusic": 2
+  },
+  "D1_ORB_ScienceLabs_CINE_m": {
+   "HmSkeletalMeshActor": 11,
+   "SeqAct_ToggleHidden": 6,
+   "SeqAct_ActivateRemoteEvent": 5,
+   "SeqAct_CauseDamage": 4,
+   "SeqAct_CameraShake": 3,
+   "SeqEvent_RemoteEvent": 3,
+   "SeqAct_Delay": 2,
+   "SeqAct_ForceFeedback": 2
+  },
+  "D1_ORB_ScienceLabs_DGN_m": {
+   "SeqAct_ActivateRemoteEvent": 22,
+   "SeqAct_Delay": 15,
+   "SeqEvent_RemoteEvent": 13,
+   "SeqAct_TnPawnFactory": 8,
+   "SeqAct_Interp": 6,
+   "SeqAct_TnAiSetMoveToObjective": 6,
+   "SeqAct_Toggle": 6,
+   "SeqAct_PlaySound": 5
+  },
+  "D1_ORB_Space_VIG_m": {
+   "StaticInterpActor": 17,
+   "SeqAct_PlaySound": 14,
+   "SeqAct_Delay": 10,
+   "SeqAct_ToggleHidden": 9,
+   "SeqAct_Toggle": 7,
+   "SeqEvent_Touch": 6,
+   "SeqEvent_RemoteEvent": 3,
+   "SeqAct_Interp": 2
+  },
+  "D1_ORB_Vent1_DGN_m": {
+   "SeqAct_Toggle": 80,
+   "SeqAct_Delay": 34,
+   "SeqAct_ToggleNavGate": 34,
+   "SeqAct_PlaySound": 27,
+   "SeqAct_Interp": 23,
+   "SeqEvent_SequenceActivated": 18,
+   "SeqAct_ActivateRemoteEvent": 13,
+   "SeqEvent_Touch": 10
+  },
+  "D2_COR_Audio_m": {
+   "SeqAct_ActivateRemoteEvent": 105,
+   "SeqAct_PlaySound": 72,
+   "SeqEvent_RemoteEvent": 69,
+   "SeqEvent_Touch": 63,
+   "SeqEvent_SequenceActivated": 51,
+   "SeqAct_AmbientAudioZone": 46,
+   "SeqAct_PlayPlayerPositionalSound": 45,
+   "SeqAct_Delay": 11
+  },
+  "D2_COR_Base_m": {
+   "SeqEvent_RemoteEvent": 52,
+   "SeqAct_ActivateRemoteEvent": 37,
+   "SeqAct_TnAddMarker": 22,
+   "SeqAct_TnRemoveMarker": 22,
+   "SeqAct_SetStreamingState": 18,
+   "TnSeqAct_ActivateTogethernessVolume": 16,
+   "SeqAct_Delay": 8,
+   "SeqEvent_Touch": 7
+  },
+  "D2_COR_Cave_Design2B_m": {
+   "SeqAct_Delay": 33,
+   "SeqEvent_Touch": 26,
+   "SeqAct_Toggle": 16,
+   "SeqAct_Interp": 13,
+   "SeqAct_CameraShake": 8,
+   "SeqAct_ForceFeedback": 8,
+   "SeqAct_PlaySound": 8,
+   "SeqAct_AttachToActor": 7
+  },
+  "D2_COR_Cave_Design2_m": {
+   "SeqAct_ActivateRemoteEvent": 72,
+   "SeqEvent_RemoteEvent": 63,
+   "SeqEvent_Touch": 41,
+   "SeqAct_Gate": 37,
+   "SeqAct_Delay": 35,
+   "SeqAct_Interp": 28,
+   "SeqAct_TnPawnFactory": 26,
+   "SeqAct_Toggle": 20
+  },
+  "D2_COR_Cave_DesignB_m": {
+   "SeqAct_Delay": 39,
+   "SeqAct_ActivateRemoteEvent": 33,
+   "StaticInterpActor": 31,
+   "SeqEvent_HmDestructibleStateNotification": 26,
+   "SeqAct_Interp": 23,
+   "SeqEvent_Touch": 20,
+   "SeqAct_Gate": 17,
+   "SeqAct_PlaySound": 17
+  },
+  "D2_COR_Cave_Design_m": {
+   "SeqAct_Delay": 10,
+   "SeqAct_TnAiUseInteract": 9,
+   "SeqEvent_Touch": 8,
+   "SeqEvent_RemoteEvent": 6,
+   "SeqAct_ActivateRemoteEvent": 5,
+   "SeqAct_Gate": 4,
+   "SeqAct_TnPawnFactory": 4,
+   "TnSeqAct_SetTargetableByAi": 2
+  },
+  "D2_COR_Chamber_Design_m": {
+   "SeqAct_Delay": 81,
+   "SeqEvent_RemoteEvent": 81,
+   "SeqAct_ActivateRemoteEvent": 76,
+   "SeqAct_CauseDamage": 62,
+   "SeqEvent_HmDestructibleStateNotification": 50,
+   "SeqAct_Gate": 42,
+   "SeqAct_Interp": 37,
+   "SeqAct_Toggle": 33
+  },
+  "D2_COR_Gorge_01_ART_m": {
+   "InterpActor": 2
+  },
+  "D2_COR_Gorge_01_Design_m": {
+   "StaticInterpActor": 151,
+   "SeqEvent_RemoteEvent": 112,
+   "SeqAct_ActivateRemoteEvent": 96,
+   "SeqAct_Delay": 72,
+   "SeqAct_Toggle": 55,
+   "SeqAct_CauseDamage": 29,
+   "SeqAct_Interp": 27,
+   "SeqEvent_Touch": 26
+  },
+  "D2_COR_Gorge_01_VIG_m": {
+   "StaticInterpActor": 77,
+   "HmSkeletalMeshActor": 22,
+   "SeqAct_ToggleHidden": 15,
+   "InterpActor": 9,
+   "SkeletalMeshActorMAT": 9,
+   "SeqAct_Delay": 8,
+   "SeqAct_ForceFeedback": 8,
+   "SeqAct_CauseDamage": 6
+  },
+  "D2_COR_Gorge_02_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 26,
+   "SeqEvent_RemoteEvent": 17,
+   "SeqAct_Delay": 10,
+   "SeqAct_Interp": 4,
+   "SeqAct_Conversation": 3,
+   "SeqAct_PlaySound": 2,
+   "SeqAct_Switch": 2,
+   "SeqAct_TnAiUseInteract": 2
+  },
+  "D2_COR_Gorge_02_VIG_m": {
+   "SeqAct_ToggleHidden": 4,
+   "HmSkeletalMeshActor": 2,
+   "SeqAct_ToggleCinematicMode": 2,
+   "SkeletalMeshActorMAT": 2,
+   "SeqAct_ActivateRemoteEvent": 1,
+   "SeqAct_Teleport": 1,
+   "SeqEvent_Touch": 1,
+   "SkeletalMeshActor": 1
+  },
+  "D2_COR_Gorge_03_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 110,
+   "SeqEvent_RemoteEvent": 37,
+   "SeqAct_TnPawnFactory": 26,
+   "SeqAct_Delay": 23,
+   "StaticInterpActor": 23,
+   "SeqAct_TnAssignTacticalVolume": 20,
+   "SeqAct_Gate": 16,
+   "SeqEvent_HmDestructibleStateNotification": 13
+  },
+  "D2_COR_Gorge_1B_Design_m": {
+   "SeqEvent_RemoteEvent": 6,
+   "SeqAct_TnAiUseInteract": 4,
+   "SeqAct_Delay": 2,
+   "SeqEvent_Touch": 2,
+   "SeqAct_ActivateRemoteEvent": 1,
+   "SeqAct_Conversation": 1,
+   "SeqAct_Gate": 1
+  },
+  "D2_COR_IntroGorge_Design_m": {
+   "StaticInterpActor": 14,
+   "SeqAct_Delay": 12,
+   "SeqAct_Interp": 11,
+   "SeqEvent_RemoteEvent": 9,
+   "SeqEvent_Touch": 9,
+   "SeqAct_Gate": 6,
+   "SeqAct_ActivateRemoteEvent": 4,
+   "SeqAct_CauseDamage": 4
+  },
+  "D2_COR_IntroGorge_VIG_m": {
+   "SeqEvent_RemoteEvent": 14,
+   "StaticInterpActor": 14,
+   "SeqAct_ActivateRemoteEvent": 11,
+   "SeqAct_Interp": 7,
+   "SeqAct_PlaySound": 7,
+   "SeqAct_Toggle": 7,
+   "SeqAct_CameraShake": 5,
+   "SeqAct_ForceFeedback": 5
+  },
+  "D2_COR_Music_m": {
+   "SeqEvent_RemoteEvent": 72,
+   "SeqAct_PlayMusic": 41,
+   "SeqAct_PlayStinger": 29,
+   "SeqAct_Delay": 16,
+   "SeqAct_StopMusic": 15,
+   "SeqAct_Gate": 3,
+   "SeqEvent_Touch": 1
+  },
+  "D2_COR_Shaft_01_Design_m": {
+   "SeqAct_Toggle": 29,
+   "SeqAct_PlaySound": 8,
+   "SeqAct_Delay": 4,
+   "SeqEvent_RemoteEvent": 4,
+   "SeqEvent_Touch": 3,
+   "SeqAct_ActivateRemoteEvent": 2,
+   "SeqAct_Conversation": 1,
+   "SeqAct_Gate": 1
+  },
+  "D2_COR_Surface_Art_m": {
+   "SeqAct_ActivateRemoteEvent": 2,
+   "SeqAct_Gate": 2,
+   "SeqAct_TnAiSentryForceTarget": 2,
+   "SeqAct_Delay": 1,
+   "SeqAct_TnPawnFactory": 1,
+   "SeqEvent_Console": 1
+  },
+  "D2_COR_Surface_Design_m": {
+   "SeqAct_CameraShake": 7,
+   "SeqAct_ToggleHidden": 7,
+   "SeqAct_ForceFeedback": 6,
+   "SeqAct_Delay": 5,
+   "SeqAct_PlaySound": 5,
+   "SeqAct_Toggle": 5,
+   "HmSkeletalMeshActor": 3,
+   "SeqAct_ActivateRemoteEvent": 3
+  },
+  "D2_COR_TNL1_Design_m": {
+   "SeqEvent_Touch": 12,
+   "SeqAct_CauseDamage": 11,
+   "SeqAct_Delay": 9,
+   "SeqAct_Interp": 8,
+   "SeqAct_Toggle": 8,
+   "SeqAct_Destroy": 7,
+   "SeqEvent_RemoteEvent": 7,
+   "SeqAct_ActivateRemoteEvent": 6
+  },
+  "D2_COR_TNL2_Design_m": {
+   "SeqAct_Delay": 18,
+   "SeqAct_Toggle": 17,
+   "SeqAct_ActivateRemoteEvent": 14,
+   "SeqEvent_Touch": 14,
+   "SeqAct_Interp": 7,
+   "SeqAct_PlaySound": 7,
+   "SeqAct_Gate": 6,
+   "SeqAct_TnPawnFactory": 6
+  },
+  "D2_COR_TNL3_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 77,
+   "SeqEvent_Touch": 51,
+   "SeqAct_Gate": 27,
+   "SeqAct_TnPawnFactory": 20,
+   "SeqEvent_RemoteEvent": 15,
+   "SeqAct_Delay": 14,
+   "SeqAct_Interp": 10,
+   "TnSeqEvent_Interact": 9
+  },
+  "D2_COR_TNL4_Design_m": {
+   "SeqEvent_Touch": 4,
+   "SeqAct_Gate": 3,
+   "SeqEvent_SequenceActivated": 3,
+   "SeqAct_ActivateRemoteEvent": 2,
+   "SeqAct_CauseDamage": 2,
+   "SeqAct_Delay": 2,
+   "SeqAct_Interp": 2,
+   "SeqEvent_HmDestructibleStateNotification": 2
+  },
+  "D2_COR_TNLMR_Art_m": {
+   "SeqEvent_RemoteEvent": 1,
+   "SeqEvent_SequenceActivated": 1
+  },
+  "D2_COR_TNLMR_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 32,
+   "SeqAct_Delay": 26,
+   "StaticInterpActor": 26,
+   "SeqEvent_RemoteEvent": 20,
+   "SeqEvent_Touch": 17,
+   "SeqAct_Gate": 15,
+   "SeqAct_CauseDamage": 13,
+   "SeqAct_Toggle": 13
+  },
+  "D2_COR_TrioBss_Design_m": {
+   "SeqAct_ActivateRemoteEvent": 74,
+   "SeqEvent_RemoteEvent": 64,
+   "StaticInterpActor": 53,
+   "SeqAct_Gate": 51,
+   "SeqAct_Interp": 45,
+   "SeqAct_Toggle": 45,
+   "SeqAct_ToggleHidden": 39,
+   "SeqAct_Delay": 36
+  },
+  "D3A_IAC_AUDIO_m": {
+   "SeqAct_PlayPlayerPositionalSound": 236,
+   "SeqEvent_Touch": 70,
+   "SeqAct_AmbientAudioZone": 65,
+   "SeqEvent_RemoteEvent": 49,
+   "SeqAct_PlayFlybySound": 43,
+   "SeqAct_ActivateRemoteEvent": 27,
+   "SeqAct_Delay": 17,
+   "SeqAct_DialogGroup": 13
+  },
+  "D3A_IAC_Alley1_DESIGN": {
+   "SeqAct_ActivateRemoteEvent": 89,
+   "SeqAct_Delay": 35,
+   "SeqAct_PlaySound": 26,
+   "SeqAct_Toggle": 18,
+   "SeqAct_Interp": 6,
+   "SeqAct_Log": 6,
+   "SeqAct_Gate": 3,
+   "SeqAct_ToggleHidden": 3
+  },
+  "D3A_IAC_Alley1_VIG_m": {
+   "StaticInterpActor": 60,
+   "SeqAct_Interp": 11,
+   "SeqAct_ToggleHidden": 8,
+   "SeqAct_Delay": 5,
+   "SeqAct_CameraShake": 3,
+   "SeqAct_TnPawnFactory": 3,
+   "SeqAct_Toggle": 3,
+   "SkeletalMeshActor": 3
+  },
+  "D3A_IAC_Base_m": {
+   "SeqAct_ActivateRemoteEvent": 27,
+   "SeqAct_AttachToEvent": 3,
+   "SeqAct_Delay": 1,
+   "SeqAct_Interp": 1,
+   "SeqAct_Switch": 1,
+   "SeqAct_ToggleCinematicMode": 1
+  },
+  "D3A_IAC_City1_CINE_m": {
+   "SeqAct_ToggleHidden": 14,
+   "SkeletalMeshActorMAT": 13,
+   "SeqAct_ActivateRemoteEvent": 9,
+   "StaticInterpActor": 7,
+   "SeqAct_CameraShake": 6,
+   "SeqAct_ToggleCinematicMode": 5,
+   "SkeletalMeshActor": 5,
+   "SeqAct_ForceFeedback": 4
+  },
+  "D3A_IAC_City1_DESIGN_m": {
+   "SeqAct_ActivateRemoteEvent": 29,
+   "SeqAct_Delay": 23,
+   "SeqAct_Gate": 12,
+   "SeqAct_Log": 8,
+   "SeqAct_Toggle": 3,
+   "SeqAct_Conversation": 1,
+   "SeqAct_Interp": 1,
+   "SeqAct_ToggleHidden": 1
+  },
+  "D3A_IAC_City1_VIG_m": {
+   "SeqAct_Interp": 11,
+   "SeqAct_Delay": 9,
+   "SkeletalMeshActorMAT": 4,
+   "SeqAct_CauseDamage": 3,
+   "SeqAct_PlaySound": 3,
+   "SeqAct_ToggleHidden": 3,
+   "SeqAct_Toggle": 2,
+   "SeqEvent_Touch": 2
+  },
+  "D3A_IAC_City2B_DESIGN_m": {
+   "SeqAct_ActivateRemoteEvent": 21,
+   "SeqAct_Delay": 17,
+   "SeqAct_Gate": 5,
+   "SeqAct_Log": 3,
+   "SeqAct_PlaySound": 2,
+   "SeqAct_ForceFeedback": 1,
+   "SkeletalMeshActorMAT": 1
+  },
+  "D3A_IAC_City2B_VIG_m": {
+   "SeqAct_Delay": 12,
+   "SeqAct_Interp": 11,
+   "HmSkeletalMeshActor": 6,
+   "SkeletalMeshActor": 6,
+   "SkeletalMeshActorMAT": 6,
+   "SeqAct_Destroy": 4,
+   "SeqAct_Toggle": 4,
+   "SeqAct_ToggleHidden": 4
+  },
+  "D3A_IAC_City2_CINE_m": {
+   "HmSkeletalMeshActor": 8,
+   "SeqAct_ToggleHidden": 3,
+   "SkeletalMeshActorMAT": 3,
+   "SeqAct_CauseDamage": 2,
+   "SeqAct_ToggleCinematicMode": 2,
+   "StaticInterpActor": 2,
+   "SeqAct_Interp": 1
+  },
+  "D3A_IAC_City2_DESIGN_m": {
+   "SeqAct_ActivateRemoteEvent": 174,
+   "SeqAct_Delay": 104,
+   "SeqAct_Log": 29,
+   "SeqAct_Gate": 22,
+   "StaticInterpActor": 16,
+   "TnSeqAct_AttackFromActor": 5,
+   "SeqAct_Conversation": 2,
+   "SeqAct_Interp": 2
+  },
+  "D3A_IAC_City2_VIG_m": {
+   "TnTransformingWorldActor": 76,
+   "SeqAct_CauseDamage": 11,
+   "StaticInterpActor": 11,
+   "SeqAct_Delay": 8,
+   "SeqAct_Toggle": 8,
+   "SeqAct_Gate": 7,
+   "SeqAct_ToggleHidden": 5,
+   "SkeletalMeshActor": 5
+  },
+  "D3A_IAC_CityTank_ART_m": {
+   "StaticInterpActor": 1
+  },
+  "D3A_IAC_CityTank_CINE_m": {
+   "StaticInterpActor": 7,
+   "SeqAct_ActivateRemoteEvent": 5,
+   "SeqAct_ToggleHidden": 5,
+   "SeqAct_Delay": 3,
+   "SeqAct_ForceFeedback": 3,
+   "SkeletalMeshActorMAT": 3,
+   "HmSkeletalMeshActor": 2,
+   "SeqAct_ToggleCinematicMode": 2
+  },
+  "D3A_IAC_CityTank_DESIGN_m": {
+   "StaticInterpActor": 25,
+   "SeqAct_ToggleHidden": 16,
+   "SeqAct_Interp": 14,
+   "SeqAct_Delay": 6,
+   "SeqAct_ActivateRemoteEvent": 4,
+   "SeqAct_Gate": 1,
+   "SeqAct_Switch": 1
+  },
+  "D3A_IAC_CityTank_VIG_m": {
+   "SeqAct_Interp": 38,
+   "SeqAct_ToggleHidden": 26,
+   "TnTransformingWorldActor": 20,
+   "SeqAct_CauseDamage": 7,
+   "SeqAct_Delay": 7,
+   "SeqAct_TnPawnFactory": 5,
+   "HmSkeletalMeshActor": 4,
+   "SeqAct_Toggle": 4
+  },
+  "D3A_IAC_CityTrans_ART_m": {
+   "SeqAct_Toggle": 2
+  },
+  "D3A_IAC_CityTrans_DESIGN_m": {
+   "SeqAct_ActivateRemoteEvent": 21,
+   "SeqAct_Delay": 10,
+   "SeqAct_CauseDamage": 3,
+   "SeqAct_Interp": 2,
+   "SeqAct_Log": 2,
+   "SeqCond_Increment": 1,
+   "SeqEvent_RemoteEvent": 1
+  },
+  "D3A_IAC_CourtNew_DESIGN_m": {
+   "SeqAct_Delay": 30,
+   "SeqAct_ActivateRemoteEvent": 23,
+   "SeqAct_Gate": 11,
+   "SeqAct_Log": 6,
+   "SeqAct_Toggle": 5,
+   "SeqAct_Conversation": 2,
+   "SeqAct_ToggleHidden": 2,
+   "SeqEvent_RemoteEvent": 2
+  },
+  "D3A_IAC_CourtTrans_DESIGN_m": {
+   "SeqAct_Delay": 30,
+   "SeqAct_ActivateRemoteEvent": 29,
+   "SeqAct_Gate": 22,
+   "SeqAct_Toggle": 18,
+   "SeqAct_PlaySound": 16,
+   "StaticInterpActor": 12,
+   "SeqAct_Interp": 9,
+   "SeqAct_TnPawnFactory": 7
+  },
+  "D3A_IAC_CourtTrans_VIG_m": {
+   "TnTransformingWorldActor": 63,
+   "SeqAct_CauseDamage": 4,
+   "SeqAct_Interp": 3,
+   "SeqAct_TnPawnFactory": 3,
+   "SeqAct_ToggleHidden": 3
+  },
+  "D3A_IAC_Court_CINE_m": {
+   "SeqAct_ToggleHidden": 14,
+   "HmSkeletalMeshActor": 8,
+   "SeqAct_ActivateRemoteEvent": 6,
+   "SkeletalMeshActorMAT": 5,
+   "SeqAct_CameraShake": 3,
+   "SeqAct_ForceFeedback": 3,
+   "SeqAct_PlaySound": 3,
+   "SeqEvent_RemoteEvent": 3
+  },
+  "D3A_IAC_Court_VIG_m": {
+   "StaticInterpActor": 92,
+   "SeqAct_Interp": 56,
+   "SeqEvent_RemoteEvent": 53,
+   "SeqAct_Delay": 31,
+   "SeqAct_Gate": 28,
+   "SeqAct_ToggleHidden": 27,
+   "SeqAct_Toggle": 25,
+   "HmSkeletalMeshActor": 9
+  },
+  "D3A_IAC_Drive1_DESIGN_m": {
+   "SeqAct_Delay": 21,
+   "SeqAct_Toggle": 14,
+   "SeqAct_TnPawnFactory": 12,
+   "SkeletalMeshActor": 12,
+   "SeqAct_PlaySound": 5,
+   "SeqAct_ActivateRemoteEvent": 1,
+   "SeqAct_CameraShake": 1,
+   "SeqAct_ForceFeedback": 1
+  },
+  "D3A_IAC_Drive1_VIG_m": {
+   "SeqAct_PlaySound": 13,
+   "SeqAct_ActivateRemoteEvent": 10,
+   "SeqEvent_RemoteEvent": 10,
+   "SeqAct_CameraShake": 3,
+   "SeqAct_ForceFeedback": 3,
+   "SeqEvent_Touch": 1
+  },
+  "D3A_IAC_Drive2_DESIGN_m": {
+   "SeqAct_Delay": 19,
+   "SeqAct_Toggle": 16,
+   "SkeletalMeshActor": 12,
+   "SeqAct_PlaySound": 11,
+   "SeqEvent_Touch": 7,
+   "SeqAct_Interp": 6,
+   "SeqAct_TnPawnFactory": 5,
+   "SeqAct_CameraShake": 2
+  },
+  "D3A_IAC_DriveTrans_DESIGN_m": {
+   "SeqAct_Delay": 43,
+   "SeqAct_Log": 21,
+   "StaticInterpActor": 10,
+   "SeqAct_Gate": 9,
+   "SeqAct_ActivateRemoteEvent": 7,
+   "SeqAct_Toggle": 7,
+   "SeqAct_ToggleHidden": 4,
+   "SeqAct_ForceFeedback": 2
+  },
+  "D3A_IAC_MUSIC_m": {
+   "SeqEvent_RemoteEvent": 60,
+   "SeqAct_PlayMusic": 36,
+   "SeqAct_PlayStinger": 32,
+   "SeqAct_Delay": 20,
+   "SeqAct_StopMusic": 15,
+   "SeqAct_Gate": 3,
+   "SeqAct_ActivateRemoteEvent": 1
+  },
+  "D3A_IAC_Planet1_CINE_m": {
+   "StaticInterpActor": 18,
+   "SeqAct_ToggleHidden": 12,
+   "SkeletalMeshActorMAT": 6,
+   "SeqAct_Delay": 5,
+   "SeqAct_ToggleCinematicMode": 3,
+   "SkeletalMeshActor": 3,
+   "SeqAct_Interp": 2,
+   "HmSkeletalMeshActor": 1
+  },
+  "D3A_IAC_Planet1_DESIGN_m": {
+   "TnTransformingWorldActor": 24,
+   "SeqAct_Delay": 15,
+   "StaticInterpActor": 10,
+   "SeqAct_ActivateRemoteEvent": 6,
+   "SeqAct_Gate": 3,
+   "SeqAct_Log": 3,
+   "SeqAct_PlaySound": 2,
+   "SeqAct_ToggleHidden": 2
+  },
+  "D3A_IAC_Sentinel_DESIGN_m": {
+   "SeqAct_Delay": 131,
+   "SeqAct_Gate": 66,
+   "TnTransformingWorldActor": 16,
+   "SeqAct_ToggleHidden": 14,
+   "SeqAct_Log": 11,
+   "SeqCond_CompareInt": 10,
+   "SeqAct_ActivateRemoteEvent": 9,
+   "SeqAct_Toggle": 7
+  },
+  "D3A_IAC_Vaults_DESIGN_m": {
+   "SeqAct_Toggle": 8,
+   "SeqAct_Delay": 7,
+   "SeqAct_ActivateRemoteEvent": 6,
+   "SeqAct_PlaySound": 6,
+   "SeqAct_ToggleHidden": 4,
+   "SkeletalMeshActorMAT": 4,
+   "TnSkeletalMeshLookAtActorMAT": 3,
+   "SeqAct_Interp": 2
+  },
+  "D3A_IAC_Vent_DESIGN_m": {
+   "SeqAct_Delay": 4,
+   "SeqAct_Toggle": 4,
+   "SeqAct_CameraShake": 3,
+   "SeqAct_Gate": 3,
+   "SeqAct_Interp": 3,
+   "SeqAct_ForceFeedback": 1,
+   "SeqAct_ToggleHidden": 1
+  },
+  "D3B_IAC_Balcony_DSN_m": {
+   "SeqAct_Delay": 41,
+   "SeqAct_TnPawnFactory": 26,
+   "SeqAct_ActivateRemoteEvent": 25,
+   "SeqAct_Log": 22,
+   "SeqAct_Toggle": 21,
+   "SeqAct_Gate": 20,
+   "SeqEvent_RemoteEvent": 13,
+   "SkeletalMeshActor": 9
+  },
+  "D3B_IAC_Balcony_VIG_m": {
+   "HmSkeletalMeshActor": 3,
+   "SeqAct_ToggleHidden": 1
+  },
+  "D3B_IAC_Base_m": {
+   "SeqAct_ActivateRemoteEvent": 21,
+   "SeqAct_AttachToEvent": 3,
+   "SeqAct_Delay": 2,
+   "SeqAct_Switch": 1
+  },
+  "D3B_IAC_BottomInt_DSN_m": {
+   "SeqAct_Delay": 16,
+   "SeqAct_ActivateRemoteEvent": 8,
+   "SeqAct_Toggle": 7,
+   "SeqAct_Gate": 5,
+   "StaticInterpActor": 3,
+   "SeqAct_Switch": 1,
+   "SeqAct_TnPawnFactory": 1
+  },
+  "D3B_IAC_BottomInt_VIG_m": {
+   "SeqAct_Toggle": 23,
+   "SeqAct_Delay": 15,
+   "HmSkeletalMeshActor": 8,
+   "SeqAct_ToggleHidden": 6,
+   "SeqEvent_Touch": 5,
+   "SeqAct_CauseDamage": 4,
+   "SkeletalMeshActorMAT": 4,
+   "StaticInterpActor": 4
+  },
+  "D3B_IAC_BottomLedge_DSN_m": {
+   "SeqAct_Delay": 49,
+   "SeqAct_Toggle": 20,
+   "TnTransformingWorldActor": 18,
+   "SeqAct_Gate": 11,
+   "SeqAct_CameraShake": 9,
+   "StaticInterpActor": 9,
+   "SeqAct_TnAiMoveToActor": 7,
+   "SeqAct_Log": 6
+  },
+  "D3B_IAC_BottomLedge_VIG_m": {
+   "SeqAct_Toggle": 20,
+   "SeqAct_ToggleHidden": 19,
+   "SeqAct_Delay": 16,
+   "SeqAct_Gate": 15,
+   "SeqAct_CameraShake": 8,
+   "StaticInterpActor": 5,
+   "HmSkeletalMeshActor": 3,
+   "SeqAct_Conversation": 3
+  },
+  "D3B_IAC_BottomLift1_DSN_m": {
+   "SeqAct_Delay": 7,
+   "SeqAct_Gate": 2,
+   "SeqAct_Interp": 1,
+   "SeqAct_PlaySound": 1,
+   "SeqAct_Toggle": 1
+  },
+  "D3B_IAC_BottomLift2_DSN_m": {
+   "SeqAct_Delay": 8,
+   "SeqAct_ActivateRemoteEvent": 2,
+   "SeqAct_Log": 2,
+   "SeqAct_TnPawnFactory": 2
+  },
+  "D3B_IAC_BottomLift2_VIG_m": {
+   "HmSkeletalMeshActor": 15,
+   "SkeletalMeshActorMAT": 4,
+   "SeqAct_ToggleHidden": 2,
+   "StaticInterpActor": 2,
+   "TnSkeletalMeshLookAtActorMAT": 1
+  },
+  "D3B_IAC_BridgeStation1_DSN_m": {
+   "SeqAct_Delay": 15,
+   "SeqAct_ActivateRemoteEvent": 13,
+   "SeqAct_TnPawnFactory": 13,
+   "SeqAct_Interp": 10,
+   "SeqAct_TnAssignTacticalVolume": 9,
+   "SeqAct_Gate": 3,
+   "SeqAct_Toggle": 3,
+   "SeqAct_ToggleHidden": 3
+  },
+  "D3B_IAC_BridgeStation2_DSN_m": {
+   "SeqAct_Delay": 4,
+   "SeqAct_ActivateRemoteEvent": 1
+  },
+  "D3B_IAC_BridgeTube_DSN_m": {
+   "SeqAct_Delay": 26,
+   "SeqAct_Toggle": 25,
+   "SeqAct_TnPawnFactory": 8,
+   "StaticInterpActor": 8,
+   "SeqAct_PlaySound": 6,
+   "SeqAct_ToggleHidden": 3,
+   "HmSkeletalMeshActor": 1,
+   "SeqAct_CameraShake": 1
+  },
+  "D3B_IAC_GLB_AUD_m": {
+   "SeqAct_PlayPlayerPositionalSound": 137,
+   "SeqEvent_RemoteEvent": 114,
+   "SeqAct_ActivateRemoteEvent": 87,
+   "SeqEvent_Touch": 48,
+   "SeqAct_AmbientAudioZone": 46,
+   "SeqAct_PlaySound": 33,
+   "SeqAct_PlayFlybySound": 19,
+   "SeqAct_Delay": 11
+  },
+  "D3B_IAC_GLB_DSN_m": {
+   "SeqAct_Delay": 31,
+   "SeqAct_Toggle": 24,
+   "SeqAct_Log": 14,
+   "SeqAct_CameraShake": 11,
+   "SeqAct_TnPawnFactory": 6,
+   "SeqEvent_RemoteEvent": 6,
+   "SkeletalMeshActor": 6,
+   "SeqAct_PlaySound": 4
+  },
+  "D3B_IAC_GLB_VIG_m": {
+   "SeqAct_Toggle": 42,
+   "SeqAct_PlaySound": 21,
+   "StaticInterpActor": 12,
+   "SeqAct_Gate": 4,
+   "SeqAct_Delay": 3,
+   "SeqAct_ToggleHidden": 3,
+   "SeqAct_CameraShake": 2
+  },
+  "D3B_IAC_LedgeDrive_DSN_m": {
+   "SeqAct_Toggle": 16,
+   "SeqAct_Delay": 12,
+   "SeqAct_ActivateRemoteEvent": 2
+  },
+  "D3B_IAC_LevelIntro_CINE_m": {
+   "SeqAct_ActivateRemoteEvent": 47,
+   "SeqAct_CameraShake": 17,
+   "SeqAct_Interp": 17,
+   "SeqAct_PlaySound": 16,
+   "SeqAct_ToggleHidden": 6,
+   "SeqEvent_RemoteEvent": 6,
+   "HmSkeletalMeshActor": 2,
+   "SeqAct_AmbientAudioZone": 2
+  },
+  "D3B_IAC_LevelOutro_CINE_m": {
+   "SkeletalMeshActorMAT": 3,
+   "HmSkeletalMeshActor": 1,
+   "SeqAct_Gate": 1,
+   "SeqAct_ToggleCinematicMode": 1,
+   "SeqAct_ToggleHidden": 1,
+   "SeqEvent_RemoteEvent": 1,
+   "SkeletalMeshActor": 1
+  },
+  "D3B_IAC_Lift1B_DSN_m": {
+   "SeqAct_Delay": 13,
+   "SeqAct_ActivateRemoteEvent": 6,
+   "SeqAct_Log": 3,
+   "SeqAct_TnPawnFactory": 2,
+   "SeqAct_Interp": 1
+  },
+  "D3B_IAC_Lift1_DSN_m": {
+   "SeqAct_Delay": 30,
+   "SeqAct_Toggle": 18,
+   "StaticInterpActor": 14,
+   "SeqAct_PlaySound": 13,
+   "SeqAct_Gate": 11,
+   "SeqAct_ToggleHidden": 8,
+   "SeqAct_CameraShake": 7,
+   "SeqAct_Log": 5
+  },
+  "D3B_IAC_Lift1_VIG_m": {
+   "StaticInterpActor": 15,
+   "SeqAct_Toggle": 14,
+   "SeqAct_CameraShake": 7,
+   "SeqAct_Delay": 6,
+   "SeqAct_ToggleHidden": 6,
+   "SeqAct_PlaySound": 4,
+   "SeqAct_ActivateRemoteEvent": 2,
+   "SeqAct_ToggleCinematicMode": 2
+  },
+  "D3B_IAC_Lift2_DSN_m": {
+   "SeqAct_Delay": 6,
+   "SeqAct_Interp": 4,
+   "SeqAct_Log": 4,
+   "SeqAct_PlaySound": 4,
+   "SeqEvent_RemoteEvent": 4,
+   "SeqAct_ActivateRemoteEvent": 3,
+   "SeqAct_TnPawnFactory": 2
+  },
+  "D3B_IAC_MiddleDome_DSN_m": {
+   "SeqAct_Gate": 6,
+   "SeqAct_Delay": 5
+  },
+  "D3B_IAC_MiddleDome_VIG_m": {
+   "StaticInterpActor": 8,
+   "SeqEvent_RemoteEvent": 6,
+   "SeqAct_Delay": 5,
+   "StaticMeshActor": 5,
+   "SeqAct_Gate": 4,
+   "SeqAct_Log": 4,
+   "SeqAct_CameraShake": 2,
+   "SeqAct_ActivateRemoteEvent": 1
+  },
+  "D3B_IAC_MiddleInt1_DSN_m": {
+   "SeqAct_Interp": 39,
+   "SeqAct_ActivateRemoteEvent": 35,
+   "SeqAct_Delay": 28,
+   "SeqAct_ToggleHidden": 22,
+   "SeqAct_Toggle": 18,
+   "SeqAct_TnPawnFactory": 15,
+   "SeqAct_Gate": 14,
+   "StaticInterpActor": 11
+  },
+  "D3B_IAC_MiddleInt1_VIG_m": {
+   "SeqAct_ToggleHidden": 20,
+   "HmSkeletalMeshActor": 10,
+   "SkeletalMeshActorMAT": 7,
+   "StaticMeshActor": 6,
+   "StaticInterpActor": 3,
+   "SeqAct_Toggle": 1
+  },
+  "D3B_IAC_MiddleInt2_CINE_m": {
+   "HmSkeletalMeshActor": 6,
+   "SeqAct_ToggleHidden": 6,
+   "SeqAct_PlaySound": 5,
+   "SkeletalMeshActor": 5,
+   "SkeletalMeshActorMAT": 4,
+   "SeqAct_ActivateRemoteEvent": 2,
+   "SeqAct_CameraShake": 2,
+   "SeqEvent_RemoteEvent": 2
+  },
+  "D3B_IAC_MiddleInt2_DSN_m": {
+   "SeqAct_TnPawnFactory": 11,
+   "SeqAct_ActivateRemoteEvent": 8,
+   "SkeletalMeshActor": 4,
+   "SeqAct_Delay": 2,
+   "SeqAct_TnAssignTacticalVolume": 2,
+   "SeqAct_Gate": 1,
+   "SeqEvent_RemoteEvent": 1
+  },
+  "D3B_IAC_Music_m": {
+   "SeqEvent_RemoteEvent": 84,
+   "SeqAct_PlayMusic": 55,
+   "SeqAct_Delay": 48,
+   "SeqAct_PlayStinger": 41,
+   "SeqAct_StopMusic": 19,
+   "SeqAct_Gate": 10,
+   "SeqAct_Switch": 2,
+   "SeqEvent_Touch": 2
+  },
+  "D3B_IAC_TunnelDrop_DSN_m": {
+   "SeqAct_ActivateRemoteEvent": 39,
+   "StaticInterpActor": 23,
+   "SeqAct_Delay": 17,
+   "SeqAct_ToggleHidden": 17,
+   "SeqAct_TnPawnFactory": 15,
+   "SeqAct_PlaySound": 14,
+   "SeqAct_Toggle": 12,
+   "SeqAct_Interp": 9
+  },
+  "D5_OME_ART_m": {
+   "SeqEvent_HmDestructibleStateNotification": 32,
+   "SeqAct_Toggle": 4,
+   "SeqEvent_Console": 2,
+   "SeqEvent_RemoteEvent": 2,
+   "SeqAct_ActivateRemoteEvent": 1,
+   "SeqAct_Delay": 1
+  },
+  "D5_OME_AUDIO_m": {
+   "SeqAct_PlayPlayerPositionalSound": 2,
+   "SeqAct_PlaySound": 1
+  },
+  "D5_OME_BASE_m": {
+   "SeqAct_ActivateRemoteEvent": 19,
+   "SeqEvent_RemoteEvent": 10,
+   "SeqAct_Delay": 5,
+   "SeqAct_Interp": 4,
+   "SeqAct_TnSetCurrentObjective": 4,
+   "SeqAct_ToggleCinematicMode": 4,
+   "SeqAct_Gate": 3,
+   "SeqAct_MoviePlayer": 2
+  },
+  "D5_OME_CINE_LevelIntro_m": {
+   "SeqAct_ActivateRemoteEvent": 10,
+   "SeqEvent_RemoteEvent": 10,
+   "SeqAct_ForceFeedback": 5,
+   "SeqAct_ToggleHidden": 5,
+   "SeqAct_CameraShake": 4,
+   "SeqAct_CauseDamage": 2,
+   "SeqAct_Interp": 2,
+   "HmSkeletalMeshActor": 1
+  },
+  "D5_OME_CINE_Outro_m": {
+   "HmSkeletalMeshActor": 7,
+   "SeqAct_CameraShake": 7,
+   "SeqAct_ForceFeedback": 5,
+   "SeqAct_ToggleHidden": 5,
+   "SkeletalMeshActorMAT": 4,
+   "SeqAct_ActivateRemoteEvent": 2,
+   "SeqAct_MuteActorWhenHidden": 2,
+   "SeqAct_Toggle": 2
+  },
+  "D5_OME_DSN_m": {
+   "SeqAct_Delay": 84,
+   "SeqAct_ActivateRemoteEvent": 64,
+   "SeqAct_Gate": 51,
+   "SeqEvent_RemoteEvent": 51,
+   "SeqAct_Conversation": 42,
+   "SeqAct_TnPawnFactory": 30,
+   "SeqEvent_SequenceActivated": 25,
+   "SeqAct_TnAiMoveToActor": 24
+  },
+  "D5_OME_GLB_AUD_m": {
+   "SeqAct_PlayFlybySound": 2,
+   "SeqAct_AmbientAudioZone": 1,
+   "SeqEvent_Touch": 1
+  },
+  "D5_OME_Music_m": {
+   "SeqEvent_RemoteEvent": 14,
+   "SeqAct_PlayMusic": 7,
+   "SeqAct_PlayStinger": 5,
+   "SeqAct_StopMusic": 4,
+   "SeqAct_Delay": 1
+  },
+  "GLB_Audio_m": {
+   "SeqAct_Mixer": 3
+  },
+  "MP_ESC_BrokenHope_Audio_m": {
+   "SeqEvent_Touch": 49,
+   "SeqAct_PlayPlayerPositionalSound": 40,
+   "SeqEvent_SequenceActivated": 21,
+   "SeqAct_AmbientAudioZone": 6,
+   "SeqAct_ActivateRemoteEvent": 2,
+   "SeqAct_Delay": 2,
+   "SeqAct_DialogGroup": 2,
+   "SeqEvent_RemoteEvent": 2
+  },
+  "MP_ESC_BrokenHope_Base_m": {
+   "SeqAct_Toggle": 20,
+   "TnSeqAct_TransformWorldProp": 14,
+   "SeqAct_ToggleHidden": 13,
+   "SeqEvent_Touch": 10,
+   "TnSeqEvent_SurvivalGenerator": 8,
+   "SeqEvent_Console": 6,
+   "SeqAct_ActivateRemoteEvent": 5,
+   "SeqAct_CauseDamage": 5
+  },
+  "MP_ESC_Remnant_AUDIO_m": {
+   "SeqAct_Delay": 4,
+   "SeqAct_ActivateRemoteEvent": 3,
+   "SeqAct_DialogGroup": 2,
+   "SeqEvent_RemoteEvent": 2,
+   "SeqAct_Gate": 1,
+   "SeqEvent_SequenceActivated": 1
+  },
+  "MP_ESC_Remnant_BASE_m": {
+   "SeqAct_Conversation": 5,
+   "SeqAct_Delay": 3,
+   "SeqAct_ActivateRemoteEvent": 2,
+   "TnSeqEvent_SurvivalEvents": 1
+  }
+ },
+ "kismet_hide_at_start": {
+  "A1_IAC_kismet.json": {
+   "A1_IAC_DecoInt_Design_m": 10
+  },
+  "A2_KON_kismet.json": {},
+  "A3_COR_kismet.json": {
+   "A3_COR_CoreInt_Design_m": 1
+  },
+  "A4_ORB_kismet.json": {
+   "A4_ORB_FallingTryp_DSN_m": 2,
+   "A4_ORB_PreRelay1_DSN_m": 5,
+   "A4_ORB_Relay1Int_DSN_m": 2
+  },
+  "A5_TRY_kismet.json": {},
+  "D1_ORB_kismet.json": {
+   "D1_ORB_Assmebly2_DGN_m": 6,
+   "D1_ORB_CrashHack_DGN": 1,
+   "D1_ORB_GLB_Doors_m": 1,
+   "D1_ORB_ScienceLabs_CINE_m": 4
+  },
+  "D2_COR_kismet.json": {},
+  "D3A_IAC_kismet.json": {
+   "D3A_IAC_Alley1_DESIGN": 7,
+   "D3A_IAC_CityTank_DESIGN_m": 1,
+   "D3A_IAC_CourtTrans_DESIGN_m": 4,
+   "D3A_IAC_DriveTrans_DESIGN_m": 2
+  },
+  "D3B_IAC_kismet.json": {
+   "D3B_IAC_BridgeTube_DSN_m": 1
+  },
+  "D5_OME_kismet.json": {},
+  "MP_ESC_BrokenHope_kismet.json": {
+   "MP_ESC_BrokenHope_Base_m": 29
+  },
+  "MP_ESC_Remnant_kismet.json": {}
+ },
+ "per_state": {
+  "A1_IAC_Base_m": {
+   "AntiAirBalcony": {
+    "visible_levels": 9,
+    "prims": 4515,
+    "culled": 302
+   },
+   "Armory": {
+    "visible_levels": 11,
+    "prims": 2019,
+    "culled": 131
+   },
+   "BalconyDemo": {
+    "visible_levels": 6,
+    "prims": 3698,
+    "culled": 42
+   },
+   "Courtyard": {
+    "visible_levels": 10,
+    "prims": 3128,
+    "culled": 318
+   },
+   "DecoCommandRoom": {
+    "visible_levels": 6,
+    "prims": 833,
+    "culled": 34
+   },
+   "DecoInterior": {
+    "visible_levels": 7,
+    "prims": 2947,
+    "culled": 151
+   },
+   "DecoPlaza": {
+    "visible_levels": 10,
+    "prims": 2217,
+    "culled": 129
+   },
+   "DecoToCommandRoom": {
+    "visible_levels": 8,
+    "prims": 3035,
+    "culled": 153
+   },
+   "Everything": {
+    "visible_levels": 50,
+    "prims": 30049,
+    "culled": 1292
+   },
+   "HalfPipe": {
+    "visible_levels": 10,
+    "prims": 3239,
+    "culled": 170
+   },
+   "Highway2": {
+    "visible_levels": 10,
+    "prims": 5555,
+    "culled": 174
+   },
+   "Highway2Transition": {
+    "visible_levels": 9,
+    "prims": 5304,
+    "culled": 164
+   },
+   "Highway3": {
+    "visible_levels": 11,
+    "prims": 2818,
+    "culled": 97
+   },
+   "InsideHalfPipeTerminal": {
+    "visible_levels": 10,
+    "prims": 2692,
+    "culled": 89
+   },
+   "Interior1": {
+    "visible_levels": 10,
+    "prims": 4486,
+    "culled": 252
+   },
+   "LevelStart": {
+    "visible_levels": 9,
+    "prims": 3228,
+    "culled": 300
+   },
+   "SideAlley": {
+    "visible_levels": 10,
+    "prims": 4797,
+    "culled": 55
+   },
+   "Streets0": {
+    "visible_levels": 10,
+    "prims": 4461,
+    "culled": 155
+   },
+   "Thumper": {
+    "visible_levels": 12,
+    "prims": 5342,
+    "culled": 176
+   },
+   "ThumperTransition": {
+    "visible_levels": 9,
+    "prims": 2446,
+    "culled": 81
+   },
+   "TransitionToInterior1": {
+    "visible_levels": 10,
+    "prims": 4486,
+    "culled": 252
+   },
+   "WreckedStreets": {
+    "visible_levels": 9,
+    "prims": 2901,
+    "culled": 130
+   },
+   "WreckedTransition": {
+    "visible_levels": 9,
+    "prims": 4496,
+    "culled": 160
+   }
+  },
+  "A2_KON_Base_m": {
+   "Air_Raid": {
+    "visible_levels": 9,
+    "prims": 3424,
+    "culled": 93
+   },
+   "AirRaid_Trans": {
+    "visible_levels": 9,
+    "prims": 2603,
+    "culled": 75
+   },
+   "Bucket_Ride_1": {
+    "visible_levels": 8,
+    "prims": 1182,
+    "culled": 29
+   },
+   "Collapsing_Floors": {
+    "visible_levels": 10,
+    "prims": 7439,
+    "culled": 93
+   },
+   "CollapsingFloors_Trans": {
+    "visible_levels": 9,
+    "prims": 6637,
+    "culled": 42
+   },
+   "Command": {
+    "visible_levels": 10,
+    "prims": 3784,
+    "culled": 41
+   },
+   "Courtyard": {
+    "visible_levels": 9,
+    "prims": 2229,
+    "culled": 24
+   },
+   "Dungeons": {
+    "visible_levels": 10,
+    "prims": 3923,
+    "culled": 22
+   },
+   "Dungeons2": {
+    "visible_levels": 7,
+    "prims": 2361,
+    "culled": 9
+   },
+   "Guard_Room": {
+    "visible_levels": 9,
+    "prims": 2201,
+    "culled": 22
+   },
+   "Guard_Room_Trans": {
+    "visible_levels": 12,
+    "prims": 3927,
+    "culled": 40
+   },
+   "Hangar": {
+    "visible_levels": 9,
+    "prims": 2537,
+    "culled": 45
+   },
+   "Intro_Entrance": {
+    "visible_levels": 12,
+    "prims": 2492,
+    "culled": 91
+   },
+   "Intro_Final": {
+    "visible_levels": 12,
+    "prims": 2959,
+    "culled": 106
+   },
+   "Intro_Pits": {
+    "visible_levels": 9,
+    "prims": 1703,
+    "culled": 90
+   },
+   "Jailbreak": {
+    "visible_levels": 10,
+    "prims": 3821,
+    "culled": 38
+   },
+   "Megatron_End": {
+    "visible_levels": 9,
+    "prims": 2186,
+    "culled": 29
+   },
+   "Megatron_Face": {
+    "visible_levels": 8,
+    "prims": 675,
+    "culled": 24
+   },
+   "Sewers": {
+    "visible_levels": 10,
+    "prims": 2738,
+    "culled": 21
+   },
+   "Sewers_Trans": {
+    "visible_levels": 12,
+    "prims": 4963,
+    "culled": 84
+   },
+   "Soundwave": {
+    "visible_levels": 6,
+    "prims": 965,
+    "culled": 54
+   },
+   "Start_State": {
+    "visible_levels": 13,
+    "prims": 3594,
+    "culled": 151
+   },
+   "Vents": {
+    "visible_levels": 9,
+    "prims": 2257,
+    "culled": 29
+   },
+   "Wall_Crawler": {
+    "visible_levels": 11,
+    "prims": 7938,
+    "culled": 60
+   },
+   "Wallcrawl_Trans": {
+    "visible_levels": 8,
+    "prims": 1465,
+    "culled": 21
+   }
+  },
+  "A3_COR_Base_m": {
+   "Core_Exterior": {
+    "visible_levels": 10,
+    "prims": 2845,
+    "culled": 1113
+   },
+   "Core_Interior": {
+    "visible_levels": 6,
+    "prims": 977,
+    "culled": 104
+   },
+   "Core_Trans": {
+    "visible_levels": 8,
+    "prims": 2309,
+    "culled": 1013
+   },
+   "Initial": {
+    "visible_levels": 6,
+    "prims": 4611,
+    "culled": 51
+   },
+   "Omega_Facility": {
+    "visible_levels": 8,
+    "prims": 6128,
+    "culled": 376
+   },
+   "Omega_Gate": {
+    "visible_levels": 8,
+    "prims": 3546,
+    "culled": 566
+   },
+   "Omega_Gate_Design": {
+    "visible_levels": 10,
+    "prims": 7201,
+    "culled": 629
+   },
+   "Routing_1": {
+    "visible_levels": 8,
+    "prims": 4103,
+    "culled": 35
+   },
+   "Routing_2": {
+    "visible_levels": 8,
+    "prims": 3602,
+    "culled": 39
+   },
+   "Routing_2B": {
+    "visible_levels": 10,
+    "prims": 4824,
+    "culled": 64
+   },
+   "Routing_2C": {
+    "visible_levels": 9,
+    "prims": 3379,
+    "culled": 46
+   },
+   "Routing_Intro": {
+    "visible_levels": 11,
+    "prims": 6085,
+    "culled": 572
+   },
+   "Routing_Slug_Intro": {
+    "visible_levels": 11,
+    "prims": 5293,
+    "culled": 76
+   },
+   "Routing_Slug_Post_Intro_Cine": {
+    "visible_levels": 7,
+    "prims": 3357,
+    "culled": 40
+   },
+   "Routing_Slug_Ride": {
+    "visible_levels": 8,
+    "prims": 3050,
+    "culled": 50
+   },
+   "Routing_Slug_Ride_2": {
+    "visible_levels": 8,
+    "prims": 2804,
+    "culled": 27
+   },
+   "Routing_Slug_Ride_2_Part_2": {
+    "visible_levels": 8,
+    "prims": 3136,
+    "culled": 32
+   },
+   "Routing_Slug_Ride_2_Part_3": {
+    "visible_levels": 9,
+    "prims": 2173,
+    "culled": 58
+   },
+   "Routing_Slug_Ride_Finale": {
+    "visible_levels": 9,
+    "prims": 1370,
+    "culled": 42
+   },
+   "Routing_Trans": {
+    "visible_levels": 10,
+    "prims": 4095,
+    "culled": 566
+   },
+   "Split_Paths": {
+    "visible_levels": 8,
+    "prims": 6042,
+    "culled": 111
+   }
+  },
+  "A4_ORB_Base_m": {
+   "CQC_MiniCommandRoom": {
+    "visible_levels": 8,
+    "prims": 2929,
+    "culled": 53
+   },
+   "Falling_Trypticon": {
+    "visible_levels": 7,
+    "prims": 107,
+    "culled": 30
+   },
+   "Flying2": {
+    "visible_levels": 11,
+    "prims": 2643,
+    "culled": 486
+   },
+   "Flying2CheckpointStart": {
+    "visible_levels": 12,
+    "prims": 2844,
+    "culled": 517
+   },
+   "Flying2Start": {
+    "visible_levels": 13,
+    "prims": 4400,
+    "culled": 557
+   },
+   "Flying2WithTrypIntro": {
+    "visible_levels": 12,
+    "prims": 3235,
+    "culled": 521
+   },
+   "LevelStart": {
+    "visible_levels": 10,
+    "prims": 1093,
+    "culled": 432
+   },
+   "LevelStart_NoCine": {
+    "visible_levels": 12,
+    "prims": 2090,
+    "culled": 549
+   },
+   "Megatron_CommandRoom": {
+    "visible_levels": 8,
+    "prims": 3003,
+    "culled": 119
+   },
+   "NerveRoom": {
+    "visible_levels": 8,
+    "prims": 1899,
+    "culled": 82
+   },
+   "PostCavePreRelay": {
+    "visible_levels": 8,
+    "prims": 868,
+    "culled": 130
+   },
+   "Relay1Interior": {
+    "visible_levels": 10,
+    "prims": 4681,
+    "culled": 225
+   },
+   "Relay2_FlyingTunnel": {
+    "visible_levels": 10,
+    "prims": 4099,
+    "culled": 155
+   },
+   "RelayInteriorPart2": {
+    "visible_levels": 10,
+    "prims": 3730,
+    "culled": 217
+   },
+   "TransitionToRelay1": {
+    "visible_levels": 10,
+    "prims": 4112,
+    "culled": 292
+   },
+   "TrypIntroWithVisibleAmmoRoom": {
+    "visible_levels": 5,
+    "prims": 2760,
+    "culled": 196
+   },
+   "TrypticonCogRoom": {
+    "visible_levels": 11,
+    "prims": 1353,
+    "culled": 190
+   },
+   "TrypticonCogRoomExit": {
+    "visible_levels": 12,
+    "prims": 1353,
+    "culled": 190
+   },
+   "TrypticonFlyingIntro": {
+    "visible_levels": 7,
+    "prims": 1673,
+    "culled": 63
+   },
+   "TrypticonInterior": {
+    "visible_levels": 14,
+    "prims": 3032,
+    "culled": 358
+   }
+  },
+  "A5_TRY_Base_m": {
+   "CraterLower": {
+    "visible_levels": 9,
+    "prims": 2761,
+    "culled": 204
+   },
+   "CraterTop": {
+    "visible_levels": 7,
+    "prims": 1868,
+    "culled": 186
+   },
+   "Impact": {
+    "visible_levels": 11,
+    "prims": 2697,
+    "culled": 277
+   },
+   "Streets": {
+    "visible_levels": 11,
+    "prims": 2712,
+    "culled": 247
+   }
+  },
+  "D1_ORB_Base_m": {
+   "DarkEnergon_Only": {
+    "visible_levels": 7,
+    "prims": 3103,
+    "culled": 112
+   },
+   "Level_Started": {
+    "visible_levels": 10,
+    "prims": 2946,
+    "culled": 87
+   },
+   "Load_Assembly1": {
+    "visible_levels": 8,
+    "prims": 5712,
+    "culled": 76
+   },
+   "Load_Assembly2": {
+    "visible_levels": 9,
+    "prims": 6708,
+    "culled": 81
+   },
+   "Load_Crash1B": {
+    "visible_levels": 10,
+    "prims": 2946,
+    "culled": 87
+   },
+   "Load_Crash2": {
+    "visible_levels": 10,
+    "prims": 2647,
+    "culled": 46
+   },
+   "Load_Crash2B": {
+    "visible_levels": 10,
+    "prims": 3141,
+    "culled": 100
+   },
+   "Load_Crash2C": {
+    "visible_levels": 12,
+    "prims": 4642,
+    "culled": 121
+   },
+   "Load_DarkEnergon": {
+    "visible_levels": 12,
+    "prims": 5642,
+    "culled": 120
+   },
+   "Load_DataCenter": {
+    "visible_levels": 11,
+    "prims": 5315,
+    "culled": 249
+   },
+   "Load_DataCenter2": {
+    "visible_levels": 8,
+    "prims": 4373,
+    "culled": 84
+   },
+   "Load_DataCenter2b": {
+    "visible_levels": 7,
+    "prims": 3826,
+    "culled": 57
+   },
+   "Load_DataCenter3": {
+    "visible_levels": 6,
+    "prims": 3858,
+    "culled": 54
+   },
+   "Load_Exterior1": {
+    "visible_levels": 12,
+    "prims": 4469,
+    "culled": 68
+   },
+   "Load_ExteriorTrans": {
+    "visible_levels": 12,
+    "prims": 4267,
+    "culled": 16
+   },
+   "Load_ScienceLabs": {
+    "visible_levels": 11,
+    "prims": 3830,
+    "culled": 94
+   },
+   "Load_Vent1": {
+    "visible_levels": 7,
+    "prims": 5944,
+    "culled": 89
+   },
+   "Load_VentChkPt": {
+    "visible_levels": 6,
+    "prims": 5230,
+    "culled": 37
+   },
+   "Unload_Assembly1": {
+    "visible_levels": 6,
+    "prims": 1300,
+    "culled": 52
+   },
+   "Unload_Crash2": {
+    "visible_levels": 7,
+    "prims": 1837,
+    "culled": 65
+   },
+   "Unload_Crash2B": {
+    "visible_levels": 10,
+    "prims": 4107,
+    "culled": 240
+   },
+   "Unload_Crash2C": {
+    "visible_levels": 11,
+    "prims": 4506,
+    "culled": 273
+   },
+   "Unload_Crash2E": {
+    "visible_levels": 7,
+    "prims": 3302,
+    "culled": 81
+   },
+   "Unload_Crashsite": {
+    "visible_levels": 7,
+    "prims": 1343,
+    "culled": 11
+   },
+   "Unload_DataCenter": {
+    "visible_levels": 6,
+    "prims": 1839,
+    "culled": 56
+   },
+   "Unload_DataCenter2": {
+    "visible_levels": 5,
+    "prims": 2730,
+    "culled": 54
+   },
+   "Unload_DataCenter2b": {
+    "visible_levels": 5,
+    "prims": 1871,
+    "culled": 53
+   },
+   "Unload_DataCenter3": {
+    "visible_levels": 5,
+    "prims": 4102,
+    "culled": 37
+   },
+   "Unlodad_Crash1B": {
+    "visible_levels": 7,
+    "prims": 1358,
+    "culled": 36
+   },
+   "Unlodad_Crash2D": {
+    "visible_levels": 8,
+    "prims": 2172,
+    "culled": 198
+   }
+  },
+  "D2_COR_Base_m": {
+   "cave": {
+    "visible_levels": 7,
+    "prims": 2970,
+    "culled": 27
+   },
+   "Cave2": {
+    "visible_levels": 7,
+    "prims": 4821,
+    "culled": 42
+   },
+   "Cave2B": {
+    "visible_levels": 9,
+    "prims": 5507,
+    "culled": 234
+   },
+   "CaveB": {
+    "visible_levels": 7,
+    "prims": 3989,
+    "culled": 34
+   },
+   "Chamber": {
+    "visible_levels": 7,
+    "prims": 3042,
+    "culled": 108
+   },
+   "Cloaker_Room": {
+    "visible_levels": 7,
+    "prims": 2234,
+    "culled": 26
+   },
+   "Gorge1": {
+    "visible_levels": 11,
+    "prims": 2959,
+    "culled": 175
+   },
+   "Gorge2": {
+    "visible_levels": 7,
+    "prims": 3565,
+    "culled": 43
+   },
+   "Gorge_Intro": {
+    "visible_levels": 8,
+    "prims": 2745,
+    "culled": 46
+   },
+   "GorgeInterior": {
+    "visible_levels": 10,
+    "prims": 2844,
+    "culled": 29
+   },
+   "Guard_Station": {
+    "visible_levels": 7,
+    "prims": 4443,
+    "culled": 59
+   },
+   "Machine_Room": {
+    "visible_levels": 7,
+    "prims": 4256,
+    "culled": 52
+   },
+   "Shaft_01": {
+    "visible_levels": 7,
+    "prims": 2553,
+    "culled": 77
+   },
+   "Surface": {
+    "visible_levels": 5,
+    "prims": 1360,
+    "culled": 38
+   },
+   "TrioBoss": {
+    "visible_levels": 9,
+    "prims": 5244,
+    "culled": 119
+   },
+   "Tunnel_1": {
+    "visible_levels": 7,
+    "prims": 3428,
+    "culled": 34
+   },
+   "Tunnel_2": {
+    "visible_levels": 7,
+    "prims": 4226,
+    "culled": 46
+   },
+   "Tunnel_4": {
+    "visible_levels": 7,
+    "prims": 2466,
+    "culled": 70
+   }
+  },
+  "D3A_IAC_Base_m": {
+   "Alley1": {
+    "visible_levels": 10,
+    "prims": 4084,
+    "culled": 1253
+   },
+   "Alley2": {
+    "visible_levels": 9,
+    "prims": 3077,
+    "culled": 718
+   },
+   "City1a": {
+    "visible_levels": 11,
+    "prims": 3713,
+    "culled": 1846
+   },
+   "City1b": {
+    "visible_levels": 13,
+    "prims": 4075,
+    "culled": 1979
+   },
+   "City1c": {
+    "visible_levels": 15,
+    "prims": 4551,
+    "culled": 2280
+   },
+   "City2a": {
+    "visible_levels": 14,
+    "prims": 4454,
+    "culled": 2202
+   },
+   "City2b": {
+    "visible_levels": 13,
+    "prims": 4291,
+    "culled": 2172
+   },
+   "City3": {
+    "visible_levels": 10,
+    "prims": 4057,
+    "culled": 2066
+   },
+   "City4": {
+    "visible_levels": 10,
+    "prims": 4057,
+    "culled": 2066
+   },
+   "City5": {
+    "visible_levels": 13,
+    "prims": 4794,
+    "culled": 2569
+   },
+   "City5a": {
+    "visible_levels": 13,
+    "prims": 4895,
+    "culled": 2285
+   },
+   "City6": {
+    "visible_levels": 12,
+    "prims": 4870,
+    "culled": 2276
+   },
+   "CityTrans": {
+    "visible_levels": 13,
+    "prims": 3791,
+    "culled": 1032
+   },
+   "CourtNew": {
+    "visible_levels": 9,
+    "prims": 4180,
+    "culled": 249
+   },
+   "CourtNew2": {
+    "visible_levels": 11,
+    "prims": 4569,
+    "culled": 296
+   },
+   "CourtTrans": {
+    "visible_levels": 9,
+    "prims": 1504,
+    "culled": 76
+   },
+   "Drive1": {
+    "visible_levels": 11,
+    "prims": 4351,
+    "culled": 1224
+   },
+   "Drive2": {
+    "visible_levels": 9,
+    "prims": 3282,
+    "culled": 1180
+   },
+   "Drive2b": {
+    "visible_levels": 9,
+    "prims": 3216,
+    "culled": 1133
+   },
+   "Everything": {
+    "visible_levels": 47,
+    "prims": 20228,
+    "culled": 5872
+   },
+   "Planetarium1A": {
+    "visible_levels": 10,
+    "prims": 1576,
+    "culled": 105
+   },
+   "Planetarium1B": {
+    "visible_levels": 9,
+    "prims": 1627,
+    "culled": 94
+   },
+   "Start": {
+    "visible_levels": 10,
+    "prims": 4247,
+    "culled": 274
+   },
+   "Vault": {
+    "visible_levels": 9,
+    "prims": 1927,
+    "culled": 813
+   },
+   "Vault2": {
+    "visible_levels": 8,
+    "prims": 1114,
+    "culled": 91
+   },
+   "Vent": {
+    "visible_levels": 12,
+    "prims": 3789,
+    "culled": 1229
+   },
+   "Vent2": {
+    "visible_levels": 9,
+    "prims": 3247,
+    "culled": 1180
+   },
+   "Zeta_Prime": {
+    "visible_levels": 8,
+    "prims": 1114,
+    "culled": 91
+   },
+   "Zeta_Prime2": {
+    "visible_levels": 6,
+    "prims": 536,
+    "culled": 71
+   }
+  },
+  "D3B_IAC_Base_m": {
+   "BalconyA": {
+    "visible_levels": 12,
+    "prims": 2853,
+    "culled": 194
+   },
+   "BalconyB": {
+    "visible_levels": 11,
+    "prims": 2640,
+    "culled": 207
+   },
+   "BottomIntA": {
+    "visible_levels": 13,
+    "prims": 3078,
+    "culled": 318
+   },
+   "BottomIntB": {
+    "visible_levels": 12,
+    "prims": 2445,
+    "culled": 188
+   },
+   "BottomIntC": {
+    "visible_levels": 13,
+    "prims": 2654,
+    "culled": 188
+   },
+   "BottomLift2": {
+    "visible_levels": 14,
+    "prims": 2779,
+    "culled": 173
+   },
+   "BridgeStation1": {
+    "visible_levels": 14,
+    "prims": 3732,
+    "culled": 240
+   },
+   "BridgeStation2": {
+    "visible_levels": 17,
+    "prims": 3224,
+    "culled": 211
+   },
+   "BridgeTrans": {
+    "visible_levels": 14,
+    "prims": 3074,
+    "culled": 211
+   },
+   "BridgeTubeA": {
+    "visible_levels": 16,
+    "prims": 3137,
+    "culled": 211
+   },
+   "BridgeTubeB": {
+    "visible_levels": 17,
+    "prims": 3224,
+    "culled": 211
+   },
+   "Default": {
+    "visible_levels": 54,
+    "prims": 12098,
+    "culled": 859
+   },
+   "IntroCine": {
+    "visible_levels": 11,
+    "prims": 2879,
+    "culled": 305
+   },
+   "LedgeDrive": {
+    "visible_levels": 15,
+    "prims": 4196,
+    "culled": 259
+   },
+   "LedgeJump": {
+    "visible_levels": 15,
+    "prims": 3328,
+    "culled": 300
+   },
+   "LevelStart": {
+    "visible_levels": 10,
+    "prims": 2641,
+    "culled": 271
+   },
+   "Lift1a": {
+    "visible_levels": 13,
+    "prims": 2508,
+    "culled": 230
+   },
+   "Lift1b": {
+    "visible_levels": 12,
+    "prims": 2625,
+    "culled": 240
+   },
+   "Lift2": {
+    "visible_levels": 15,
+    "prims": 3420,
+    "culled": 221
+   },
+   "MiddleDome": {
+    "visible_levels": 14,
+    "prims": 4449,
+    "culled": 254
+   },
+   "MiddleInt1": {
+    "visible_levels": 12,
+    "prims": 2956,
+    "culled": 220
+   },
+   "MiddleInt2a": {
+    "visible_levels": 15,
+    "prims": 3922,
+    "culled": 225
+   },
+   "MiddleInt2b": {
+    "visible_levels": 12,
+    "prims": 3299,
+    "culled": 176
+   },
+   "TunnelDrop": {
+    "visible_levels": 12,
+    "prims": 3276,
+    "culled": 242
+   },
+   "TunnelDrop2": {
+    "visible_levels": 9,
+    "prims": 2847,
+    "culled": 216
+   }
+  },
+  "D5_OME_BASE_m": {
+   "Arena": {
+    "visible_levels": 8,
+    "prims": 1784,
+    "culled": 64
+   }
+  }
+ }
+}
