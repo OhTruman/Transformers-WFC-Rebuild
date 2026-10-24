@@ -4477,3 +4477,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   glTF loads on the main thread). 300 fps phase-0 harness ready (tools/fidelity/minfps.ps1: camp-play / camp-sweep / esc
   rows, 1440p + offscreen 4K, Off look; PASS = steady worst frame >= 300 fps); baseline on fast_bd543d9 in the slot after
   Systems' verify. Gameplay adds WFC_ESC_STARTWAVE / WFC_ESC_INVULN (test only).
+2026-10-24 10:53 PACKAGE 48e42af6 cut (Systems): Rebuild-Systems/work/playtest_slim_48e42af6 (19 GB) + _HDpack (22 GB), 0 PROBLEMs;
+  verify_everything running 10:53 (W: base, X: HD; ~45 min). Phase-0 perf slot (Experimental drives, Rendering parses)
+  after the verify; work/render has junctions for all 9 DLC maps.
