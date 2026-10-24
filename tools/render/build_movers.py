@@ -50,7 +50,8 @@ def glb_nodes(path):
 def main():
     mapname, out = sys.argv[1], sys.argv[2]
     mv = manifest(mapname, 'movers') or {'movers': []}
-    nodes = glb_nodes(os.path.join(VS_MAPS, mapname, 'world.glb'))
+    wg = os.path.join(VS_MAPS, mapname, 'world.glb')
+    nodes = glb_nodes(wg) if os.path.exists(wg) else {}   # (transform validation only: maps outside VerticalSlice skip it)
     kis = manifest(mapname, 'kismet') or {}
     res = {'map': mapname, 'source': 'AssetTools <map>_movers.json / <map>_kismet.json', 'rotating': [],
            'matinee': [], 'hidden': [], 'validation': []}
@@ -72,7 +73,43 @@ def main():
                                     'confidence': 'CONFIRMED AUTHORED DATA (PHYS_Rotating)'})
         if m.get('bHidden'):
             res['hidden'].append({'actor': actor, 'confidence': 'CONFIRMED AUTHORED DATA (bHidden)'})
-    for mt in mv.get('matinee', []):
+    # (AssetTools <out>/matinee_tracks.json when the map has one: each InterpGroup bound to its own actors - UE3 VariableLink
+    # LinkDesc == GroupName -> SeqVar_Object - and every action by its full path. Without it, below, every Move group went to
+    # every actor the matinee links: Tranquillity's drain Interp_5361 wrote the energon's curve onto the fog volume too, and
+    # SeqAct_Interp_10535 exists in 8 of its sequences. The shipped maps' matinees are single-group: unchanged.)
+    mtp = os.path.join(out, 'matinee_tracks.json')
+    bound_src = json.load(open(mtp, encoding='utf-8')).get('matinees', []) if os.path.exists(mtp) else None
+    if bound_src is not None:
+        where = {}
+        for mt in mv.get('matinee', []):
+            for a in mt['actors']:
+                where[a['actor'].split('.')[-1]] = (a['location_ue'], a['rotation_ue'])
+        for m in mv.get('movers', []):
+            t = m['transform']
+            where.setdefault(m['actor'].split('.')[-1], ([t['Location'][k] for k in 'XYZ'],
+                                                         [t['Rotation'][k] for k in ('Pitch', 'Yaw', 'Roll')]))
+        for x in bound_src:
+            for g in x['groups']:
+                for tr in g['tracks']:
+                    if tr['class'] != 'InterpTrackMove': continue
+                    pr = tr['props']
+                    pos = [{'t': k['InVal'], 'v': [k['OutVal'][c] for c in 'XYZ'],
+                            'arrive': [k['ArriveTangent'][c] for c in 'XYZ'], 'leave': [k['LeaveTangent'][c] for c in 'XYZ'],
+                            'mode': k['InterpMode']} for k in pr['PosTrack']['Points']]
+                    eul = [{'t': k['InVal'], 'v': [k['OutVal'][c] for c in 'XYZ']} for k in pr['EulerTrack']['Points']]
+                    for b in g['bound']:
+                        actor = b['actor'].split('.')[-1]
+                        if actor not in where:
+                            print('movers: %s group %s -> %s has no authored transform, skipped' % (x['action'], g['name'], actor))
+                            continue
+                        res['matinee'].append({'actor': actor, 'group': g['name'], 'action': x['action'].split('.')[-1],
+                                               'action_path': x['action'], 'looping': bool(x['action_props'].get('bLooping', False)),
+                                               'length_s': x['length_s'], 'location_ue': where[actor][0], 'rotation_ue': where[actor][1],
+                                               'move_frame': pr.get('MoveFrame'), 'quat_interp': pr.get('bUseQuatInterpolation'),
+                                               'pos_keys': pos, 'euler_keys_deg': eul,
+                                               'confidence': 'CONFIRMED AUTHORED DATA (track + UE3 group binding); UE3 '
+                                                             'InterpTrackMove evaluation rules HIGH'})
+    for mt in (mv.get('matinee', []) if bound_src is None else []):
         for g in mt['groups']:
             for tr in g['tracks']:
                 if tr['class'] != 'InterpTrackMove': continue
