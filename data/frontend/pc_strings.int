@@ -102,3 +102,6 @@ LanOnly=Public matches need the lobby service. LAN games only.
 Player2=Player 2
 Player2Joined=Player 2 joined
 Player2Left=Player 2 left
+
+[Escalation]
+PowerOutage=Power outage
