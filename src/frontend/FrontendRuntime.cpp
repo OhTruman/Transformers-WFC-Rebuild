@@ -96,6 +96,11 @@ void ScriptDriver::applySynthetic(platform::InputFrame& in) const {
 }
 
 void ScriptDriver::update(GameFlow& flow, float dt) {
+    if (!padHold_.empty() && (holdLeft_ -= dt) <= 0.0f) {   // padhold expiry: release
+        FlowTrace::emit("script.padHold", {{"button", padHold_}, {"state", "released"}});
+        if (padHook) padHook(padHold_, false);
+        padHold_.clear();
+    }
     if (!synthQueue_.empty()) { synth_ = synthQueue_.front(); synthQueue_.erase(synthQueue_.begin()); return; }
     if (keyUp_ >= 0) { if (keyHook) keyHook(keyUp_, false); keyUp_ = -1; return; }
     if (!padUp_.empty()) { if (padHook) padHook(padUp_, false); padUp_.clear(); return; }
@@ -177,6 +182,18 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
             if (keyHook) keyHook(code, true);
             keyUp_ = code;
             return;
+        }
+        // padhold:<button>,<seconds> (DEV / QA): a pad button or left-stick direction (LStickUp ...: full deflection) held through
+        // the XInput layer for that long while the next steps run (wait:t= to let it play out); a new padhold releases the old one
+        if (st.rfind("padhold:", 0) == 0) {
+            const std::vector<std::string> p = split(st.substr(8), ',');
+            if (!padHold_.empty() && padHook) padHook(padHold_, false);
+            padHold_ = p.empty() ? std::string() : p[0];
+            holdLeft_ = p.size() > 1 ? (float)std::atof(p[1].c_str()) : 1.0f;
+            FlowTrace::emit("script.padHold", {{"button", padHold_}, {"seconds", std::to_string(holdLeft_)}});
+            if (padHook && !padHold_.empty()) padHook(padHold_, true);
+            else if (!padHook) LOG_WARN("FRONTEND script: padhold: needs the window's injectPad hook");
+            continue;
         }
         if (st.rfind("pad:", 0) == 0) {   // a pad button (binding name), held for one frame through the XInput layer
             FlowTrace::emit("script.pad", {{"button", st.substr(4)}});
