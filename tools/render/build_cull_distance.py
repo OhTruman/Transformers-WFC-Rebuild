@@ -9,7 +9,7 @@ asset root (ExtractedAssets: read only) is untouched.
   campaign unit: --world <unit>/world.glb --prefix <unit>_m --out <render root of the unit>
 
 Writes <out>/cull_distance.json:
-  nodes: world.glb node name -> distance (UE units), static meshes. A collection-actor node carries its component path; a plain actor
+  nodes: "<world.glb node name>|<its mesh>" -> distance (UE units), static meshes. A collection-actor node carries its component path; a plain actor
          node is resolved by its short name in the prefix's level packages (several matches: the one whose StaticMesh is the node's).
   fx:    emitter actor short name -> distance (its ParticleSystemComponent), for the map FX path.
 Only distances > 0 are listed.
@@ -71,7 +71,7 @@ def main():
         stats["resolved"] += 1
         d = dist(props(comp))
         if d > 0:
-            nodes[n.get("name")] = d
+            nodes[n.get("name") + "|" + e["mesh"]] = d   # node name | its mesh: names can repeat across a chapter's units
     for op, pr in c.execute("select opath, props from objects where opath like ? escape '\\' and class = 'ParticleSystemComponent'", (like,)):
         d = dist(json.loads(pr or "{}"))
         parts = op.split(".")
