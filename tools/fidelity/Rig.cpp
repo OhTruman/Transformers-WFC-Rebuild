@@ -34,7 +34,7 @@ template <class C, class M> bool giveArm(C&, const M*, long) { return false; }
 
 std::string Models::assetRoot() {
     if (const char* e = std::getenv("WFC_ASSETS")) return e;
-    return core::config::kAssetRootDefault;
+    return core::config::assetRootDefault();
 }
 
 void Models::disable() { gModelsDisabled = true; }
