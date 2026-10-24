@@ -132,6 +132,32 @@ void GameFlow::setPushToTalkHeld(bool held) {
     session_->setPushToTalk(held);
 }
 
+bool GameFlow::joinSeat2(int pad) {
+    const bool lobby = (level_ == LevelKind::PartyLobby || level_ == LevelKind::GameLobby) && !loading_.active;
+    std::string why;
+    if (seat2Active_) why = "already joined";
+    else if (pad < 0 || pad == seat1Pad_) why = "seat 1's device";
+    else if (!lobby) why = "not in a lobby";
+    else if (role_ == SessionRole::Member) why = "an online member cannot add a local player";
+    else if (campaign()) why = "campaign chapter";
+    if (!why.empty()) { FlowTrace::emit("split.join", {{"pad", std::to_string(pad)}, {"result", "refused"}, {"why", why}}); return false; }
+    seat2Profile_ = LocalProfile{};
+    seat2Profile_.setFile(LocalProfile::kSeat2File);
+    seat2Profile_.load();
+    seat2Active_ = true;
+    seat2Pad_ = pad;
+    FlowTrace::emit("split.join", {{"pad", std::to_string(pad)}, {"result", "joined"}, {"profile", LocalProfile::kSeat2File}});
+    return true;
+}
+
+void GameFlow::leaveSeat2() {
+    if (!seat2Active_) return;
+    seat2Profile_.save();
+    seat2Active_ = false;
+    FlowTrace::emit("split.leave", {{"pad", std::to_string(seat2Pad_)}});
+    seat2Pad_ = -1;
+}
+
 void GameFlow::publicSnakeDraft() {
     // RE ONLINE_POSTMATCH_PARTY_VOICE_RE: at a public lobby's final countdown the teams are re-drafted (PublicSnakeDraft) by
     // score if anyone scored (the match just played), else by level.

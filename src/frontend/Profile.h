@@ -21,6 +21,10 @@ namespace frontend {
 class LocalProfile {
 public:
     static constexpr const char* kFile = "wfc_profile.ini";
+    static constexpr const char* kSeat2File = "wfc_profile_2.ini";   // split screen: the second local seat's own profile
+    std::string file_ = kFile;   // the file this profile reads / writes (kSeat2File for split screen's seat 2)
+    void setFile(const std::string& path) { file_ = path; }
+    const std::string& file() const { return file_; }
     void load();
     // Parses a profile; returns true when an older format was migrated (load() then saves it once).
     bool loadFrom(std::istream& in);
@@ -57,7 +61,8 @@ public:
         int upscaling = 0; int hdTextures = 0; int anisotropy = 4; int frameGeneration = 0; int rayTracing = 0;
         bool hdTexturesUserSet = false, hdPackHintShown = false, showFps = false;
         bool volumetricLighting = true;   // [PCSettings] VolumetricLighting: Rendering's X3 froxel volumetrics, Realistic only
-        std::string language = "INT";     // [PCSettings] Language: INT (default) / FRA / ... (a Coalesced_<lang> text pack); only when not INT
+        std::string language = "INT";
+        int splitLayout = 1;              // [PCSettings] SplitLayout (split screen, PC EXTENSION): 1 Horizontal (default) / 2 Vertical; only when not 1     // [PCSettings] Language: INT (default) / FRA / ... (a Coalesced_<lang> text pack); only when not INT
         int lensFlares = 2;               // [PCSettings] LensFlares: 0 Off, 1 Subtle, 2 Original (default, the shipped look); only when not 2
         int smoke = 0;                    // [PCSettings] Smoke: 0 Original (default, the authored sprites), 1 Enhanced; only when not 0
         int water = 0;                    // [PCSettings] Water: 0 Original (default, the authored materials), 1 Enhanced; only when not 0
@@ -125,14 +130,14 @@ public:
     // per-player mutes (fingerprints, local only). [Voice], written only when something differs from the defaults.
     struct Voice {
         int mode = 1;                 // 0 Off, 1 Push to Talk (the user's default), 2 Open Mic
-        int audience = 3;             // 0 Team Radio, 1 All Radio, 2 Proximity, 3 Radio + Proximity (the proposed default)
+        int audience = 0;             // 0 Team Radio (the original: team-only voice, RE TnVoiceMuteHandler), 1 All Radio, 2 Proximity, 3 Radio + Proximity
         std::string device;           // "" = System Default
         std::string pttKey = "V";
         int volume = 70, proximityVolume = 70;
         std::vector<std::string> muted;
         std::vector<std::string> blocked;   // PC addition: the player card's Block (always muted; a local list, no server report)
         bool isDefault() const {
-            return mode == 1 && audience == 3 && device.empty() && pttKey == "V" && volume == 70 && proximityVolume == 70 && muted.empty() &&
+            return mode == 1 && audience == 0 && device.empty() && pttKey == "V" && volume == 70 && proximityVolume == 70 && muted.empty() &&
                    blocked.empty();
         }
     };
