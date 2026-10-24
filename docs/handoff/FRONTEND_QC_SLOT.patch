@@ -1,0 +1,220 @@
+diff --git a/src/ui/GfxPresenter.cpp b/src/ui/GfxPresenter.cpp
+index 2940b4a4..d41fcf80 100644
+--- a/src/ui/GfxPresenter.cpp
++++ b/src/ui/GfxPresenter.cpp
+@@ -1648,16 +1648,39 @@ void GfxPresenter::syncSettingsCommit() {
+     gfx::avm1::VM& vm = p->vm();
+     if (self.isObject() && vm.getV(self, "_name").isUndef()) return;   // the page closed meanwhile
+     frontend::LocalProfile& prof = rt_.flow().profile();
+-    const frontend::LocalProfile::Display before = prof.display;
++    const frontend::LocalProfile::Display before = graphicsOpened_;   // the PC rows save as they change: compare with the page's start
+     gfx::avm1::Args none;
+     vm.call(fn, self, none);
+     prof.apply();
+     const auto& d = prof.display;
+     const bool restart = rt_.frameGenerationAvailable() && (d.frameGeneration != 0) != rt_.frameGenerationActive();
+-    const bool nextMap = d.hdTextures != before.hdTextures || rt_.rayTracingOnAppliesNextMap();
++    const bool nextMap = d.hdTextures != before.hdTextures || (d.rayTracing != before.rayTracing && rt_.rayTracingOnAppliesNextMap());
++    graphicsOpened_ = d;   // a second Commit on the same page reports only what changed since
+     rt_.flow().settingsCommitted(restart, nextMap);
+ }
+ 
++// PC ADAPTATION (the user, playtest 2026-10-23b #34): the brightness calibration belongs to the first-launch setup. The original
++// shows it on the first Campaign entry only (the Campaign submenu: !ProfileData.HasAdjustedGamma -> attach
++// mc_brightnessMenuLoader, hide the menu) [RE BASE_GAME_FLOWS_RE 5]. Here the first main menu does the same once: Brightness
++// records _global.currentMenu (the main menu) and on Accept / Cancel sets HasAdjustedGamma, shows that menu again and gives it
++// the input - so Campaign does not ask again.
++void GfxPresenter::syncFirstLaunchBrightness(gfx::Player& p, frontend::GameFlow& flow) {
++    if (firstBrightnessShown_ || flow.level() != frontend::LevelKind::FrontEnd || flow.ui().state() != frontend::UIState::FrontEnd) return;
++    if (flow.profile().getBool("HasAdjustedGamma")) { firstBrightnessShown_ = true; return; }
++    gfx::MovieClip* mainMenu = findClipNamed(p.root(), "menuMain_mc");
++    if (!mainMenu || !mainMenu->script || !mainMenu->visible || !p.root() || !p.root()->script) return;
++    gfx::avm1::VM& vm = p.vm();
++    using V = gfx::avm1::Value;
++    const V cur = vm.get(vm.global, "currentMenu");
++    if (!cur.isObject() || cur.o != mainMenu->script) return;   // the main menu has the input (after the intro / press start)
++    if (findClipNamed(p.root(), "brightnessMenuLoader_mc")) { firstBrightnessShown_ = true; return; }
++    firstBrightnessShown_ = true;
++    const V depth = vm.callMethod(V(p.root()->script), "getNextHighestDepth", {});
++    vm.callMethod(V(p.root()->script), "attachMovie", {V(std::string("mc_brightnessMenuLoader")), V(std::string("brightnessMenuLoader_mc")), depth});
++    vm.set(mainMenu->script, "_visible", V(false));
++    frontend::FlowTrace::emit("brightness.firstLaunch", {{"shown", "true"}, {"provenance", "PC ADAPTATION (user playtest 2026-10-23b #34)"}});
++}
++
+ // ONLINE_LOBBY_FLOW_V2 1.1: the party lobby's Private Match row hosts at once (the last-used mode; offline the same lobby
+ // with bots) instead of opening the mode list and the options page. Versus only (GTS_TeamGame): the Escalation and Campaign
+ // party lobbies keep the original Host Game (mc_menuEscalationHostGame / mc_menuCampaignHostGame, PartyLobby_GFX sprites
+@@ -1809,9 +1832,9 @@ void GfxPresenter::syncGameSettings(gfx::Player& p, frontend::GameFlow& flow) {
+         }
+     }
+     if (const V tr = cc && cc->parent && cc->parent->script ? vm.get(cc->parent->script, "wfcTeam_mc") : V(); tr.isObject()) {
+-        const int t = flow.lobby().localTeam;
++        const int t = flow.lobby().shownTeam(flow.onlineMembers().empty());
+         const std::string side = rt_.catalog().localize("TransGame", t == 1 ? "TnFactionTeamDecepticons" : "TnFactionTeamAutobots", "TeamName");
+-        const std::string label = rt_.catalog().localizeKey("$WfcPC.Lobby.Team") + "   < " + (t < 0 ? std::string("-") : side) + " >";
++        const std::string label = rt_.catalog().localizeKey("$WfcPC.Lobby.Team") + "   &lt; " + (t < 0 ? std::string("-") : side) + " &gt;";   // htmlText
+         if (vm.toString(vm.get(tr.o, "__wfcLabel")) != label) {
+             vm.set(tr.o, "__wfcLabel", V(label));
+             vm.set(tr.o, "text", V(label));
+@@ -1849,6 +1872,16 @@ void GfxPresenter::syncGameSettings(gfx::Player& p, frontend::GameFlow& flow) {
+         if (close) {
+             if (sub && !sub->removed) vm.callMethod(V(sub->script), "removeMovieClip", {});
+             vm.callMethod(V(vm.global), "closeSettings", {});
++            // QC #10 (Back left the global Settings root - Graphics / Audio / Controls - over the lobby): closeSettings' own
++            // _parent.removeMovieClip() does not reach our holder when called from here, so the page's holder goes explicitly, the
++            // lobby menu shows again and gets the input back.
++            if (gfx::MovieClip* holder = findClipNamed(p.root(), "wfcGameSettings_mc"); holder && holder->script && !holder->removed)
++                vm.callMethod(V(holder->script), "removeMovieClip", {});
++            if (gfx::MovieClip* anchor = findClipNamed(p.root(), "menuAnchor_mc"); anchor && anchor->script) vm.set(anchor->script, "_alpha", V(100.0));
++            if (cc && cc->parent && cc->parent->script) {
++                const V ih = p.root() && p.root()->script ? vm.get(p.root()->script, "inputHandler") : V();
++                if (ih.isObject()) vm.callMethod(ih, "giveInput", {V(cc->parent->script)});
++            }
+             gsState_ = 0; gsPlayer_ = nullptr; gsMenu_ = nullptr;
+             frontend::FlowTrace::emit("lobby.gameSettingsPage", {{"closed", "true"}});
+         } else if (flow.lobby().gameModeTag != gsMode_) {   // a new mode: its own rows
+@@ -2273,6 +2306,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame&
+         if (flow.online() && op.object.find("PartyLobby_GFX") != std::string::npos) runFirstRunUi(op.movie->player(), flow, op.object);
+         if (op.object.find("PartyLobby_GFX") != std::string::npos) syncHostNowRow(op.movie->player(), flow);   // lobby flow v2
+         if (op.object.find("GameLobby_GFX") != std::string::npos) syncGameSettings(op.movie->player(), flow);
++        if (op.object.find("FrontEnd_GFX") != std::string::npos) syncFirstLaunchBrightness(op.movie->player(), flow);
+         if (op.object.find("GameLobby_GFX") != std::string::npos) syncVoteRows(op.movie->player(), flow);
+         if (op.object.find("PauseMenu_GFX") != std::string::npos) syncPauseChooseCharacter(op.movie->player(), flow);
+         syncIconicPlayerList(op.movie->player(), flow);   // the countdown roster / end-of-match list (#7)
+@@ -2303,7 +2337,10 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame&
+                                           commitPlayer_ = &p; commitFn_ = fn; commitSelf_ = self;
+                                           rt_.flow().requestSettingsCommit();
+                                       }))
++                {
+                     graphicsPagePlayer_ = &p;
++                    graphicsOpened_ = rt_.flow().profile().display;
++                }
+                 else if (rt_.flow().online() && addVoiceRows(p, linkage, init, rt_.flow().profile().voice.pttKey))   // online only
+                     audioPagePlayer_ = &p;
+             };
+diff --git a/src/ui/GfxPresenter.h b/src/ui/GfxPresenter.h
+index bd096ed6..b4d4a4a3 100644
+--- a/src/ui/GfxPresenter.h
++++ b/src/ui/GfxPresenter.h
+@@ -140,9 +140,12 @@ private:
+     // Graphics -> Recommended Settings: re-apply the auto-detect preset, then leave and re-enter the page (queued
+     // Escape / Enter, frames from now) so the original rows re-read their values.
+     void recommendedSettingsPressed();
+-    void syncSettingsCommit();   // Commit Changes' confirmation (requestSettingsCommit) -> the original commit + apply + the result
++    void syncSettingsCommit();
++    void syncFirstLaunchBrightness(gfx::Player& p, frontend::GameFlow& flow);   // the calibration at the first main menu (#34)
++    bool firstBrightnessShown_ = false;   // Commit Changes' confirmation (requestSettingsCommit) -> the original commit + apply + the result
+     gfx::Player* commitPlayer_ = nullptr;
+     gfx::avm1::Value commitFn_, commitSelf_;   // the original writeGraphicsSettings and the button it ran on
++    frontend::LocalProfile::Display graphicsOpened_;   // the display settings when the Graphics page opened (the PC rows save live)
+     struct QueuedKey { int frames; int code; bool down; };
+     std::vector<QueuedKey> keyQueue_;                 // [PCSettings] FrameLimit for the graphics menu's Frame Rate Limit entry
+     float scoreScroll_ = 0.0f;   // in-match scoreboard scroll (stage units), PC EXTENSION for extended matches
+diff --git a/src/frontend/GameFlow.cpp b/src/frontend/GameFlow.cpp
+index cf94d29e..1a773235 100644
+--- a/src/frontend/GameFlow.cpp
++++ b/src/frontend/GameFlow.cpp
+@@ -522,7 +522,8 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
+     }
+     if (fn == "Online.SwitchTeam") {
+         if (level_ == LevelKind::GameLobby && lobby_.localTeam >= 0) lobby_.localTeam = 1 - lobby_.localTeam;
+-        FlowTrace::emit("lobby.team", {{"team", std::to_string(lobby_.localTeam)}});
++        else if (level_ == LevelKind::GameLobby && lobby_.preferredTeam >= 0 && onlineMembers_.empty()) lobby_.preferredTeam = 1 - lobby_.preferredTeam;
++        FlowTrace::emit("lobby.team", {{"team", std::to_string(lobby_.shownTeam(onlineMembers_.empty()))}});
+         return {};
+     }
+     FlowTrace::emit("bridge.unhandled", {{"fn", fn}});
+@@ -1154,7 +1155,7 @@ void GameFlow::gameLobbyBegin() {
+     // PC ADAPTATION (the user, playtest 2026-10-23b #23): in a Private Match team lobby the host is on a side from the start
+     // (shown under AUTOBOTS / DECEPTICONS, switched with the lobby's Team row; that side is the match team). The original keeps
+     // everyone unassigned until the final countdown under Autobalanced [RE BASE_GAME_FLOWS_RE 3].
+-    if (isPrivate && lobby_.gameTeamStatus == 3 && role_ == SessionRole::Offline) lobby_.localTeam = pickTeam();   // online: the host's balancing (S10 / S11)
++    lobby_.preferredTeam = isPrivate && lobby_.gameTeamStatus == 3 && role_ != SessionRole::Member ? pickTeam() : -1;
+     launchLobby_ = SessionLobby{};
+     FlowTrace::emit("gamelobby.game", {{"gameClass", levelUrl_.option("Game")}, {"tag", tag}, {"settings", gs ? gs->className : "?"},
+                                        {"private", FlowTrace::boolean(isPrivate)}, {"mapSelectionMethod", std::to_string(lobby_.mapSelectionMethod)}});
+@@ -1281,6 +1282,8 @@ void GameFlow::sendOnlineLaunch() {
+     // random (pickTeam) while the members already hold a record with the host's slot on team 0 - the two worlds then
+     // disagree on the host's team and desync at the first spawn (two-window test 2026-10-23 01:30, status 3 at tick 660).
+     // TnTeamHandlerTwoTeams.PickTeam: the smaller team of the members, random on a tie.
++    if (lobby_.localTeam < 0 && lobby_.gameTeamStatus == 3 && onlineMembers_.empty() && lobby_.preferredTeam >= 0)
++        lobby_.localTeam = lobby_.preferredTeam;   // the Team row's side (no one joined)
+     if (lobby_.localTeam < 0 && lobby_.gameTeamStatus == 3) {
+         int n[2] = {0, 0};
+         for (const OnlineMember& m : onlineMembers_) if (m.team == 0 || m.team == 1) n[m.team]++;
+@@ -1425,7 +1428,8 @@ void GameFlow::gameLobbyTick(float dt) {
+             // none offline) else ForceToTeam() -> PickTeam(255) for every human without a team.
+             lobby_.finalCountdown = true;
+             // Teams exist only for GTS_TeamGame lobbies (TnTeamHandlerTwoTeams); FFA has none.
+-            if (lobby_.localTeam < 0 && lobby_.gameTeamStatus == 3) lobby_.localTeam = pickTeam();
++            if (lobby_.localTeam < 0 && lobby_.gameTeamStatus == 3)
++                lobby_.localTeam = onlineMembers_.empty() && lobby_.preferredTeam >= 0 ? lobby_.preferredTeam : pickTeam();
+             FlowTrace::emit("gamelobby.finalCountdown", {{"team", std::to_string(lobby_.localTeam)},
+                                                          {"teamName", lobby_.localTeam == 0 ? "Autobots" : lobby_.localTeam == 1 ? "Decepticons" : "none (FFA)"}});
+         }
+diff --git a/src/frontend/GameFlow.h b/src/frontend/GameFlow.h
+index cf47ad56..1bfbba83 100644
+--- a/src/frontend/GameFlow.h
++++ b/src/frontend/GameFlow.h
+@@ -124,6 +124,11 @@ struct LobbyState {
+     int countdown = 0;                       // <CurrentGame:CurrentCountdown> (integer seconds)
+     float countdownTimer = 0.0f;
+     int localTeam = -1;
++    // PC ADAPTATION (the user, playtest 2026-10-23b #23): a Private Match team lobby's side for the host while nobody has joined -
++    // shown under its team header and switched by the Team row; it becomes the team at the final countdown / in the launch
++    // record only if still nobody joined (online lobbies with members keep the host's balancing).
++    int preferredTeam = -1;
++    int shownTeam(bool noMembers) const { return localTeam >= 0 ? localTeam : noMembers ? preferredTeam : -1; }
+     std::string prestreamMap;                // GameEngine.UpdateMapPrestreaming target
+ };
+ 
+diff --git a/src/frontend/DataStores.cpp b/src/frontend/DataStores.cpp
+index 1f3dd365..8f3c7d01 100644
+--- a/src/frontend/DataStores.cpp
++++ b/src/frontend/DataStores.cpp
+@@ -265,7 +265,7 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
+         bool inMatch = flow_.level() == LevelKind::Match;
+         const MatchValues& mv = flow_.matchValues();
+         const bool live = inMatch && mv.valid;   // [integration] Gameplay's PRI values in a match
+-        int team = live ? mv.myTeam : inMatch ? flow_.currentMatch().teamIndex : flow_.lobby().localTeam;
++        int team = live ? mv.myTeam : inMatch ? flow_.currentMatch().teamIndex : flow_.lobby().shownTeam(flow_.onlineMembers().empty());
+         // The party lobby has no teams (TnPartyLobbyGame TeamHandler = TnTeamHandlerNoTeams: TeamID 255 for everyone), so
+         // PlayerList draws one plain list - a stale / unset team (-1) drew AUTOBOTS / DECEPTICONS there [RE BASE_GAME_FLOWS_RE 2;
+         // playtest 2026-10-23b #19]. 255 is also the original's "no team yet" anywhere else.
+diff --git a/src/ui/gfx/Display.cpp b/src/ui/gfx/Display.cpp
+index 2105fafc..4b78176f 100644
+--- a/src/ui/gfx/Display.cpp
++++ b/src/ui/gfx/Display.cpp
+@@ -3,6 +3,7 @@
+ #include "core/FrameProfile.h"
+ #include "core/Log.h"
+ 
++#include <cctype>
+ #include <algorithm>
+ #include <unordered_set>
+ #include <cmath>
+@@ -315,6 +316,24 @@ bool Player::findExportedBitmap(const std::string& linkage, std::shared_ptr<cons
+             std::shared_ptr<const MovieDef> lib = path.empty() ? nullptr : loadDef(path);
+             if (lib && resolveExport(lib, linkage, outDef, outId) && isBitmap(outDef, outId)) return true;
+         }
++    // The shipped linkage names are not always cased like the names built for them: CharacterSelect_GFX loads
++    // CharacterName + "_Robot" with the iconic id "SilverBolt", the export is "Silverbolt_Robot" (QC #12, RE BASE_GAME_FLOWS_RE 1.4)
++    // - Flash's linkage lookup forgave that. A case-insensitive match, then the exact lookup with its spelling.
++    auto lower = [](std::string v) { for (char& c : v) c = (char)std::tolower((unsigned char)c); return v; };
++    const std::string want = lower(linkage);
++    auto ciIn = [&](const std::shared_ptr<const MovieDef>& d) -> std::string {
++        if (d) for (const auto& [name, id] : d->exports) if (name != linkage && lower(name) == want) return name;
++        return std::string();
++    };
++    std::vector<std::shared_ptr<const MovieDef>> all = loaded;
++    all.push_back(rootDef_);
++    for (auto& d : loaded)
++        for (const ImportDef& im : d->imports) {
++            std::string path = resolveMovieUrl ? resolveMovieUrl(im.url, d->dir()) : "";
++            if (std::shared_ptr<const MovieDef> lib = path.empty() ? nullptr : loadDef(path)) all.push_back(lib);
++        }
++    for (auto& d : all)
++        if (const std::string exact = ciIn(d); !exact.empty() && resolveExport(d, exact, outDef, outId) && isBitmap(outDef, outId)) return true;
+     return false;
+ }
+ 
