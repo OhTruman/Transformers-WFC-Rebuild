@@ -55,7 +55,7 @@ change is load scheduling or a faster equivalent only (no visible difference), w
 - **Why:** Streets' 15 animation files are 95 MB (65 MB binary + 30 MB JSON) and cost 0.44 s (read 222 ms, JSON parse 103,
   key extraction ~120); a class's Shared_ROBO_ANIM dominates, and a mid-match class load pays the same.
 - **Format:** `<file>.anim.gltf.wfcanim` beside each source: magic + version, the source's size and FNV-1a (a stale cache is
-  ignored), then the parsed AssetFile as-is - node names, clips (name, duration), samplers (interpolation, components, times[],
+  ignored), then the parsed assets::AnimFile as-is - node names, clips (name, duration), samplers (interpolation, components, times[],
   values[] as raw floats), channels. One read + pointer fix-up, no JSON.
 - **Built offline, never at runtime:** a tool mode of the exe (the same loadAnimationFile, then serialise), run by build_slim /
   AssetTools at packaging time; the package ships both (the cache is optional: missing or stale = the gltf path).
