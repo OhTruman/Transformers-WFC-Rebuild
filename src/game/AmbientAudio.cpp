@@ -214,6 +214,8 @@ bool AmbientAudio::load(const std::string& path, const std::string& contentRoot,
 
     // Kismet audio ops (Systems manifest; an AssetTools manifest may carry the same section).
     const int ns = script_.load(root.has("kismet") ? root["kismet"] : sys["kismet"]);
+    if (root.has("subtitles") && subtitles_.load(root) > 0)   // a campaign chapter's dialogue text
+        script_.setDialogListener([this](const std::string& cue, int) { subCue_ = cue; subStart_ = subClock_; });
     // A generated Kismet graph with the map's touch volumes runs the zones itself (Out:<touch> -> zone -> reverb /
     // pools / mixer...); the AssetTools manifest's flattened zones are then not used (no double zone logic).
     if (script_.hasTouchZones()) {
@@ -243,6 +245,8 @@ void AmbientAudio::unload(SoundCues& cues) {
     cues.unloadMapCues();                                // also stops pool one-shots still sounding
     cues.mixer().removeMapPresets();
     script_.unload();
+    script_.setDialogListener(nullptr);
+    subtitles_.clear(); subCue_.clear();
     level_.clear();
     announcer_.clear();
     emitters_.clear();
@@ -322,8 +326,17 @@ core::Vec3 AmbientAudio::placeFor(const Emitter& e, const core::Vec3& l) const {
     return out;
 }
 
+std::string AmbientAudio::currentSubtitle() const {
+    if (subCue_.empty()) return std::string();
+    std::string lang = SoundCues::language();
+    for (char& ch : lang) ch = (char)std::tolower((unsigned char)ch);
+    const std::vector<CampaignSubtitles::Line>* l = subtitles_.lines(subCue_, lang);
+    return l ? CampaignSubtitles::lineAt(*l, subClock_ - subStart_, subtitles_.duration(subCue_)) : std::string();
+}
+
 void AmbientAudio::tick(float dt, const core::Vec3& listener, const core::Vec3& pawn, SoundCues& cues, bool pawnAlive) {
     if (!loaded_) return;
+    subClock_ += dt;
 
     // Zones: SeqEvent_Touch (local player pawn, client side, camera ignored) fires on the frame the pawn
     // starts overlapping a trigger volume; UnTouched is unlinked. Several Touches in one frame run in zone

@@ -129,6 +129,7 @@ public:
 
     const std::string& level() const { return level_; }
     AmbientAudio& ambient() { return ambient_; }
+    std::string currentSubtitle() const { return ambient_.currentSubtitle(); }   // [Systems QC] the HUD's subtitle line
     const AmbientAudio& ambient() const { return ambient_; }
     MusicPlayer& music() { return music_; }
     FrontendAudio& frontend() { return frontend_; }

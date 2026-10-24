@@ -21,6 +21,10 @@ public:
     // The lines for a dialog cue in a language ("int", "fra"; another / missing language falls back to "int"); null = none.
     const std::vector<Line>* lines(const std::string& cue, const std::string& lang = "int") const;
     float duration(const std::string& cue) const;   // the wave's authored Duration (s), 0 = unknown
+    std::vector<std::string> cues() const;           // every cue with localized waves (tests)
+    // The text on screen t seconds after a line's cue started: the last line with time <= t that the original shows (show), until
+    // the wave's Duration (unknown: the last line's time + 4 s); "" before the first line, after the end, or for a hidden line.
+    static std::string lineAt(const std::vector<Line>& lines, float t, float duration);
 private:
     struct Wave { float duration = 0.0f; std::unordered_map<std::string, std::vector<Line>> byLang; };
     std::unordered_map<std::string, Wave> byWave_;

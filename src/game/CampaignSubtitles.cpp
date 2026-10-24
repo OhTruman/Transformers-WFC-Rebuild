@@ -59,6 +59,21 @@ const std::vector<CampaignSubtitles::Line>* CampaignSubtitles::lines(const std::
     return l == w->byLang.end() ? nullptr : &l->second;
 }
 
+std::vector<std::string> CampaignSubtitles::cues() const {
+    std::vector<std::string> out;
+    for (const auto& kv : cueWaves_) out.push_back(kv.first);
+    return out;
+}
+
+std::string CampaignSubtitles::lineAt(const std::vector<Line>& lines, float t, float duration) {
+    if (lines.empty() || t < 0.0f) return std::string();
+    const float end = duration > 0.0f ? duration : lines.back().time + 4.0f;
+    if (t > end) return std::string();
+    const Line* at = nullptr;
+    for (const Line& l : lines) if (l.time <= t) at = &l;
+    return at && at->show ? at->text : std::string();
+}
+
 float CampaignSubtitles::duration(const std::string& cue) const {
     const Wave* w = waveFor(cue, "int");
     return w ? w->duration : 0.0f;

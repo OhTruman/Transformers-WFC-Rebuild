@@ -1,0 +1,170 @@
+diff -ruN a/src/core/Application_CampaignAudio.cpp b/src/core/Application_CampaignAudio.cpp
+--- a/src/core/Application_CampaignAudio.cpp	2026-10-24 00:16:25.228967500 -0500
++++ b/src/core/Application_CampaignAudio.cpp	2026-10-24 00:16:25.243517500 -0500
+@@ -40,6 +40,26 @@
+     script.load(k);
+     game::CampaignSubtitles subtitles;
+     const int subCues = subtitles.load(doc);
++    bool subtitleTimingBad = false;
++    {   // [Systems QC] the HUD's timing (CampaignSubtitles::lineAt) on this chapter's real lines: each shown line at its time, nothing past the end
++        int checked = 0, bad = 0;
++        for (const std::string& cue : subtitles.cues()) {
++            const auto* l = subtitles.lines(cue, "int");
++            if (!l || l->empty()) continue;
++            const float dur = subtitles.duration(cue);
++            for (const auto& ln : *l) {
++                const std::string got = game::CampaignSubtitles::lineAt(*l, ln.time, dur);
++                bool later = false;   // a later line at the same time wins
++                for (const auto& o : *l) later = later || (&o > &ln && o.time <= ln.time);
++                if (!later && got != (ln.show ? ln.text : std::string())) ++bad;
++                ++checked;
++            }
++            const float end = dur > 0.0f ? dur : l->back().time + 4.0f;
++            if (!game::CampaignSubtitles::lineAt(*l, end + 0.1f, dur).empty()) ++bad;
++        }
++        LOG_INFO("CAMPAIGNAUDIO subtitle timing: %d lines checked, %d wrong", checked, bad);
++        subtitleTimingBad = bad || (subCues > 0 && checked == 0);
++    }
+     int linesStarted = 0, linesWithText = 0;
+     auto listen = [&](const std::string& cue, int) {
+         ++linesStarted;
+@@ -123,6 +143,7 @@
+         cues.stopAll();
+     }
+     LOG_INFO("CAMPAIGNAUDIO subtitles: %d cues with text; %d of %d started dialog lines resolved to a subtitle", subCues, linesWithText, linesStarted);
++    if (subtitleTimingBad) ++fail;
+     LOG_INFO("CAMPAIGNAUDIO RESULT %s: %d conversations (%d finished, %d stopped), %d timelines (%d keys), %d failures",
+              fail ? "FAIL" : "PASS", convs, finished, stopped, timelines, keys, fail);
+     std::exit(fail ? 1 : 0);
+diff -ruN a/src/game/AmbientAudio.cpp b/src/game/AmbientAudio.cpp
+--- a/src/game/AmbientAudio.cpp	2026-10-24 00:16:24.976100800 -0500
++++ b/src/game/AmbientAudio.cpp	2026-10-24 00:16:24.992155400 -0500
+@@ -214,6 +214,8 @@
+ 
+     // Kismet audio ops (Systems manifest; an AssetTools manifest may carry the same section).
+     const int ns = script_.load(root.has("kismet") ? root["kismet"] : sys["kismet"]);
++    if (root.has("subtitles") && subtitles_.load(root) > 0)   // a campaign chapter's dialogue text
++        script_.setDialogListener([this](const std::string& cue, int) { subCue_ = cue; subStart_ = subClock_; });
+     // A generated Kismet graph with the map's touch volumes runs the zones itself (Out:<touch> -> zone -> reverb /
+     // pools / mixer...); the AssetTools manifest's flattened zones are then not used (no double zone logic).
+     if (script_.hasTouchZones()) {
+@@ -243,6 +245,8 @@
+     cues.unloadMapCues();                                // also stops pool one-shots still sounding
+     cues.mixer().removeMapPresets();
+     script_.unload();
++    script_.setDialogListener(nullptr);
++    subtitles_.clear(); subCue_.clear();
+     level_.clear();
+     announcer_.clear();
+     emitters_.clear();
+@@ -322,8 +326,17 @@
+     return out;
+ }
+ 
++std::string AmbientAudio::currentSubtitle() const {
++    if (subCue_.empty()) return std::string();
++    std::string lang = SoundCues::language();
++    for (char& ch : lang) ch = (char)std::tolower((unsigned char)ch);
++    const std::vector<CampaignSubtitles::Line>* l = subtitles_.lines(subCue_, lang);
++    return l ? CampaignSubtitles::lineAt(*l, subClock_ - subStart_, subtitles_.duration(subCue_)) : std::string();
++}
++
+ void AmbientAudio::tick(float dt, const core::Vec3& listener, const core::Vec3& pawn, SoundCues& cues, bool pawnAlive) {
+     if (!loaded_) return;
++    subClock_ += dt;
+ 
+     // Zones: SeqEvent_Touch (local player pawn, client side, camera ignored) fires on the frame the pawn
+     // starts overlapping a trigger volume; UnTouched is unlinked. Several Touches in one frame run in zone
+diff -ruN a/src/game/AmbientAudio.h b/src/game/AmbientAudio.h
+--- a/src/game/AmbientAudio.h	2026-10-24 00:16:24.891811700 -0500
++++ b/src/game/AmbientAudio.h	2026-10-24 00:16:24.906863300 -0500
+@@ -45,6 +45,7 @@
+ #include <vector>
+ #include "audio/Audio.h"
+ #include "core/Math.h"
++#include "game/CampaignSubtitles.h"
+ #include "game/LevelAudioScript.h"
+ 
+ namespace game {
+@@ -75,6 +76,9 @@
+     int fireEvent(const std::string& trigger, SoundCues& cues, const core::Vec3& listener);
+     const LevelAudioScript& script() const { return script_; }
+     LevelAudioScript& hostedScript() { return script_; }   // the campaign VM's audio ops (LevelAudioScript hosted mode)
++    // [Systems QC] The subtitle on screen now (the chapter audio's "subtitles", in the dialogue language, INT fallback): the line of
++    // the conversation line playing, "" for none. Display - and the profile's Subtitles option (default off) - is the HUD's.
++    std::string currentSubtitle() const;
+     const std::string& levelName() const { return level_; }
+     // The compiled-in Systems level manifests.
+     static bool hasLevelManifest(const std::string& level);
+@@ -137,6 +141,9 @@
+     bool preferManifestZones_ = false;
+     std::map<std::string, std::string> announcer_;
+     LevelAudioScript script_;
++    CampaignSubtitles subtitles_;
++    std::string subCue_;                 // the conversation line's cue the subtitle follows ("" = none)
++    float subClock_ = 0.0f, subStart_ = 0.0f;
+     MusicPlayer* music_ = nullptr;
+     audio::IAudio* audio_ = nullptr;
+     std::vector<Emitter> emitters_;
+diff -ruN a/src/game/CampaignSubtitles.cpp b/src/game/CampaignSubtitles.cpp
+--- a/src/game/CampaignSubtitles.cpp	2026-10-24 00:16:24.810533300 -0500
++++ b/src/game/CampaignSubtitles.cpp	2026-10-24 00:16:24.825082900 -0500
+@@ -59,6 +59,21 @@
+     return l == w->byLang.end() ? nullptr : &l->second;
+ }
+ 
++std::vector<std::string> CampaignSubtitles::cues() const {
++    std::vector<std::string> out;
++    for (const auto& kv : cueWaves_) out.push_back(kv.first);
++    return out;
++}
++
++std::string CampaignSubtitles::lineAt(const std::vector<Line>& lines, float t, float duration) {
++    if (lines.empty() || t < 0.0f) return std::string();
++    const float end = duration > 0.0f ? duration : lines.back().time + 4.0f;
++    if (t > end) return std::string();
++    const Line* at = nullptr;
++    for (const Line& l : lines) if (l.time <= t) at = &l;
++    return at && at->show ? at->text : std::string();
++}
++
+ float CampaignSubtitles::duration(const std::string& cue) const {
+     const Wave* w = waveFor(cue, "int");
+     return w ? w->duration : 0.0f;
+diff -ruN a/src/game/CampaignSubtitles.h b/src/game/CampaignSubtitles.h
+--- a/src/game/CampaignSubtitles.h	2026-10-24 00:16:24.731763400 -0500
++++ b/src/game/CampaignSubtitles.h	2026-10-24 00:16:24.746313300 -0500
+@@ -21,6 +21,10 @@
+     // The lines for a dialog cue in a language ("int", "fra"; another / missing language falls back to "int"); null = none.
+     const std::vector<Line>* lines(const std::string& cue, const std::string& lang = "int") const;
+     float duration(const std::string& cue) const;   // the wave's authored Duration (s), 0 = unknown
++    std::vector<std::string> cues() const;           // every cue with localized waves (tests)
++    // The text on screen t seconds after a line's cue started: the last line with time <= t that the original shows (show), until
++    // the wave's Duration (unknown: the last line's time + 4 s); "" before the first line, after the end, or for a hidden line.
++    static std::string lineAt(const std::vector<Line>& lines, float t, float duration);
+ private:
+     struct Wave { float duration = 0.0f; std::unordered_map<std::string, std::vector<Line>> byLang; };
+     std::unordered_map<std::string, Wave> byWave_;
+diff -ruN a/src/game/LevelAudioHost.h b/src/game/LevelAudioHost.h
+--- a/src/game/LevelAudioHost.h	2026-10-24 00:16:25.061894200 -0500
++++ b/src/game/LevelAudioHost.h	2026-10-24 00:16:25.077950100 -0500
+@@ -129,6 +129,7 @@
+ 
+     const std::string& level() const { return level_; }
+     AmbientAudio& ambient() { return ambient_; }
++    std::string currentSubtitle() const { return ambient_.currentSubtitle(); }   // [Systems QC] the HUD's subtitle line
+     const AmbientAudio& ambient() const { return ambient_; }
+     MusicPlayer& music() { return music_; }
+     FrontendAudio& frontend() { return frontend_; }
+diff -ruN a/src/game/World.h b/src/game/World.h
+--- a/src/game/World.h	2026-10-24 00:16:25.146686500 -0500
++++ b/src/game/World.h	2026-10-24 00:16:25.162238700 -0500
+@@ -316,6 +316,8 @@
+     // A level Kismet trigger the frontend owns: "FsCommand:<cmd>" (GFx fscommand, e.g. "FsCommand:enterFrontEnd"),
+     // "MovieStopped:<movie>" (e.g. "MovieStopped:FMV_intro"). Returns the op inputs it reached (0: none authored).
+     int levelAudioEvent(const std::string& trigger) { return levelAudio_.event(trigger, listenerPos_); }
++    // [Systems QC] The campaign dialogue subtitle on screen now ("" = none); the HUD draws it when the profile's Subtitles is on.
++    std::string currentSubtitle() const { return levelAudio_.currentSubtitle(); }
+     // GFx Sound.PlaySound(name) / StopSound(name, fade) (TnSoundActionScriptBinding).
+     int playUiSound(const char* name) { return levelAudio_.playUiSound(name); }
+     bool stopUiSound(const char* name, float fade) { return levelAudio_.stopUiSound(name, fade); }

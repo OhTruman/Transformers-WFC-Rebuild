@@ -45,6 +45,7 @@
 #include <vector>
 #include "audio/Audio.h"
 #include "core/Math.h"
+#include "game/CampaignSubtitles.h"
 #include "game/LevelAudioScript.h"
 
 namespace game {
@@ -75,6 +76,9 @@ public:
     int fireEvent(const std::string& trigger, SoundCues& cues, const core::Vec3& listener);
     const LevelAudioScript& script() const { return script_; }
     LevelAudioScript& hostedScript() { return script_; }   // the campaign VM's audio ops (LevelAudioScript hosted mode)
+    // [Systems QC] The subtitle on screen now (the chapter audio's "subtitles", in the dialogue language, INT fallback): the line of
+    // the conversation line playing, "" for none. Display - and the profile's Subtitles option (default off) - is the HUD's.
+    std::string currentSubtitle() const;
     const std::string& levelName() const { return level_; }
     // The compiled-in Systems level manifests.
     static bool hasLevelManifest(const std::string& level);
@@ -137,6 +141,9 @@ private:
     bool preferManifestZones_ = false;
     std::map<std::string, std::string> announcer_;
     LevelAudioScript script_;
+    CampaignSubtitles subtitles_;
+    std::string subCue_;                 // the conversation line's cue the subtitle follows ("" = none)
+    float subClock_ = 0.0f, subStart_ = 0.0f;
     MusicPlayer* music_ = nullptr;
     audio::IAudio* audio_ = nullptr;
     std::vector<Emitter> emitters_;

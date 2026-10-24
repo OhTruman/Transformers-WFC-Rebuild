@@ -40,6 +40,26 @@ void Application::runCampaignAudioTest() {
     script.load(k);
     game::CampaignSubtitles subtitles;
     const int subCues = subtitles.load(doc);
+    bool subtitleTimingBad = false;
+    {   // [Systems QC] the HUD's timing (CampaignSubtitles::lineAt) on this chapter's real lines: each shown line at its time, nothing past the end
+        int checked = 0, bad = 0;
+        for (const std::string& cue : subtitles.cues()) {
+            const auto* l = subtitles.lines(cue, "int");
+            if (!l || l->empty()) continue;
+            const float dur = subtitles.duration(cue);
+            for (const auto& ln : *l) {
+                const std::string got = game::CampaignSubtitles::lineAt(*l, ln.time, dur);
+                bool later = false;   // a later line at the same time wins
+                for (const auto& o : *l) later = later || (&o > &ln && o.time <= ln.time);
+                if (!later && got != (ln.show ? ln.text : std::string())) ++bad;
+                ++checked;
+            }
+            const float end = dur > 0.0f ? dur : l->back().time + 4.0f;
+            if (!game::CampaignSubtitles::lineAt(*l, end + 0.1f, dur).empty()) ++bad;
+        }
+        LOG_INFO("CAMPAIGNAUDIO subtitle timing: %d lines checked, %d wrong", checked, bad);
+        subtitleTimingBad = bad || (subCues > 0 && checked == 0);
+    }
     int linesStarted = 0, linesWithText = 0;
     auto listen = [&](const std::string& cue, int) {
         ++linesStarted;
@@ -123,6 +143,7 @@ void Application::runCampaignAudioTest() {
         cues.stopAll();
     }
     LOG_INFO("CAMPAIGNAUDIO subtitles: %d cues with text; %d of %d started dialog lines resolved to a subtitle", subCues, linesWithText, linesStarted);
+    if (subtitleTimingBad) ++fail;
     LOG_INFO("CAMPAIGNAUDIO RESULT %s: %d conversations (%d finished, %d stopped), %d timelines (%d keys), %d failures",
              fail ? "FAIL" : "PASS", convs, finished, stopped, timelines, keys, fail);
     std::exit(fail ? 1 : 0);

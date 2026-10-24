@@ -316,6 +316,8 @@ public:
     // A level Kismet trigger the frontend owns: "FsCommand:<cmd>" (GFx fscommand, e.g. "FsCommand:enterFrontEnd"),
     // "MovieStopped:<movie>" (e.g. "MovieStopped:FMV_intro"). Returns the op inputs it reached (0: none authored).
     int levelAudioEvent(const std::string& trigger) { return levelAudio_.event(trigger, listenerPos_); }
+    // [Systems QC] The campaign dialogue subtitle on screen now ("" = none); the HUD draws it when the profile's Subtitles is on.
+    std::string currentSubtitle() const { return levelAudio_.currentSubtitle(); }
     // GFx Sound.PlaySound(name) / StopSound(name, fade) (TnSoundActionScriptBinding).
     int playUiSound(const char* name) { return levelAudio_.playUiSound(name); }
     bool stopUiSound(const char* name, float fade) { return levelAudio_.stopUiSound(name, fade); }
