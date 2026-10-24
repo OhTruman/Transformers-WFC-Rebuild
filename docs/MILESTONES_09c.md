@@ -4295,3 +4295,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Manual balancing, 10 s countdown not cancellable (cancel = a user addition); fresh profile has D1 (I) + A1 (VI) unlocked
   by design; brightness = first Campaign entry + Settings (first-launch = a user change), logos respond to real gamma;
   pause: Escalation has NO Choose Character.
+2026-10-23 23:41 QC pass progress: MERGED 319fd0cf audio / voice audit fixes (Systems: proximity gain, All Radio flag, input device list,
+  mic test level, mid-match voice on; Subtitles row has no display -> Frontend + Systems); MERGED 24b150c8 UI-layer
+  display gamma (calibration logos respond; Frontend applies to every movie). Rendering audit: Texture Quality no-op and
+  VSync ignored on D3D12 present (fixes in progress), renderer-recreate re-applies only Brightness + a hidden Water row
+  (Frontend). Experimental's menu-QA driver synced (needs the Frontend's step lists + navcheck fields). Rendering swept
+  88 GB; Experimental 174 GB; the user deleted Systems' old packages: F: 516 GB free.
