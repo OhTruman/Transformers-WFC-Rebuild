@@ -48,3 +48,10 @@ with no context, no direction after it, NPCs inactive, exit returns to Escalatio
 -> spawn -> move -> aim = hit at the crosshair -> kill -> XP -> weapons / reload -> ability -> killstreak earn + use ->
 transform -> complete -> results -> lobby. ESC: menu -> Escalation -> host SOLO -> valid map -> character -> start ->
 load -> spawn -> waves -> rewards -> complete / fail -> return.
+
+## User follow-up (2026-10-24 ~17:30)
+- The "pickup cube" = the cubes that spawn around the map (the Energon / Allspark cubes): the user expects to pick them
+  up and could not.
+- The hitbox = the central glowing blue Energon pool / crater with the dark spiky debris on Streets (photo:
+  playtest3/streets_hitbox_pool.jpg), NOT a cylinder: walking toward it blocks the player, "which makes no logical
+  sense unless it's missing additional assets for it".
