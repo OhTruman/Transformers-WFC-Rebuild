@@ -23,6 +23,7 @@
 namespace game {
 using namespace cuedata;
 namespace {
+std::string contentFile(const std::string& contentRoot, const std::string& f);   // [Systems] below: content root, else the DLC root
 
 using LARGE_INTEGER_T = long long;
 LARGE_INTEGER_T nowTicks() { return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -241,7 +242,7 @@ void SoundCues::loadWaves(size_t c, const std::string& contentRoot) {
             if (!wanted(c, ei, wi)) continue;
             const std::string& f = e.waves[wi];
             const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');       // a localized twin outside content/
-            audio::Sound s = audio_ ? audio_->load(abs ? f : contentRoot + f) : audio::kInvalidSound;
+            audio::Sound s = audio_ ? audio_->load(abs ? f : contentFile(contentRoot, f)) : audio::kInvalidSound;
             if (s != audio::kInvalidSound) w.push_back(s);
         }
         waves_[c].push_back(w);
@@ -267,7 +268,7 @@ void SoundCues::load(audio::IAudio* a, const std::string& contentRoot) {
             for (const EventDef& e : cd.events)
                 for (const std::string& f : e.waves) {
                     const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
-                    paths.push_back(abs ? f : contentRoot + f);
+                    paths.push_back(abs ? f : contentFile(contentRoot, f));
                 }
         }
         parallelLoad(a, paths);
@@ -302,6 +303,30 @@ int SoundCues::applyLoopPoints() {
 // overrides the _LOC root), else the merged file if `loc` is the selected twin, else NOT played (logged once): another
 // language is never substituted. Twin of GLanguage: INT -> "int", else the language code (FRA ...).
 SoundCues::LocStats& SoundCues::locStats() { static LocStats s; return s; }
+
+namespace {
+// [Systems] A wave of the content root, else of the DLC content root (development: AssetTools' DLC-only files sit in
+// out/dlc_content/content until a package merges them into content/; WFC_DLC_CONTENT overrides the root). A package has every
+// wave in its content/, so the first path always exists there. X.wav also counts when only X.fsb exists (the backend decodes it).
+bool waveExists(const std::string& path) {
+    std::FILE* fp = _wfopen(platform::longPath(path).c_str(), L"rb");
+    if (!fp && path.size() > 4) fp = _wfopen(platform::longPath(path.substr(0, path.size() - 4) + ".fsb").c_str(), L"rb");
+    if (fp) std::fclose(fp);
+    return fp != nullptr;
+}
+std::string contentFile(const std::string& contentRoot, const std::string& f) {
+    const std::string base = contentRoot + f;
+    static const std::string dlc = [] {
+        const char* e = std::getenv("WFC_DLC_CONTENT");
+        std::string r = e && *e ? e : "F:/Transformers Rebuild/AssetTools/out/dlc_content/content";
+        if (!r.empty() && r.back() != '/' && r.back() != '\\') r += '/';
+        return r;
+    }();
+    if (waveExists(base)) return base;
+    const std::string alt = dlc + f;
+    return waveExists(alt) ? alt : base;
+}
+}
 
 namespace {
 std::string& languageRef() {
@@ -463,7 +488,7 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
             for (const EventDef& e : cues_[c].events)
                 for (const std::string& f : e.waves) {
                     const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
-                    bw.paths.push_back(abs ? f : contentRoot + f);
+                    bw.paths.push_back(abs ? f : contentFile(contentRoot, f));
                 }
         } else loadWaves(c, contentRoot);
     }
@@ -703,7 +728,7 @@ int SoundCues::warmCueWaves(const assets::Json& cues, const std::string& content
                 if (!loc.empty()) f = localizedWave(f, loc, contentRoot, false);   // the twin the load will pick
                 if (f.empty()) continue;
                 const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
-                paths.push_back(abs ? f : contentRoot + f);
+                paths.push_back(abs ? f : contentFile(contentRoot, f));
             }
         }
     }

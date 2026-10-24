@@ -19,12 +19,21 @@ import io, json, os, sqlite3, sys
 DB = 'F:/Transformers Rebuild/AssetTools/manifests/authored.db'
 STREETS_AUDIO = 'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps/MP_IAC_Streets/audio.json'
 CONTENT = 'F:/Transformers Rebuild/ExtractedAssets/content/'
+# [Systems] the DLC map packs (Integration's DLC phase): their own authored.db and their maps / content beside the base ones
+# (AssetTools: manifests/dlc/authored.db, work/dlc_maps/VerticalSlice/Maps/<map>, out/dlc_content/content - the DLC-only files,
+# merged into the package's content/ by build_slim)
+DLC_DB = 'F:/Transformers Rebuild/AssetTools/manifests/dlc/authored.db'
+DLC_MAPS_DIR = 'F:/Transformers Rebuild/AssetTools/work/dlc_maps/VerticalSlice/Maps/'
+DLC_CONTENT = 'F:/Transformers Rebuild/AssetTools/out/dlc_content/content/'
 UI_LEVELS = ['UI_FrontEnd_m', 'UI_PartyLobby_m', 'UI_Lobby_m', 'UI_CampaignLobby_m']
 AUDIO_OPS = {'SeqAct_PlaySound', 'SeqAct_PlayPlayerPositionalSound', 'SeqAct_Reverb', 'SeqAct_PlayMusic',
              'SeqAct_StopMusic'}
 NOT_EVENTS = {'Completed', 'Aborted', 'Reversed', 'Out', 'Finished', 'Stopped'}
 
-c = sqlite3.connect(DB)
+c = sqlite3.connect('file:%s?mode=ro' % DB, uri=True)
+if os.path.exists(DLC_DB):   # one 'objects' over both (a TEMP view shadows main.objects; nothing is written to either file)
+    c.execute("ATTACH DATABASE ? AS dlc", ('file:%s?mode=ro' % DLC_DB,))
+    c.execute("CREATE TEMP VIEW objects AS SELECT * FROM main.objects UNION ALL SELECT * FROM dlc.objects")
 ROWS = {}
 def row(op):
     if op not in ROWS:
@@ -73,7 +82,7 @@ def cue_tree(cue, prefer=None):
         for w in [x for x in (ep.get('ChildNodes') or []) if x]:
             pk, nm = w.split('.', 1)
             wav = 'content/%s/%s.wav' % (pk, nm)
-            if not os.path.exists(CONTENT + wav[8:]): print('  MISSING wave', wav)
+            if not os.path.exists(CONTENT + wav[8:]) and not os.path.exists(DLC_CONTENT + wav[8:]): print('  MISSING wave', wav)
             entry = {'node': w, 'class': 'SoundNodeWaveEx', 'wav': wav}
             # Localized wave: the extracted file came from this _LOC_ twin (authored.db keeps one per path) [RE pass4 C].
             r = c.execute("select package from objects where opath=? and class like 'SoundNodeWave%'", (w,)).fetchone()
@@ -92,7 +101,8 @@ def reverb_preset(name):
     return {'mixer_preset': mp, 'dsp_by_category': {'MASTER_WET': dsp} if dsp else {}}
 
 SINK_OPS = {'SeqAct_PlaySound', 'SeqAct_PlayPlayerPositionalSound', 'SeqAct_PlayFlybySound', 'SeqAct_Reverb',
-            'SeqAct_Mixer', 'SeqAct_PlayMusic', 'SeqAct_StopMusic', 'SeqAct_AmbientAudioZone', 'SeqAct_Delay', 'SeqAct_Gate'}
+            'SeqAct_Mixer', 'SeqAct_PlayMusic', 'SeqAct_StopMusic', 'SeqAct_AmbientAudioZone', 'SeqAct_Delay', 'SeqAct_Gate',
+            'SeqAct_PlayStinger'}   # HmWorldInfo._MusicPlayer.PlayStinger(Stinger), output 0 at once [C, CAMPAIGN_KISMET_WFC_CLASSES_RE 6]
 STATEFUL = {'SeqAct_AmbientAudioZone', 'SeqAct_Delay', 'SeqAct_Gate', 'SeqEvent_Touch'}   # their outputs are runtime events
 # Dialog ops (any level: the Escalation maps' Round Begin / End chains, the campaign): SeqAct_Conversation (lines), SeqAct_PlayDialog
 # (one dialog cue: Play / Stop, Stopped / Finished, a ducking preset - exported as a one-line conversation), SeqAct_RandomSwitch
@@ -292,6 +302,8 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None, campaig
                       boredom=t['BoredomTime'], priority=t['Priority'],
                       ignore_spaz_timer=bool(p.get('IgnoreSpazTimer', False)),
                       fade_out_override=p.get('CurrentTrackFadeOutTimeOverride', -1.0) if p.get('UseCurrentTrackFadeOutTimeOverride') else -1.0)
+        elif cl == 'SeqAct_PlayStinger':
+            op.update(type='play_stinger', cue=p.get('Stinger'))
         elif cl == 'SeqAct_StopMusic':
             op.update(type='stop_music', fade_out_override=p.get('FadeTimeOverride', -1.0) if p.get('UseFadeTimeOverride') else -1.0)
         elif cl == 'SeqAct_AmbientAudioZone':
@@ -320,7 +332,7 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None, campaig
     # Keep only what can make or change sound: sinks some trigger reaches, and stateful ops (touch / zone / delay / gate)
     # whose outputs lead to a kept op. Links into dropped ops and from unresolved sources go too.
     links = [l for l in links if not l['from'].startswith('Unresolved:')]
-    SOUND = {'play_sound', 'positional_pool', 'flyby', 'reverb', 'mixer', 'play_music', 'stop_music', 'timeline', 'conversation'}
+    SOUND = {'play_sound', 'positional_pool', 'flyby', 'reverb', 'mixer', 'play_music', 'stop_music', 'timeline', 'conversation', 'play_stinger'}
     byid = {op['id']: op for op in ops}
     keep = {op['id'] for op in ops if op['type'] in SOUND and any(l['to'] == op['id'] for l in links)}
     changed = True
@@ -332,6 +344,10 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None, campaig
                 if src in byid and src not in keep: keep.add(src); changed = True
     for o2, tl in timelines.items():
         if tl['id'] in keep: pass
+    # [campaign] the chapter's Kismet VM (Gameplay) drives the ops and routes their links (LevelAudioScript hosted mode): every audio op
+    # ships, reachable from a known trigger or not (D5_OME_Music_m's music is started by gameplay events the generator cannot see)
+    # (the VM runs the stock flow ops itself - Delay, Gate, RandomSwitch - so their copies are left out)
+    if campaign: keep = {op['id'] for op in ops if op['type'] not in ('delay', 'gate', 'random_switch')}
     ops = [op for op in ops if op['id'] in keep]
     links = [l for l in links if l['to'] in keep and (not l['from'].startswith('Out:') or l['from'].split(':', 2)[1] in keep)]
     used = {op.get('cue') for op in ops} | {l['cue'] for op in ops for l in op.get('lines', [])} | {k['cue'] for op in ops for k in op.get('sounds', [])}
@@ -411,6 +427,19 @@ if len(sys.argv) > 1 and sys.argv[1] == '--campaign':
                      for x in p.get('Subtitles') or [] if x.get('Text')]
             if lines: subs.setdefault(wv, {'duration': round(p.get('Duration', 0.0), 3)})[lang] = lines
     doc['subtitles'] = subs
+    # Each conversation line's sim duration (Gameplay 2026-10-23: every peer ends a line on the same tick, playback or not): the
+    # longest localized wave its cue can play (the authored SoundNodeWave Duration; one wave per dialog cue in practice), -1 unknown.
+    def cue_waves(n, out):
+        if n.get('class') == 'SoundNodeWaveEx': out.append(n.get('node'))
+        for ch in n.get('children') or []: cue_waves(ch, out)
+        return out
+    unknown = 0
+    for op in doc['kismet']['ops']:
+        for ln in op.get('lines', []) if op.get('type') == 'conversation' else []:
+            ds = [subs[w]['duration'] for w in cue_waves((doc['cues'].get(ln['cue']) or {}).get('tree') or {}, []) if w in subs and subs[w].get('duration')]
+            ln['duration'] = max(ds) if ds else -1.0
+            unknown += 0 if ds else 1
+    print('%s: conversation line durations, %d unknown' % (chap, unknown))
     print('%s: subtitles for %d of %d localized waves (%d with French)' % (chap, len(subs), len(waves),
                                                                          sum(1 for v in subs.values() if 'fra' in v)))
     io.open(dst, 'w', encoding='utf-8', newline='\n').write(json.dumps(doc, separators=(',', ':')))
@@ -539,8 +568,12 @@ def actor_notify_cues(sets):   # {(animset, the sequence the actor plays)}
                     if q: out.add(q)
     return out
 announcer_sets = {}
-for level_name in sorted(d for d in os.listdir(MAPS_DIR) if d.startswith('MP_') and os.path.exists(MAPS_DIR + d + '/audio.json')):
-    am = json.load(io.open(MAPS_DIR + level_name + '/audio.json', encoding='utf-8'))
+MAP_DIRS = {d: MAPS_DIR for d in os.listdir(MAPS_DIR) if d.startswith('MP_') and os.path.exists(MAPS_DIR + d + '/audio.json')}
+if os.path.isdir(DLC_MAPS_DIR):   # the DLC maps AssetTools has shipped so far (a base map of the same name wins)
+    for d in os.listdir(DLC_MAPS_DIR):
+        if d.startswith('MP_') and d not in MAP_DIRS and os.path.exists(DLC_MAPS_DIR + d + '/audio.json'): MAP_DIRS[d] = DLC_MAPS_DIR
+for level_name in sorted(MAP_DIRS):
+    am = json.load(io.open(MAP_DIRS[level_name] + level_name + '/audio.json', encoding='utf-8'))
     subs = am['sublevels']
     base = [x for x in subs if 'base' in x.lower()] or subs[:1]
     geo = {z['event']: {'polygons': z['trigger_polygons_gltf'], 'trigger': z.get('trigger', {}), 'comment': z.get('comment', '')}
