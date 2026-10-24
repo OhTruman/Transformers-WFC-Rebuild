@@ -114,3 +114,15 @@ Apply it after 11. Verified: the 01–12 chain applies to a fresh af4d0731 and m
 - SeqVar_ObjectList: factory Spawned appends to it, SeqAct_ModifyObjectList, dead pawns leave the lists;
 - SeqAct_TnAssignTacticalVolume: assigned AI keep their goal spots inside the volume.
 Apply it after 12. Verified: the 01–13 chain applies to a fresh af4d0731 and matches the tested tree over every patched path.
+
+## 14: DLC Escalation maps + split-screen seat 2 (13 tree -> c6fb42bb + GAMEPLAY_ESC_DLC_MAPS)
+
+`14_esc_dlc_split.patch`: the same paths, from the 13 tree to c6fb42bb + GAMEPLAY_ESC_DLC_MAPS. It covers:
+- the Escalation data for MP_ESC_Tranquillity and MP_ESC_District (gen_escalation.py over RE's waves / zone order / factions and
+  AssetTools' escalation_geometry), compiled into EscalationData.inc; District's AiEscalation_Soldier_Jet_Autobot row;
+- WFC_ESCTEST on the DLC maps (waves advance, due enemy rows spawn, a generator is bought);
+- split-screen seat 2 (steps 1, 2 and 4: the second local seat, PresentedFrame::seats, the bot-slot join, the split draw owner),
+  a no-op without a seat 2 join;
+- everything else merged between c4155702 and c6fb42bb on these paths.
+Apply it after 13. Verified: the 01–14 chain applies to a fresh af4d0731 and matches the tested tree over every patched path (content
+equal; git apply's CRLF conversion aside).

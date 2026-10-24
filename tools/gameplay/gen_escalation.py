@@ -6,7 +6,8 @@ import json, math, os
 
 ROOT = 'F:/Transformers Rebuild'
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data', 'gameplay')
-COOP = {'MP_ESC_BrokenHope': 0, 'MP_ESC_Remnant': 1}
+# the players' team (TnCoopInfo.Faction; RE 2a5d0ea for the DLC maps: Tranquillity / Pulse unset = Autobots, District / Static Decepticons)
+COOP = {'MP_ESC_BrokenHope': 0, 'MP_ESC_Remnant': 1, 'MP_ESC_Tranquillity': 0, 'MP_ESC_District': 1, 'MP_ESC_Pulse': 0, 'MP_ESC_Static': 1}
 TYPES = ['EST_Standard', 'EST_ShortRange', 'EST_LongRange', 'EST_Air', 'EST_Boss']
 
 def short(z):
@@ -16,9 +17,12 @@ incs = []
 # RE (escalation_zone_order.json, a5cc309): the PersistentLevel actor order of the zones (Initialize walks AllActors, adding the active
 # ones in that order) and, as a test vector, every type's initial sorted order (the binary's MSVC qsort).
 ORDER = json.load(open(ROOT + '/RE-Workspace/work/handoff/escalation_zone_order.json'))
-for m in ['MP_ESC_BrokenHope', 'MP_ESC_Remnant']:
+for m in COOP:
+    gpath = ROOT + '/AssetTools/manifests/maps/' + m + '/escalation_geometry.json'
+    if not os.path.exists(gpath):   # a DLC map whose AssetTools geometry has not landed yet
+        print('skip', m, '(no escalation_geometry.json)'); continue
     re_ = json.load(open(ROOT + '/RE-Workspace/notes/data/escalation/' + m + '.json'))
-    geo = json.load(open(ROOT + '/AssetTools/manifests/maps/' + m + '/escalation_geometry.json'))
+    geo = json.load(open(gpath))
     sl = re_['spawn_list'][0]
     boxes = {}; spawns = {}
     for z in geo['zones']:
@@ -108,8 +112,8 @@ for m in ['MP_ESC_BrokenHope', 'MP_ESC_Remnant']:
         },
     }
     k = KISMET.get(m, {})
-    col = json.load(open(ROOT + '/ExtractedAssets/VerticalSlice/Maps/' + m + '/collision.json'))
-    vols = {v['actor']: v for v in col['volumes']}
+    cpath = ROOT + '/ExtractedAssets/VerticalSlice/Maps/' + m + '/collision.json'
+    vols = {v['actor']: v for v in json.load(open(cpath))['volumes']} if os.path.exists(cpath) else {}
     need = set([w[0] for w in k.get('crashWalls', [])] + [g[0] for g in k.get('roundGates', [])] +
                ([k['window']['enable'], k['window']['volume']] if 'window' in k else []))
     tvs = {}
@@ -129,6 +133,7 @@ for m in ['MP_ESC_BrokenHope', 'MP_ESC_Remnant']:
         'Soldier_Shotgun_Decepticon': (['EmpShotgun'], ['AssaultRifleVehicle'], 150), 'Soldier_Shotgun_Autobot': (['EmpShotgun'], ['AssaultRifleVehicle'], 150),
         'CQCSpecialist_Decepticon': (['PlasmaCannon'], [], 90), 'CQCSpecialist_Autobot': (['PlasmaCannon'], [], 90),
         'Soldier_Jet_Decepticon': (['HeavyMG'], ['PlaneMachineGun'], 250),
+        'AiEscalation_Soldier_Jet_Autobot': (['HeavyMG'], ['PlaneMachineGun'], 250),   # District (DLC): the Dec jet soldier's numbers [RE 2a5d0ea]
         'Brute_Decepticon': (['HalberdAxe'], [], 1500), 'Brute_Autobot': (['WarHammer'], [], 1500),
         'Titan_Decepticon': (['GatlingGun'], [], 1250), 'Titan_Autobot': (['GatlingGun'], [], 1250),
         'Soldier_Tank_Decepticon': ([], ['TankCannon'], 6000), 'HoloBrute_Autobot': (['CeremonialStaff'], [], 1800),
