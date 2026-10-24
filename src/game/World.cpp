@@ -425,6 +425,14 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
         out.positions = in.positions;
         for (const render::SubMesh& sm : in.subs) {
             bool mover = std::find(names.begin(), names.end(), sm.nodeName) != names.end();
+            if (!escBlockerNames_.empty() && std::find(escBlockerNames_.begin(), escBlockerNames_.end(), sm.nodeName) != escBlockerNames_.end()) {
+                escBlockerTris_.push_back({sm.nodeName, {}});   // an Escalation mechanism's blocking volume: a switchable set
+                for (uint32_t i = sm.indexOffset; i < sm.indexOffset + sm.indexCount; ++i) {
+                    const uint32_t v = in.indices[i];
+                    escBlockerTris_.back().second.push_back({in.positions[v * 3], in.positions[v * 3 + 1], in.positions[v * 3 + 2]});
+                }
+                continue;
+            }
             std::vector<core::Vec3>* dst = nullptr;
             if (mover) { moverTris.push_back({sm.nodeName, {}}); dst = &moverTris.back().second; }
             // a PhysicsVolume, not world collision (forcedDirPre / Post); WFC_NOFORCEDDIR=1 keeps the old solid brushes (regression A/B)
@@ -437,6 +445,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
             }
         }
     };
+    escBlockerNames_ = svMechBlockerNames(mapName_); escBlockerTris_.clear(); escBlockerSets_.clear();
     render::MeshData colMesh, pawnStatic, weaponColMesh, weaponStatic;
     std::vector<std::pair<std::string, std::vector<core::Vec3>>> pawnMovers, weaponMovers;
     bool authored = campaignMap_ ? loadCampaignMesh("collision_pawn.glb", colMesh) : assets::loadGlb(overlayed(mapDir + "collision_pawn.glb"), colMesh);
@@ -464,6 +473,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
         if (campaignMap_) { cpCollectMovers(); cpSplitMovers(colMesh, pawnStatic); }   // campaign: the chapter's InterpActors
         else splitMovers(colMesh, pawnStatic, pawnMovers);
         collision_.build(pawnStatic);
+        svMechAddBlockers();
         if (campaignMap_) cpRegisterMovers();
         core::loadYield("World: movement collision");
         if (assets::loadGlb(mapDir + "collision_weapon.glb", weaponColMesh)) {
@@ -4396,6 +4406,7 @@ HudGameState World::hudState() const {
         if (sv_.phase == SurvivalState::Phase::PreGame) h.svNextWaveTime = (int)std::ceil(std::max(0.0f, svData_.preGameTime - sv_.phaseTime));
         else if (sv_.phase == SurvivalState::Phase::BetweenWaves) h.svNextWaveTime = (int)std::ceil(std::max(0.0f, svData_.timeBetweenWaves - sv_.phaseTime));
         h.svGameOver = sv_.phase == SurvivalState::Phase::GameOver;
+        h.svPowerOutage = sv_.mech.outageLeft > 0.0f;
         if (localPlayer_ >= 0 && (size_t)localPlayer_ < sv_.power.size()) {
             h.svPower = (int)sv_.power[(size_t)localPlayer_];
             if ((size_t)localPlayer_ < sv_.abilityResource.size()) h.svAbilityResource = sv_.abilityResource[(size_t)localPlayer_] / 100.0f;
@@ -5581,6 +5592,7 @@ int World::hazardAt(const core::Vec3& p) const {
     for (size_t i = 0; i < hazards_.size(); ++i) {
         const std::string& u = hazards_[i].unit;   // campaign: only while its unit is loaded (streaming)
         if (campaignMap_ && !u.empty() && u != cpChapter_.persistentDir && !cpUnitLoaded_.count(u)) continue;
+        if (!hazards_[i].on) continue;   // switched off (Escalation mechanisms)
         bool in = !hazards_[i].planes.empty();
         for (const HazardVolume::Plane& pl : hazards_[i].planes) if (core::dot(pl.n, p) > pl.w) { in = false; break; }
         if (in) return (int)i;

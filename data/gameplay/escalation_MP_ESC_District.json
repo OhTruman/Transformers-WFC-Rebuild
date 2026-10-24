@@ -3412,188 +3412,7 @@
     27.096,
     -83.144
    ],
-   "actions": [
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_12287"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_15676"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8523"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8523"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_9344"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8272"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8272"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_12287"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_7696"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_7696"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_4711"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_966"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_966"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_14360"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_6675"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_6675"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    }
-   ]
+   "actions": []
   },
   {
    "id": "1070",
@@ -3702,23 +3521,7 @@
     25.214,
     -100.449
    ],
-   "actions": [
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_11015"
-    },
-    {
-     "op": "on",
-     "class": "Emitter",
-     "target": "Emitter_10"
-    },
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_11015"
-    }
-   ]
+   "actions": []
   },
   {
    "id": "11238",
@@ -3888,188 +3691,7 @@
     42.222,
     14.739
    ],
-   "actions": [
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_4711"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_15676"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8523"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8523"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_9344"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8272"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8272"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_12287"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_7696"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_7696"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_4711"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_966"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_966"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_14360"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_6675"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_6675"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    }
-   ]
+   "actions": []
   },
   {
    "id": "11671",
@@ -5044,48 +4666,7 @@
     18.24,
     -158.88
    ],
-   "actions": [
-    {
-     "op": "on",
-     "class": "Emitter",
-     "target": "Emitter_1536"
-    },
-    {
-     "op": "off",
-     "class": "Emitter",
-     "target": "Emitter_12255"
-    },
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_16022"
-    },
-    {
-     "op": "off",
-     "class": "Emitter",
-     "target": "Emitter_4363"
-    },
-    {
-     "op": "on",
-     "class": "Emitter",
-     "target": "Emitter_12255"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_16022"
-    },
-    {
-     "op": "on",
-     "class": "Emitter",
-     "target": "Emitter_8651"
-    },
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_16022"
-    }
-   ]
+   "actions": []
   },
   {
    "id": "13719",
@@ -5940,188 +5521,7 @@
     27.096,
     -118.985
    ],
-   "actions": [
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_9344"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_15676"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8523"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8523"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_9344"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8272"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8272"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_12287"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_7696"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_7696"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_4711"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_966"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_966"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_14360"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_6675"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_6675"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    }
-   ]
+   "actions": []
   },
   {
    "id": "2249",
@@ -6230,48 +5630,7 @@
     41.92,
     -87.76
    ],
-   "actions": [
-    {
-     "op": "on",
-     "class": "Emitter",
-     "target": "Emitter_11889"
-    },
-    {
-     "op": "off",
-     "class": "Emitter",
-     "target": "Emitter_9487"
-    },
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_2925"
-    },
-    {
-     "op": "off",
-     "class": "Emitter",
-     "target": "Emitter_15757"
-    },
-    {
-     "op": "on",
-     "class": "Emitter",
-     "target": "Emitter_9487"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_2925"
-    },
-    {
-     "op": "on",
-     "class": "Emitter",
-     "target": "Emitter_4654"
-    },
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_2925"
-    }
-   ]
+   "actions": []
   },
   {
    "id": "226",
@@ -6639,23 +5998,7 @@
     24.48,
     -84.269
    ],
-   "actions": [
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_2247"
-    },
-    {
-     "op": "on",
-     "class": "Emitter",
-     "target": "Emitter_8388"
-    },
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_2247"
-    }
-   ]
+   "actions": []
   },
   {
    "id": "2467",
@@ -8058,23 +7401,7 @@
     25.28,
     -125.6
    ],
-   "actions": [
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_2516"
-    },
-    {
-     "op": "on",
-     "class": "Emitter",
-     "target": "Emitter_953"
-    },
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_2516"
-    }
-   ]
+   "actions": []
   },
   {
    "id": "4507",
@@ -9350,23 +8677,7 @@
     24.48,
     -127.36
    ],
-   "actions": [
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_11572"
-    },
-    {
-     "op": "on",
-     "class": "Emitter",
-     "target": "Emitter_9357"
-    },
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_11572"
-    }
-   ]
+   "actions": []
   },
   {
    "id": "7143",
@@ -9584,23 +8895,7 @@
     25.28,
     20.96
    ],
-   "actions": [
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_1540"
-    },
-    {
-     "op": "on",
-     "class": "Emitter",
-     "target": "Emitter_462"
-    },
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_1540"
-    }
-   ]
+   "actions": []
   },
   {
    "id": "7381",
@@ -9661,188 +8956,7 @@
     26.876,
     -146.483
    ],
-   "actions": [
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_14360"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_15676"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8523"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8523"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_9344"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8272"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8272"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_12287"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_7696"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_7696"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_4711"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_966"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_966"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_14360"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_6675"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_6675"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    }
-   ]
+   "actions": []
   },
   {
    "id": "7408",
@@ -10441,188 +9555,7 @@
     42.282,
     -31.991
    ],
-   "actions": [
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_15676"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_15676"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8523"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8523"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_4078"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_9344"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8272"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_8272"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_9997"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_12287"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_7696"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_7696"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_944"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_4711"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_966"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_966"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_15142"
-    },
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_14360"
-    },
-    {
-     "op": "hide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    },
-    {
-     "op": "unhide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_6675"
-    },
-    {
-     "op": "off",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    },
-    {
-     "op": "unhide",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    },
-    {
-     "op": "hide",
-     "class": "SkeletalMeshActor",
-     "target": "SkeletalMeshActor_6675"
-    },
-    {
-     "op": "on",
-     "class": "TnInteractButtonReusable",
-     "target": "TnInteractButtonReusable_11476"
-    }
-   ]
+   "actions": []
   },
   {
    "id": "7932",
@@ -10985,23 +9918,7 @@
     25.214,
     -112.674
    ],
-   "actions": [
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_2516"
-    },
-    {
-     "op": "on",
-     "class": "Emitter",
-     "target": "Emitter_8670"
-    },
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_2516"
-    }
-   ]
+   "actions": []
   },
   {
    "id": "91",
@@ -11219,23 +10136,7 @@
     33.866,
     65.927
    ],
-   "actions": [
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_11219"
-    },
-    {
-     "op": "on",
-     "class": "Emitter",
-     "target": "Emitter_8145"
-    },
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_11219"
-    }
-   ]
+   "actions": []
   },
   {
    "id": "961",
@@ -11562,23 +10463,7 @@
     24.48,
     -119.41
    ],
-   "actions": [
-    {
-     "op": "on",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_492"
-    },
-    {
-     "op": "on",
-     "class": "Emitter",
-     "target": "Emitter_1061"
-    },
-    {
-     "op": "off",
-     "class": "TriggerVolume",
-     "target": "TriggerVolume_492"
-    }
-   ]
+   "actions": []
   },
   {
    "id": "980",
@@ -11832,6 +10717,259 @@
  ],
  "kismet": {
   "volumes": {}
+ },
+ "mechanisms": {
+  "hazardsOff": [
+   "DynamicPhysicsVolume_10120",
+   "DynamicPhysicsVolume_2841",
+   "DynamicPhysicsVolume_3986",
+   "DynamicPhysicsVolume_11907",
+   "DynamicPhysicsVolume_4440"
+  ],
+  "lasers": [
+   {
+    "gen": "7381",
+    "button": [
+     -123.318,
+     17.92,
+     -149.978
+    ],
+    "hazard": "DynamicPhysicsVolume_10120",
+    "time": 45.0,
+    "armDelay": 3.0,
+    "buttonRange": 3.0
+   },
+   {
+    "gen": "11492",
+    "button": [
+     -349.549,
+     33.205,
+     11.736
+    ],
+    "hazard": "DynamicPhysicsVolume_2841",
+    "time": 45.0,
+    "armDelay": 3.0,
+    "buttonRange": 3.0
+   },
+   {
+    "gen": "1022",
+    "button": [
+     -146.108,
+     17.92,
+     -105.084
+    ],
+    "hazard": "DynamicPhysicsVolume_3986",
+    "time": 45.0,
+    "armDelay": 3.0,
+    "buttonRange": 3.0
+   },
+   {
+    "gen": "15098",
+    "button": [
+     -85.328,
+     17.92,
+     -104.232
+    ],
+    "hazard": "DynamicPhysicsVolume_11907",
+    "time": 45.0,
+    "armDelay": 3.0,
+    "buttonRange": 3.0
+   },
+   {
+    "gen": "7702",
+    "button": [
+     -329.754,
+     33.105,
+     -37.428
+    ],
+    "hazard": "DynamicPhysicsVolume_4440",
+    "time": 45.0,
+    "armDelay": 3.0,
+    "buttonRange": 3.0
+   }
+  ],
+  "sentries": [
+   {
+    "seq": "Sentry_0",
+    "gen": "4356",
+    "pos": [
+     -173.44,
+     26.24,
+     -126.24
+    ],
+    "yaw": 0.29452,
+    "repair": false,
+    "time": 45.0,
+    "uses": 0
+   },
+   {
+    "seq": "Sentry_1",
+    "gen": "9559",
+    "pos": [
+     -255.393,
+     31.896,
+     60.727
+    ],
+    "yaw": 1.5708,
+    "repair": false,
+    "time": 45.0,
+    "uses": 0
+   },
+   {
+    "seq": "Sentry_2",
+    "gen": "2342",
+    "pos": [
+     -126.715,
+     22.826,
+     -89.334
+    ],
+    "yaw": 1.27627,
+    "repair": false,
+    "time": 45.0,
+    "uses": 0
+   },
+   {
+    "seq": "Sentry_3",
+    "gen": "9740",
+    "pos": [
+     -126.57,
+     22.826,
+     -124.407
+    ],
+    "yaw": 0.29452,
+    "repair": false,
+    "time": 45.0,
+    "uses": 0
+   },
+   {
+    "seq": "Sentry_5",
+    "gen": "7105",
+    "pos": [
+     -59.927,
+     24.023,
+     -132.417
+    ],
+    "yaw": -0.0,
+    "repair": false,
+    "time": 45.0,
+    "uses": 0
+   },
+   {
+    "seq": "Sentry_6",
+    "gen": "7283",
+    "pos": [
+     -145.2,
+     26.24,
+     11.52
+    ],
+    "yaw": 0.3927,
+    "repair": false,
+    "time": 45.0,
+    "uses": 0
+   },
+   {
+    "seq": "Sentry_4",
+    "gen": "2249",
+    "pos": [
+     -337.53,
+     39.06,
+     -92.76
+    ],
+    "yaw": -1.07992,
+    "repair": true,
+    "time": 90.0,
+    "uses": 3
+   },
+   {
+    "seq": "Sentry_7",
+    "gen": "13380",
+    "pos": [
+     44.15,
+     15.26,
+     -163.88
+    ],
+    "yaw": 1.66897,
+    "repair": true,
+    "time": 90.0,
+    "uses": 3
+   },
+   {
+    "seq": "Repair_Sentry#0",
+    "gen": "1070",
+    "pos": [
+     -104.8,
+     30.72,
+     -116.0
+    ],
+    "yaw": -1.5708,
+    "repair": true,
+    "time": 90.0,
+    "uses": 0
+   },
+   {
+    "seq": "Repair_Sentry#1",
+    "gen": "8605",
+    "pos": [
+     -104.8,
+     30.72,
+     -106.88
+    ],
+    "yaw": 1.10715,
+    "repair": true,
+    "time": 90.0,
+    "uses": 0
+   }
+  ],
+  "detpacks": [
+   {
+    "pos": [
+     -284.96,
+     28.131,
+     77.92
+    ],
+    "range": 5.0,
+    "countdown": 3.0,
+    "hits": [
+     [
+      "TnStaticDestructibleActor_3947",
+      0.0,
+      1000.0
+     ]
+    ]
+   },
+   {
+    "pos": [
+     6.4,
+     10.72,
+     -163.84
+    ],
+    "range": 5.0,
+    "countdown": 3.0,
+    "hits": [
+     [
+      "TnStaticDestructibleActor_171",
+      0.0,
+      1000.0
+     ],
+     [
+      "TnStaticDestructibleActor_11555",
+      1.0,
+      1000.0
+     ]
+    ]
+   }
+  ],
+  "outage": {
+   "fromRound": 4,
+   "chance": 0.25,
+   "lateRound": 10,
+   "lateChance": 0.5,
+   "delay": 5.0,
+   "duration": 60.0,
+   "lockout": 180.0,
+   "lateLockout": 300.0,
+   "max": 3
+  }
  },
  "weaponPickups": [
   {

@@ -186,6 +186,63 @@ void Application::runEscalationTest() {
                 check(S.generatorDone[(size_t)dg] && doors > 0 && opened == doors && zonesOn == zones, "a door generator opens its doors and activates its zones");
             } else if (map == "MP_ESC_District") check(false, "District: a door generator with loaded doors");
         }
+        {   // the map mechanisms (SurvivalMech.h): District lasers / sentries / detpacks / outage, Tranquillity floodgates / base doors
+            const game::SvMech& MD = D.mech;
+            const game::SvMechState& MS = S.mech;
+            auto buyGen = [&](int g) {   // stand in its activation volume and hold Interact until bought (or 30 s)
+                if (g < 0) return false;
+                const game::SurvivalData::Generator& G = D.generators[(size_t)g];
+                static core::Vec3 at3; at3 = (G.mn + G.mx) * 0.5f; at3.y = G.mn.y + 0.5f;
+                pin = &at3; interact = false; step(); step(); interact = true;
+                float b = 0.0f; while (b < 30.0f && !S.generatorDone[(size_t)g]) { step(); b += dt; }
+                interact = false; step(); pin = nullptr;
+                return S.generatorDone[(size_t)g] != 0;
+            };
+            auto hazardOn = [&](const std::string& a) { for (const auto& h : world_.hazardVolumes()) if (h.actor == a) return h.on ? 1 : 0; return -1; };
+            if (!MD.hazardsOff.empty()) {
+                int off = 0; for (const std::string& h : MD.hazardsOff) off += hazardOn(h) == 0;
+                LOG_INFO("ESCTEST %s: %d / %zu laser pain volumes off at start", map.c_str(), off, MD.hazardsOff.size());
+            }
+            if (!MD.lasers.empty()) {
+                const game::SvMech::Laser& L = MD.lasers[0];
+                const bool bought = buyGen(L.g);
+                const int on = hazardOn(L.hazard);
+                run(L.time + 1.0f);
+                const int after = hazardOn(L.hazard);
+                LOG_INFO("ESCTEST %s: laser grid %s bought %d: volume on %d, after %.0f s on %d, re-buyable %d", map.c_str(), L.gen.c_str(), (int)bought, on,
+                         L.time, after, (int)(!S.generatorDone[(size_t)L.g] && !S.generatorOff[(size_t)L.g]));
+                check(bought && on == 1 && after == 0 && !S.generatorDone[(size_t)L.g] && !S.generatorOff[(size_t)L.g],
+                      "laser grid: bought -> its pain volume on; 45 s later off and the generator re-buyable");
+            }
+            if (!MD.sentries.empty()) {
+                const game::SvMech::Sentry& T = MD.sentries[0];
+                const bool bought = buyGen(T.g);
+                run(2.0f);
+                LOG_INFO("ESCTEST %s: sentry %s bought %d, awake %d, target p%d", map.c_str(), T.seq.c_str(), (int)bought, (int)MS.sentries[0].active, MS.sentries[0].target);
+                check(bought && MS.sentries[0].active, "sentry: its generator wakes it");
+            }
+            if (!MD.detpacks.empty()) {
+                static core::Vec3 dp; dp = MD.detpacks[0].pos;
+                pin = &dp; interact = false; step(); step(); interact = true; step(); interact = false; step(); pin = nullptr;
+                run(MD.detpacks[0].countdown + 1.0f);
+                LOG_INFO("ESCTEST %s: detpack used %d, detonations %d", map.c_str(), (int)MS.detpacks[0].used, MS.detonations);
+                check(MS.detpacks[0].used && MS.detonations >= 1, "detpack: a press plants it; after the countdown its destructible is hit");
+            }
+            if (MD.outage.on) LOG_INFO("ESCTEST %s: power outages so far %d (Round Begins %d)", map.c_str(), MS.outages, S.roundBegins);
+            if (!MD.floods.empty()) {
+                int bought = 0;
+                for (const auto& F : MD.floods) bought += buyGen(F.g);
+                run(12.0f);
+                const bool drained = MS.drained;
+                run(MD.gateOpenDelay + 1.0f);
+                int zonesOn = 0;
+                for (const std::string& z : MD.zonesOn) for (const auto& Z : D.zones) if (Z.id == z) zonesOn += Z.active;
+                LOG_INFO("ESCTEST %s: floodgates bought %d / %zu, drained %d, zones %d / %zu on, base doors open %d", map.c_str(), bought, MD.floods.size(),
+                         (int)drained, zonesOn, MD.zonesOn.size(), (int)MS.gatesOpen);
+                check(bought == (int)MD.floods.size() && drained && MS.gatesOpen && zonesOn == (int)MD.zonesOn.size(),
+                      "floodgates: three purchases drain the base; its zones on, the base doors open");
+            }
+        }
         LOG_INFO("ESCTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
         exitCode_ = fails ? 1 : 0;
         return;

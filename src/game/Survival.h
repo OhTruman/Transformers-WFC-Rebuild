@@ -5,6 +5,7 @@
 // Owned and ticked by World (WorldSurvival.cpp); all sim, drawn from the Match RNG, by match player index.
 #include "core/Math.h"
 #include "game/Weapon.h"
+#include "game/SurvivalMech.h"
 
 #include <array>
 #include <cstdint>
@@ -83,6 +84,7 @@ struct SurvivalData {
     // TnWeaponPickupFactory (AssetTools weapon_pickups): the weapon id (our WeaponDef id), RespawnTime, location / yaw.
     struct WeaponPickup { std::string actor, weapon; float respawn = 2.0f; core::Vec3 pos{0, 0, 0}; float yaw = 0.0f; };
     std::vector<WeaponPickup> weaponPickups;
+    SvMech mech;                                     // the DLC maps' mechanisms (SurvivalMech.h; empty elsewhere)
     std::map<std::string, std::string> dropMeshes;   // weapon id -> its pickup mesh object ("WEP_RocketLauncher_p.WEP_RocketLauncher_SKEL")
     // RE's initial sorted order per type (the original binary's sort of the starting Zones list): ESCTEST's test vector.
     std::array<std::vector<std::string>, kSvTypes> initialSorted;
@@ -129,6 +131,7 @@ struct SurvivalState {
     int purchases = 0;
     // Round Begin / Round End (TnSeqEvent_SurvivalEvents 1 / 0) for the map's sequence and the announcer: counters + the last one.
     int roundBegins = 0, roundEnds = 0;
+    SvMechState mech;                     // the DLC map mechanisms' state (WorldSurvivalMech.cpp)
     // The Escalation nav (E2b part 3): loaded for this match; each generator's NavigationCells (opened on purchase); start-blocked count.
     bool escNav = false;
     std::vector<std::pair<std::string, std::vector<int>>> generatorCells;

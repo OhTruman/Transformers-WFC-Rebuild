@@ -232,6 +232,7 @@ struct HudGameState {
     // Escalation (MP_ESCALATION_RE §8; 0 / -1 / false outside it): the wave (DisplayWave + 1), the PreGame / next-wave countdown (whole
     // s), the game over (TnSurvivalGameOverMessage wave = svWave). E2: the local seat's power and the generator prompt; E4: downed / revive.
     int svWave = 0; int svNextWaveTime = -1; bool svGameOver = false;
+    bool svPowerOutage = false;   // District: a power outage is on (no buying; the dark grade, the screens off)
     // Campaign: the game over shown (UI event 14 -> CampaignGameOver_GFX), MissionComplete, the active checkpoint actor.
     bool cpActive = false, cpGameOver = false, cpMissionComplete = false; std::string cpCheckpoint;
     bool cpCinematic = false;   // SeqAct_ToggleCinematicMode on: the HUD hides
@@ -571,6 +572,7 @@ public:
     // per second and damage type. Stock UE3 PhysicsVolume pain: on entry (bEntryPain) and every PainInterval while
     // touching, DamagePerSec * PainInterval [HIGH: stock defaults PainInterval 1, bEntryPain true].
     struct HazardVolume { std::string actor, damageType; float damagePerSec = 0, painInterval = 1.0f; bool entryPain = true;
+                          bool on = true;     // Escalation mechanisms toggle it (SurvivalMech.h: District's lasers, Tranquillity's volumes)
                           std::string unit;   // campaign: its level's unit (object path prefix without _m); active only while loaded
                           core::Vec3 centroid{0, 0, 0};
                           struct Plane { core::Vec3 n; float w; };
@@ -1583,6 +1585,20 @@ private:
     bool svInteractHeld(int player) const;
     void svFireGenerator(int generator, bool levelDrop = false);
     void svTickKismet();   // Wall_Crashers (map Kismet as data)
+    // The DLC maps' mechanisms (WorldSurvivalMech.cpp / SurvivalMech.h)
+    void svMechSetup();
+    void svMechTick(float dt);
+    void svMechGenerator(int generator, bool levelDrop);
+    bool svMechBuyBlocked() const;          // a power outage: no generator can be bought
+    bool svMechHazard(const std::string& actor, bool on);
+    void svMechResetGenerator(int generator);
+    static std::vector<std::string> svMechBlockerNames(const std::string& map);   // switchable collision brushes (at map load)
+    void svMechAddBlockers();
+    void svMechSetBlockers(bool on);
+    std::vector<std::string> escBlockerNames_;
+    std::vector<std::pair<std::string, std::vector<core::Vec3>>> escBlockerTris_;
+    std::vector<int> escBlockerSets_;      // their collision_ dynamic sets
+    bool escBlockersOn_ = true;
     // Escalation weapons (E2b part 2): the SV spawn loadout, the pickup / dropped weapon take rules, the factories and drops.
     Character* svMutablePawn(int player);
     void svApplySpawnLoadout(Character& c);

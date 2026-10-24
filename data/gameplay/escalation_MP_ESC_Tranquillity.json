@@ -8502,6 +8502,42 @@
  "kismet": {
   "volumes": {}
  },
+ "mechanisms": {
+  "floodgates": {
+   "gens": [
+    {
+     "gen": "3589",
+     "trigger": "TriggerVolume_10055",
+     "hazard": "DynamicPhysicsVolume_14764"
+    },
+    {
+     "gen": "15956",
+     "trigger": "TriggerVolume_6407",
+     "hazard": "DynamicPhysicsVolume_2157"
+    },
+    {
+     "gen": "14278",
+     "trigger": "TriggerVolume_9646",
+     "hazard": "DynamicPhysicsVolume_576"
+    }
+   ],
+   "drainTimes": [
+    1.76,
+    3.49,
+    10.03
+   ],
+   "zonesOn": [
+    "64",
+    "7748"
+   ],
+   "energon": "DynamicPhysicsVolume_672",
+   "blockers": [
+    "DynamicBlockingVolume_8499",
+    "DynamicBlockingVolume_9335"
+   ],
+   "gateOpenDelay": 3.1
+  }
+ },
  "weaponPickups": [
   {
    "actor": "TnWeaponPickupFactory_43",

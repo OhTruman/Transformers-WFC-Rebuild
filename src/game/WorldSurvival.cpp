@@ -132,6 +132,7 @@ bool SurvivalData::load(const std::string& map, SurvivalData& out) {
             out.weaponPickups.push_back(w);
         }
         for (const auto& kv : j["dropMeshes"].obj) out.dropMeshes[kv.first] = kv.second.asString();
+        SvMech::parse(j["mechanisms"], out.mech);
         for (int t = 0; t < kSvTypes; ++t)
             for (size_t k = 0; k < j["initialSorted"][(size_t)t].size(); ++k) out.initialSorted[(size_t)t].push_back(j["initialSorted"][(size_t)t][k].asString());
         out.ok = !out.waves.empty() && !out.enemies.empty() && !out.zones.empty();
@@ -150,6 +151,8 @@ static std::string svManifest(const std::string& map, const char* file) {
 void World::setupSurvival() {
     const bool hadEscNav = sv_.escNav;
     sv_ = SurvivalState{};
+    for (HazardVolume& h : hazards_) h.on = true;   // a previous Escalation launch's mechanism states
+    svMechSetBlockers(true);
     if (!match_.settings().survival) {
         if (hadEscNav) { botNavTried_ = false; ensureBotNav(); LOG_INFO("escalation: the versus nav is back for %s", mapName_.c_str()); }
         return;
@@ -234,6 +237,7 @@ void World::setupSurvival() {
     sv_.reofferTimer.assign(svData_.generators.size(), 0.0f);
     sv_.factoryWasAvailable.assign(svData_.generators.size(), 1);
     sv_.crashDone.assign(svData_.crashWalls.size(), 0);
+    svMechSetup();   // the DLC maps' mechanisms: their PreGameplaySetup states
     sv_.windowInside.assign(match_.players().size(), 0);
     if (svData_.window.volume >= 0)   // PreGameplaySetup: SeqAct_TnToggleDestructible 1 -> _Invulnerable
         for (Destructible* d : destructibles_) {
@@ -810,6 +814,7 @@ void World::svFireGenerator(int gi, bool levelDrop) {
     if (!levelDrop) ++sv_.purchases;
     LOG_INFO("escalation: generator %s (%s, %d) %s: %d actions applied, %d not built yet (E2b)", g.id.c_str(), g.nameKey.c_str(), g.cost,
              levelDrop ? "level drop (Taken)" : "bought", done, pending);
+    svMechGenerator(gi, levelDrop);   // a DLC mechanism's generator
 }
 
 // TnSurvivalZoneVolume.Touch (sign +1) / UnTouch (-1) by a player pawn: UniversalScoreAdjustment -= 999 (OccupiedZoneScore),
@@ -955,6 +960,7 @@ void World::tickSurvival(float dt) {
         sv_.allowDrain.resize(P.size(), 0); sv_.prevInteract.resize(P.size(), 0); sv_.drainClock.resize(P.size(), 0.0f);
     }
     svTickKismet();
+    svMechTick(dt);   // the DLC maps' mechanisms
     svTickWeaponPickups(dt);
     // Item generators (map Kismet per generator, PickupStatusChange Taken): Hide; ModifySurvivalGeneratorPower(-cost); a level drop
     // (1 -> 0) fires "New Power Level" again - the event fires on negative changes too - so its actions re-apply (UnHide + the volume
@@ -1006,7 +1012,7 @@ void World::tickSurvival(float dt) {
         const Character* c = participantPawn((int)q);
         if (!c) { sv_.allowDrain[q] = 0; continue; }
         for (size_t g = 0; g < svData_.generators.size(); ++g)
-            if (!sv_.generatorDone[g] && !sv_.generatorOff[g] && svData_.generators[g].contains(c->position())) { sv_.nearGenerator[q] = (int)g; break; }
+            if (!sv_.generatorDone[g] && !sv_.generatorOff[g] && !svMechBuyBlocked() && svData_.generators[g].contains(c->position())) { sv_.nearGenerator[q] = (int)g; break; }
         const int g = sv_.nearGenerator[q];
         if (g != was) { sv_.allowDrain[q] = 0; sv_.drainClock[q] = 0.0f; }   // entering (or leaving): _AllowDraining = false
         if (g < 0) continue;

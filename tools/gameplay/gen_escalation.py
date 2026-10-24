@@ -162,6 +162,71 @@ for m in COOP:
         else: chassis = ''
         e.update({'chassis': chassis, 'robotWeapons': robot, 'vehicleWeapons': vehicle, 'health': health})
     out['kismet'] = dict(k, volumes=tvs)
+    # DLC map mechanisms the director runs as data (RE work/handoff/DLC_ESC_MECHANISMS_RE.md, 1104a86; C unless marked): positions from
+    # AssetTools' DLC authored.db (UE units -> glTF metres: x = X / 100, y = Z / 100, z = Y / 100), sentry spots from RE's kismet_extra.
+    MECH_RE = {
+        'MP_ESC_District': {
+            'lasers': [('7381', '11476', '10120'), ('11492', '15142', '2841'), ('1022', '944', '3986'), ('15098', '9997', '11907'), ('7702', '4078', '4440')],
+            'sentries': {'Sentry_0': ('4356', 'light'), 'Sentry_1': ('9559', 'light'), 'Sentry_2': ('2342', 'light'), 'Sentry_3': ('9740', 'light'),
+                         'Sentry_5': ('7105', 'light'), 'Sentry_6': ('7283', 'light'), 'Sentry_4': ('2249', 'repair3'), 'Sentry_7': ('13380', 'repair3'),
+                         'Repair_Sentry#0': ('1070', 'repair'), 'Repair_Sentry#1': ('8605', 'repair')},
+            'detpacks': [('TnInteractDetpack_12501', [('TnStaticDestructibleActor_3947', 0.0)]),
+                         ('TnInteractDetpack_14838', [('TnStaticDestructibleActor_171', 0.0), ('TnStaticDestructibleActor_11555', 1.0)])],
+            'outage': True,
+        },
+        'MP_ESC_Tranquillity': {
+            # FloodgateGenerators in RE's order with their TriggerVolume / DynamicPhysicsVolume pair (both off on purchase)
+            'floodgates': [('3589', '10055', '14764'), ('15956', '6407', '2157'), ('14278', '9646', '576')],
+        },
+    }
+    mech = {}
+    mre = MECH_RE.get(m)
+    if mre:
+        import sqlite3
+        db = sqlite3.connect('file:' + ROOT + '/AssetTools/manifests/dlc/authored.db?mode=ro', uri=True)
+        def actor(name):   # (glTF position, our yaw) of an authored actor of this map
+            row = db.execute('select props from objects where opath like ? limit 1', ('%' + m + '%.' + name,)).fetchone()
+            p = json.loads(row[0]) if row and row[0] else {}
+            L = p.get('Location') or {}
+            yaw_ue = (p.get('Rotation') or {}).get('Yaw', 0) * 360.0 / 65536.0
+            pos = [round(L.get('X', 0.0) / 100.0, 3), round(L.get('Z', 0.0) / 100.0, 3), round(L.get('Y', 0.0) / 100.0, 3)]
+            if not row: print('  no authored actor', name)
+            return pos, round(math.atan2(-math.cos(math.radians(yaw_ue)), -math.sin(math.radians(yaw_ue))), 5)
+        if 'lasers' in mre:   # all five damage volumes start off (root Toggle_14580); a purchase: on 45 s, the button usable after 3 s
+            mech['hazardsOff'] = ['DynamicPhysicsVolume_' + h for (_, _, h) in mre['lasers']]
+            mech['lasers'] = [{'gen': g, 'button': actor('TnInteractButtonReusable_' + b)[0], 'hazard': 'DynamicPhysicsVolume_' + h,
+                               'time': 45.0, 'armDelay': 3.0, 'buttonRange': 3.0} for (g, b, h) in mre['lasers']]   # buttonRange PROV
+        if 'sentries' in mre:
+            xe = json.load(open(ROOT + '/RE-Workspace/notes/data/escalation/' + m + '_kismet_extra.json'))
+            spots = {}
+            for x in xe['mechanisms']:   # the TnPawnFactory's Spawn Point at PreGameplaySetup, per sequence (Repair_Sentry: two, in order)
+                for y in x['downstream'][1:]:
+                    if y['class'] == 'SeqAct_TnPawnFactory' and (y.get('vars') or {}).get('Spawn Point'):
+                        seq = x['sequence']
+                        n = sum(1 for k in spots if k.split('#')[0] == seq)
+                        spots[seq + ('#%d' % n if seq == 'Repair_Sentry' else '')] = y['vars']['Spawn Point'][0]
+            mech['sentries'] = []
+            for seq, (g, kind) in mre['sentries'].items():
+                if seq not in spots:
+                    print('  no spawn point for', seq)
+                    continue
+                pos, yaw = actor(spots[seq])
+                mech['sentries'].append({'seq': seq, 'gen': g, 'pos': pos, 'yaw': yaw, 'repair': kind != 'light',
+                                         'time': 45.0 if kind == 'light' else 90.0, 'uses': 3 if kind == 'repair3' else 0})
+        if 'detpacks' in mre:   # a player interact (TouchDistance 500 UU), no cost, single use; BaBoom: 1000 on each destructible
+            mech['detpacks'] = [{'pos': actor(a)[0], 'range': 5.0, 'countdown': 3.0,   # countdown: the plant / countdown anim (H, PROV 3 s)
+                                 'hits': [[w, d, 1000.0] for (w, d) in hits]} for (a, hits) in mre['detpacks']]
+        if mre.get('outage'):   # Power_Outage: 25 % per Round Begin from the 4th (50 % from the 10th), 60 s, max 3, lockout 180 / 300 s
+            mech['outage'] = {'fromRound': 4, 'chance': 0.25, 'lateRound': 10, 'lateChance': 0.5, 'delay': 5.0, 'duration': 60.0,
+                              'lockout': 180.0, 'lateLockout': 300.0, 'max': 3}
+        if 'floodgates' in mre:   # three purchases resume the 10.03 s drain (pauses 1.76 / 3.49 s); Drain Completed after the third
+            mech['floodgates'] = {'gens': [{'gen': g, 'trigger': 'TriggerVolume_' + t, 'hazard': 'DynamicPhysicsVolume_' + h} for (g, t, h) in mre['floodgates']],
+                                  'drainTimes': [1.76, 3.49, 10.03], 'zonesOn': ['64', '7748'], 'energon': 'DynamicPhysicsVolume_672',
+                                  'blockers': ['DynamicBlockingVolume_8499', 'DynamicBlockingVolume_9335'], 'gateOpenDelay': 3.1}   # 4.35 - 1.25 s
+        own = {x['gen'] for x in mech.get('lasers', [])} | {x['gen'] for x in mech.get('sentries', [])}
+        for g in out['generators']:   # their flattened chains cross the prefab copies (RE 1104a86 section 0): the mechanism runs them
+            if g['id'] in own: g['actions'] = []
+    if mech: out['mechanisms'] = mech   # (base maps: no key, their data unchanged)
     # TnWeaponPickupFactory (AssetTools weapon_pickups): our weapon id = the inventory class without TransContent.TnWeapon.
     out['weaponPickups'] = [{'actor': w['actor'], 'weapon': w['inventory_type'].split('.')[-1].replace('TnWeapon', ''),
                              'respawn': w.get('respawn_time') or 2.0, 'pos': [round(v, 3) for v in w['location_gltf']],
