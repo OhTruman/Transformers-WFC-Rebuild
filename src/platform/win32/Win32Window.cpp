@@ -581,6 +581,14 @@ private:
                               kPadLStickLeft = 1u << 20, kPadLStickRight = 1u << 21;
     uint32_t padBits_ = 0;
     uint32_t fakePad_ = 0;   // injectPad (scripted runs)
+    // [Systems] split screen: the four XInput pads' states this pump, the seat -> pad routing, the Start edges
+    struct PadState { bool connected = false; XINPUT_STATE st{}; bool startDown = false; ULONGLONG nextProbeMs = 0; };
+    PadState pads_[4];
+    bool split_ = false;
+    int seatPad_[2] = {0, -1};
+    int lastActivePad_ = -1;
+    int seat2Serial_ = 0;
+    uint32_t seat2Prev_ = 0;
     std::vector<int> uiVk_[(int)UiKey::Count];
     std::vector<uint32_t> uiPad_[(int)UiKey::Count];
     int wheel_ = 0;
@@ -738,11 +746,89 @@ private:
         return c;
     }
 
+public:
+    void setSplitScreen(bool on) override {
+        if (on == split_) return;
+        split_ = on;
+        if (on) {   // seat 1: the keyboard / mouse, plus the pad it was last playing with
+            seatPad_[0] = lastActivePad_;
+            seatPad_[1] = -1;
+        } else {
+            seatPad_[0] = 0; seatPad_[1] = -1;
+        }
+        LOG_INFO("input: split screen %s (seat 1 pad %d)", on ? "on" : "off", seatPad_[0]);
+    }
+    bool splitScreen() const override { return split_; }
+    int seatPad(int seat) const override { return seat >= 0 && seat < 2 ? seatPad_[seat] : -1; }
+    void swapSeatPads() override { std::swap(seatPad_[0], seatPad_[1]); LOG_INFO("input: seat pads swapped (seat 1 pad %d, seat 2 pad %d)", seatPad_[0], seatPad_[1]); }
+    void releaseSeat2() override { if (seatPad_[1] >= 0) LOG_INFO("input: seat 2 left (pad %d free)", seatPad_[1]); seatPad_[1] = -1; }
+    int seat2JoinedSerial() const override { return seat2Serial_; }
+    bool pumpSeat2(InputFrame& input) override {
+        const int pi = split_ ? seatPad_[1] : -1;
+        const bool held = pi >= 0 && pi < 4 && pads_[pi].connected;
+        uint32_t bits = 0;
+        if (held) fillPad(input, pads_[pi].st, bits);
+        else { input.padConnected = false; input.padLX = input.padLY = input.padRX = input.padRY = 0.0f; input.padLT = 0.0f; }
+        uint32_t ui = 0;
+        for (int i = 0; i < (int)UiKey::Count; ++i) for (uint32_t m : uiPad_[i]) if (bits & m) ui |= 1u << i;
+        input.uiDown = ui;
+        input.padActive = bits != 0 || std::fabs(input.padRX) > 0.5f || std::fabs(input.padRY) > 0.5f;
+        input.keyActive = false;
+        for (int i = 0; i < (int)Button::Count; ++i) { input.pressed[i] = false; input.down[i] = false; }   // keys are seat 1's
+        input.mouseDX = input.mouseDY = 0.0f; input.mouseX = input.mouseY = -1; input.mouseLeft = input.mouseRight = false;
+        input.mouseWheel = 0.0f; input.text.clear(); input.keyPresses.clear();
+        seat2Prev_ = bits;
+        return pi >= 0;
+    }
+private:
+    // One pad's state -> the frame's pad fields and its button bits (raw buttons + synthetic trigger / left-stick bits).
+    static void fillPad(InputFrame& input, const XINPUT_STATE& st, uint32_t& bits) {
+        input.padConnected = true;
+        auto axis = [](SHORT v, SHORT dz) -> float {
+            if (v > dz) return float(v - dz) / float(32767 - dz);
+            if (v < -dz) return float(v + dz) / float(32768 - dz);
+            return 0.0f;
+        };
+        input.padLX = axis(st.Gamepad.sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+        input.padLY = axis(st.Gamepad.sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+        input.padRX = axis(st.Gamepad.sThumbRX, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
+        input.padRY = axis(st.Gamepad.sThumbRY, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
+        input.padLT = st.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD ? st.Gamepad.bLeftTrigger / 255.0f : 0.0f;
+        bits = st.Gamepad.wButtons;
+        if (st.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) bits |= kPadLT;
+        if (st.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) bits |= kPadRT;
+        if (input.padLY > 0.5f) bits |= kPadLStickUp;
+        if (input.padLY < -0.5f) bits |= kPadLStickDown;
+        if (input.padLX < -0.5f) bits |= kPadLStickLeft;
+        if (input.padLX > 0.5f) bits |= kPadLStickRight;
+    }
+    // Every pad's state this pump and the last pad used (seat 1's pad when split screen turns on). With split screen, a Start press
+    // on a pad no seat holds gives it seat 2 (seat 1 keeps the keyboard and its own pad). An empty slot is probed once a second
+    // only (XInputGetState on a disconnected index is slow).
+    void pollAllPads() {
+        const ULONGLONG nowMs = GetTickCount64();
+        for (int i = 0; i < 4; ++i) {
+            PadState& p = pads_[i];
+            const bool wasStart = p.startDown;
+            if (!p.connected && nowMs < p.nextProbeMs) continue;
+            p.connected = XInputGetState((DWORD)i, &p.st) == ERROR_SUCCESS;
+            if (!p.connected) { p.nextProbeMs = nowMs + 1000; p.startDown = false; continue; }
+            p.startDown = p.connected && (p.st.Gamepad.wButtons & XINPUT_GAMEPAD_START) != 0;
+            if (p.connected && (p.st.Gamepad.wButtons != 0 || p.st.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD ||
+                                p.st.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)) lastActivePad_ = i;
+            if (split_ && p.startDown && !wasStart && i != seatPad_[0] && i != seatPad_[1] && seatPad_[1] < 0) {
+                seatPad_[1] = i; ++seat2Serial_;
+                LOG_INFO("input: pad %d pressed Start - seat 2 joined", i);
+            }
+        }
+    }
     void pollGamepad(InputFrame& input) {
         static const bool noPad = std::getenv("WFC_NOPAD") != nullptr;   // scripted runs: ignore a real controller
         if (noPad || noInteract()) { padBits_ = fakePad_; return; }   // (NOINTERACT: the user's controller is theirs)
+        pollAllPads();
+        const int seat1Pad = split_ ? seatPad_[0] : 0;   // split screen: seat 1's own pad (or none: the keyboard only)
         XINPUT_STATE st{};
-        if (XInputGetState(0, &st) == ERROR_SUCCESS) {
+        if (seat1Pad >= 0 && pads_[seat1Pad].connected && (st = pads_[seat1Pad].st, true)) {
             static bool logged = false;
             if (!logged) { logged = true; LOG_INFO("input: XInput pad 0 connected"); }
             input.padConnected = true;

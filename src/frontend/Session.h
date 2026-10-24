@@ -237,6 +237,14 @@ public:
     // InviteSent{-1} (the clipboard path stays the fallback).
     virtual void sendInvite(const std::string& fingerprint, const std::string& code) { (void)fingerprint; (void)code; }
     virtual void queryOnline(const std::vector<std::string>& fingerprints) { (void)fingerprints; }
+    // [Systems] Split screen online (DLC_PLAN split-screen decisions, RE SPLITSCREEN_RE: two PRIs on one connection, counted against
+    // MaxPlayers): this peer carries a second local player. setSecondLocal(&info) adds it (its own SessionMemberInfo: name,
+    // character, team request; its id = this member's fingerprint + "/2"), nullptr removes it. It takes a lobby slot like any
+    // member (JoinFailed{Full} / refused when there is none) and its own match seat; MemberJoined / MemberLeft / LobbyState report it
+    // as a member. In a match its commands ride this peer's connection. supportsSecondLocal() = the session implements it.
+    virtual bool supportsSecondLocal() const { return false; }
+    virtual void setSecondLocal(const SessionMemberInfo* info) { (void)info; }
+    static std::string secondLocalId(const std::string& fingerprint) { return fingerprint + "/2"; }
 };
 
 // Match-side plumbing for WFC_SESSIONTEST (Gameplay's harness, ONLINE_MP_FRONTEND_TESTS.md section 4); declared here so

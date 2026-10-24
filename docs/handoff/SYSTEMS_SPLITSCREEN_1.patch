@@ -1,0 +1,314 @@
+diff -ruN a/src/core/Application.cpp b/src/core/Application.cpp
+--- a/src/core/Application.cpp	2026-10-23 21:18:28.889218400 -0500
++++ b/src/core/Application.cpp	2026-10-23 21:18:28.904771300 -0500
+@@ -1309,6 +1309,7 @@
+             core::Vec3 fwd = core::forwardFromYawPitch(camera_.yaw, camera_.pitch);
+             core::Vec3 right = core::normalize(core::cross(fwd, core::Vec3{0, 1, 0}));
+             audio_->setListener(camera_.pos, fwd, right);
++            world_.setAudioListenerFrame(fwd, right);   // [Systems] split screen: listener 1's frame for the nearest-listener mapping
+             audio_->update();
+         }
+ 
+diff -ruN a/src/frontend/Session.h b/src/frontend/Session.h
+--- a/src/frontend/Session.h	2026-10-23 21:18:31.244794300 -0500
++++ b/src/frontend/Session.h	2026-10-23 21:18:31.260346500 -0500
+@@ -237,6 +237,14 @@
+     // InviteSent{-1} (the clipboard path stays the fallback).
+     virtual void sendInvite(const std::string& fingerprint, const std::string& code) { (void)fingerprint; (void)code; }
+     virtual void queryOnline(const std::vector<std::string>& fingerprints) { (void)fingerprints; }
++    // [Systems] Split screen online (DLC_PLAN split-screen decisions, RE SPLITSCREEN_RE: two PRIs on one connection, counted against
++    // MaxPlayers): this peer carries a second local player. setSecondLocal(&info) adds it (its own SessionMemberInfo: name,
++    // character, team request; its id = this member's fingerprint + "/2"), nullptr removes it. It takes a lobby slot like any
++    // member (JoinFailed{Full} / refused when there is none) and its own match seat; MemberJoined / MemberLeft / LobbyState report it
++    // as a member. In a match its commands ride this peer's connection. supportsSecondLocal() = the session implements it.
++    virtual bool supportsSecondLocal() const { return false; }
++    virtual void setSecondLocal(const SessionMemberInfo* info) { (void)info; }
++    static std::string secondLocalId(const std::string& fingerprint) { return fingerprint + "/2"; }
+ };
+ 
+ // Match-side plumbing for WFC_SESSIONTEST (Gameplay's harness, ONLINE_MP_FRONTEND_TESTS.md section 4); declared here so
+diff -ruN a/src/game/SoundCues.cpp b/src/game/SoundCues.cpp
+--- a/src/game/SoundCues.cpp	2026-10-23 21:18:34.724220300 -0500
++++ b/src/game/SoundCues.cpp	2026-10-23 21:18:34.738770400 -0500
+@@ -303,6 +303,22 @@
+ // language is never substituted. Twin of GLanguage: INT -> "int", else the language code (FRA ...).
+ SoundCues::LocStats& SoundCues::locStats() { static LocStats s; return s; }
+ 
++core::Vec3 SoundCues::nearestListener(const core::Vec3& p) const {
++    if (!l2Active_) return listener_;
++    const core::Vec3 a = p - listener_, b = p - l2_;
++    return core::dot(b, b) < core::dot(a, a) ? l2_ : listener_;
++}
++
++core::Vec3 SoundCues::devicePos(const core::Vec3& p) const {
++    if (!l2Active_) return p;
++    const core::Vec3 a = p - listener_, b = p - l2_;
++    if (!(core::dot(b, b) < core::dot(a, a))) return p;
++    // the source in listener 2's frame (right, up, forward), rebuilt in listener 1's frame around listener 1
++    const core::Vec3 u2 = core::cross(l2Right_, l2Fwd_), u1 = core::cross(l1Right_, l1Fwd_);
++    const float x = core::dot(b, l2Right_), y = core::dot(b, u2), z = core::dot(b, l2Fwd_);
++    return listener_ + l1Right_ * x + u1 * y + l1Fwd_ * z;
++}
++
+ std::string SoundCues::localizedWave(const std::string& rel, const std::string& owner, const std::string& contentRoot, bool account) {
+     const char* lang = std::getenv("WFC_LANGUAGE");
+     std::string twin = lang && *lang ? lang : "INT";
+@@ -895,7 +911,7 @@
+     if (in.owner != kUI && cd.spatial != Spatial::TwoD && !cd.rootLoop && cd.distMaxUU > 0.0f) {
+         bool loops = false;
+         for (const EventDef& ev : cd.events) if (ev.loop) { loops = true; break; }
+-        const core::Vec3 d = in.pos - listener_;
++        const core::Vec3 d = in.pos - nearestListener(in.pos);
+         const float maxM = cd.distMaxUU * UU;
+         if (!loops && core::dot(d, d) > maxM * maxM) { ++inaudibleSkipped_; return -1; }
+     }
+@@ -913,7 +929,7 @@
+             if (cd.limit == Limit::KillNewest) return -1;
+             if (cd.limit == Limit::KillOldest) victim = live_[playing.front()].id;
+             else {
+-                auto d2 = [&](const core::Vec3& p) { core::Vec3 v = p - listener_; return core::dot(v, v); };
++                auto d2 = [&](const core::Vec3& p) { core::Vec3 v = p - nearestListener(p); return core::dot(v, v); };
+                 float best = d2(in.pos);
+                 for (size_t k = playing.size(); k-- > 0;) {
+                     float d = d2(live_[playing[k]].pos);
+@@ -927,10 +943,10 @@
+     if (!cd.mixerPreset.empty()) mixer_.enable(cd.mixerPreset);      // SoundNodeRoot.PlayMixerPreset (AC play)
+     // A new instance starts with the current occlusion (no fade-in from clear).
+     if (cd.occlusion && occlusion_ && in.owner != kUI && cd.spatial != Spatial::TwoD) {
+-        const core::Vec3 d = in.pos - listener_;
++        const core::Vec3 d = in.pos - nearestListener(in.pos);
+         const float maxM = cd.distMaxUU * UU;
+         if (cd.distMaxUU > 0.0f && core::dot(d, d) > maxM * maxM) in.occlStale = true;   // inaudible loop: no ray yet
+-        else in.occl = in.occlTarget = occlusion_(listener_, in.pos, in.owner) ? 1.0f : 0.0f;
++        else in.occl = in.occlTarget = occlusion_(nearestListener(in.pos), in.pos, in.owner) ? 1.0f : 0.0f;
+         in.occlCheck = kOcclCheck * (float)(in.id % 8) / 8.0f;
+     }
+     for (const EventDef& e : cd.events) if (e.loop) in.looping = true;
+@@ -980,7 +996,7 @@
+     p.positional = in.owner != kUI && cd.spatial != Spatial::TwoD;
+     p.spatial = (int)cd.spatial;
+     p.panAtten3DDb = cd.panAtten3DDb;
+-    p.pos = in.pos;
++    p.pos = devicePos(in.pos);
+     p.minDist = cd.distMinUU * UU;
+     p.maxDist = cd.distMaxUU * UU;
+     p.rolloff = cd.rolloff;
+@@ -1035,7 +1051,7 @@
+         float gain = r.baseGain * ed.stereoGain * gainOf(in) * dbToLinear(kOcclDb * in.occl) *
+                      evalCurve(ed.volCurve, x, 1.0f) * evalCurve(ed.envVol, in.age, 1.0f) * fade;
+         float pitch = stToRate(r.baseSt + evalCurve(ed.pitchCurve, x, 0.0f) + evalCurve(ed.envPitch, in.age, 0.0f));
+-        audio_->updateVoice(r.v, gain, pitch, in.pos);
++        audio_->updateVoice(r.v, gain, pitch, devicePos(in.pos));
+     }
+ }
+ 
+@@ -1185,7 +1201,7 @@
+             // Beyond the cue's audible distance the voices are virtual (gain 0): the line check is skipped (the 32 v 32 cost
+             // was mostly these). Back in range it is checked at once and takes its value directly - what the continuous
+             // checks would have reached - so nothing audible changes.
+-            const core::Vec3 d = in.pos - listener_;
++            const core::Vec3 d = in.pos - nearestListener(in.pos);
+             const float maxM = cd.distMaxUU * UU;
+             if (cd.distMaxUU > 0.0f && core::dot(d, d) > maxM * maxM) {
+                 in.occlStale = true;
+@@ -1193,7 +1209,7 @@
+                 in.occlCheck -= dt;
+                 if (in.occlStale || in.occlCheck <= 0.0f) {
+                     in.occlCheck = kOcclCheck;
+-                    in.occlTarget = occlusion_(listener_, in.pos, in.owner) ? 1.0f : 0.0f;
++                    in.occlTarget = occlusion_(nearestListener(in.pos), in.pos, in.owner) ? 1.0f : 0.0f;
+                     if (in.occlStale) in.occl = in.occlTarget;
+                     in.occlStale = false;
+                 }
+@@ -1208,7 +1224,7 @@
+         int resolvedHere = -1;
+         if (in.owner != kUI && cd.spatial != Spatial::TwoD && cd.distMaxUU > 0.0f && !in.voices.empty()) {
+             resolvedHere = resolve(in) ? 1 : 0;
+-            const core::Vec3 d = in.pos - listener_;
++            const core::Vec3 d = in.pos - nearestListener(in.pos);
+             const float far = cd.distMaxUU * UU * 1.1f + 2.0f;
+             if (core::dot(d, d) > far * far) { in.dormant = true; ++i; continue; }
+             if (in.dormant) { in.dormant = false; in.posDirty = true; }   // back: one full refresh (position, gains) now
+diff -ruN a/src/game/SoundCues.h b/src/game/SoundCues.h
+--- a/src/game/SoundCues.h	2026-10-23 21:18:34.837608900 -0500
++++ b/src/game/SoundCues.h	2026-10-23 21:18:34.852660700 -0500
+@@ -102,6 +102,19 @@
+     using OcclusionQuery = std::function<bool(const core::Vec3& from, const core::Vec3& to, int owner)>;
+     void setOcclusion(OcclusionQuery q) { occlusion_ = std::move(q); }
+     void setListener(const core::Vec3& p) { listener_ = p; }
++    // [Systems] Split screen: the second local player's listener (split-screen decisions: one listener per player, nearest-listener
++    // attenuation - UE3 AudioDevice: each source is spatialized against its CLOSEST listener). setListenerFrame = listener 1's
++    // orientation (the device's listener: the caller passes what it gives IAudio::setListener); setListener2 = listener 2's pose
++    // (active false: one listener, everything as before). Distance culling, kill-farthest limiting, occlusion rays and dormancy use
++    // the nearest listener; a voice's position goes to the device re-expressed around listener 1 as seen from its nearest listener,
++    // so the device's distance and pan equal the nearest player's.
++    void setListenerFrame(const core::Vec3& forward, const core::Vec3& right) { l1Fwd_ = forward; l1Right_ = right; }
++    void setListener2(const core::Vec3& pos, const core::Vec3& forward, const core::Vec3& right, bool active) {
++        l2_ = pos; l2Fwd_ = forward; l2Right_ = right; l2Active_ = active;
++    }
++    bool listener2Active() const { return l2Active_; }
++    core::Vec3 nearestListener(const core::Vec3& p) const;   // the listener (1 or 2) nearest to p
++    core::Vec3 devicePos(const core::Vec3& p) const;          // p for the device (identity with one listener)
+     int occludedInstances() const;
+     // Diagnostics: visit every live instance (resolved position, owner id, occlusion 0..1).
+     template <class F> void forEachInstance(F&& f) const {
+@@ -254,6 +267,9 @@
+     Resolver resolver_;
+     OcclusionQuery occlusion_;
+     core::Vec3 listener_{0, 0, 0};
++    core::Vec3 l1Fwd_{0, 0, -1}, l1Right_{1, 0, 0};
++    core::Vec3 l2_{0, 0, 0}, l2Fwd_{0, 0, -1}, l2Right_{1, 0, 0};
++    bool l2Active_ = false;
+     std::vector<cuedata::CueDef> cues_;
+     // findCue index (was a linear scan with a string compare per play): FNV-1a 64 of the name -> cue indices, ascending (the
+     // first match wins, as the scan did). No allocation on lookup.
+diff -ruN a/src/game/World.h b/src/game/World.h
+--- a/src/game/World.h	2026-10-23 21:18:36.350796000 -0500
++++ b/src/game/World.h	2026-10-23 21:18:36.365345900 -0500
+@@ -504,6 +504,12 @@
+     bool prefetchLevelAudio(const std::string& level) { return levelAudio_.prefetch(level); }
+     // The listener (frontend camera) for audio-only ticking; World::tick sets it from the game camera itself.
+     void setAudioListener(const core::Vec3& p) { listenerPos_ = p; }
++    // [Systems] Split screen audio (SoundCues: nearest-listener attenuation): listener 1's orientation (what the app gives the
++    // device) and the second local player's listener (its view camera; active false = one player). Presentation only.
++    void setAudioListenerFrame(const core::Vec3& forward, const core::Vec3& right) { cues_.setListenerFrame(forward, right); }
++    void setAudioListener2(const core::Vec3& pos, const core::Vec3& forward, const core::Vec3& right, bool active) {
++        cues_.setListener2(pos, forward, right, active);
++    }
+     // Frontend / lobby / loading frames (no match ticking): level audio (Kismet ops, pools, timelines, emitters),
+     // music player, mixer fades, cue instances and voices.
+     void tickAudioOnly(float dt);
+diff -ruN a/src/platform/Window.h b/src/platform/Window.h
+--- a/src/platform/Window.h	2026-10-23 21:18:38.529765600 -0500
++++ b/src/platform/Window.h	2026-10-23 21:18:38.544817000 -0500
+@@ -48,6 +48,21 @@
+     // DEV TOOL (scripted pad coverage): hold / release a pad button by its binding name ("A", "DPadDown", "LStickUp", ...)
+     // as if read from XInput; it is ORed into the pad state, so it reaches the same name -> UiKey bindings as a real pad.
+     virtual void injectPad(const std::string& button, bool down) { (void)button; (void)down; }
++    // [Systems] Split screen (two local players; DLC_PLAN split-screen decisions): the window owns the device -> seat routing.
++    //   Off (default): seat 1 = keyboard / mouse + pad 0, as always.
++    //   On: seat 1 keeps the keyboard / mouse, plus the pad it was last playing with (if it was on a pad when split screen was
++    //   turned on); the next OTHER pad that presses Start takes seat 2 (the stock CreatePlayer(ControllerId) rule). The
++    //   keyboard / mouse always belong to seat 1.
++    // pump() fills seat 1's frame as before; pumpSeat2() (after pump) fills seat 2's pad-only frame and returns false while
++    // nobody holds seat 2. seatPad(): the XInput index a seat uses (-1 = none). swapSeatPads(): the seats exchange pads.
++    // releaseSeat2(): seat 2 leaves (its pad is free again). seat2JoinedSerial(): changes each time a pad takes seat 2.
++    virtual void setSplitScreen(bool on) { (void)on; }
++    virtual bool splitScreen() const { return false; }
++    virtual bool pumpSeat2(InputFrame& input) { (void)input; return false; }
++    virtual int seatPad(int seat) const { return seat == 0 ? 0 : -1; }
++    virtual void swapSeatPads() {}
++    virtual void releaseSeat2() {}
++    virtual int seat2JoinedSerial() const { return 0; }
+     virtual bool vsync() const = 0;
+ };
+ 
+diff -ruN a/src/platform/win32/Win32Window.cpp b/src/platform/win32/Win32Window.cpp
+--- a/src/platform/win32/Win32Window.cpp	2026-10-23 21:18:38.421895700 -0500
++++ b/src/platform/win32/Win32Window.cpp	2026-10-23 21:18:38.435441900 -0500
+@@ -581,6 +581,14 @@
+                               kPadLStickLeft = 1u << 20, kPadLStickRight = 1u << 21;
+     uint32_t padBits_ = 0;
+     uint32_t fakePad_ = 0;   // injectPad (scripted runs)
++    // [Systems] split screen: the four XInput pads' states this pump, the seat -> pad routing, the Start edges
++    struct PadState { bool connected = false; XINPUT_STATE st{}; bool startDown = false; ULONGLONG nextProbeMs = 0; };
++    PadState pads_[4];
++    bool split_ = false;
++    int seatPad_[2] = {0, -1};
++    int lastActivePad_ = -1;
++    int seat2Serial_ = 0;
++    uint32_t seat2Prev_ = 0;
+     std::vector<int> uiVk_[(int)UiKey::Count];
+     std::vector<uint32_t> uiPad_[(int)UiKey::Count];
+     int wheel_ = 0;
+@@ -738,11 +746,89 @@
+         return c;
+     }
+ 
++public:
++    void setSplitScreen(bool on) override {
++        if (on == split_) return;
++        split_ = on;
++        if (on) {   // seat 1: the keyboard / mouse, plus the pad it was last playing with
++            seatPad_[0] = lastActivePad_;
++            seatPad_[1] = -1;
++        } else {
++            seatPad_[0] = 0; seatPad_[1] = -1;
++        }
++        LOG_INFO("input: split screen %s (seat 1 pad %d)", on ? "on" : "off", seatPad_[0]);
++    }
++    bool splitScreen() const override { return split_; }
++    int seatPad(int seat) const override { return seat >= 0 && seat < 2 ? seatPad_[seat] : -1; }
++    void swapSeatPads() override { std::swap(seatPad_[0], seatPad_[1]); LOG_INFO("input: seat pads swapped (seat 1 pad %d, seat 2 pad %d)", seatPad_[0], seatPad_[1]); }
++    void releaseSeat2() override { if (seatPad_[1] >= 0) LOG_INFO("input: seat 2 left (pad %d free)", seatPad_[1]); seatPad_[1] = -1; }
++    int seat2JoinedSerial() const override { return seat2Serial_; }
++    bool pumpSeat2(InputFrame& input) override {
++        const int pi = split_ ? seatPad_[1] : -1;
++        const bool held = pi >= 0 && pi < 4 && pads_[pi].connected;
++        uint32_t bits = 0;
++        if (held) fillPad(input, pads_[pi].st, bits);
++        else { input.padConnected = false; input.padLX = input.padLY = input.padRX = input.padRY = 0.0f; input.padLT = 0.0f; }
++        uint32_t ui = 0;
++        for (int i = 0; i < (int)UiKey::Count; ++i) for (uint32_t m : uiPad_[i]) if (bits & m) ui |= 1u << i;
++        input.uiDown = ui;
++        input.padActive = bits != 0 || std::fabs(input.padRX) > 0.5f || std::fabs(input.padRY) > 0.5f;
++        input.keyActive = false;
++        for (int i = 0; i < (int)Button::Count; ++i) { input.pressed[i] = false; input.down[i] = false; }   // keys are seat 1's
++        input.mouseDX = input.mouseDY = 0.0f; input.mouseX = input.mouseY = -1; input.mouseLeft = input.mouseRight = false;
++        input.mouseWheel = 0.0f; input.text.clear(); input.keyPresses.clear();
++        seat2Prev_ = bits;
++        return pi >= 0;
++    }
++private:
++    // One pad's state -> the frame's pad fields and its button bits (raw buttons + synthetic trigger / left-stick bits).
++    static void fillPad(InputFrame& input, const XINPUT_STATE& st, uint32_t& bits) {
++        input.padConnected = true;
++        auto axis = [](SHORT v, SHORT dz) -> float {
++            if (v > dz) return float(v - dz) / float(32767 - dz);
++            if (v < -dz) return float(v + dz) / float(32768 - dz);
++            return 0.0f;
++        };
++        input.padLX = axis(st.Gamepad.sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
++        input.padLY = axis(st.Gamepad.sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
++        input.padRX = axis(st.Gamepad.sThumbRX, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
++        input.padRY = axis(st.Gamepad.sThumbRY, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
++        input.padLT = st.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD ? st.Gamepad.bLeftTrigger / 255.0f : 0.0f;
++        bits = st.Gamepad.wButtons;
++        if (st.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) bits |= kPadLT;
++        if (st.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) bits |= kPadRT;
++        if (input.padLY > 0.5f) bits |= kPadLStickUp;
++        if (input.padLY < -0.5f) bits |= kPadLStickDown;
++        if (input.padLX < -0.5f) bits |= kPadLStickLeft;
++        if (input.padLX > 0.5f) bits |= kPadLStickRight;
++    }
++    // Every pad's state this pump and the last pad used (seat 1's pad when split screen turns on). With split screen, a Start press
++    // on a pad no seat holds gives it seat 2 (seat 1 keeps the keyboard and its own pad). An empty slot is probed once a second
++    // only (XInputGetState on a disconnected index is slow).
++    void pollAllPads() {
++        const ULONGLONG nowMs = GetTickCount64();
++        for (int i = 0; i < 4; ++i) {
++            PadState& p = pads_[i];
++            const bool wasStart = p.startDown;
++            if (!p.connected && nowMs < p.nextProbeMs) continue;
++            p.connected = XInputGetState((DWORD)i, &p.st) == ERROR_SUCCESS;
++            if (!p.connected) { p.nextProbeMs = nowMs + 1000; p.startDown = false; continue; }
++            p.startDown = p.connected && (p.st.Gamepad.wButtons & XINPUT_GAMEPAD_START) != 0;
++            if (p.connected && (p.st.Gamepad.wButtons != 0 || p.st.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD ||
++                                p.st.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)) lastActivePad_ = i;
++            if (split_ && p.startDown && !wasStart && i != seatPad_[0] && i != seatPad_[1] && seatPad_[1] < 0) {
++                seatPad_[1] = i; ++seat2Serial_;
++                LOG_INFO("input: pad %d pressed Start - seat 2 joined", i);
++            }
++        }
++    }
+     void pollGamepad(InputFrame& input) {
+         static const bool noPad = std::getenv("WFC_NOPAD") != nullptr;   // scripted runs: ignore a real controller
+         if (noPad || noInteract()) { padBits_ = fakePad_; return; }   // (NOINTERACT: the user's controller is theirs)
++        pollAllPads();
++        const int seat1Pad = split_ ? seatPad_[0] : 0;   // split screen: seat 1's own pad (or none: the keyboard only)
+         XINPUT_STATE st{};
+-        if (XInputGetState(0, &st) == ERROR_SUCCESS) {
++        if (seat1Pad >= 0 && pads_[seat1Pad].connected && (st = pads_[seat1Pad].st, true)) {
+             static bool logged = false;
+             if (!logged) { logged = true; LOG_INFO("input: XInput pad 0 connected"); }
+             input.padConnected = true;

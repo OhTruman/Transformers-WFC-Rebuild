@@ -48,6 +48,21 @@ public:
     // DEV TOOL (scripted pad coverage): hold / release a pad button by its binding name ("A", "DPadDown", "LStickUp", ...)
     // as if read from XInput; it is ORed into the pad state, so it reaches the same name -> UiKey bindings as a real pad.
     virtual void injectPad(const std::string& button, bool down) { (void)button; (void)down; }
+    // [Systems] Split screen (two local players; DLC_PLAN split-screen decisions): the window owns the device -> seat routing.
+    //   Off (default): seat 1 = keyboard / mouse + pad 0, as always.
+    //   On: seat 1 keeps the keyboard / mouse, plus the pad it was last playing with (if it was on a pad when split screen was
+    //   turned on); the next OTHER pad that presses Start takes seat 2 (the stock CreatePlayer(ControllerId) rule). The
+    //   keyboard / mouse always belong to seat 1.
+    // pump() fills seat 1's frame as before; pumpSeat2() (after pump) fills seat 2's pad-only frame and returns false while
+    // nobody holds seat 2. seatPad(): the XInput index a seat uses (-1 = none). swapSeatPads(): the seats exchange pads.
+    // releaseSeat2(): seat 2 leaves (its pad is free again). seat2JoinedSerial(): changes each time a pad takes seat 2.
+    virtual void setSplitScreen(bool on) { (void)on; }
+    virtual bool splitScreen() const { return false; }
+    virtual bool pumpSeat2(InputFrame& input) { (void)input; return false; }
+    virtual int seatPad(int seat) const { return seat == 0 ? 0 : -1; }
+    virtual void swapSeatPads() {}
+    virtual void releaseSeat2() {}
+    virtual int seat2JoinedSerial() const { return 0; }
     virtual bool vsync() const = 0;
 };
 

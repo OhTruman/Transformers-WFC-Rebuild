@@ -303,6 +303,22 @@ int SoundCues::applyLoopPoints() {
 // language is never substituted. Twin of GLanguage: INT -> "int", else the language code (FRA ...).
 SoundCues::LocStats& SoundCues::locStats() { static LocStats s; return s; }
 
+core::Vec3 SoundCues::nearestListener(const core::Vec3& p) const {
+    if (!l2Active_) return listener_;
+    const core::Vec3 a = p - listener_, b = p - l2_;
+    return core::dot(b, b) < core::dot(a, a) ? l2_ : listener_;
+}
+
+core::Vec3 SoundCues::devicePos(const core::Vec3& p) const {
+    if (!l2Active_) return p;
+    const core::Vec3 a = p - listener_, b = p - l2_;
+    if (!(core::dot(b, b) < core::dot(a, a))) return p;
+    // the source in listener 2's frame (right, up, forward), rebuilt in listener 1's frame around listener 1
+    const core::Vec3 u2 = core::cross(l2Right_, l2Fwd_), u1 = core::cross(l1Right_, l1Fwd_);
+    const float x = core::dot(b, l2Right_), y = core::dot(b, u2), z = core::dot(b, l2Fwd_);
+    return listener_ + l1Right_ * x + u1 * y + l1Fwd_ * z;
+}
+
 std::string SoundCues::localizedWave(const std::string& rel, const std::string& owner, const std::string& contentRoot, bool account) {
     const char* lang = std::getenv("WFC_LANGUAGE");
     std::string twin = lang && *lang ? lang : "INT";
@@ -895,7 +911,7 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
     if (in.owner != kUI && cd.spatial != Spatial::TwoD && !cd.rootLoop && cd.distMaxUU > 0.0f) {
         bool loops = false;
         for (const EventDef& ev : cd.events) if (ev.loop) { loops = true; break; }
-        const core::Vec3 d = in.pos - listener_;
+        const core::Vec3 d = in.pos - nearestListener(in.pos);
         const float maxM = cd.distMaxUU * UU;
         if (!loops && core::dot(d, d) > maxM * maxM) { ++inaudibleSkipped_; return -1; }
     }
@@ -913,7 +929,7 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
             if (cd.limit == Limit::KillNewest) return -1;
             if (cd.limit == Limit::KillOldest) victim = live_[playing.front()].id;
             else {
-                auto d2 = [&](const core::Vec3& p) { core::Vec3 v = p - listener_; return core::dot(v, v); };
+                auto d2 = [&](const core::Vec3& p) { core::Vec3 v = p - nearestListener(p); return core::dot(v, v); };
                 float best = d2(in.pos);
                 for (size_t k = playing.size(); k-- > 0;) {
                     float d = d2(live_[playing[k]].pos);
@@ -927,10 +943,10 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
     if (!cd.mixerPreset.empty()) mixer_.enable(cd.mixerPreset);      // SoundNodeRoot.PlayMixerPreset (AC play)
     // A new instance starts with the current occlusion (no fade-in from clear).
     if (cd.occlusion && occlusion_ && in.owner != kUI && cd.spatial != Spatial::TwoD) {
-        const core::Vec3 d = in.pos - listener_;
+        const core::Vec3 d = in.pos - nearestListener(in.pos);
         const float maxM = cd.distMaxUU * UU;
         if (cd.distMaxUU > 0.0f && core::dot(d, d) > maxM * maxM) in.occlStale = true;   // inaudible loop: no ray yet
-        else in.occl = in.occlTarget = occlusion_(listener_, in.pos, in.owner) ? 1.0f : 0.0f;
+        else in.occl = in.occlTarget = occlusion_(nearestListener(in.pos), in.pos, in.owner) ? 1.0f : 0.0f;
         in.occlCheck = kOcclCheck * (float)(in.id % 8) / 8.0f;
     }
     for (const EventDef& e : cd.events) if (e.loop) in.looping = true;
@@ -980,7 +996,7 @@ void SoundCues::launch(Instance& in, int e) {
     p.positional = in.owner != kUI && cd.spatial != Spatial::TwoD;
     p.spatial = (int)cd.spatial;
     p.panAtten3DDb = cd.panAtten3DDb;
-    p.pos = in.pos;
+    p.pos = devicePos(in.pos);
     p.minDist = cd.distMinUU * UU;
     p.maxDist = cd.distMaxUU * UU;
     p.rolloff = cd.rolloff;
@@ -1035,7 +1051,7 @@ void SoundCues::refresh(Instance& in, int resolved) {
         float gain = r.baseGain * ed.stereoGain * gainOf(in) * dbToLinear(kOcclDb * in.occl) *
                      evalCurve(ed.volCurve, x, 1.0f) * evalCurve(ed.envVol, in.age, 1.0f) * fade;
         float pitch = stToRate(r.baseSt + evalCurve(ed.pitchCurve, x, 0.0f) + evalCurve(ed.envPitch, in.age, 0.0f));
-        audio_->updateVoice(r.v, gain, pitch, in.pos);
+        audio_->updateVoice(r.v, gain, pitch, devicePos(in.pos));
     }
 }
 
@@ -1185,7 +1201,7 @@ void SoundCues::tick(float dt) {
             // Beyond the cue's audible distance the voices are virtual (gain 0): the line check is skipped (the 32 v 32 cost
             // was mostly these). Back in range it is checked at once and takes its value directly - what the continuous
             // checks would have reached - so nothing audible changes.
-            const core::Vec3 d = in.pos - listener_;
+            const core::Vec3 d = in.pos - nearestListener(in.pos);
             const float maxM = cd.distMaxUU * UU;
             if (cd.distMaxUU > 0.0f && core::dot(d, d) > maxM * maxM) {
                 in.occlStale = true;
@@ -1193,7 +1209,7 @@ void SoundCues::tick(float dt) {
                 in.occlCheck -= dt;
                 if (in.occlStale || in.occlCheck <= 0.0f) {
                     in.occlCheck = kOcclCheck;
-                    in.occlTarget = occlusion_(listener_, in.pos, in.owner) ? 1.0f : 0.0f;
+                    in.occlTarget = occlusion_(nearestListener(in.pos), in.pos, in.owner) ? 1.0f : 0.0f;
                     if (in.occlStale) in.occl = in.occlTarget;
                     in.occlStale = false;
                 }
@@ -1208,7 +1224,7 @@ void SoundCues::tick(float dt) {
         int resolvedHere = -1;
         if (in.owner != kUI && cd.spatial != Spatial::TwoD && cd.distMaxUU > 0.0f && !in.voices.empty()) {
             resolvedHere = resolve(in) ? 1 : 0;
-            const core::Vec3 d = in.pos - listener_;
+            const core::Vec3 d = in.pos - nearestListener(in.pos);
             const float far = cd.distMaxUU * UU * 1.1f + 2.0f;
             if (core::dot(d, d) > far * far) { in.dormant = true; ++i; continue; }
             if (in.dormant) { in.dormant = false; in.posDirty = true; }   // back: one full refresh (position, gains) now

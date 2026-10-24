@@ -102,6 +102,19 @@ public:
     using OcclusionQuery = std::function<bool(const core::Vec3& from, const core::Vec3& to, int owner)>;
     void setOcclusion(OcclusionQuery q) { occlusion_ = std::move(q); }
     void setListener(const core::Vec3& p) { listener_ = p; }
+    // [Systems] Split screen: the second local player's listener (split-screen decisions: one listener per player, nearest-listener
+    // attenuation - UE3 AudioDevice: each source is spatialized against its CLOSEST listener). setListenerFrame = listener 1's
+    // orientation (the device's listener: the caller passes what it gives IAudio::setListener); setListener2 = listener 2's pose
+    // (active false: one listener, everything as before). Distance culling, kill-farthest limiting, occlusion rays and dormancy use
+    // the nearest listener; a voice's position goes to the device re-expressed around listener 1 as seen from its nearest listener,
+    // so the device's distance and pan equal the nearest player's.
+    void setListenerFrame(const core::Vec3& forward, const core::Vec3& right) { l1Fwd_ = forward; l1Right_ = right; }
+    void setListener2(const core::Vec3& pos, const core::Vec3& forward, const core::Vec3& right, bool active) {
+        l2_ = pos; l2Fwd_ = forward; l2Right_ = right; l2Active_ = active;
+    }
+    bool listener2Active() const { return l2Active_; }
+    core::Vec3 nearestListener(const core::Vec3& p) const;   // the listener (1 or 2) nearest to p
+    core::Vec3 devicePos(const core::Vec3& p) const;          // p for the device (identity with one listener)
     int occludedInstances() const;
     // Diagnostics: visit every live instance (resolved position, owner id, occlusion 0..1).
     template <class F> void forEachInstance(F&& f) const {
@@ -254,6 +267,9 @@ private:
     Resolver resolver_;
     OcclusionQuery occlusion_;
     core::Vec3 listener_{0, 0, 0};
+    core::Vec3 l1Fwd_{0, 0, -1}, l1Right_{1, 0, 0};
+    core::Vec3 l2_{0, 0, 0}, l2Fwd_{0, 0, -1}, l2Right_{1, 0, 0};
+    bool l2Active_ = false;
     std::vector<cuedata::CueDef> cues_;
     // findCue index (was a linear scan with a string compare per play): FNV-1a 64 of the name -> cue indices, ascending (the
     // first match wins, as the scan did). No allocation on lookup.

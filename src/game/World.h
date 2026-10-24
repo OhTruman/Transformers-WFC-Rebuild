@@ -504,6 +504,12 @@ public:
     bool prefetchLevelAudio(const std::string& level) { return levelAudio_.prefetch(level); }
     // The listener (frontend camera) for audio-only ticking; World::tick sets it from the game camera itself.
     void setAudioListener(const core::Vec3& p) { listenerPos_ = p; }
+    // [Systems] Split screen audio (SoundCues: nearest-listener attenuation): listener 1's orientation (what the app gives the
+    // device) and the second local player's listener (its view camera; active false = one player). Presentation only.
+    void setAudioListenerFrame(const core::Vec3& forward, const core::Vec3& right) { cues_.setListenerFrame(forward, right); }
+    void setAudioListener2(const core::Vec3& pos, const core::Vec3& forward, const core::Vec3& right, bool active) {
+        cues_.setListener2(pos, forward, right, active);
+    }
     // Frontend / lobby / loading frames (no match ticking): level audio (Kismet ops, pools, timelines, emitters),
     // music player, mixer fades, cue instances and voices.
     void tickAudioOnly(float dt);

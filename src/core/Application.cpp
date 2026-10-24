@@ -1320,6 +1320,7 @@ Application::MatchExit Application::runMatch() {
             core::Vec3 fwd = core::forwardFromYawPitch(camera_.yaw, camera_.pitch);
             core::Vec3 right = core::normalize(core::cross(fwd, core::Vec3{0, 1, 0}));
             audio_->setListener(camera_.pos, fwd, right);
+            world_.setAudioListenerFrame(fwd, right);   // [Systems] split screen: listener 1's frame for the nearest-listener mapping
             audio_->update();
         }
 
