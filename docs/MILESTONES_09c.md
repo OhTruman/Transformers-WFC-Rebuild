@@ -4229,3 +4229,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   ISession second-local interface off). DECISION: offline split screen ships first; online two-locals = a wire bump (one
   match seat per peer today) as Systems' own later patch with a 2-peer headless SIMHASH test; Gameplay's step 3 holds.
   Systems next: setLanguage, DLC audio + packaging.
+2026-10-23 21:23 MERGED 7545d295 split-screen render phase 2 (RT per view; the frame loop drives two views from the seat cameras). DLC
+  maps 2 / 9: Fortress re-emitted + Havoc shipped at the final root AssetTools/out/dlc_content (base-style URIs); dev
+  junctions re-pointed; both boot headless (exit 0, 0 errors, 0 texture failures). Campaign air nav final (D3A failed at
+  8 m, later). Gameplay / Experimental run Havoc; Rendering checks the render data headless.
