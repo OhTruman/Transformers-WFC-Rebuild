@@ -4312,3 +4312,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 23:49 MERGED d8da7b64 voice channel switch binding (N / D-pad Right; cycles the four channels; Settings > Audio row). Morning
   note: the default push-to-talk V doubles as jet Hover Down (the user picked V; the hint flags it). RE QC 22: the colour
   conversion matches; check the material instance scalars (ColorBrightness / Color_Saturation / LUT switches): Rendering.
+2026-10-23 23:53 USER (~01:00): "I wasn't able to move ANY of the characters while in game" (all classes, not only Scout) + "be resourceful
+  with your resources: limited Claude usage left; get the entire game done before I run out." The user's last package
+  log (menu-only session) shows Frame Generation ON (D3D12 presenter, 64 real fps / 127 presents); FG is on in no
+  automated run. Gameplay's repro tests: keys not reaching the pawn (input owner / remap / GFx / PTT path), a per-frame
+  state toggle, FG double-image. Rendering adds an FG + moving-pawn row. Token economy: minimal messages, no reruns.
