@@ -126,3 +126,8 @@ Apply it after 12. Verified: the 01–13 chain applies to a fresh af4d0731 and m
 - everything else merged between c4155702 and c6fb42bb on these paths.
 Apply it after 13. Verified: the 01–14 chain applies to a fresh af4d0731 and matches the tested tree over every patched path (content
 equal; git apply's CRLF conversion aside).
+
+Fix (Experimental's build of edba5bb3): 14 also adds `src/render/SplitScreen.h` (74 lines, std headers only) as a new file. Renderer.h
+includes it from 14 on, and src/render is outside the item paths. No other render header the patched files include is missing from
+af4d0731. Verified: `git apply --check` of 14 on a fresh full af4d0731 + 01–13 passes, and that tree configures and builds
+wfc_rebuild (Release, llvm-mingw) with 0 errors.
