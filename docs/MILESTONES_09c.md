@@ -4373,3 +4373,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   decode = 82 % of a Streets load (GDI+ PNG on the main thread); Systems GO on a lossless decoder (WIC / bundled,
   byte-identical over every shipped PNG, worker threads). build_slim --plan with the DLC root: 0 PROBLEMs. Static's
   export is the last AssetTools input (routed).
+2026-10-24 01:24 MERGED f64ee03a Frontend QC slot fixes (#34 first-launch calibration, #10 lobby Game Settings Back left the settings
+  root over the lobby, #23 preferred team, commit result text, #12 Silverbolt case) + DLC TransGame text INT / FRA.
+  Gameplay sweep on 74e41849: campaign 10 / 10 load + checkpoint (A4 = REAL BUG: a non-convex hazard shell killed the
+  player at t = 1 s; fix = ray-crossing parity for the 73 non-convex brushes, patch + item 18 coming); ESC Remnant /
+  BrokenHope / Tranquillity / District all pass; versus DLC Fortress / Havoc / Horizon / Metropolis / Sector 60 s TDM
+  clean; Pulse ESC BLOCKED data-side (spawn points off the nav; Kismet not built) -> AssetTools; Static pending.
+  assets_dlc now has junctions for all 9 DLC maps.
