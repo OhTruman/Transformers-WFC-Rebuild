@@ -1,3 +1,6 @@
+**SUPERSEDED 2026-10-24:** Gameplay's chain (a446ba6a on agents/gameplay) carries all four inside its merge-step items: a and d in 22,
+b in 24, c in 25 (with compat hunks so every step builds). Do NOT apply these on top: they would double-apply. Kept for reference.
+
 # Rendering's FINAL_BASE_ITEMS entries (2026-10-24, provisional numbers until Gameplay's 22+ are fixed)
 
 All three are cut on a fresh full af4d0731 + FINAL_BASE_ITEMS 01-21 (head a46a87a8), applied in this order with `git apply`, each
