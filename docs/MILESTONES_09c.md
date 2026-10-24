@@ -4317,3 +4317,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   log (menu-only session) shows Frame Generation ON (D3D12 presenter, 64 real fps / 127 presents); FG is on in no
   automated run. Gameplay's repro tests: keys not reaching the pawn (input owner / remap / GFx / PTT path), a per-frame
   state toggle, FG double-image. Rendering adds an FG + moving-pawn row. Token economy: minimal messages, no reruns.
+2026-10-23 23:56 ROOT CAUSE of 'no class could move' (Frontend + Gameplay): the launch glue sets gl.online = !onlineSlots.empty(), true
+  with 0 remotes, so a solo-hosted private match made the local player a lockstep wire seat with no driver (frozen pawn;
+  the mouse camera still turned). Gameplay's one-liner + movement proof pending. MERGED 699e640e: Escalation > Host a
+  Game restored (the PC host-now override was replacing Host in EVERY party lobby: the #9 / #14 TDM-for-Escalation bug;
+  now versus only; Escalation shows its Host Options again) + the QA gate hooks. DECISION: versus keeps flow v2 (host now
+  + the lobby Game Settings row = the user's own vote); Escalation = the original (no Game Settings row).
