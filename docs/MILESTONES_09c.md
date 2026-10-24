@@ -4253,3 +4253,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   visibility volume, the others take the original's unbaked path, no renderer change). Dev junctions added; both boot
   headless (0 errors). Gameplay wires the two ESC maps' waves; District's transforming actors re-export after psa2gltf.
   Rendering's eye pass (4 maps) + Realistic split test + the Frontend's scripted split check wait for the card.
+2026-10-23 22:13 MERGED 784dc096 Escalation on Tranquillity (17 waves) + District (20 waves, the new Autobot jet soldier) + FINAL_BASE_ITEMS
+  14 (through split screen). Dev root gains work/AssetTools junction (horde bodies at <root>/../../AssetTools/out/
+  escalation_characters). District ESCTEST 7 / 7 here. Experimental runs the DLC ESC rows; AssetTools: the jet's
+  roster_package row; Systems: the escalation_characters packaging check.
