@@ -4172,3 +4172,4 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (final-gate.sh d5bb6863 gate, base final7); freeze sent to every lane. Then: cut word -> refresh.sh -> verify -> hand-over.
 2026-10-23 20:19 NEXT PHASE (user ~20:20): the two WFC DLC packs (Map and Character Pack #1 / #2, STFS packages in F:\Transformers
   Rebuild\4156084C, read-only) go in AFTER the current build, split across the lanes by content: docs/DLC_PLAN.md.
+2026-10-23 20:21 User ~20:35: a Language option in Settings goes into the NEXT build (with the DLC); logged in docs/DLC_PLAN.md.

@@ -29,3 +29,7 @@ Never modify / extract INTO this folder; extraction goes to AssetTools' own work
 
 ## Open
 - The pack contents (map / character names) come from AssetTools' inventory after the freeze; this file is updated then.
+
+## Also in the next build (user 2026-10-23 ~20:35)
+- A Language option in Settings (Frontend): every language the dump / DLC packs ship (at least INT and FRA; RE / AssetTools
+  list the rest), applied to the GFx text, the subtitles and the dialog banks where they exist; INT stays the default.
