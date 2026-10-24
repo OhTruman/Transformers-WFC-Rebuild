@@ -24,7 +24,7 @@ kept as the original authored it, **Open** = not done. "Seen" = checked in a win
 | 29 | Fixed 1f4feb44, seen | Escalation used the versus controller; it now has its own (TnUIControllerSurvival). |
 | 19 | Fixed b851cbcd, seen | The multiplayer root shows one player list, no teams (base game). |
 | 23 | Fixed 3d49f60d + 824816f7 | Private Match: the host is shown under a team, with a **Team row** (under Game Settings) to switch sides; that side is the match team (offline / no one joined; online lobbies balance as before). |
-| 25 | Fixed 3d49f60d, seen | **Back during the start countdown cancels it** (the user's addition; the base game cannot cancel). |
+| 25 | Fixed 3d49f60d + 48e42af6, seen | **Back during the start countdown cancels it** (the user's addition; the base game cannot cancel). Start works again afterwards: the lobby menu hid Start during the countdown and never showed it again (48e42af6). Proof: cancelled at 8 s, Start again, the countdown ran out and the match loaded. |
 | 27 | Open | Probably the pre-match player list (PreGameCountdown); a shot with bots is in Experimental's final gate. The big mode banner at match start is the original's GameAnnouncement. |
 | 20 | Base game | Both chassis buttons are authored and nothing moves them; the scaling is uniform, so resolution cannot shift one. Aligned in our capture; the photo likely shows a hovered / focused button. |
 | 21 | Fixed 5757dc3c + d91b178a, seen | Create a Character colours: dragging the selector works (it never did in our Flash player), a click anywhere on the colour square moves it there, and the controller stick / D-pad and arrow keys move it too. |
