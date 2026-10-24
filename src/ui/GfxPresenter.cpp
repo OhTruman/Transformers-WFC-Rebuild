@@ -1812,6 +1812,55 @@ void GfxPresenter::syncGameSettings(gfx::Player& p, frontend::GameFlow& flow) {
             frontend::FlowTrace::emit("lobby.gameSettingsRow", {{"built", "true"}});
         }
     }
+    // PC ADAPTATION (the user, playtest 2026-10-23b #23): the Team row under Game Settings - "Team:  < Autobots >"; Accept / a
+    // click switches sides (Online.SwitchTeam); team lobbies only (GTS_TeamGame), host and members alike.
+    gfx::MovieClip* gsRow = findClipNamed(p.root(), "gameSettings_mc");
+    const bool teamLobby = flow.level() == frontend::LevelKind::GameLobby && flow.lobby().gameTeamStatus == 3 && flow.lobby().playlistId < 0;
+    if (teamLobby && gsRow && gsRow->script && cc && cc->script && cc->parent && cc->parent->script &&
+        !vm.get(cc->parent->script, "wfcTeam_mc").isObject()) {
+        gfx::avm1::Object* menu = cc->parent->script;
+        const double gsY = vm.toNumber(vm.get(gsRow->script, "_y")), ccY = vm.toNumber(vm.get(cc->script, "_y"));
+        const double pitch = ccY > gsY ? ccY - gsY : 20.0;
+        for (auto& [depth, child] : cc->parent->children) {
+            auto* mc = dynamic_cast<gfx::MovieClip*>(child.get());
+            if (!mc || !mc->script || mc == gsRow) continue;
+            const double y = vm.toNumber(vm.get(mc->script, "_y"));
+            if (y > gsY + 1.0) vm.set(mc->script, "_y", V(y + pitch));
+        }
+        gfx::avm1::Object* init = vm.newPlain();
+        vm.set(init, "_y", V(gsY + pitch));
+        gfx::MovieClip* dup = p.duplicate(cc, "wfcTeam_mc", 952, init);
+        if (dup && dup->script) {
+            gfx::avm1::Object* o = dup->script;
+            const V below = vm.get(gsRow->script, "focusDown");
+            vm.set(o, "focusUp", V(std::string("gameSettings_mc")));
+            vm.set(o, "focusDown", below);
+            vm.set(gsRow->script, "focusDown", V(std::string("wfcTeam_mc")));
+            if (below.isString()) { const V next = vm.get(menu, vm.toString(below)); if (next.isObject()) vm.set(next.o, "focusUp", V(std::string("wfcTeam_mc"))); }
+            vm.set(o, "onOver", V(vm.newFunction([menu](gfx::avm1::VM& v, const V&, gfx::avm1::Args&) -> V {
+                const V w = v.get(menu, "HintWidget");
+                if (w.isObject()) v.set(w.o, "HintText", V(std::string("$WfcPC.Lobby.TeamDesc")));
+                return V();
+            }, "onOver", 0)));
+            frontend::GameFlow* fl = &flow;
+            vm.set(o, "onClick", V(vm.newFunction([fl](gfx::avm1::VM&, const V&, gfx::avm1::Args&) -> V {
+                fl->call("Online.SwitchTeam");
+                return V();
+            }, "onClick", 0)));
+            frontend::FlowTrace::emit("lobby.teamRow", {{"built", "true"}, {"provenance", "PC ADAPTATION (user playtest 2026-10-23b #23)"}});
+        }
+    }
+    if (const V tr = cc && cc->parent && cc->parent->script ? vm.get(cc->parent->script, "wfcTeam_mc") : V(); tr.isObject()) {
+        const int t = flow.lobby().localTeam;
+        const std::string side = rt_.catalog().localize("TransGame", t == 1 ? "TnFactionTeamDecepticons" : "TnFactionTeamAutobots", "TeamName");
+        const std::string label = rt_.catalog().localizeKey("$WfcPC.Lobby.Team") + "   < " + (t < 0 ? std::string("-") : side) + " >";
+        if (vm.toString(vm.get(tr.o, "__wfcLabel")) != label) {
+            vm.set(tr.o, "__wfcLabel", V(label));
+            vm.set(tr.o, "text", V(label));
+            const V lab = vm.get(tr.o, "label_txt");
+            if (lab.isObject()) vm.set(lab.o, "htmlText", V(label));
+        }
+    }
     // the page
     if (gsOpenRequested_ && gsState_ == 0 && host && p.root() && p.root()->script) {
         gsOpenRequested_ = false;

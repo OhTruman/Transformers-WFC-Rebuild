@@ -97,6 +97,8 @@ VoiceVolume=Voice Volume
 VoiceVolumeDesc=How loud other players' voices are.
 MicBlocked=The browser has not allowed the microphone.
 [Lobby]
+Team=Team
+TeamDesc=Switch sides: your team for this match.
 GameSettings=Game Settings
 GameSettingsDesc=Game mode, limits, bots and the other match options.
 VoteNone=None of these
