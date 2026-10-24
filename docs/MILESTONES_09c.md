@@ -4399,3 +4399,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   collision sets) + DLC mechanism presentation data (Rendering draws next) + FINAL_BASE_ITEMS 20; ESCTEST all 5 ESC
   maps pass (Pulse 9 / 9). Open for this build: Pulse healing platform / Nexus / sentries / Trypticon, FinalRoomUnlocked,
   Static §9 (export blocked: AssetTools 'waiting' on a prompt since ~23:41).
+2026-10-24 01:56 MERGED e36b6654 two local players in an online match (Systems; seat 2 rides the owner's packets; 3 seats on 2 peers
+  2,401 ticks status 0, 10 % loss 41 ms stall) -> Frontend split step 3 (joinSeat2 -> setSecondLocal). Gameplay
+  hand-over doc HANDOVER_GAMEPLAY_2026-10-24.md taken. Systems next: animation-load (lossless), then Static audio.
