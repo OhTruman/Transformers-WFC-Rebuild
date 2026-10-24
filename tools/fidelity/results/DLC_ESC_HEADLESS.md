@@ -18,3 +18,5 @@ the head (edba5bb3:src/render/SplitScreen.h) to the base tree; Gameplay to add i
 
 Both DLC ESC maps load for real ('map: MP_ESC_Tranquillity' / 'MP_ESC_District', launched in ESC), 0 errors on base and head, wave 1
 begins and the horde kills the lone PlayerBot (as on Remnant / BrokenHope).
+
+Update: Gameplay fixed 14 in 85316d8d (adds src/render/SplitScreen.h); a fresh af4d0731 + 01-14 builds with 0 errors. My base final8 already carries the same header from the head, so the rows above stand.
