@@ -96,6 +96,10 @@ void ScriptDriver::applySynthetic(platform::InputFrame& in) const {
 }
 
 void ScriptDriver::update(GameFlow& flow, float dt) {
+    if (!buttonHold_.empty() && (buttonLeft_ -= dt) <= 0.0f) {   // buttonhold expiry
+        FlowTrace::emit("script.buttonHold", {{"button", buttonHold_}, {"state", "released"}});
+        buttonHold_.clear();
+    }
     if (!padHold_.empty() && (holdLeft_ -= dt) <= 0.0f) {   // padhold expiry: release
         FlowTrace::emit("script.padHold", {{"button", padHold_}, {"state", "released"}});
         if (padHook) padHook(padHold_, false);
@@ -185,6 +189,16 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
         }
         // padhold:<button>,<seconds> (DEV / QA): a pad button or left-stick direction (LStickUp ...: full deflection) held through
         // the XInput layer for that long while the next steps run (wait:t= to let it play out); a new padhold releases the old one
+        // buttonhold:<Button>,<seconds> (DEV / QA): a gameplay button by its platform::Button name (Forward, Fire, Transform, Jump,
+        // FineAim, Dash, Melee, Grenade, Interact, Ability1, Reload ...) held in the match input for that long, pressed on its first
+        // frame - the keyboard / mouse path a PC player uses (the window maps pad buttons to UI actions only)
+        if (st.rfind("buttonhold:", 0) == 0) {
+            const std::vector<std::string> p = split(st.substr(11), ',');
+            buttonHold_ = p.empty() ? std::string() : p[0];
+            buttonLeft_ = p.size() > 1 ? (float)std::atof(p[1].c_str()) : 1.0f;
+            FlowTrace::emit("script.buttonHold", {{"button", buttonHold_}, {"seconds", std::to_string(buttonLeft_)}});
+            continue;
+        }
         if (st.rfind("padhold:", 0) == 0) {
             const std::vector<std::string> p = split(st.substr(8), ',');
             if (!padHold_.empty() && padHook) padHook(padHold_, false);

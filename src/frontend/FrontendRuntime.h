@@ -103,6 +103,7 @@ public:
     bool active() const { return pos_ < steps_.size(); }
     bool finished() const { return !steps_.empty() && pos_ >= steps_.size(); }
     void update(GameFlow& flow, float dt);
+    const std::string& heldGameButton() const { return buttonHold_; }   // buttonhold: (the match loop applies it)
     std::function<void(int code, bool down)> keyHook;          // key:<code>
     std::function<void(const std::string& button, bool down)> padHook;   // pad:<button> (IWindow::injectPad)
     std::function<void(const std::string& fn, const std::vector<std::string>& args)> hudCallHook;   // hudcall:<fn>,<args>
@@ -139,6 +140,8 @@ private:
     std::string padUp_;
     std::string padHold_;          // padhold:<button>,<seconds>: held until holdLeft_ runs out (later steps keep running)
     float holdLeft_ = 0.0f;
+    std::string buttonHold_;       // buttonhold:<Button>,<seconds>: a gameplay button (Fire, Transform, Forward ...) held in the match input
+    float buttonLeft_ = 0.0f;
 };
 
 class FrontendRuntime {
