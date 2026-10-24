@@ -71,3 +71,15 @@ Two local players on one PC (the original's 2-player split screen: campaign co-o
 - Experimental: a split-screen identity + perf row (two views cost ~2x).
 Order: RE first, then Rendering + Gameplay in parallel, Frontend + Systems after; it ships with the DLC build if ready,
 else in the one after (the user decides at the cut).
+
+### Split screen: RE result + decisions (2026-10-23 ~21:50)
+RE (SPLITSCREEN_RE.md): the original has NO split screen (no second LocalPlayer in script; every mode is online / system
+link, one seat per console). So the modes and layout are ours. Decisions (Integration, under the user's autonomy):
+- Modes: every mode: campaign co-op (2 locals + squad AI), Escalation, local versus with bots, and online sessions with
+  two local seats (two PRIs on one connection, counted against MaxPlayers, per RE).
+- Layout: horizontal (top / bottom) default, vertical as a Settings option; title-safe per view as the stock CDO.
+- Seats: seat 1 = keyboard / mouse or the first Start pad; seat 2 = the next other pad pressing Start (the stock
+  CreatePlayer(ControllerId) rule); each seat keeps its own profile remap, customization, XP; saves / achievements on seat 1.
+- Render: full quality per view (beauty first); per-view post-process and RT; perf reductions only if visually lossless.
+- Audio: one listener per player, nearest-listener attenuation (stock).
+- The 45 GetLocalPlayerController call sites must use the owning PC (Gameplay / Frontend).

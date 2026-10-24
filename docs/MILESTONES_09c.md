@@ -4190,3 +4190,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   packs, FRA text overlaid key by key, FRA map names, FRA logo / movies; Systems' audio setLanguage follows the package)
   + the harness steps (00c61cbf). 250 frontend tests, identity. Not in the d5bb6863 package (next build).
 2026-10-23 20:37 User ~21:30: split screen on PC -> next build scope (docs/DLC_PLAN.md); RE spec first, then Rendering + Gameplay.
+2026-10-23 20:40 SPLITSCREEN_RE.md (RE a952b13): the original has no split screen -> ours to define; decisions in docs/DLC_PLAN.md (all
+  modes, horizontal default + vertical option, KB+M = seat 1, full quality per view). MERGED f2c2ca5d chapter-level
+  texture fallback (loader side of the PNG dedupe).
