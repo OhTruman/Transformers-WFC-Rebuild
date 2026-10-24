@@ -4444,3 +4444,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 04:16 BUILD SHA a2e9fbd9 (HD level deferred to the next map load: the 9 s menu freeze was the setter verifying 3,505 HD files on
   the spot). Experimental builds the head arm; Systems runs the staged refresh (W: base, X: HD; NOPROMOTE); then the
   card: 3-flow menu gate + final-gate.sh timed rows under a freeze; then verify_everything; then the hand-over note.
+2026-10-24 04:33 PACKAGE a2e9fbd9 cut (Systems refresh, NOPROMOTE): Rebuild-Systems/work/playtest_slim_a2e9fbd9 (19 GB) + _HDpack (22 GB);
+  build_slim 125,386 kept + 7,161 xpr, 0 failures, 0 PROBLEMs; overlay 114 / 114, HD 4,005 + M6 498, 10 chapters, 9 DLC
+  maps. FREEZE sent to every lane; Experimental runs the 3-flow menu gate + final-gate.sh a2e9fbd9 (base final12).
