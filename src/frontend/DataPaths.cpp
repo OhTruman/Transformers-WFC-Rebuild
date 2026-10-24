@@ -4,6 +4,7 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <system_error>
 #include <vector>
 
@@ -53,5 +54,20 @@ const std::string& frontendDataDir() {
 }
 
 std::string frontendDataFile(const char* name) { return frontendDataDir() + "/" + name; }
+
+std::string dlcContentRoot() {
+    if (const char* e = std::getenv("WFC_DLC_CONTENT")) return e;
+    return "F:/Transformers Rebuild/AssetTools/out/dlc_content/content";
+}
+
+std::string contentImagePng(const std::string& extractedRoot, const std::string& object) {
+    const size_t dot = object.find('.');
+    if (dot == std::string::npos) return {};
+    const std::string rel = object.substr(0, dot) + "/" + object.substr(dot + 1) + ".png";
+    const std::string base = extractedRoot + "/content/" + rel;
+    if (std::ifstream(openPath(base)).good()) return base;
+    const std::string dlc = dlcContentRoot() + "/" + rel;
+    return std::ifstream(openPath(dlc)).good() ? dlc : base;
+}
 
 } // namespace frontend

@@ -242,6 +242,11 @@ void CharacterRoster::loadSaved(const std::string& path) {
     }
 }
 
+void CharacterRoster::unlockChassis(const std::string& id) {
+    auto it = chassis_.find(id);
+    if (it != chassis_.end()) { it->second.lockedChassis = false; it->second.lockedCharacter = false; }
+}
+
 const ChassisInfo* CharacterRoster::chassis(const std::string& id) const {
     auto it = chassis_.find(id);
     return it == chassis_.end() ? nullptr : &it->second;

@@ -5,6 +5,7 @@
 #include "frontend/OpenPath.h"
 #include "platform/Keyboard.h"
 #include "frontend/Catalog.h"
+#include "frontend/DataPaths.h"
 #include "frontend/FrontendRuntime.h"
 #include "frontend/GraphicsAutoDetect.h"
 #include "frontend/FrontendScene.h"
@@ -478,8 +479,9 @@ static void testHudObservers(const Catalog& c) {
 }
 
 static void testCatalog(const Catalog& c) {
-    // 13 versus maps (frontend_maps manifest) + the 10 campaign chapters (TransLevels.ini, CAMPAIGN_FRONTEND_PLAN C3)
-    check(c.maps().size() == 23 && c.mapById(96) && c.mapById(105) && c.mapById(96)->faction == 0 && c.mapById(101)->faction == 1,
+    // 13 versus maps (frontend_maps manifest) + the 10 campaign chapters (TransLevels.ini, CAMPAIGN_FRONTEND_PLAN C3) + the DLC
+    // packs' 6 maps the base registry does not list (DLC_RE: Pack 1 re-defines Havoc / Fortress / Tranquillity), when present
+    check(c.maps().size() == (c.dlcMapCount() > 0 ? 29u : 23u) && c.mapById(96) && c.mapById(105) && c.mapById(96)->faction == 0 && c.mapById(101)->faction == 1,
           "catalog.map_providers", std::to_string(c.maps().size()));
     bool ordered = true;
     for (size_t i = 1; i < c.maps().size(); ++i) ordered &= c.maps()[i - 1].iniOrder <= c.maps()[i].iniOrder;
@@ -490,7 +492,8 @@ static void testCatalog(const Catalog& c) {
     check(s && s->compatibleWith("TDM") && s->compatibleWith("DOM") && !s->compatibleWith("SV"), "catalog.streets_modes");
     check(s && s->thumbnailPng == "content/UI_LevelThumbnails_p/MP_Streets.png", "catalog.streets_thumbnail");
     const MapInfo* f = c.mapById(512);
-    check(f && !f->cooked && !f->hasRequiredAssets, "catalog.dlc_fortress_disabled");
+    // DLC always owned (cooked) once the packs are inventoried; still not selectable until its runtime data ships
+    check(f && f->cooked == (c.dlcMapCount() > 0) && !f->hasRequiredAssets, "catalog.dlc_fortress_disabled");
     std::string order;
     for (const Playlist& p : c.playlists()) order += p.tag + " ";
     check(order == "TDM DM DOM CTF EXT KOTH SV CP CCP ", "catalog.playlist_order", order);
@@ -1969,6 +1972,28 @@ static void testCampaignCoopLobby() {
           std::to_string(party) + std::to_string(lobby) + std::to_string(hosted) + std::to_string(claimed) + std::to_string(launch) + " " + url);
 }
 
+static void testDlcMerge() {
+    // The DLC packs, always owned (RE DLC_RE 4): their nine maps in the catalog (Pack 1 re-defines Havoc / Fortress /
+    // Tranquillity with a thumbnail), the ESC ones as SV maps with their faction, the thumbnails resolved from the DLC
+    // content root, the seven unlocked chassis open. Skipped when the inventory is not on this machine.
+    FrontendRuntime rt;
+    if (!rt.init()) { check(false, "dlc.merge", "init"); return; }
+    const Catalog& c = rt.catalog();
+    if (c.dlcMapCount() == 0) { check(true, "dlc.merge", "no DLC inventory here (skipped)"); return; }
+    const MapInfo* horizon = c.mapById(517);
+    const MapInfo* pulse = c.mapById(516);
+    const MapInfo* havoc = c.mapById(511);
+    const bool maps = c.dlcMapCount() == 9 && horizon && horizon->imagePath == "UI_DLC2Thumbnails_p.MP_Horizon" && horizon->cooked &&
+                      horizon->compatibleWith("TDM") && pulse && pulse->compatibleWith("SV") && pulse->faction == 0 &&
+                      havoc && havoc->cooked && havoc->imagePath == "UI_DLCThumbnails_p.MP_Havoc";
+    const std::string png = frontend::contentImagePng(Catalog::defaultExtractedRoot(), "UI_DLC2Thumbnails_p.MP_Horizon");
+    const bool thumb = png.find("dlc_content") != std::string::npos || std::getenv("WFC_DLC_CONTENT");
+    const ChassisInfo* tank4 = rt.roster().chassis("Tank4");
+    const bool unlocked = tank4 && !tank4->lockedChassis && !tank4->lockedCharacter && c.dlcUnlockedChassis().size() == 7;
+    check(maps && thumb && unlocked, "dlc.merge", std::to_string(c.dlcMapCount()) + " " + std::to_string(maps) + std::to_string(thumb) +
+          std::to_string(unlocked) + " " + png + " unlocks=" + std::to_string(c.dlcUnlockedChassis().size()));
+}
+
 static void testLanguageSetting() {
     // The Settings Language row (PC EXTENSION, user 2026-10-23): INT + every Coalesced_<lang> text pack (FRA in the base game);
     // the profile's choice applies on the next frame (boot / Apply), French text overlays INT key by key (a key FRA lacks
@@ -2412,6 +2437,7 @@ int main() {
     testCampaignC6();
     testEscalationNoXp();
     testLanguageSetting();
+    testDlcMerge();
     testCampaignCoopLobby();
     testFriendsInvites();
     testCampaignObjectivesManifest();
