@@ -57,7 +57,11 @@ struct SvMech {
     // (blockers, nodes of the pawn collision) goes off once the matinee has played (delay); actors / interps for the presentation.
     struct Manager { std::string seq; std::vector<std::string> gens, interps, blockers, actors; float delay = 0.0f; std::vector<int> g; };
     std::vector<Manager> managers;
-    bool any() const { return !hazardsOff.empty() || !lasers.empty() || !sentries.empty() || !detpacks.empty() || outage.on || !floods.empty() || !managers.empty(); }
+    // Static's fire-jet trap generators: bought -> the pain volumes on for `time` (its matinee), then off; after `cooldown` the generator
+    // is back at 0 (re-buyable). The volumes are off from GameplayStarted (hazardsOff).
+    struct Trap { std::string gen, interp; std::vector<std::string> hazards; float time = 10.0f, cooldown = 0.0f; int g = -1; };
+    std::vector<Trap> traps;
+    bool any() const { return !hazardsOff.empty() || !lasers.empty() || !sentries.empty() || !detpacks.empty() || outage.on || !floods.empty() || !managers.empty() || !traps.empty(); }
     static void parse(const assets::Json& j, SvMech& out);
 };
 
@@ -79,6 +83,9 @@ struct SvMechState {
     std::vector<float> floodT;
     std::vector<float> managerT;              // s since a manager fired (-1 not yet); its doors open at its delay
     std::vector<uint8_t> managerDone;
+    struct Trap { bool active = false, cooling = false; float t = 0.0f; };
+    std::vector<Trap> traps;
+    int trapRuns = 0;
     bool drained = false, gatesOpen = false;
     int laserRuns = 0, sentryRuns = 0, detonations = 0;   // test counters (WFC_ESCTEST)
 };

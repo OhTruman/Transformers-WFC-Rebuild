@@ -79,6 +79,12 @@ void SvMech::parse(const assets::Json& j, SvMech& out) {
         out.doorHold = f["doorHold"].asFloat(1.25f); out.doorOpened = f["doorOpened"].asFloat(4.35f); out.doorLength = f["doorLength"].asFloat(6.67f);
         out.floodBlockers = out.blockers;
     }
+    for (size_t k = 0; k < j["traps"].size(); ++k) {
+        const assets::Json& r = j["traps"][k];
+        Trap T; T.gen = r["gen"].asString(); T.interp = r["interp"].asString(); strings(r["hazards"], T.hazards);
+        T.time = r["time"].asFloat(10.0f); T.cooldown = r["cooldown"].asFloat(0.0f);
+        out.traps.push_back(T);
+    }
     for (size_t k = 0; k < j["managers"].size(); ++k) {
         const assets::Json& r = j["managers"][k];
         Manager G; G.seq = r["seq"].asString(); G.delay = r["delay"].asFloat(0.0f);
@@ -152,6 +158,8 @@ void World::svMechSetup() {
     S.floodT.assign(M.floods.size(), -1.0f);
     S.doorPos = M.doorHold;
     S.managerT.assign(M.managers.size(), -1.0f); S.managerDone.assign(M.managers.size(), 0);
+    for (SvMech::Trap& T : M.traps) missing += (T.g = gen(T.gen)) < 0;
+    S.traps.assign(M.traps.size(), {});
     for (SvMech::Manager& G : M.managers) { G.g.clear(); for (const std::string& id : G.gens) { const int gi = gen(id); if (gi >= 0) G.g.push_back(gi); else ++missing; } }
     S.detpacks.assign(M.detpacks.size(), {});
     S.prevInteract.assign(match_.players().size(), 0);
@@ -182,6 +190,14 @@ void World::svMechGenerator(int g, bool levelDrop) {
             ++S.sentryRuns;
             LOG_INFO("escalation: sentry %s (%s) awake for %.0f s", M.sentries[k].seq.c_str(), M.sentries[k].repair ? "repair" : "ion", M.sentries[k].time);
         }
+    for (size_t k = 0; k < M.traps.size(); ++k)
+        if (M.traps[k].g == g && !S.traps[k].active && !S.traps[k].cooling) {   // the fire jets on for the matinee; its volume off meanwhile
+            S.traps[k] = {true, false, 0.0f};
+            for (const std::string& h : M.traps[k].hazards) svMechHazard(h, true);
+            sv_.generatorOff[(size_t)g] = 1;
+            ++S.trapRuns;
+            LOG_INFO("escalation: trap %s on (%zu pain volumes, %.1f s)", M.traps[k].gen.c_str(), M.traps[k].hazards.size(), M.traps[k].time);
+        }
     for (size_t k = 0; k < M.managers.size(); ++k)   // a Zone_Manager: its door matinee plays (the zones / volumes: the flattened actions)
         if (S.managerT[k] < 0.0f && std::find(M.managers[k].g.begin(), M.managers[k].g.end(), g) != M.managers[k].g.end()) {
             S.managerT[k] = 0.0f;
@@ -207,6 +223,17 @@ void World::svMechTick(float dt) {
         S.lasers[k].switchPos = std::clamp(S.lasers[k].switchPos + (S.lasers[k].active ? -dt : dt), 0.0f, M.lasers[k].switchLength);
     if (M.outage.on) S.outagePos = std::clamp(S.outagePos + (S.outageLeft > 0.0f ? dt : -dt), 0.0f, M.outage.interpLength);
     for (float& t : S.floodT) if (t >= 0.0f) t += dt;
+    for (size_t k = 0; k < M.traps.size(); ++k) {   // a trap: off at its matinee's end, re-buyable after the cooldown
+        SvMechState::Trap& T = S.traps[k];
+        if (!T.active && !T.cooling) continue;
+        T.t += dt;
+        if (T.active && T.t >= M.traps[k].time) {
+            T.active = false; T.cooling = true; T.t = 0.0f;
+            for (const std::string& h : M.traps[k].hazards) svMechHazard(h, false);
+            LOG_INFO("escalation: trap %s off", M.traps[k].gen.c_str());
+        }
+        if (T.cooling && T.t >= M.traps[k].cooldown) { T.cooling = false; svMechResetGenerator(M.traps[k].g); }
+    }
     for (size_t k = 0; k < M.managers.size(); ++k) {   // a fired manager's doors: their collision off once the matinee has played
         if (S.managerT[k] < 0.0f) continue;
         S.managerT[k] += dt;
