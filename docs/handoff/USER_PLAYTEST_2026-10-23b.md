@@ -98,3 +98,45 @@ Order, therefore:
    setting, load times, menus).
 DLC and split screen resume after 1-3 (AssetTools / Systems data work may continue in the background; no Frontend /
 Gameplay feature patches until the QC pass is closed).
+
+## Items 40-43 (the rest of the user's message)
+
+**40. Campaign complete audit** (the frontend exists, actual Campaign startup does not work): first-time brightness
+calibration, Campaign root, Solo, Co-op, difficulty, chapter selection, chapter locks, mission selection, character
+selection, loading, actual level startup, back / cancel behaviour, progression state, returning to menus.
+
+**41. Full system quality pass.** "Stop treating each one as an isolated frontend bug. There may be shared routing /
+state / lifecycle problems across these systems. Investigate the underlying architecture." Surfaces: Multiplayer
+(no Private Match settings, Scout cannot move, flickering character, wrong character menu, menu traps, name layout);
+Escalation (TDM UI / state, Game Settings, character selector, duplicated / missing characters, character not preserved,
+broken spawn, menu traps, mode flow); Campaign (calibration, chapter / unlock state, UI layout, mission does not launch,
+blank screen / navigation).
+
+**42. Priority order (the user's):**
+1. Restore basic playable Multiplayer spawning / control.
+2. Fix the Scout flicker / frozen-character problem.
+3. Restore Private Match Game Settings.
+4. Separate Multiplayer and Escalation state / menu logic.
+5. Fix modal / menu ownership so the player cannot become trapped.
+6. Restore proper character-selection state.
+7. Repair Escalation end-to-end.
+8. Repair Campaign launch / progression end-to-end.
+9. Fix Campaign brightness calibration.
+10. Fix Private Match team-selection / lobby flow.
+11. Fix character-select UI overlap / duplicate / missing characters.
+12. Improve loading and add progress feedback.
+13. Graphics-menu scroll indicators.
+14. Graphics-setting confirmation / restart prompts.
+15. Visual graphics-setting previews.
+16. Lock menus to 60 FPS.
+17. Create-a-Character alignment and controls.
+18. Voice-channel switching binding.
+
+**43. Validation requirement.** Not unit tests or isolated captures: actual end-to-end flows, which must survive without
+wrong menus, dimmed / stuck screens, frozen or flickering characters, incorrect mode identity, blank screens, lost input,
+stale modal overlays or duplicated UI state:
+- MAIN MENU -> MULTIPLAYER -> PRIVATE MATCH -> CHANGE SETTINGS -> SELECT MAP -> SELECT CHARACTER -> START MATCH -> SPAWN
+  -> MOVE / SHOOT / TRANSFORM -> PAUSE / CHANGE CHARACTER -> RETURN TO LOBBY
+- MAIN MENU -> ESCALATION -> HOST GAME -> CONFIGURE -> SELECT CHARACTER -> START -> SPAWN -> ACTUALLY PLAY -> RETURN
+- MAIN MENU -> CAMPAIGN -> SOLO -> DIFFICULTY -> CHAPTER I -> CRASH SITE -> SELECT CHARACTER -> LOAD LEVEL -> ACTUALLY PLAY
+"Fix the state / lifecycle problems before adding more large user-facing features."
