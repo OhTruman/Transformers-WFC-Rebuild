@@ -1360,6 +1360,8 @@ public:
     static bool hdEnhancedAvailable();          // HD level 2: the colour pack + the M6 modern material maps (hd_pbr_index)
     void setHdTextures(bool on);
     bool hdTextures_ = false;
+    bool hdWanted_ = false;    // the HD row's choice; the next map load verifies the pack and sets hdTextures_
+    void applyHdChoice();
     int anisotropy_ = 4;
     long fxPoolSeq_ = 0;
     int statPoolPeak_ = 0, statPoolOver_ = 0, statPoolReclaimed_ = 0, statPoolFrames_ = 0;

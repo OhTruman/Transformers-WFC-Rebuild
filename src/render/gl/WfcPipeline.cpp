@@ -1391,7 +1391,7 @@ void Pipeline::release() {
     const float keepFsrScale = fsrScale_, keepFsrSharp = fsrSharpness_;
     const int keepAniso = anisotropy_;
     const int keepTexQ = texQuality_;
-    const bool keepHd = hdTextures_;
+    const bool keepHd = hdTextures_, keepHdWanted = hdWanted_;
     const bool keepFsr3 = fsr3On_;                     // (the Upscaling row's FSR 3.1: lost here before, FSR 1 in matches)
     const bool keepModern = modern_;                   // (the HD row's Modern materials: lost here before - Original after the
                                                        //  frontend -> match unload; WFC_SETTINGSTEST checks every kept setting)
@@ -1414,7 +1414,7 @@ void Pipeline::release() {
     fsrScale_ = keepFsrScale; fsrSharpness_ = keepFsrSharp;
     anisotropy_ = keepAniso;
     texQuality_ = keepTexQ;
-    hdTextures_ = keepHd;
+    hdTextures_ = keepHd; hdWanted_ = keepHdWanted;
     fsr3On_ = keepFsr3;
     modern_ = keepModern;
     rtMode_ = keepRtMode; rtAvailKnown_ = keepRtAvail;
@@ -1683,6 +1683,7 @@ bool Pipeline::load(const std::string& mapArg) {
     if (std::getenv("WFC_LEGACYRENDER")) { LOG_INFO("wfc: WFC_LEGACYRENDER set; shader path disabled"); return false; }
     std::string root = renderDataRoot();
     cutPending_ = true; cutPendingWhy_ = "map load";   // (temporal history never spans maps)
+    applyHdChoice();   // the HD row, under the loading screen (its one-time pack verification froze the menu ~9 s in the setter)
     rtInitMode();
     rtInfra_ = rtMode_ > 0 || std::getenv("WFC_RT_SHADOWAO") != nullptr || std::getenv("WFC_RT_TOGGLE") != nullptr;
     loadFrame_ = frameNo_;
@@ -2399,9 +2400,15 @@ GLuint Pipeline::hdPbrTexture(const std::string& textureObject, const std::strin
 }
 
 void Pipeline::setHdTextures(bool on) {
-    hdTextures_ = on && hdIndexRows() && !hdIndex().empty();   // (turning on verifies the pack's files once)
-    LOG_INFO("renderer: HD textures %s%s", hdTextures_ ? "on" : "off",
-             on && !hdTextures_ ? " (pack not installed: originals)" : " (from the next map load)");
+    hdWanted_ = on && hdIndexRows();   // (the pack's files are verified at the next map load: applyHdChoice)
+    LOG_INFO("renderer: HD textures %s%s", hdWanted_ ? "on" : "off",
+             on && !hdWanted_ ? " (pack not installed: originals)" : " (from the next map load)");
+}
+
+void Pipeline::applyHdChoice() {   // (Pipeline::load) the HD row's choice; turning the pack on verifies its files once
+    if (hdWanted_ == hdTextures_) return;
+    hdTextures_ = hdWanted_ && hdIndexRows() && !hdIndex().empty();
+    if (hdWanted_ && !hdTextures_) LOG_INFO("renderer: HD textures: pack incomplete or invalid (originals)");
 }
 
 // platform::decodeImage's second source: the verified original top level (RGBA8, identical to the PNG)
