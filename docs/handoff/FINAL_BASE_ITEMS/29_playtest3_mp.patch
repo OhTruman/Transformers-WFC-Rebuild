@@ -1,0 +1,144 @@
+diff --git a/data/frontend/pc_strings.int b/data/frontend/pc_strings.int
+index dca0008..ec656cf 100644
+--- a/data/frontend/pc_strings.int
++++ b/data/frontend/pc_strings.int
+@@ -99,6 +99,7 @@ VoiceVolume=Voice Volume
+ VoiceVolumeDesc=How loud other players' voices are.
+ MicBlocked=The browser has not allowed the microphone.
+ [Lobby]
++CancelStart=Cancel Start
+ Team=Team
+ TeamDesc=Switch sides: your team for this match.
+ GameSettings=Game Settings
+diff --git a/src/frontend/Catalog.cpp b/src/frontend/Catalog.cpp
+index f397e00..5e66cd2 100644
+--- a/src/frontend/Catalog.cpp
++++ b/src/frontend/Catalog.cpp
+@@ -598,6 +598,19 @@ void Catalog::loadDlc(const std::string& manifestRoot, const std::string& runtim
+                 dlcUnlockedChassis_.push_back(c["chassis"].asString());
+         }
+     }
++    // The DLC Escalation maps carry no CampaignCharacters of their own (TransLevels lists only the base maps): Tranquillity / Pulse
++    // use Broken Hope's 13 Autobots, District / Static Remnant's 13 Decepticons [RE DLC_RE 2]. Without them the wheel fell back to
++    // every iconic chassis - both factions and Truck7 "Optimus" beside "Optimus Prime" (playtest 3 ESC 3).
++    auto baseList = [&](const char* key) -> std::vector<std::string> {
++        for (const MapInfo& m : maps_) if (m.mapFilename.find(key) != std::string::npos && !m.campaignCharacters.empty()) return m.campaignCharacters;
++        return {};
++    };
++    for (MapInfo& m : maps_) {
++        if (!m.campaignCharacters.empty() || !m.compatibleWith("SV")) continue;
++        const std::string& f = m.mapFilename;
++        if (f.find("Tranquil") != std::string::npos || f.find("Pulse") != std::string::npos) m.campaignCharacters = baseList("BrokenHope");
++        else if (f.find("District") != std::string::npos || f.find("Static") != std::string::npos) m.campaignCharacters = baseList("Remnant");
++    }
+     std::stable_sort(maps_.begin(), maps_.end(), [](const MapInfo& a, const MapInfo& b) { return a.iniOrder < b.iniOrder; });
+ }
+ 
+diff --git a/src/frontend/DataStores.cpp b/src/frontend/DataStores.cpp
+index ff58659..3e6020a 100644
+--- a/src/frontend/DataStores.cpp
++++ b/src/frontend/DataStores.cpp
+@@ -152,7 +152,8 @@ std::string DataStores::read(const std::string& markup, bool* known) {
+         return b(flow_.level() == LevelKind::GameLobby && L.mapSelectionMethod == 1 && !L.countdownRubicon && L.mapId >= 0 &&
+                  flow_.sessionRole() != GameFlow::SessionRole::Member &&     // an online member never starts the game
+                  flow_.mapVote().round == 0 &&   // CanHostRequestGameStart = IsPrivateMatch: a public lobby starts by itself [RE]
+-                 (flow_.sessionRole() == GameFlow::SessionRole::Offline || L.lobbyStatus == 3 ||
++                 // a private host alone (no member yet) starts as offline: CanHostRequestGameStart = IsPrivateMatch [RE; playtest 3 ESC 1]
++                 (flow_.sessionRole() == GameFlow::SessionRole::Offline || L.lobbyStatus == 3 || flow_.onlineMembers().empty() ||
+                   GameFlow::isCampaignTag(L.gameModeTag)));   // online: the original gate (D4); TnGameLobbyGameCampaign: always
+     if (markup == "<CurrentGame:LobbyStatus>") {
+         if (flow_.level() != LevelKind::GameLobby || L.countingDown) return "";
+diff --git a/src/frontend/FrontendRuntime.cpp b/src/frontend/FrontendRuntime.cpp
+index 639bf94..331fd7d 100644
+--- a/src/frontend/FrontendRuntime.cpp
++++ b/src/frontend/FrontendRuntime.cpp
+@@ -901,6 +901,8 @@ void FrontendRuntime::updateHdPackHint() {
+     if (!hdPackHintPending_ || flow_.level() != LevelKind::FrontEnd || !flow_.frontEndStarted() || flow_.ui().state() != UIState::FrontEnd ||
+         flow_.popup().open || !flow_.kismetMovie().empty() || !flow_.scriptMovie().empty())
+         return;
++    // first-boot modals queue (playtest 3): the first-launch brightness calibration first, this hint after it
++    if (!flow_.profile().getBool("HasAdjustedGamma")) return;
+     hdPackHintPending_ = false;
+     flow_.showMessage("HD Textures", "HD texture pack found. Turn it on in Settings > Graphics > HD Textures.");
+     flow_.profile().display.hdPackHintShown = true;
+diff --git a/src/frontend/GameFlow.cpp b/src/frontend/GameFlow.cpp
+index 7334c17..5cc4aff 100644
+--- a/src/frontend/GameFlow.cpp
++++ b/src/frontend/GameFlow.cpp
+@@ -994,6 +994,12 @@ void GameFlow::quitGame() {
+     // lobbies and private matches) -> QuitToFrontEnd from the party lobby (TnPlayerControllerPartyLobby.IsInPartyLobby),
+     // otherwise QuitToPartyLobby: TellClientsToReturnToPartyHost -> ClientReturnToParty -> BuildPartyLobbyURL.
+     bool toFrontEnd = level_ == LevelKind::PartyLobby || level_ == LevelKind::FrontEnd || level_ == LevelKind::None;
++    // Playtest 3: backing out of Campaign landed in the Escalation party lobby - the party lobby kept the last party's
++    // GameTeamStatus. Solo Campaign never had a party lobby (main menu > Campaign > Solo): back to the main menu; a co-op campaign
++    // returns to the campaign party lobby.
++    const std::string modeTag = level_ == LevelKind::Match ? match_.modeTag : lobby_.gameModeTag;
++    if (modeTag == "SOLO") toFrontEnd = true;
++    else if (isCampaignTag(modeTag)) gameTeamStatus_ = 4;   // GTS_CampaignGame
+     if (session_ && role_ != SessionRole::Offline && !toFrontEnd) {   // online: leave the game session (a host's leave ends it)
+         session_->leave();
+         FlowTrace::emit("online.leave", {{"role", sessionRoleName(role_)}, {"from", levelKindName(level_)}});
+@@ -1558,7 +1564,8 @@ bool GameFlow::canGainXp() const {
+     // WFC_ORIGINAL_XP_RULE=1 keeps the original rule.
+     if (lobby_.gameModeTag == "SV") return false;   // Escalation: no XP (CanGainXp false) [RE]
+     const bool publicGame = lobby_.playlistId >= 0 || vote_.round > 0;
+-    if (role_ != SessionRole::Offline) return publicGame;
++    // a private host with nobody else in the session plays as offline (playtest 3: XP stopped once private matches became hosted sessions)
++    if (role_ == SessionRole::Member || (role_ == SessionRole::Host && !onlineMembers_.empty())) return publicGame;
+     return !std::getenv("WFC_ORIGINAL_XP_RULE") || publicGame;
+ }
+ 
+diff --git a/src/game/PlayerController.cpp b/src/game/PlayerController.cpp
+index 0d32975..04288a0 100644
+--- a/src/game/PlayerController.cpp
++++ b/src/game/PlayerController.cpp
+@@ -887,7 +887,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
+             pawn_->exposeSelf();          // TnWeapon.OnPreServerFire -> ExposeSelf (decloak)
+             static const bool noRecoil = std::getenv("WFC_NORECOIL") != nullptr;   // A/B diagnostic
+             if (!noRecoil) pawn_->notifyFired(w.def ? w.def->id : nullptr);   // per-shot skeletal recoil (TnRecoiler), the weapon's values
+-            onLocalShot(w.def ? w.def->id : nullptr);   // TnPlayerController.OnWeaponFired: camera recoil + shake
++            const float trigPitch = camPitch_, trigYaw = camYaw_;   // the rotation the crosshair showed at the trigger (WFC_AIMLOG)
+             // TnPlayerPawn.GetWeaponStartTraceLocation: ViewLoc + ProjectOnTo(Location - ViewLoc, view dir) - the point on the
+             // camera's crosshair ray nearest the pawn. Instant-hit / beam traces run from there along the aim for the weapon range
+             // [CONF RE, script TransGame.TnPlayerPawn]. Projectiles: Weapon.ProjectileFire spawns at RealStartLoc = GetMuzzleLoc()
+@@ -910,6 +910,14 @@ void PlayerController::applyToPawn(World& world, float dt) {
+             }
+             // NumShotsToFire traces per shot (shotgun pellets), each with its own spread sample [CONF data; HIGH: one ammo per shot].
+             else { for (int k = 0; k < std::max(1, pawn_->weapon().shots); ++k) { world.setPelletIndex(k); world.fireHitscan(start, camDir); } world.setPelletIndex(0); }
++            static const bool aimLog = std::getenv("WFC_AIMLOG") != nullptr;   // diagnostic: the shot rotation vs the trigger's
++            if (aimLog) {
++                const float sp = std::asin(core::clampf(camDir.y, -1.0f, 1.0f)), sy = std::atan2(-camDir.x, -camDir.z);
++                LOG_INFO("AIMLOG %s shot-vs-trigger pitch %+.3f deg yaw %+.3f deg", w.def ? w.def->id : "IonBlaster",
++                         (sp - trigPitch) * 57.29578f, std::remainder(sy - trigYaw, 6.2831853f) * 57.29578f);
++            }
++            // TnPlayerController.OnWeaponFired after the shot: camera recoil (the permanent pitch step) + shake, as the vehicle path
++            onLocalShot(w.def ? w.def->id : nullptr);
+     };
+     if (w.charge()) {
+         // TnChargeWeapon. Active.BeginFire: loaded and TimeSinceLastCharge >= FireInterval -> Charging (state 1). Charging.Tick:
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 7579b07..deba6c8 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -3111,7 +3111,7 @@ void World::fillPresented(PresentedFrame& p) {
+             if (!t.drawn) continue;
+             PresentedFrame::Marker m;
+             m.key = "pawn:" + std::to_string(t.player); m.type = "TnObjectiveMarkerTypeTransformerVersus";
+-            m.setup = t.ally ? "AllyMarkerSetup" : "TransformerEnemyMarkerSetup"; m.relation = t.ally ? 0 : 1; m.player = t.player;
++            m.setup = t.ally ? "AllyMarkerSetup" : "EnemyMarkerSetup"; m.relation = t.ally ? 0 : 1; m.player = t.player;   // the type's authored setups
+             m.owner = 100 + t.player;   // the draw owner World::draw passes to IRenderer::setDrawOwner for participants
+             m.base = t.pos;
+             if (const Character* c = participantPawn(t.player)) {
+diff --git a/src/game/World.h b/src/game/World.h
+index 76cea0c..d134b98 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1103,7 +1103,7 @@ public:
+         struct Marker {
+             std::string key;                            // stable identity ("pawn:12", "obj:<actor>", "carried:0")
+             std::string type;                           // the TnObjectiveMarkerType* class
+-            std::string setup;                          // "AllyMarkerSetup" / "TransformerEnemyMarkerSetup" / "MarkerSetup"
++            std::string setup;                          // "AllyMarkerSetup" / "EnemyMarkerSetup" / "MarkerSetup"
+             core::Vec3 base{0, 0, 0};                   // MarkerBase.Location (glTF metres)
+             float labelZ = -1.0f;                       // Versus pawns: CollisionHeight x 0.5; < 0 = authored
+             std::string label;                          // PRI.PlayerName / node number
