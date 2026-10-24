@@ -10737,7 +10737,27 @@
     "hazard": "DynamicPhysicsVolume_10120",
     "time": 45.0,
     "armDelay": 3.0,
-    "buttonRange": 3.0
+    "buttonRange": 3.0,
+    "seq": "Door_Lasers",
+    "emitters": [
+     "Emitter_1281",
+     "Emitter_1328",
+     "Emitter_13695",
+     "Emitter_15012",
+     "Emitter_15399",
+     "Emitter_2003",
+     "Emitter_5186",
+     "Emitter_7955",
+     "Emitter_8342"
+    ],
+    "buttonActor": "TnInteractButtonReusable_11476",
+    "switchActor": "SkeletalMeshActor_6675",
+    "interps": {
+     "button": "SeqAct_Interp_13587",
+     "buttonLength": 0.06,
+     "switch": "SeqAct_Interp_13276",
+     "switchLength": 1.84
+    }
    },
    {
     "gen": "11492",
@@ -10749,7 +10769,27 @@
     "hazard": "DynamicPhysicsVolume_2841",
     "time": 45.0,
     "armDelay": 3.0,
-    "buttonRange": 3.0
+    "buttonRange": 3.0,
+    "seq": "Door_Lasers_0",
+    "emitters": [
+     "Emitter_12398",
+     "Emitter_13315",
+     "Emitter_14985",
+     "Emitter_16076",
+     "Emitter_16285",
+     "Emitter_275",
+     "Emitter_4092",
+     "Emitter_7714",
+     "Emitter_7875"
+    ],
+    "buttonActor": "TnInteractButtonReusable_15142",
+    "switchActor": "SkeletalMeshActor_966",
+    "interps": {
+     "button": "SeqAct_Interp_13587",
+     "buttonLength": 0.06,
+     "switch": "SeqAct_Interp_13276",
+     "switchLength": 1.84
+    }
    },
    {
     "gen": "1022",
@@ -10761,7 +10801,27 @@
     "hazard": "DynamicPhysicsVolume_3986",
     "time": 45.0,
     "armDelay": 3.0,
-    "buttonRange": 3.0
+    "buttonRange": 3.0,
+    "seq": "Door_Lasers_1",
+    "emitters": [
+     "Emitter_12196",
+     "Emitter_13469",
+     "Emitter_14937",
+     "Emitter_15597",
+     "Emitter_3463",
+     "Emitter_4097",
+     "Emitter_4620",
+     "Emitter_5009",
+     "Emitter_7876"
+    ],
+    "buttonActor": "TnInteractButtonReusable_944",
+    "switchActor": "SkeletalMeshActor_7696",
+    "interps": {
+     "button": "SeqAct_Interp_13587",
+     "buttonLength": 0.06,
+     "switch": "SeqAct_Interp_13276",
+     "switchLength": 1.84
+    }
    },
    {
     "gen": "15098",
@@ -10773,7 +10833,27 @@
     "hazard": "DynamicPhysicsVolume_11907",
     "time": 45.0,
     "armDelay": 3.0,
-    "buttonRange": 3.0
+    "buttonRange": 3.0,
+    "seq": "Door_Lasers_2",
+    "emitters": [
+     "Emitter_10811",
+     "Emitter_11266",
+     "Emitter_1193",
+     "Emitter_13065",
+     "Emitter_13504",
+     "Emitter_14574",
+     "Emitter_14693",
+     "Emitter_3069",
+     "Emitter_4298"
+    ],
+    "buttonActor": "TnInteractButtonReusable_9997",
+    "switchActor": "SkeletalMeshActor_8272",
+    "interps": {
+     "button": "SeqAct_Interp_13587",
+     "buttonLength": 0.06,
+     "switch": "SeqAct_Interp_13276",
+     "switchLength": 1.84
+    }
    },
    {
     "gen": "7702",
@@ -10785,7 +10865,27 @@
     "hazard": "DynamicPhysicsVolume_4440",
     "time": 45.0,
     "armDelay": 3.0,
-    "buttonRange": 3.0
+    "buttonRange": 3.0,
+    "seq": "Door_Lasers_3",
+    "emitters": [
+     "Emitter_1428",
+     "Emitter_2046",
+     "Emitter_4024",
+     "Emitter_5017",
+     "Emitter_6190",
+     "Emitter_6656",
+     "Emitter_7368",
+     "Emitter_8472",
+     "Emitter_9377"
+    ],
+    "buttonActor": "TnInteractButtonReusable_4078",
+    "switchActor": "SkeletalMeshActor_8523",
+    "interps": {
+     "button": "SeqAct_Interp_13587",
+     "buttonLength": 0.06,
+     "switch": "SeqAct_Interp_13276",
+     "switchLength": 1.84
+    }
    }
   ],
   "sentries": [
@@ -10800,7 +10900,12 @@
     "yaw": 0.29452,
     "repair": false,
     "time": 45.0,
-    "uses": 0
+    "uses": 0,
+    "emitters": [
+     "Emitter_953"
+    ],
+    "body": "SkeletalMeshActor_2552",
+    "template": "WEP_SentryBlaster01_p.LightSentry_TURRETDEF"
    },
    {
     "seq": "Sentry_1",
@@ -10813,7 +10918,12 @@
     "yaw": 1.5708,
     "repair": false,
     "time": 45.0,
-    "uses": 0
+    "uses": 0,
+    "emitters": [
+     "Emitter_8145"
+    ],
+    "body": "SkeletalMeshActor_3225",
+    "template": "WEP_SentryBlaster01_p.LightSentry_TURRETDEF"
    },
    {
     "seq": "Sentry_2",
@@ -10826,7 +10936,12 @@
     "yaw": 1.27627,
     "repair": false,
     "time": 45.0,
-    "uses": 0
+    "uses": 0,
+    "emitters": [
+     "Emitter_8388"
+    ],
+    "body": "SkeletalMeshActor_2662",
+    "template": "WEP_SentryBlaster01_p.LightSentry_TURRETDEF"
    },
    {
     "seq": "Sentry_3",
@@ -10839,7 +10954,12 @@
     "yaw": 0.29452,
     "repair": false,
     "time": 45.0,
-    "uses": 0
+    "uses": 0,
+    "emitters": [
+     "Emitter_1061"
+    ],
+    "body": "SkeletalMeshActor_1283",
+    "template": "WEP_SentryBlaster01_p.LightSentry_TURRETDEF"
    },
    {
     "seq": "Sentry_5",
@@ -10852,7 +10972,12 @@
     "yaw": -0.0,
     "repair": false,
     "time": 45.0,
-    "uses": 0
+    "uses": 0,
+    "emitters": [
+     "Emitter_9357"
+    ],
+    "body": "SkeletalMeshActor_2805",
+    "template": "WEP_SentryBlaster01_p.LightSentry_TURRETDEF"
    },
    {
     "seq": "Sentry_6",
@@ -10865,7 +10990,12 @@
     "yaw": 0.3927,
     "repair": false,
     "time": 45.0,
-    "uses": 0
+    "uses": 0,
+    "emitters": [
+     "Emitter_462"
+    ],
+    "body": "SkeletalMeshActor_14491",
+    "template": "WEP_SentryBlaster01_p.LightSentry_TURRETDEF"
    },
    {
     "seq": "Sentry_4",
@@ -10878,7 +11008,15 @@
     "yaw": -1.07992,
     "repair": true,
     "time": 90.0,
-    "uses": 3
+    "uses": 3,
+    "emitters": [
+     "Emitter_11889",
+     "Emitter_9487",
+     "Emitter_15757",
+     "Emitter_4654"
+    ],
+    "body": "SkeletalMeshActor_227",
+    "template": "WEP_SentryBlaster01_p.RepairSentry_TURRETDEF"
    },
    {
     "seq": "Sentry_7",
@@ -10891,7 +11029,15 @@
     "yaw": 1.66897,
     "repair": true,
     "time": 90.0,
-    "uses": 3
+    "uses": 3,
+    "emitters": [
+     "Emitter_1536",
+     "Emitter_12255",
+     "Emitter_4363",
+     "Emitter_8651"
+    ],
+    "body": "SkeletalMeshActor_880",
+    "template": "WEP_SentryBlaster01_p.RepairSentry_TURRETDEF"
    },
    {
     "seq": "Repair_Sentry#0",
@@ -10904,7 +11050,12 @@
     "yaw": -1.5708,
     "repair": true,
     "time": 90.0,
-    "uses": 0
+    "uses": 0,
+    "emitters": [
+     "Emitter_10"
+    ],
+    "body": "SkeletalMeshActor_5269",
+    "template": "WEP_SentryBlaster01_p.RepairSentry_TURRETDEF"
    },
    {
     "seq": "Repair_Sentry#1",
@@ -10917,7 +11068,12 @@
     "yaw": 1.10715,
     "repair": true,
     "time": 90.0,
-    "uses": 0
+    "uses": 0,
+    "emitters": [
+     "Emitter_8670"
+    ],
+    "body": "SkeletalMeshActor_4455",
+    "template": "WEP_SentryBlaster01_p.RepairSentry_TURRETDEF"
    }
   ],
   "detpacks": [
@@ -10968,7 +11124,11 @@
    "duration": 60.0,
    "lockout": 180.0,
    "lateLockout": 300.0,
-   "max": 3
+   "max": 3,
+   "ppvOn": "PostProcessVolume_4388",
+   "ppvOff": "PostProcessVolume_3052",
+   "interp": "SeqAct_Interp_6320",
+   "interpLength": 1.51
   }
  },
  "weaponPickups": [

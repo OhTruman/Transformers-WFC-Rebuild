@@ -233,6 +233,37 @@ void Application::runEscalationTest() {
                 check(MS.detpacks[0].used && MS.detonations >= 1, "detpack: a press plants it; after the countdown its destructible is hit");
             }
             if (MD.outage.on) LOG_INFO("ESCTEST %s: power outages so far %d (Round Begins %d)", map.c_str(), MS.outages, S.roundBegins);
+            if (!MD.managers.empty()) {   // Pulse: a Zone_Manager door generator opens its zone and, after its matinee, its doors
+                int mk = -1;
+                for (size_t k = 0; k < MD.managers.size() && mk < 0; ++k)
+                    if (!MD.managers[k].blockers.empty() && !MD.managers[k].g.empty() && !S.generatorDone[(size_t)MD.managers[k].g[0]])
+                        for (const auto& a : D.generators[(size_t)MD.managers[k].g[0]].actions) if (a.op == "on" && a.cls == "TnSurvivalZoneVolume") { mk = (int)k; break; }
+                if (mk >= 0) {
+                    const auto& MG = MD.managers[(size_t)mk];
+                    const bool closedBefore = world_.svMechBlockerOn(MG.blockers[0]);
+                    const bool bought = buyGen(MG.g[0]);
+                    run(MG.delay + 1.0f);
+                    int open = 0; for (const auto& b : MG.blockers) open += !world_.svMechBlockerOn(b);
+                    int zonesOn = 0, zones = 0;
+                    for (const auto& a : D.generators[(size_t)MG.g[0]].actions)
+                        if (a.op == "on" && a.cls == "TnSurvivalZoneVolume") for (const auto& Z : D.zones) if ("TnSurvivalZoneVolume_" + Z.id == a.target) { ++zones; zonesOn += Z.active; }
+                    LOG_INFO("ESCTEST %s: %s via generator %s: bought %d, doors closed before %d, open %d / %zu after %.2f s, zones %d / %d on", map.c_str(), MG.seq.c_str(),
+                             MG.gens[0].c_str(), (int)bought, (int)closedBefore, open, MG.blockers.size(), MG.delay, zonesOn, zones);
+                    check(bought && closedBefore && open == (int)MG.blockers.size() && zonesOn == zones && zones > 0,
+                          "Power_Generator_Action: a door generator enables its zone and opens its doors after the matinee");
+                } else check(false, "Power_Generator_Action: a manager door generator to buy");
+            }
+            {   // the presentation data (Rendering): every laser set with its 9 emitters / button / switch, every sentry its body
+                bool ok = true;
+                for (const auto& L : MD.lasers) ok = ok && L.emitters.size() == 9 && !L.buttonActor.empty() && !L.switchActor.empty() && !L.switchInterp.empty();
+                for (const auto& T : MD.sentries) ok = ok && !T.body.empty() && !T.templ.empty() && !T.emitters.empty();
+                if (MD.outage.on) ok = ok && !MD.outage.ppvOn.empty() && !MD.outage.interp.empty();
+                for (const auto& F : MD.floods) ok = ok && !F.waterfallInterp.empty() && !F.materialInterp.empty();
+                if (!MD.floods.empty()) ok = ok && !MD.drainInterp.empty() && MD.baseDoors.size() == 2 && !MD.unhideAtDrain.empty();
+                LOG_INFO("ESCTEST %s: presentation actors %s (lasers %zu, sentries %zu, floodgates %zu, base doors %zu)", map.c_str(), ok ? "complete" : "MISSING",
+                         MD.lasers.size(), MD.sentries.size(), MD.floods.size(), MD.baseDoors.size());
+                if (MD.any()) check(ok, "the mechanisms' presentation actors are all named");
+            }
             if (!MD.floods.empty()) {
                 int bought = 0;
                 for (const auto& F : MD.floods) bought += buyGen(F.g);
@@ -245,6 +276,10 @@ void Application::runEscalationTest() {
                          (int)drained, zonesOn, MD.zonesOn.size(), (int)MS.gatesOpen);
                 check(bought == (int)MD.floods.size() && drained && MS.gatesOpen && zonesOn == (int)MD.zonesOn.size(),
                       "floodgates: three purchases drain the base; its zones on, the base doors open");
+                run(MD.doorLength);   // the door matinees play on to their end
+                LOG_INFO("ESCTEST %s: drain matinee at %.2f / %.2f s, door matinees at %.2f / %.2f s", map.c_str(), MS.drainT, MD.drainLength, MS.doorPos, MD.doorLength);
+                check(std::fabs(MS.drainT - MD.drainLength) < 0.05f && std::fabs(MS.doorPos - MD.doorLength) < 0.05f,
+                      "matinee positions: the drain at its end, the base doors played to their end");
             }
         }
         LOG_INFO("ESCTEST SUMMARY: %d/%d checks passed", checks - fails, checks);

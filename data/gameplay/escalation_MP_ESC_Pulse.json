@@ -4936,7 +4936,28 @@
     32.64,
     18.456
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5643"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_1577"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_8362"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_1001"
+    }
+   ]
   },
   {
    "id": "11565",
@@ -6280,6 +6301,26 @@
      "op": "transform",
      "class": "TnTransformingWorldActor",
      "target": "TnTransformingWorldActor_10778"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_2452"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_7603"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_13164"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_1506"
     }
    ]
   },
@@ -6352,6 +6393,16 @@
      "op": "on",
      "class": "TnSurvivalZoneVolume",
      "target": "TnSurvivalZoneVolume_5643"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_6212"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_14773"
     }
    ]
   },
@@ -6712,6 +6763,11 @@
      "op": "on",
      "class": "TnSurvivalZoneVolume",
      "target": "TnSurvivalZoneVolume_14658"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_12943"
     }
    ]
   },
@@ -6957,6 +7013,16 @@
      "op": "on",
      "class": "TnSurvivalZoneVolume",
      "target": "TnSurvivalZoneVolume_2452"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_7603"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_6698"
     }
    ]
   },
@@ -7192,6 +7258,11 @@
      "op": "on",
      "class": "Emitter",
      "target": "Emitter_7490"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_16245"
     }
    ]
   },
@@ -7302,7 +7373,28 @@
     32.64,
     18.456
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_2452"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_1577"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_3883"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_12021"
+    }
+   ]
   },
   {
    "id": "2600",
@@ -8719,6 +8811,11 @@
      "op": "on",
      "class": "TnSurvivalZoneVolume",
      "target": "TnSurvivalZoneVolume_13164"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_1506"
     }
    ]
   },
@@ -8829,7 +8926,23 @@
     32.64,
     30.297
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_1577"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_8362"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_1001"
+    }
+   ]
   },
   {
    "id": "7606",
@@ -9063,6 +9176,11 @@
      "op": "on",
      "class": "TnSurvivalZoneVolume",
      "target": "TnSurvivalZoneVolume_7345"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_2438"
     }
    ]
   },
@@ -9173,7 +9291,23 @@
     32.64,
     30.297
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_1577"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_3883"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_12021"
+    }
+   ]
   },
   {
    "id": "7911",
@@ -9292,6 +9426,26 @@
      "op": "transform",
      "class": "TnTransformingWorldActor",
      "target": "TnTransformingWorldActor_7288"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5643"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_6212"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_7345"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_2438"
     }
    ]
   },
@@ -9951,6 +10105,227 @@
  ],
  "kismet": {
   "volumes": {}
+ },
+ "mechanisms": {
+  "managers": [
+   {
+    "seq": "Zone_Manager",
+    "gens": [
+     "2403"
+    ],
+    "interps": [
+     "SeqAct_Interp_54",
+     "SeqAct_Interp_4544"
+    ],
+    "delay": 1.026,
+    "blockers": [
+     "StaticInterpActor_10983",
+     "StaticInterpActor_9813"
+    ],
+    "actors": [
+     "StaticInterpActor_10983",
+     "StaticInterpActor_9813"
+    ]
+   },
+   {
+    "seq": "Zone_Manager_1",
+    "gens": [
+     "15987"
+    ],
+    "interps": [
+     "SeqAct_Interp_5622",
+     "SeqAct_Interp_8917"
+    ],
+    "delay": 7.011,
+    "blockers": [
+     "StaticInterpActor_4667",
+     "StaticInterpActor_7071"
+    ],
+    "actors": [
+     "StaticInterpActor_10088",
+     "StaticInterpActor_11545",
+     "StaticInterpActor_14172",
+     "StaticInterpActor_14703",
+     "StaticInterpActor_15977",
+     "StaticInterpActor_4277",
+     "StaticInterpActor_4472",
+     "StaticInterpActor_4572",
+     "StaticInterpActor_4667",
+     "StaticInterpActor_4964",
+     "StaticInterpActor_7071",
+     "StaticInterpActor_8138",
+     "StaticInterpActor_8145",
+     "StaticInterpActor_8897",
+     "StaticInterpActor_9682"
+    ]
+   },
+   {
+    "seq": "Zone_Manager_2",
+    "gens": [
+     "1460",
+     "7312"
+    ],
+    "interps": [
+     "SeqAct_Interp_7549"
+    ],
+    "delay": 2.041,
+    "blockers": [
+     "StaticInterpActor_14854",
+     "StaticInterpActor_244"
+    ],
+    "actors": [
+     "StaticInterpActor_14854",
+     "StaticInterpActor_244"
+    ]
+   },
+   {
+    "seq": "Zone_Manager_3",
+    "gens": [
+     "2441"
+    ],
+    "interps": [
+     "SeqAct_Interp_12776"
+    ],
+    "delay": 2.041,
+    "blockers": [
+     "StaticInterpActor_13328",
+     "StaticInterpActor_1497",
+     "StaticInterpActor_172"
+    ],
+    "actors": [
+     "StaticInterpActor_13328",
+     "StaticInterpActor_1497",
+     "StaticInterpActor_172"
+    ]
+   },
+   {
+    "seq": "Zone_Manager_4",
+    "gens": [
+     "2441",
+     "7876"
+    ],
+    "interps": [
+     "SeqAct_Interp_11165"
+    ],
+    "delay": 2.374,
+    "blockers": [],
+    "actors": [
+     "HmLightMappedSkeletalMeshActor_14009"
+    ]
+   },
+   {
+    "seq": "Zone_Manager_5",
+    "gens": [
+     "11205",
+     "7554"
+    ],
+    "interps": [
+     "SeqAct_Interp_11287"
+    ],
+    "delay": 2.37,
+    "blockers": [],
+    "actors": [
+     "HmLightMappedSkeletalMeshActor_15111"
+    ]
+   },
+   {
+    "seq": "Zone_Manager_6",
+    "gens": [
+     "11205"
+    ],
+    "interps": [
+     "SeqAct_Interp_14950"
+    ],
+    "delay": 2.041,
+    "blockers": [
+     "StaticInterpActor_11494",
+     "StaticInterpActor_13716",
+     "StaticInterpActor_13774"
+    ],
+    "actors": [
+     "StaticInterpActor_11494",
+     "StaticInterpActor_13716",
+     "StaticInterpActor_13774"
+    ]
+   },
+   {
+    "seq": "Zone_Manager_8",
+    "gens": [
+     "1460",
+     "1963"
+    ],
+    "interps": [
+     "SeqAct_Interp_12613"
+    ],
+    "delay": 12.06,
+    "blockers": [
+     "StaticInterpActor_13328",
+     "StaticInterpActor_1497",
+     "StaticInterpActor_172"
+    ],
+    "actors": [
+     "StaticInterpActor_13328",
+     "StaticInterpActor_1497",
+     "StaticInterpActor_172"
+    ]
+   },
+   {
+    "seq": "Zone_Manager_9",
+    "gens": [
+     "15272",
+     "7911"
+    ],
+    "interps": [
+     "SeqAct_Interp_7793"
+    ],
+    "delay": 2.041,
+    "blockers": [
+     "StaticInterpActor_11494",
+     "StaticInterpActor_13716",
+     "StaticInterpActor_13774"
+    ],
+    "actors": [
+     "StaticInterpActor_11494",
+     "StaticInterpActor_13716",
+     "StaticInterpActor_13774"
+    ]
+   },
+   {
+    "seq": "Zone_Manager_10",
+    "gens": [
+     "7636",
+     "7911"
+    ],
+    "interps": [
+     "SeqAct_Interp_542"
+    ],
+    "delay": 2.041,
+    "blockers": [
+     "StaticInterpActor_1518",
+     "StaticInterpActor_6795"
+    ],
+    "actors": [
+     "StaticInterpActor_1518",
+     "StaticInterpActor_6795"
+    ]
+   }
+  ],
+  "blockersAll": [
+   "StaticInterpActor_10983",
+   "StaticInterpActor_11494",
+   "StaticInterpActor_13328",
+   "StaticInterpActor_13716",
+   "StaticInterpActor_13774",
+   "StaticInterpActor_14854",
+   "StaticInterpActor_1497",
+   "StaticInterpActor_1518",
+   "StaticInterpActor_172",
+   "StaticInterpActor_244",
+   "StaticInterpActor_4667",
+   "StaticInterpActor_6795",
+   "StaticInterpActor_7071",
+   "StaticInterpActor_9813"
+  ]
  },
  "weaponPickups": [
   {

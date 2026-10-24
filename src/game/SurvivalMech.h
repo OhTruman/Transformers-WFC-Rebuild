@@ -15,11 +15,17 @@ struct SvMech {
     std::vector<std::string> hazardsOff;   // pain volumes off at PreGameplaySetup
     // LaserDefenseGridGenerator: bought -> the damage volume on for `time`; the button (within buttonRange, from armDelay) ends it
     // early; at the end the volume goes off and the generator is back at 0 (re-buyable).
-    struct Laser { std::string gen, hazard; core::Vec3 button{0, 0, 0}; float time = 45.0f, armDelay = 3.0f, buttonRange = 3.0f; int g = -1; };
+    struct Laser { std::string gen, hazard; core::Vec3 button{0, 0, 0}; float time = 45.0f, armDelay = 3.0f, buttonRange = 3.0f; int g = -1;
+                   // presentation (Rendering): the 9 beam emitters, the button and its fake switch, their matinee actions + lengths
+                   std::string seq, buttonActor, switchActor, buttonInterp, switchInterp; std::vector<std::string> emitters;
+                   float buttonLength = 0.06f, switchLength = 1.84f; };
     std::vector<Laser> lasers;
     // TnActorFactorySentryAI at a SkeletalMeshActor: spawned dormant + god mode (never removed); its generator wakes it for `time`,
     // then dormant again and the generator reset. uses > 0: after that many expiries the generator is off for good.
-    struct Sentry { std::string seq, gen; core::Vec3 pos{0, 0, 0}; float yaw = 0.0f; bool repair = false; float time = 45.0f; int uses = 0; int g = -1; };
+    struct Sentry { std::string seq, gen; core::Vec3 pos{0, 0, 0}; float yaw = 0.0f; bool repair = false; float time = 45.0f; int uses = 0; int g = -1;
+                    // presentation: the TURRETDEF (the spawned sentry pawn; the SkeletalMeshActor `body` is only its spawn point), the
+                    // generator's emitters (on while it is bought)
+                    std::string body, templ; std::vector<std::string> emitters; };
     std::vector<Sentry> sentries;
     // TnInteractDetpack: a player Interact within range (no cost, single use) -> after the countdown, damage per destructible
     struct Hit { std::string wall; float delay = 0.0f, damage = 1000.0f; };
@@ -28,22 +34,38 @@ struct SvMech {
     // Power_Outage: from Round Begin `fromRound`, each Round Begin -> `delay` s -> `chance` (lateChance from lateRound); while out
     // (duration) no generator can be bought; at most `max` per match; lockout after each (lateLockout from lateRound).
     struct Outage { bool on = false; int fromRound = 4, lateRound = 10, max = 3; float chance = 0.25f, lateChance = 0.5f, delay = 5.0f,
-                    duration = 60.0f, lockout = 180.0f, lateLockout = 300.0f; };
+                    duration = 60.0f, lockout = 180.0f, lateLockout = 300.0f;
+                    std::string ppvOn, ppvOff, interp; float interpLength = 1.51f; };   // presentation: the dark grade + the screens' matinee
     Outage outage;
     // Floodgates: each purchase resumes the drain to its next pause (drainTimes); after the last: Drain Completed (zones on, the
     // energon pain volume off, the base doors open: blockers off after gateOpenDelay).
-    struct Flood { std::string gen, trigger, hazard; int g = -1; };
+    struct Flood { std::string gen, trigger, hazard; int g = -1; std::string waterfallInterp, materialInterp; };   // + its ~1 s / 5 s matinees
     std::vector<Flood> floods;
     std::vector<float> drainTimes;
     std::vector<std::string> zonesOn, blockers;
     std::string energon;
     float gateOpenDelay = 3.1f;
-    bool any() const { return !hazardsOff.empty() || !lasers.empty() || !sentries.empty() || !detpacks.empty() || outage.on || !floods.empty(); }
+    // presentation: the drain matinee (Energon / its pain volume / the height fog), the destructibles unhidden and FogOn at Drain
+    // Completed, the base doors' matinees (held at doorHold, played on to doorLength; pistons hidden at doorOpened)
+    std::string drainInterp; float drainLength = 10.03f; std::vector<std::string> unhideAtDrain; bool fogOnAtDrain = false;
+    struct BaseDoor { std::string interp, blocker; std::vector<std::string> pistons; };
+    std::vector<BaseDoor> baseDoors;
+    float doorHold = 1.25f, doorOpened = 4.35f, doorLength = 6.67f;
+    std::vector<std::string> floodBlockers;   // the base doors' blocking volumes (blockers = these + the managers')
+    // Pulse Power_Generator_Action: a Zone_Manager instance fired by any of its generators (RE's resolved chains: remote events, the
+    // first-of-two gates); its zones / volumes are the generators' flattened actions; here its door matinee: the doors' collision
+    // (blockers, nodes of the pawn collision) goes off once the matinee has played (delay); actors / interps for the presentation.
+    struct Manager { std::string seq; std::vector<std::string> gens, interps, blockers, actors; float delay = 0.0f; std::vector<int> g; };
+    std::vector<Manager> managers;
+    bool any() const { return !hazardsOff.empty() || !lasers.empty() || !sentries.empty() || !detpacks.empty() || outage.on || !floods.empty() || !managers.empty(); }
     static void parse(const assets::Json& j, SvMech& out);
 };
 
 struct SvMechState {
-    struct Laser { bool active = false; float t = 0.0f; };
+    // Matinee positions (s) for the presentation, advanced by the sim (deterministic; nothing in the sim reads them):
+    // laser switchPos 0..switchLength (forward = button down / disabled, reversed while bought); outagePos 0..interpLength;
+    // drainT (the drain matinee); doorPos (doorHold until OpenBase, then up to doorLength); flood boughtT per floodgate (-1 not).
+    struct Laser { bool active = false; float t = 0.0f, switchPos = 1.84f; };
     struct Sentry { bool active = false; float t = 0.0f, yaw = 0.0f, cool = 0.0f; int expiries = 0; int target = -1; };
     struct Detpack { bool used = false; float t = -1.0f; size_t next = 0; int by = -1; };
     std::vector<Laser> lasers;
@@ -53,7 +75,10 @@ struct SvMechState {
     int outages = 0, roundsSeen = 0;
     float outageLeft = 0.0f, lockLeft = 0.0f, rollIn = -1.0f;
     int floodBought = 0;
-    float drainT = 0.0f, gateT = -1.0f;
+    float drainT = 0.0f, gateT = -1.0f, doorPos = 1.25f, outagePos = 0.0f;
+    std::vector<float> floodT;
+    std::vector<float> managerT;              // s since a manager fired (-1 not yet); its doors open at its delay
+    std::vector<uint8_t> managerDone;
     bool drained = false, gatesOpen = false;
     int laserRuns = 0, sentryRuns = 0, detonations = 0;   // test counters (WFC_ESCTEST)
 };

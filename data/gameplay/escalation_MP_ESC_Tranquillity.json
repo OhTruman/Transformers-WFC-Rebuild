@@ -8508,17 +8508,23 @@
     {
      "gen": "3589",
      "trigger": "TriggerVolume_10055",
-     "hazard": "DynamicPhysicsVolume_14764"
+     "hazard": "DynamicPhysicsVolume_14764",
+     "materialInterp": "SeqAct_Interp_3643",
+     "waterfallInterp": "SeqAct_Interp_2657"
     },
     {
      "gen": "15956",
      "trigger": "TriggerVolume_6407",
-     "hazard": "DynamicPhysicsVolume_2157"
+     "hazard": "DynamicPhysicsVolume_2157",
+     "materialInterp": "SeqAct_Interp_13602",
+     "waterfallInterp": "SeqAct_Interp_10625"
     },
     {
      "gen": "14278",
      "trigger": "TriggerVolume_9646",
-     "hazard": "DynamicPhysicsVolume_576"
+     "hazard": "DynamicPhysicsVolume_576",
+     "materialInterp": "SeqAct_Interp_5123",
+     "waterfallInterp": "SeqAct_Interp_15196"
     }
    ],
    "drainTimes": [
@@ -8535,7 +8541,44 @@
     "DynamicBlockingVolume_8499",
     "DynamicBlockingVolume_9335"
    ],
-   "gateOpenDelay": 3.1
+   "gateOpenDelay": 3.1,
+   "drainInterp": "SeqAct_Interp_5361",
+   "drainLength": 10.03,
+   "unhideAtDrain": [
+    "TnStaticDestructibleActor_10965",
+    "TnStaticDestructibleActor_12025",
+    "TnStaticDestructibleActor_9315",
+    "TnStaticDestructibleActor_7764",
+    "TnStaticDestructibleActor_39",
+    "TnStaticDestructibleActor_5516",
+    "TnStaticDestructibleActor_11676",
+    "TnStaticDestructibleActor_13740",
+    "TnStaticDestructibleActor_12119",
+    "TnStaticDestructibleActor_13900",
+    "TnStaticDestructibleActor_14302"
+   ],
+   "fogOnAtDrain": true,
+   "baseDoors": [
+    {
+     "interp": "SeqAct_Interp_6026",
+     "pistons": [
+      "HmSkeletalMeshActor_7715",
+      "HmSkeletalMeshActor_13308"
+     ],
+     "blocker": "DynamicBlockingVolume_9335"
+    },
+    {
+     "interp": "SeqAct_Interp_10535",
+     "pistons": [
+      "HmSkeletalMeshActor_16151",
+      "HmSkeletalMeshActor_817"
+     ],
+     "blocker": "DynamicBlockingVolume_8499"
+    }
+   ],
+   "doorHold": 1.25,
+   "doorOpened": 4.35,
+   "doorLength": 6.67
   }
  },
  "weaponPickups": [

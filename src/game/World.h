@@ -582,6 +582,7 @@ public:
                           bool concave = false;           // a non-convex brush: inside by ray-crossing parity over tris (bounds first)
                           std::vector<core::Vec3> tris; core::Vec3 lo{0, 0, 0}, hi{0, 0, 0}; };
     const std::vector<HazardVolume>& hazardVolumes() const { return hazards_; }
+    bool svMechBlockerOn(const std::string& name) const;   // an Escalation mechanism blocker: its collision on (blocking)
     int hazardAt(const core::Vec3& p) const;
     std::string mapDir() const;
     // "MP_UND_Gorge_BASE_m" / "mp_und_gorge" -> "MP_UND_Gorge" when that map's export exists; else the input.
@@ -1600,6 +1601,8 @@ private:
     static std::vector<std::string> svMechBlockerNames(const std::string& map);   // switchable collision brushes (at map load)
     void svMechAddBlockers();
     void svMechSetBlockers(bool on);
+    bool svMechSetBlocker(const std::string& name, bool on);   // one blocking actor (a Pulse door, a Tranquillity gate)
+    std::vector<uint8_t> escBlockerOn_;    // per escBlockerSets_ entry
     std::vector<std::string> escBlockerNames_;
     std::vector<std::pair<std::string, std::vector<core::Vec3>>> escBlockerTris_;
     std::vector<int> escBlockerSets_;      // their collision_ dynamic sets
