@@ -11,7 +11,7 @@
 
 namespace platform { class IWindow; }
 namespace render { class IRenderer; }
-namespace frontend { class FrontendRuntime; struct MatchLaunch; }
+namespace frontend { class FrontendRuntime; struct MatchLaunch; class LocalProfile; }
 namespace net { class UdpSession; class NetMatchDriver; class VoiceSession; }
 namespace ui { class GfxPresenter; }
 
@@ -50,6 +50,7 @@ private:
     void unloadMatch();
     void drawFrontendFrame();
     void attachPresenter();
+    void applyRendererSettings(const frontend::LocalProfile& p, const char* when, bool force);   // boot / Apply / a recreated renderer
     static void applyStartupGraphics();   // before the renderer exists: settings it can only take at start-up (frame generation)
     void applyBootProfile();              // WFC_BOOT_PROFILE=1: the direct boot applies the profile's display / graphics rows (harness)
     void shutdownFrontend();
@@ -95,6 +96,7 @@ private:
     int appliedRayTracing_ = -1;   // PC EXTENSION [PCSettings] RayTracing last handed to the renderer
     int appliedVolumetric_ = -1;   // PC ADAPTATION [PCSettings] VolumetricLighting last handed to the renderer
     int appliedLensFlare_ = -1;     // the Lens Flares row last applied to the renderer
+    int appliedTextureQuality_ = -1;   // [PCSettings] TextureQuality last applied (Rendering setTextureQuality)
     void qaTick(const platform::InputFrame& in);
     void playtestOverlayTick(const platform::InputFrame& in);
     std::unique_ptr<platform::QaPanel> qa_;

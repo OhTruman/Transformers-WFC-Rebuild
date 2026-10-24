@@ -643,6 +643,10 @@ void Application::applyBootProfile() {
     appliedRayTracing_ = d.rayTracing;
     frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(d.rayTracing)}, {"by", applyRayTracing(renderer_, d.rayTracing, hw.rtAvailable)},
                                                      {"when", "boot"}, {"provenance", "PC EXTENSION"}});
+    if (renderer_) {
+        renderer_->setTextureQuality(std::clamp(d.textureQuality, 0, 2));
+        renderer_->setWaterMode(std::getenv("WFC_DEV_ROWS") ? d.water : 0);
+    }
     applyGamma(renderer_, p.getInt("GammaSetting"));
 }
 
@@ -663,6 +667,67 @@ bool Application::wantsFrontendBoot() {
                           "WFC_DETERMINISMTEST", "WFC_WEAPONAUDIT", "WFC_VEHFRAMETEST", "WFC_VEHICLEAUDIT", "WFC_QABOTTEST", "WFC_MARKERSTEST", "WFC_STUCKSPOT_BOT", "WFC_ASYNCSTEPTEST", "WFC_ENGAGETEST", "WFC_EVICTTEST", "WFC_BARRIERWALKTEST"})   // [integration 09c] Gameplay 26d / 26h / 26k harnesses
         if (std::getenv(v)) return false;
     return true;
+}
+
+// [Frontend, QC 2026-10-24] Every renderer-owned setting from the profile, in one place: the frontend boot (force), every
+// profile Apply (only what changed) and a recreated renderer after a match (force: a new renderer starts at its defaults and
+// the applied*_ caches described the old one - only Brightness was re-applied before, so the next Apply pushed nothing).
+// Water: its row is dev-only (WFC_DEV_ROWS), so a stored Water=1 applies only while that row is shown.
+void Application::applyRendererSettings(const frontend::LocalProfile& p, const char* when, bool force) {
+    const auto& d = p.display;
+    if (force || d.frameLimit != appliedFrameLimit_) {   // the Frame Rate Limit selector applies on every step
+        int cap = d.frameLimit;
+        if (const char* e = std::getenv("WFC_FPS_LIMIT")) cap = std::max(0, std::atoi(e));
+        appliedFrameLimit_ = d.frameLimit;
+        pacingHz_ = cap;
+        const char* by = applyFrameLimit(renderer_, window_, cap, pacingFg_);
+        frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(cap)}, {"by", by}, {"when", when}});
+    }
+    const int hdNow = frontend_->hdTexturesEffectiveLevel();
+    if (force || d.upscaling != appliedUpscaling_ || hdNow != appliedHdTextures_ || d.anisotropy != appliedAnisotropy_) {
+        appliedUpscaling_ = d.upscaling;
+        appliedHdTextures_ = hdNow;
+        appliedAnisotropy_ = d.anisotropy;
+        int up = appliedUpscaling_, af = appliedAnisotropy_;
+        int hd = appliedHdTextures_;
+        bool env = false;
+        const char* gx = applyGraphicsExtensions(renderer_, up, hd, af, env);
+        frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", std::to_string(hd)},
+                                                                 {"anisotropy", std::to_string(af)},
+                                                                 {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", when},
+                                                                 {"provenance", "PC EXTENSION"}});
+        applyModernMaterials(renderer_, hd, when);
+    }
+    if (force || d.rayTracing != appliedRayTracing_) {
+        appliedRayTracing_ = d.rayTracing;
+        frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(appliedRayTracing_)}, {"by", applyRayTracing(renderer_, appliedRayTracing_, frontend_->rayTracingAvailable())},
+                                                         {"when", when}, {"provenance", "PC EXTENSION"}});
+    }
+    if (force || (d.volumetricLighting ? 1 : 0) != appliedVolumetric_) {   // restart-free (Rendering): next frame
+        appliedVolumetric_ = d.volumetricLighting ? 1 : 0;
+        frontend::FlowTrace::emit("display.volumetricLighting", {{"on", frontend::FlowTrace::boolean(d.volumetricLighting)},
+                                                                 {"by", applyVolumetric(renderer_, d.volumetricLighting)},
+                                                                 {"when", when}, {"provenance", "PC ADAPTATION"}});
+    }
+    if (force || d.lensFlares != appliedLensFlare_) {   // restart-free (Rendering): next frame
+        appliedLensFlare_ = d.lensFlares;
+        frontend::FlowTrace::emit("display.lensFlares", {{"mode", std::to_string(appliedLensFlare_)}, {"by", applyLensFlare(renderer_, appliedLensFlare_)},
+                                                         {"when", when}, {"provenance", "PC EXTENSION"}});
+    }
+    if (renderer_) {
+        const int water = std::getenv("WFC_DEV_ROWS") ? d.water : 0;   // Rendering 760257b9: the Smoke / Water rows (0 Original, 1 Enhanced)
+        if (force || d.smoke != renderer_->smokeMode() || water != renderer_->waterMode()) {
+            renderer_->setSmokeMode(d.smoke);
+            renderer_->setWaterMode(water);
+            frontend::FlowTrace::emit("display.smokeWater", {{"smoke", std::to_string(d.smoke)}, {"water", std::to_string(water)}, {"when", when}});
+        }
+        if (force || d.textureQuality != appliedTextureQuality_) {   // Rendering RENDERING_QC_SETTINGS: 0 Low / 1 Medium / 2 High, live
+            appliedTextureQuality_ = d.textureQuality;
+            renderer_->setTextureQuality(std::clamp(d.textureQuality, 0, 2));
+            frontend::FlowTrace::emit("display.textureQuality", {{"level", std::to_string(d.textureQuality)}, {"when", when}});
+        }
+    }
+    applyGamma(renderer_, p.getInt("GammaSetting"));
 }
 
 void Application::attachPresenter() {
@@ -694,38 +759,8 @@ void Application::attachPresenter() {
         window_->setVSync(d.vsync);
         // PC ADAPTATION frame-rate limit: [PCSettings] FrameLimit (Hz, 0 = unlimited, the default; the PC graphics menu's
         // Frame Rate Limit entry), or WFC_FPS_LIMIT for tests. Presentation only: the simulation's fixed step is unaffected.
-        int cap = d.frameLimit;
-        if (const char* e = std::getenv("WFC_FPS_LIMIT")) cap = std::max(0, std::atoi(e));
-        const char* by = applyFrameLimit(renderer_, window_, cap, pacingFg_);
-        pacingHz_ = cap;
-        frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(cap)}, {"by", by}, {"when", "boot"}});
-        appliedUpscaling_ = d.upscaling;
-        appliedHdTextures_ = frontend_->hdTexturesEffectiveLevel();
-        appliedAnisotropy_ = d.anisotropy;
-        int up = d.upscaling, af = d.anisotropy;
-        int hd = appliedHdTextures_;
-        bool env = false;
-        const char* gx = applyGraphicsExtensions(renderer_, up, hd, af, env);
-        frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", std::to_string(hd)},
-                                                                 {"anisotropy", std::to_string(af)},
-                                                                 {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", "boot"},
-                                                                 {"provenance", "PC EXTENSION"}});
-        applyModernMaterials(renderer_, hd, "boot");
-        appliedRayTracing_ = d.rayTracing;
-        frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(d.rayTracing)}, {"by", applyRayTracing(renderer_, d.rayTracing, frontend_->rayTracingAvailable())},
-                                                         {"when", "boot"}, {"provenance", "PC EXTENSION"}});
-        appliedVolumetric_ = d.volumetricLighting ? 1 : 0;
-        frontend::FlowTrace::emit("display.volumetricLighting", {{"on", frontend::FlowTrace::boolean(d.volumetricLighting)},
-                                                                 {"by", applyVolumetric(renderer_, d.volumetricLighting)}, {"when", "boot"},
-                                                                 {"provenance", "PC ADAPTATION"}});
-        appliedLensFlare_ = d.lensFlares;
-        frontend::FlowTrace::emit("display.lensFlares", {{"mode", std::to_string(d.lensFlares)}, {"by", applyLensFlare(renderer_, d.lensFlares)},
-                                                         {"when", "boot"}, {"provenance", "PC EXTENSION"}});
-        if (renderer_) {   // Rendering 760257b9: the Smoke / Water rows (0 Original, 1 Enhanced), restart-free
-            renderer_->setSmokeMode(d.smoke);
-            renderer_->setWaterMode(d.water);
-            frontend::FlowTrace::emit("display.smokeWater", {{"smoke", std::to_string(d.smoke)}, {"water", std::to_string(d.water)}, {"when", "boot"}});
-        }
+        // PC ADAPTATION frame-rate limit etc.: every renderer setting from the profile (applyRendererSettings)
+        applyRendererSettings(frontend_->flow().profile(), "boot", true);
     }
     // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
@@ -750,52 +785,11 @@ void Application::attachPresenter() {
         }
     }
     frontend_->flow().profile().onApplied = [this](const frontend::LocalProfile& p) {
-        applyGamma(renderer_, p.getInt("GammaSetting"));
         window_->setPadScheme(p.getBool("UseAlternateControlScheme"), p.getBool("SwitchRightThumbstickAndB"));
 #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
         game::LevelAudioHost::applyProfileVolumes(p.getInt("Music Volume"), p.getInt("FX Volume"), p.getInt("Dialogue Volume"));
 #endif
-        if (p.display.frameLimit != appliedFrameLimit_) {   // the Frame Rate Limit selector applies on every step
-            appliedFrameLimit_ = p.display.frameLimit;
-            pacingHz_ = appliedFrameLimit_;
-            const char* by = applyFrameLimit(renderer_, window_, appliedFrameLimit_, pacingFg_);
-            frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(appliedFrameLimit_)}, {"by", by}, {"when", "apply"}});
-        }
-        const int hdNow = frontend_->hdTexturesEffectiveLevel();
-        if (p.display.upscaling != appliedUpscaling_ || hdNow != appliedHdTextures_ || p.display.anisotropy != appliedAnisotropy_) {
-            appliedUpscaling_ = p.display.upscaling;
-            appliedHdTextures_ = hdNow;
-            appliedAnisotropy_ = p.display.anisotropy;
-            int up = appliedUpscaling_, af = appliedAnisotropy_;
-            int hd = appliedHdTextures_;
-            bool env = false;
-            const char* gx = applyGraphicsExtensions(renderer_, up, hd, af, env);
-            frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", std::to_string(hd)},
-                                                                     {"anisotropy", std::to_string(af)},
-                                                                     {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", "apply"}});
-            applyModernMaterials(renderer_, hd, "apply");
-        }
-        if (p.display.rayTracing != appliedRayTracing_) {
-            appliedRayTracing_ = p.display.rayTracing;
-            frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(appliedRayTracing_)}, {"by", applyRayTracing(renderer_, appliedRayTracing_, frontend_->rayTracingAvailable())},
-                                                             {"when", "apply"}, {"provenance", "PC EXTENSION"}});
-        }
-        if ((p.display.volumetricLighting ? 1 : 0) != appliedVolumetric_) {   // restart-free (Rendering): next frame
-            appliedVolumetric_ = p.display.volumetricLighting ? 1 : 0;
-            frontend::FlowTrace::emit("display.volumetricLighting", {{"on", frontend::FlowTrace::boolean(p.display.volumetricLighting)},
-                                                                     {"by", applyVolumetric(renderer_, p.display.volumetricLighting)},
-                                                                     {"when", "apply"}, {"provenance", "PC ADAPTATION"}});
-        }
-        if (renderer_ && (p.display.smoke != renderer_->smokeMode() || p.display.water != renderer_->waterMode())) {
-            renderer_->setSmokeMode(p.display.smoke);
-            renderer_->setWaterMode(p.display.water);
-            frontend::FlowTrace::emit("display.smokeWater", {{"smoke", std::to_string(p.display.smoke)}, {"water", std::to_string(p.display.water)}, {"when", "apply"}});
-        }
-        if (p.display.lensFlares != appliedLensFlare_) {   // restart-free (Rendering): next frame
-            appliedLensFlare_ = p.display.lensFlares;
-            frontend::FlowTrace::emit("display.lensFlares", {{"mode", std::to_string(appliedLensFlare_)}, {"by", applyLensFlare(renderer_, appliedLensFlare_)},
-                                                             {"when", "apply"}, {"provenance", "PC EXTENSION"}});
-        }
+        applyRendererSettings(p, "apply", false);
         if (applyLookSettings(world_.player().controller(), p))
             frontend::FlowTrace::emit("profile.lookSettings", {{"CameraSensitivity", p.get("CameraSensitivity")}, {"owner", "gameplay"}});
         frontend::FlowTrace::emit("profile.apply", {{"FXVolume", p.get("FX Volume")}, {"DialogueVolume", p.get("Dialogue Volume")},
@@ -2135,7 +2129,7 @@ void Application::unloadMatch() {
         delete renderer_;
         renderer_ = render::createGLRenderer();
         if (g_scene) g_scene->setRenderer(renderer_);
-        applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));   // the new renderer starts at its default
+        applyRendererSettings(frontend_->flow().profile(), "rendererRecreated", true);   // the new renderer starts at its defaults
     }
     // Measurement only (WFC_GLCENSUS): the live-name scan is up to millions of glIs* calls, so normal play skips it at
     // every match transition; GlCensus::release (the per-match GL release above) always runs.

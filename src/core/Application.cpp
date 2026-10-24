@@ -1265,6 +1265,44 @@ Application::MatchExit Application::runMatch() {
             hb.x = 0.30f * W; hb.y = 0.72f * H; hb.params = {{"Health", {0.6f, 0, 0, 0}}, {"Neutral", {1, 0, 0, 0}}};
             renderer_->drawMaterialTile(hb);
         }
+        // [Frontend, QC] Subtitles (the Audio row, default off as the original): the campaign dialogue line on screen now
+        // (Systems World::currentSubtitle, in the dialogue language). Hud_GFX has no subtitle element - UE3 drew them on the
+        // canvas: centred lines stacked up from the bottom of the 80 % safe region, white with a drop shadow [H: UE3
+        // GameViewportClient SubtitleRegion]. Font: the original UI_TransEngineFonts_p.SubtitleFont when the render data has it,
+        // else MarkerFont. Read before launchStep (the World is idle between joins).
+        if (frontend_ && frontend_->flow().campaign() && frontend_->flow().profile().get("Subtitles") == "True") {
+            const std::string sub = world_.currentSubtitle();
+            if (!sub.empty()) {
+                const float W = (float)window_->width(), H = (float)window_->height(), scale = H / 720.0f;
+                static std::string font;
+                if (font.empty()) { float tw, th; font = renderer_->canvasTextSize("SubtitleFont", "A", tw, th) ? "SubtitleFont" : "MarkerFont"; }
+                std::vector<std::string> lines;   // word wrap to the safe width
+                std::string cur, word;
+                auto fits = [&](const std::string& t) { float tw = 0, th = 0; renderer_->canvasTextSize(font, t, tw, th, scale); return tw <= W * 0.8f; };
+                for (size_t i = 0; i <= sub.size(); ++i) {
+                    if (i == sub.size() || sub[i] == ' ' || sub[i] == (char)10) {
+                        const std::string cand = cur.empty() ? word : cur + " " + word;
+                        if (!cur.empty() && !fits(cand)) { lines.push_back(cur); cur = word; } else cur = cand;
+                        word.clear();
+                        if (i < sub.size() && sub[i] == (char)10) { lines.push_back(cur); cur.clear(); }
+                    } else word += sub[i];
+                }
+                if (!cur.empty()) lines.push_back(cur);
+                float lineH = 0, tw = 0;
+                renderer_->canvasTextSize(font, "Ag", tw, lineH, scale);
+                if (lineH <= 0) lineH = 22.0f * scale;
+                float y = H * 0.9f - lineH * (float)lines.size();
+                const uint8_t white[4] = {255, 255, 255, 255}, shadow[4] = {0, 0, 0, 255};
+                for (const std::string& l : lines) {
+                    float lw = 0, lh = 0;
+                    renderer_->canvasTextSize(font, l, lw, lh, scale);
+                    const float x = (W - lw) * 0.5f;
+                    renderer_->drawCanvasText(font, l, x + scale, y + scale, shadow, scale);
+                    renderer_->drawCanvasText(font, l, x, y, white, scale);
+                    y += lineH;
+                }
+            }
+        }
         // [integration 09c] Async step (3): launched after the integration draws that still read World directly (diagnostics);
         // the match markers read the published presented() buffer. Overlaps endFrame / present / frontend.
         world_.launchStep();   // the step's background part overlaps endFrame / present / HUD (joined at the next frame start)
