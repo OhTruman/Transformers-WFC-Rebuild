@@ -4274,3 +4274,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 23:09 AssetTools LZO fix done (blocks at their declared offset; base 0 of 918 packages affected = byte-identical; DLC authored.db
   rebuilt: Tranquillity_AUDIO NULL rows 110 -> 28; District rebuilt, outputs unchanged; the laser generators scoped
   936 -> 356 rows per RE's export). Pack 2 resumed: Horizon (structure audit at 2 m), then Metropolis, Sector, Pulse, Static.
+2026-10-23 23:13 MERGED 83d8a199 DLC Escalation mechanisms (District laser grid off at start + buyable 45 s sets, 10 sentries, power outage,
+  detpacks; Tranquillity floodgates / base doors; District 11 / 11) + FINAL_BASE_ITEMS 16; 27b879f0 Tranquillity level
+  audio (14 damaged exports left out). Visuals -> Rendering (survival().mech); outage HUD -> Frontend. Pack 2 in the chain.
