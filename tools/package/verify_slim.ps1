@@ -163,6 +163,9 @@ $roots = [ordered]@{
     WFC_DDS_ROOT             = "$pkg\AssetTools\out\dds"
     WFC_FRONTEND_DATA        = "$pkg\Rebuild\data\frontend"    # Frontend's runtime lookup (logged "frontend data: <dir>")
     WFC_CAMPAIGN_ROOT        = "$pkg\AssetTools\out\campaign_render"    # Gameplay's CampaignChapter::root() (Play.bat sets it too)
+    WFC_DLC_TEXT             = "$pkg\AssetTools\work\dlc"    # frontend::dlcTextFile (Play.bat sets it, 307413d6)
+    WFC_DLC_CONTENT          = "$pkg\ExtractedAssets\content"    # frontend::dlcContentRoot + SoundCues' DLC fallback (the merged content)
+    WFC_BASE_CONTENT         = "$pkg\ExtractedAssets\content"    # SoundCues' base wave fallback
 }
 foreach ($k in $OmitRoot) { if ($roots.Contains($k)) { $roots.Remove($k); Write-Warning "self-test: $k left unset" } else { throw "unknown root $k" } }
 foreach ($k in $roots.Keys) { if (-not (Test-Path -LiteralPath $roots[$k])) { Write-Warning "$k -> $($roots[$k]) does not exist in the package" } }
