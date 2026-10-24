@@ -67,7 +67,7 @@ Two local players on one PC (the original's 2-player split screen: campaign co-o
   seats (party of two locals), settings per profile.
 - Gameplay: a second local human participant (the sim already has multi-human seats: the local loop gets two input
   owners), pad 2 input routing, campaign co-op with two locals, Escalation / versus with two local seats in online too.
-- Systems: two audio listeners (the original's rule), input device routing (pad 1 / pad 2 / keyboard+mouse).
+- Systems: two audio listeners (the original's rule); input device routing = the user's requirement: two controllers, OR keyboard+mouse for player 1 and a controller for player 2 (any pad takes seat 2 on Start; KB+M always belongs to seat 1; pads can be swapped).
 - Experimental: a split-screen identity + perf row (two views cost ~2x).
 Order: RE first, then Rendering + Gameplay in parallel, Frontend + Systems after; it ships with the DLC build if ready,
 else in the one after (the user decides at the cut).
