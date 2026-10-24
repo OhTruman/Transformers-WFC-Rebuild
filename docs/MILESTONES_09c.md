@@ -4173,3 +4173,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 20:19 NEXT PHASE (user ~20:20): the two WFC DLC packs (Map and Character Pack #1 / #2, STFS packages in F:\Transformers
   Rebuild\4156084C, read-only) go in AFTER the current build, split across the lanes by content: docs/DLC_PLAN.md.
 2026-10-23 20:21 User ~20:35: a Language option in Settings goes into the NEXT build (with the DLC); logged in docs/DLC_PLAN.md.
+2026-10-23 20:24 FINAL GATE PASS on d5bb6863 (Experimental 34049869, tools/fidelity/results/FINAL_GATE_d5bb6863.md): 40 / 40 rows same
+  match vs the base (af4d0731 + 01-12) on 10 maps x 1440p / 1080p x 2 reps; head faster on average (2.52 -> 2.48 ms 1440p,
+  2.53 -> 2.49 ms 1080p); worst median 3.85 ms (Gorge); no contamination; pool flat. Combined gate COMPLETE (pre + timed).
+  CUT WORD sent to Systems (refresh.sh d5bb6863). RELEASE sent to every lane; the DLC phase starts (AssetTools extraction).
