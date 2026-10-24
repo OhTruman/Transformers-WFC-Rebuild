@@ -4179,3 +4179,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   CUT WORD sent to Systems (refresh.sh d5bb6863). RELEASE sent to every lane; the DLC phase starts (AssetTools extraction).
 2026-10-23 20:29 DLC INVENTORY (AssetTools): 9 maps (5 versus + 4 Escalation), no new characters (7 base unlocks), 1 new ESC enemy, 5
   languages for DLC strings. Assignments sent to every lane (docs/DLC_PLAN.md). AssetTools' 9-map chain started (Pack 1).
+2026-10-23 20:31 Cut step 1 (Systems): the d5bb6863 build OK (Release + PGO, RT shaders, Opus); packaging stopped on 26 duplicate outside
+  rows (weapon glTFs already shipped as xpr twins) -> build_slim b8940af3 taken (c4155702); packaging phase rerunning.
+  Post-build merges: 7f654ad5 (quiet poses; matc plain pow: the DLC maps translate once correctly, shipped maps regen at
+  the DLC gate). AssetTools DLC plumbing ~2-3 h, then Fortress; ESC data needs RE's per-map export.
