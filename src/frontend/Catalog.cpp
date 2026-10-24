@@ -598,6 +598,19 @@ void Catalog::loadDlc(const std::string& manifestRoot, const std::string& runtim
                 dlcUnlockedChassis_.push_back(c["chassis"].asString());
         }
     }
+    // The DLC Escalation maps carry no CampaignCharacters of their own (TransLevels lists only the base maps): Tranquillity / Pulse
+    // use Broken Hope's 13 Autobots, District / Static Remnant's 13 Decepticons [RE DLC_RE 2]. Without them the wheel fell back to
+    // every iconic chassis - both factions and Truck7 "Optimus" beside "Optimus Prime" (playtest 3 ESC 3).
+    auto baseList = [&](const char* key) -> std::vector<std::string> {
+        for (const MapInfo& m : maps_) if (m.mapFilename.find(key) != std::string::npos && !m.campaignCharacters.empty()) return m.campaignCharacters;
+        return {};
+    };
+    for (MapInfo& m : maps_) {
+        if (!m.campaignCharacters.empty() || !m.compatibleWith("SV")) continue;
+        const std::string& f = m.mapFilename;
+        if (f.find("Tranquil") != std::string::npos || f.find("Pulse") != std::string::npos) m.campaignCharacters = baseList("BrokenHope");
+        else if (f.find("District") != std::string::npos || f.find("Static") != std::string::npos) m.campaignCharacters = baseList("Remnant");
+    }
     std::stable_sort(maps_.begin(), maps_.end(), [](const MapInfo& a, const MapInfo& b) { return a.iniOrder < b.iniOrder; });
 }
 
