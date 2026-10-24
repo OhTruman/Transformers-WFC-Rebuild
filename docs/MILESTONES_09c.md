@@ -4491,3 +4491,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   FluidRed cubemap faces, DLC text .int, Hud reticle); settings 12 / 12, RT, overlay, HD runtime PASS. Packaging fixed
   (build_slim + Play.bat 5ae93434 -> 307413d6; extras 199 -> 229); repack 48e42af6 (package phase only) + re-verify
   running. Code fix for the next package: drawReticle uses kAssetRootDefault instead of WFC_ASSETS (Rendering).
+2026-10-24 11:14 MERGED 203449b7 reticle from the content root. DISTRIBUTABLE PACKAGE WORK: Rendering found 11 more hard-coded
+  'F:/Transformers Rebuild' literals in campaign / Escalation game code (set dressing, destructibles, clips, ESC
+  characters, spawnables) -> one patch with an env-overridable helper; RE audits every runtime dev-path literal
+  (DEV_PATH_AUDIT.md); Systems: PACKAGE_ENV_CHECKLIST.md + a clean-machine verify mode. The repacked 48e42af6 (this PC)
+  verifies now; the laptop package = the next (perf) one.
