@@ -1103,7 +1103,7 @@ public:
         struct Marker {
             std::string key;                            // stable identity ("pawn:12", "obj:<actor>", "carried:0")
             std::string type;                           // the TnObjectiveMarkerType* class
-            std::string setup;                          // "AllyMarkerSetup" / "TransformerEnemyMarkerSetup" / "MarkerSetup"
+            std::string setup;                          // "AllyMarkerSetup" / "EnemyMarkerSetup" / "MarkerSetup"
             core::Vec3 base{0, 0, 0};                   // MarkerBase.Location (glTF metres)
             float labelZ = -1.0f;                       // Versus pawns: CollisionHeight x 0.5; < 0 = authored
             std::string label;                          // PRI.PlayerName / node number

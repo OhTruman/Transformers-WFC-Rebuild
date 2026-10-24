@@ -3111,7 +3111,7 @@ void World::fillPresented(PresentedFrame& p) {
             if (!t.drawn) continue;
             PresentedFrame::Marker m;
             m.key = "pawn:" + std::to_string(t.player); m.type = "TnObjectiveMarkerTypeTransformerVersus";
-            m.setup = t.ally ? "AllyMarkerSetup" : "TransformerEnemyMarkerSetup"; m.relation = t.ally ? 0 : 1; m.player = t.player;
+            m.setup = t.ally ? "AllyMarkerSetup" : "EnemyMarkerSetup"; m.relation = t.ally ? 0 : 1; m.player = t.player;   // the type's authored setups
             m.owner = 100 + t.player;   // the draw owner World::draw passes to IRenderer::setDrawOwner for participants
             m.base = t.pos;
             if (const Character* c = participantPawn(t.player)) {

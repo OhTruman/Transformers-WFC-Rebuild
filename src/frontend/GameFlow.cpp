@@ -1564,7 +1564,8 @@ bool GameFlow::canGainXp() const {
     // WFC_ORIGINAL_XP_RULE=1 keeps the original rule.
     if (lobby_.gameModeTag == "SV") return false;   // Escalation: no XP (CanGainXp false) [RE]
     const bool publicGame = lobby_.playlistId >= 0 || vote_.round > 0;
-    if (role_ != SessionRole::Offline) return publicGame;
+    // a private host with nobody else in the session plays as offline (playtest 3: XP stopped once private matches became hosted sessions)
+    if (role_ == SessionRole::Member || (role_ == SessionRole::Host && !onlineMembers_.empty())) return publicGame;
     return !std::getenv("WFC_ORIGINAL_XP_RULE") || publicGame;
 }
 

@@ -972,6 +972,19 @@ static FakeSession::Step after(const char* call, SessionEvent e, double delay = 
     FakeSession::Step s; s.afterCall = call; s.delay = delay; s.event = std::move(e); return s;
 }
 
+static void testSoloHostXp() {
+    // playtest 3: a private match hosted alone earns XP (the PC offline rule), as before private matches became hosted sessions
+    using T = SessionEvent::Type;
+    SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD"; o.address = "192.168.1.20:7777";
+    OnlineRig r({after("host", o, 0.5)});
+    r.f().call("Online.EditGameMode", {"TDM"});
+    r.f().call("Online.PlayPrivateGame", {"TDM"});
+    const bool inLobby = runUntil(*r.rt, [&] { return r.f().level() == LevelKind::GameLobby && !r.f().loading().active; });
+    const bool host = r.f().sessionRole() == GameFlow::SessionRole::Host;
+    check(r.ok && inLobby && host && r.f().canGainXp() && r.f().buildLaunchUrl().find("WfcCanGainXp=0") == std::string::npos,
+          "playtest3.solo_host_xp", std::to_string(inLobby) + std::to_string(host) + std::to_string(r.f().canGainXp()));
+}
+
 static void testOnlineHostJoin() {
     using T = SessionEvent::Type;
     {   // S1 host succeeds
@@ -2571,6 +2584,7 @@ int main() {
     testCampaignCinematicHud();
     testOnlineBoundary();
     testOnlineHostJoin();
+    testSoloHostXp();
     testOnlineLobbyGate();
     testOnlineMemberSlots();
     testHudJamBuffs();

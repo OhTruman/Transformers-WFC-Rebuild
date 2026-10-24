@@ -1,0 +1,100 @@
+diff --git a/src/frontend/GameFlow.cpp b/src/frontend/GameFlow.cpp
+index 1a773235..22a5ee0d 100644
+--- a/src/frontend/GameFlow.cpp
++++ b/src/frontend/GameFlow.cpp
+@@ -1558,7 +1558,8 @@ bool GameFlow::canGainXp() const {
+     // WFC_ORIGINAL_XP_RULE=1 keeps the original rule.
+     if (lobby_.gameModeTag == "SV") return false;   // Escalation: no XP (CanGainXp false) [RE]
+     const bool publicGame = lobby_.playlistId >= 0 || vote_.round > 0;
+-    if (role_ != SessionRole::Offline) return publicGame;
++    // a private host with nobody else in the session plays as offline (playtest 3: XP stopped once private matches became hosted sessions)
++    if (role_ == SessionRole::Member || (role_ == SessionRole::Host && !onlineMembers_.empty())) return publicGame;
+     return !std::getenv("WFC_ORIGINAL_XP_RULE") || publicGame;
+ }
+ 
+diff --git a/src/game/PlayerController.cpp b/src/game/PlayerController.cpp
+index f15a4754..04288a01 100644
+--- a/src/game/PlayerController.cpp
++++ b/src/game/PlayerController.cpp
+@@ -887,7 +887,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
+             pawn_->exposeSelf();          // TnWeapon.OnPreServerFire -> ExposeSelf (decloak)
+             static const bool noRecoil = std::getenv("WFC_NORECOIL") != nullptr;   // A/B diagnostic
+             if (!noRecoil) pawn_->notifyFired(w.def ? w.def->id : nullptr);   // per-shot skeletal recoil (TnRecoiler), the weapon's values
+-            onLocalShot(w.def ? w.def->id : nullptr);   // TnPlayerController.OnWeaponFired: camera recoil + shake
++            const float trigPitch = camPitch_, trigYaw = camYaw_;   // the rotation the crosshair showed at the trigger (WFC_AIMLOG)
+             // TnPlayerPawn.GetWeaponStartTraceLocation: ViewLoc + ProjectOnTo(Location - ViewLoc, view dir) - the point on the
+             // camera's crosshair ray nearest the pawn. Instant-hit / beam traces run from there along the aim for the weapon range
+             // [CONF RE, script TransGame.TnPlayerPawn]. Projectiles: Weapon.ProjectileFire spawns at RealStartLoc = GetMuzzleLoc()
+@@ -910,6 +910,14 @@ void PlayerController::applyToPawn(World& world, float dt) {
+             }
+             // NumShotsToFire traces per shot (shotgun pellets), each with its own spread sample [CONF data; HIGH: one ammo per shot].
+             else { for (int k = 0; k < std::max(1, pawn_->weapon().shots); ++k) { world.setPelletIndex(k); world.fireHitscan(start, camDir); } world.setPelletIndex(0); }
++            static const bool aimLog = std::getenv("WFC_AIMLOG") != nullptr;   // diagnostic: the shot rotation vs the trigger's
++            if (aimLog) {
++                const float sp = std::asin(core::clampf(camDir.y, -1.0f, 1.0f)), sy = std::atan2(-camDir.x, -camDir.z);
++                LOG_INFO("AIMLOG %s shot-vs-trigger pitch %+.3f deg yaw %+.3f deg", w.def ? w.def->id : "IonBlaster",
++                         (sp - trigPitch) * 57.29578f, std::remainder(sy - trigYaw, 6.2831853f) * 57.29578f);
++            }
++            // TnPlayerController.OnWeaponFired after the shot: camera recoil (the permanent pitch step) + shake, as the vehicle path
++            onLocalShot(w.def ? w.def->id : nullptr);
+     };
+     if (w.charge()) {
+         // TnChargeWeapon. Active.BeginFire: loaded and TimeSinceLastCharge >= FireInterval -> Charging (state 1). Charging.Tick:
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 3c14f758..deba6c88 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -3111,7 +3111,7 @@ void World::fillPresented(PresentedFrame& p) {
+             if (!t.drawn) continue;
+             PresentedFrame::Marker m;
+             m.key = "pawn:" + std::to_string(t.player); m.type = "TnObjectiveMarkerTypeTransformerVersus";
+-            m.setup = t.ally ? "AllyMarkerSetup" : "TransformerEnemyMarkerSetup"; m.relation = t.ally ? 0 : 1; m.player = t.player;
++            m.setup = t.ally ? "AllyMarkerSetup" : "EnemyMarkerSetup"; m.relation = t.ally ? 0 : 1; m.player = t.player;   // the type's authored setups
+             m.owner = 100 + t.player;   // the draw owner World::draw passes to IRenderer::setDrawOwner for participants
+             m.base = t.pos;
+             if (const Character* c = participantPawn(t.player)) {
+diff --git a/src/game/World.h b/src/game/World.h
+index 1e9a3a66..d134b98f 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1103,7 +1103,7 @@ public:
+         struct Marker {
+             std::string key;                            // stable identity ("pawn:12", "obj:<actor>", "carried:0")
+             std::string type;                           // the TnObjectiveMarkerType* class
+-            std::string setup;                          // "AllyMarkerSetup" / "TransformerEnemyMarkerSetup" / "MarkerSetup"
++            std::string setup;                          // "AllyMarkerSetup" / "EnemyMarkerSetup" / "MarkerSetup"
+             core::Vec3 base{0, 0, 0};                   // MarkerBase.Location (glTF metres)
+             float labelZ = -1.0f;                       // Versus pawns: CollisionHeight x 0.5; < 0 = authored
+             std::string label;                          // PRI.PlayerName / node number
+diff --git a/tests/FrontendTests.cpp b/tests/FrontendTests.cpp
+index 6ff3ba20..a8024a72 100644
+--- a/tests/FrontendTests.cpp
++++ b/tests/FrontendTests.cpp
+@@ -972,6 +972,19 @@ static FakeSession::Step after(const char* call, SessionEvent e, double delay =
+     FakeSession::Step s; s.afterCall = call; s.delay = delay; s.event = std::move(e); return s;
+ }
+ 
++static void testSoloHostXp() {
++    // playtest 3: a private match hosted alone earns XP (the PC offline rule), as before private matches became hosted sessions
++    using T = SessionEvent::Type;
++    SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD"; o.address = "192.168.1.20:7777";
++    OnlineRig r({after("host", o, 0.5)});
++    r.f().call("Online.EditGameMode", {"TDM"});
++    r.f().call("Online.PlayPrivateGame", {"TDM"});
++    const bool inLobby = runUntil(*r.rt, [&] { return r.f().level() == LevelKind::GameLobby && !r.f().loading().active; });
++    const bool host = r.f().sessionRole() == GameFlow::SessionRole::Host;
++    check(r.ok && inLobby && host && r.f().canGainXp() && r.f().buildLaunchUrl().find("WfcCanGainXp=0") == std::string::npos,
++          "playtest3.solo_host_xp", std::to_string(inLobby) + std::to_string(host) + std::to_string(r.f().canGainXp()));
++}
++
+ static void testOnlineHostJoin() {
+     using T = SessionEvent::Type;
+     {   // S1 host succeeds
+@@ -2571,6 +2584,7 @@ int main() {
+     testCampaignCinematicHud();
+     testOnlineBoundary();
+     testOnlineHostJoin();
++    testSoloHostXp();
+     testOnlineLobbyGate();
+     testOnlineMemberSlots();
+     testHudJamBuffs();

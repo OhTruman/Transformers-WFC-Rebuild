@@ -887,7 +887,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
             pawn_->exposeSelf();          // TnWeapon.OnPreServerFire -> ExposeSelf (decloak)
             static const bool noRecoil = std::getenv("WFC_NORECOIL") != nullptr;   // A/B diagnostic
             if (!noRecoil) pawn_->notifyFired(w.def ? w.def->id : nullptr);   // per-shot skeletal recoil (TnRecoiler), the weapon's values
-            onLocalShot(w.def ? w.def->id : nullptr);   // TnPlayerController.OnWeaponFired: camera recoil + shake
+            const float trigPitch = camPitch_, trigYaw = camYaw_;   // the rotation the crosshair showed at the trigger (WFC_AIMLOG)
             // TnPlayerPawn.GetWeaponStartTraceLocation: ViewLoc + ProjectOnTo(Location - ViewLoc, view dir) - the point on the
             // camera's crosshair ray nearest the pawn. Instant-hit / beam traces run from there along the aim for the weapon range
             // [CONF RE, script TransGame.TnPlayerPawn]. Projectiles: Weapon.ProjectileFire spawns at RealStartLoc = GetMuzzleLoc()
@@ -910,6 +910,14 @@ void PlayerController::applyToPawn(World& world, float dt) {
             }
             // NumShotsToFire traces per shot (shotgun pellets), each with its own spread sample [CONF data; HIGH: one ammo per shot].
             else { for (int k = 0; k < std::max(1, pawn_->weapon().shots); ++k) { world.setPelletIndex(k); world.fireHitscan(start, camDir); } world.setPelletIndex(0); }
+            static const bool aimLog = std::getenv("WFC_AIMLOG") != nullptr;   // diagnostic: the shot rotation vs the trigger's
+            if (aimLog) {
+                const float sp = std::asin(core::clampf(camDir.y, -1.0f, 1.0f)), sy = std::atan2(-camDir.x, -camDir.z);
+                LOG_INFO("AIMLOG %s shot-vs-trigger pitch %+.3f deg yaw %+.3f deg", w.def ? w.def->id : "IonBlaster",
+                         (sp - trigPitch) * 57.29578f, std::remainder(sy - trigYaw, 6.2831853f) * 57.29578f);
+            }
+            // TnPlayerController.OnWeaponFired after the shot: camera recoil (the permanent pitch step) + shake, as the vehicle path
+            onLocalShot(w.def ? w.def->id : nullptr);
     };
     if (w.charge()) {
         // TnChargeWeapon. Active.BeginFire: loaded and TimeSinceLastCharge >= FireInterval -> Charging (state 1). Charging.Tick:
