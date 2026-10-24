@@ -387,6 +387,17 @@ public:
     void clearAnimWindows() { animWindows_.clear(); }
 
     // World transform of a bone of the currently displayed model (this step's pose).
+    // The bone as DRAWN this frame: translate(renderOffset) x meshMatrix (the presentation yaw offset) x the pose - for
+    // presentation that must stay on the drawn mesh between sim steps (vehicle head / boost lights: they jumped against the
+    // interpolated car each step and read as flicker). The simulation keeps boneWorld.
+    bool boneDrawWorld(const std::string& bone, core::Mat4& out) const {
+        const assets::SkinnedModel* mdl = currentModel();
+        if (!mdl) return false;
+        int n = mdl->nodeByName(bone);
+        if (n < 0 || (size_t)n >= animScratch_.size() || lastModel_ != mdl) return false;
+        out = core::Mat4::translate(renderOffset()) * meshMatrix(form_) * animScratch_[(size_t)n];
+        return true;
+    }
     bool boneWorld(const std::string& bone, core::Mat4& out) const {
         const assets::SkinnedModel* mdl = currentModel();
         if (!mdl) return false;

@@ -5070,7 +5070,7 @@ void World::draw(render::IRenderer& r) const {
             for (const BoostLightDef& b : kBoostLights) {
                 if (pc.chassis().id != b.chassis) continue;
                 core::Mat4 bw;
-                if (!pc.boneWorld(b.bone, bw)) continue;
+                if (!pc.boneDrawWorld(b.bone, bw)) continue;   // (the drawn mesh: no per-step jump)
                 submit(core::transformPoint(bw, core::Vec3{b.pos[0], b.pos[1], b.pos[2]}), b.color, b.radius, b.falloff);
             }
         };
@@ -5111,7 +5111,7 @@ void World::draw(render::IRenderer& r) const {
             for (const HeadlightDef& h : kHeadlights) {
                 if (id != h.chassis) continue;
                 core::Mat4 bw;
-                if (!pc.boneWorld(h.bone, bw)) return;
+                if (!pc.boneDrawWorld(h.bone, bw)) return;   // (the drawn mesh: no per-step jump)
                 const core::Vec3 p = core::transformPoint(bw, core::Vec3{h.pos[0], h.pos[1], h.pos[2]});
                 core::Vec3 d{bw.m[0] * h.dir[0] + bw.m[4] * h.dir[1] + bw.m[8] * h.dir[2],
                              bw.m[1] * h.dir[0] + bw.m[5] * h.dir[1] + bw.m[9] * h.dir[2],

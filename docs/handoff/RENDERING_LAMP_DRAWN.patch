@@ -1,0 +1,42 @@
+diff -ru a/src/game/Character.h b/src/game/Character.h
+--- a/src/game/Character.h	2026-10-24 13:39:16.634541100 -0500
++++ b/src/game/Character.h	2026-10-24 13:39:16.700768200 -0500
+@@ -387,6 +387,17 @@
+     void clearAnimWindows() { animWindows_.clear(); }
+ 
+     // World transform of a bone of the currently displayed model (this step's pose).
++    // The bone as DRAWN this frame: translate(renderOffset) x meshMatrix (the presentation yaw offset) x the pose - for
++    // presentation that must stay on the drawn mesh between sim steps (vehicle head / boost lights: they jumped against the
++    // interpolated car each step and read as flicker). The simulation keeps boneWorld.
++    bool boneDrawWorld(const std::string& bone, core::Mat4& out) const {
++        const assets::SkinnedModel* mdl = currentModel();
++        if (!mdl) return false;
++        int n = mdl->nodeByName(bone);
++        if (n < 0 || (size_t)n >= animScratch_.size() || lastModel_ != mdl) return false;
++        out = core::Mat4::translate(renderOffset()) * meshMatrix(form_) * animScratch_[(size_t)n];
++        return true;
++    }
+     bool boneWorld(const std::string& bone, core::Mat4& out) const {
+         const assets::SkinnedModel* mdl = currentModel();
+         if (!mdl) return false;
+diff -ru a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-24 13:39:16.646582500 -0500
++++ b/src/game/World.cpp	2026-10-24 13:39:16.702775300 -0500
+@@ -5066,7 +5066,7 @@
+             for (const BoostLightDef& b : kBoostLights) {
+                 if (pc.chassis().id != b.chassis) continue;
+                 core::Mat4 bw;
+-                if (!pc.boneWorld(b.bone, bw)) continue;
++                if (!pc.boneDrawWorld(b.bone, bw)) continue;   // (the drawn mesh: no per-step jump)
+                 submit(core::transformPoint(bw, core::Vec3{b.pos[0], b.pos[1], b.pos[2]}), b.color, b.radius, b.falloff);
+             }
+         };
+@@ -5107,7 +5107,7 @@
+             for (const HeadlightDef& h : kHeadlights) {
+                 if (id != h.chassis) continue;
+                 core::Mat4 bw;
+-                if (!pc.boneWorld(h.bone, bw)) return;
++                if (!pc.boneDrawWorld(h.bone, bw)) return;   // (the drawn mesh: no per-step jump)
+                 const core::Vec3 p = core::transformPoint(bw, core::Vec3{h.pos[0], h.pos[1], h.pos[2]});
+                 core::Vec3 d{bw.m[0] * h.dir[0] + bw.m[4] * h.dir[1] + bw.m[8] * h.dir[2],
+                              bw.m[1] * h.dir[0] + bw.m[5] * h.dir[1] + bw.m[9] * h.dir[2],
