@@ -82,6 +82,14 @@ CAMPAIGN_OUTSIDE_TSV = 'AssetTools/manifests/campaign/campaign_assets_outside_re
 # ... and per chapter the manifests the runtime reads (a5d088db: WorldCampaign / Matinee / Runtime, MapState, CampaignObjectives):
 # next_map/<CH>_<kind>.json and campaign/<ch prefix, lower case>_assets.json. The other next_map files (audits, ~3.3 GB) stay out.
 CAMPAIGN_NEXT_MAP = ['kismet', 'matinee', 'pawn_factories', 'objectives', 'movers']
+# The DLC map packs (Integration 2026-10-23), in the base package: only AssetTools' DLC-only content list merges into content/
+# (the DLC packages otherwise carry low mips of base textures that would degrade the base maps); the DLC maps' data into
+# ExtractedAssets/VerticalSlice/Maps/<map>; their render data beside the base maps' (Rebuild/work/render/<map>). A destination the
+# package already has is never replaced (the base wins).
+DLC_CONTENT_TSV = 'AssetTools/out/dlc_content/dlc_only_content.tsv'   # path = AssetTools/out/dlc_content/content/<rel>
+DLC_CONTENT_SRC = 'AssetTools/out/dlc_content/content/'
+DLC_MAPS = 'AssetTools/work/dlc_maps/VerticalSlice/Maps'
+DLC_RENDER = 'AssetTools/out/dlc_render'
 # the head's own data folders (this repo): every file ships from the head being packaged, at Rebuild/<dir>/ (slim_files.tsv listed 7
 # of data/frontend's 9 files - iconic_presets.json and bot_skill.json were missing - and sources them from the live Rebuild tree)
 HEAD_DATA_DIRS = ['data/frontend', 'data/gameplay', 'data/campaign']   # + the chapters' generated audio (SYSTEMS_CAMPAIGN_AUDIO_HOSTED)
@@ -264,6 +272,42 @@ def main():
         problems.append('campaign asset list: %d listed files missing on disk' % out_missing)
     print('campaign: chapters %s; render %d files %.2f GB (%d per-unit lightmap copies skipped); outside render %d files %.2f GB'
           % (', '.join(camp_chapters), camp_files, camp_bytes / 1e9, camp_skipped_lm, out_files, out_bytes / 1e9))
+    dlc = {'content': [0, 0], 'maps': [0, 0], 'render': [0, 0]}
+    dlc_maps = []
+    def dlc_add(kind, src, dst):
+        if dst in have_dest or src in have_src:
+            return
+        sz = os.path.getsize(os.path.join(ROOT, src))
+        rows.append(dict(dest=dst, source=src, bytes=str(sz), action='keep', reason='dlc ' + kind))
+        have_dest.add(dst); dlc[kind][0] += 1; dlc[kind][1] += sz
+    tsvd = os.path.join(ROOT, DLC_CONTENT_TSV)
+    if os.path.isfile(tsvd):
+        missing_dlc = 0
+        for r in csv.DictReader(open(tsvd, encoding='utf-8'), delimiter='\t'):
+            src = (r.get('path') or '').replace('\\', '/')
+            if not src.startswith(DLC_CONTENT_SRC):
+                continue
+            if not os.path.isfile(os.path.join(ROOT, src)):
+                missing_dlc += 1
+                continue
+            dlc_add('content', src, 'Transformers Rebuild/ExtractedAssets/content/' + src[len(DLC_CONTENT_SRC):])
+        if missing_dlc:
+            problems.append('DLC content list: %d listed files missing on disk' % missing_dlc)
+    for tree, dest, kind in ((DLC_MAPS, 'Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps', 'maps'),
+                             (DLC_RENDER, 'Transformers Rebuild/Rebuild/work/render', 'render')):
+        top = os.path.join(ROOT, tree)
+        for m in sorted(os.listdir(top)) if os.path.isdir(top) else []:
+            if not os.path.isdir(os.path.join(top, m)):
+                continue
+            if kind == 'maps':
+                dlc_maps.append(m)
+            for dp, _, fs in os.walk(os.path.join(top, m)):
+                for f in fs:
+                    src = os.path.relpath(os.path.join(dp, f), ROOT).replace(os.sep, '/')
+                    dlc_add(kind, src, dest + '/' + src[len(tree) + 1:])
+    print('dlc: maps %s; content %d files %.3f GB, map data %d files %.2f GB, render %d files %.2f GB'
+          % (', '.join(dlc_maps) or 'none', dlc['content'][0], dlc['content'][1] / 1e9, dlc['maps'][0], dlc['maps'][1] / 1e9,
+             dlc['render'][0], dlc['render'][1] / 1e9))
     head_data, head_replaced = 0, 0
     for d in HEAD_DATA_DIRS:
         top = os.path.join(REPO, d)
