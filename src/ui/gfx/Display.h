@@ -228,6 +228,11 @@ public:
     void mouseMove(float x, float y);
     void mouseButton(bool down);
     void mouseWheel(int delta);
+    // MovieClip.startDrag(lockCenter, left, top, right, bottom) / stopDrag: the clip follows the pointer in its parent's space
+    // (clamped to the rect when one is given) until stopDrag (Create a Character's colour selector, HmPickablePalette).
+    void startDrag(MovieClip* mc, bool lockCenter, bool hasRect, float l, float t, float r, float b);
+    void stopDrag() { drag_ = Drag{}; }
+    void updateDrag();
     void mouseLeave();                        // pointer left the stage (no hover)
     float mouseX = 0, mouseY = 0;             // stage pixels; AS _xmouse / _ymouse are derived per clip
     MovieClip* hoverButton() const { return hover_; }
@@ -363,6 +368,8 @@ private:
     bool mouseDown_ = false, mouseInside_ = false;
 
     std::unique_ptr<avm1::VM> vm_;
+    struct Drag { MovieClip* target = nullptr; bool hasRect = false; float l = 0, t = 0, r = 0, b = 0, offX = 0, offY = 0; };
+    Drag drag_;
     std::map<std::string, std::shared_ptr<MovieDef>> defs_;
     std::shared_ptr<const MovieDef> rootDef_;
     MovieClip* root_ = nullptr;

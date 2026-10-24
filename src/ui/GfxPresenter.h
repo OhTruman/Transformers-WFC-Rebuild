@@ -142,7 +142,9 @@ private:
     // Escape / Enter, frames from now) so the original rows re-read their values.
     void recommendedSettingsPressed();
     void syncSettingsCommit();
-    void syncSettingsPreview();   // #5: the focused Graphics row's preview image (previewPng_, previewRect_)
+    void syncSettingsPreview();
+    void colourPickerMouse(gfx::Player& p, const platform::InputFrame& in);   // #21: Create a Character colours by mouse
+    bool pickerHeld_ = false;   // #5: the focused Graphics row's preview image (previewPng_, previewRect_)
     std::string previewPng_;
     float previewRect_[4] = {0, 0, 0, 0};
     render::ImageData previewImage_;

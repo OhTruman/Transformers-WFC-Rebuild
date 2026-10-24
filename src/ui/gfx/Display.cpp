@@ -1185,8 +1185,33 @@ void Player::mouseMove(float x, float y) {
     bool moved = !mouseInside_ || x != mouseX || y != mouseY;
     mouseX = x; mouseY = y;
     mouseInside_ = true;
+    if (moved) updateDrag();
     if (moved) broadcastMouse("onMouseMove", EvMouseMove, {});
     updateHover();
+}
+
+void Player::startDrag(MovieClip* mc, bool lockCenter, bool hasRect, float l, float t, float r, float b) {
+    drag_ = Drag{};
+    if (!mc || mc->removed || !mc->script) return;
+    drag_.target = mc;
+    drag_.hasRect = hasRect; drag_.l = l; drag_.t = t; drag_.r = r; drag_.b = b;
+    if (!lockCenter && mc->parent) {   // keep the grab offset
+        const Point p = mc->parent->worldMatrix().inverse().apply({mouseX * 20.0f, mouseY * 20.0f});
+        drag_.offX = (float)vm_->toNumber(vm_->get(mc->script, "_x")) - p.x / 20.0f;
+        drag_.offY = (float)vm_->toNumber(vm_->get(mc->script, "_y")) - p.y / 20.0f;
+    }
+    updateDrag();
+}
+
+void Player::updateDrag() {
+    MovieClip* mc = drag_.target;
+    if (!mc) return;
+    if (mc->removed || !mc->script || !mc->parent) { drag_ = Drag{}; return; }
+    const Point p = mc->parent->worldMatrix().inverse().apply({mouseX * 20.0f, mouseY * 20.0f});
+    float x = p.x / 20.0f + drag_.offX, y = p.y / 20.0f + drag_.offY;
+    if (drag_.hasRect) { x = std::max(drag_.l, std::min(drag_.r, x)); y = std::max(drag_.t, std::min(drag_.b, y)); }
+    vm_->set(mc->script, "_x", avm1::Value((double)x));
+    vm_->set(mc->script, "_y", avm1::Value((double)y));
 }
 
 void Player::mouseLeave() {

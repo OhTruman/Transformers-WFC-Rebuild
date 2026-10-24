@@ -1767,6 +1767,31 @@ void GfxPresenter::syncSettingsPreview() {
     }
 }
 
+// PC ADAPTATION (the user, playtest 2026-10-23b #21): Create a Character's colour picker (HmPickablePalette) by mouse. The
+// original PC movie drags its selector (selectClip_mc onPress: startDrag(true, 0, 0, 255, 255)); here a press anywhere on the
+// 256 x 256 colour square also moves the selector to the pointer and follows the held button, calling the palette's
+// selectionUpdated as the left-stick path does. The pad's left stick / D-pad and the arrow keys keep driving it
+// (Input.RegisterLeftStickCallback).
+void GfxPresenter::colourPickerMouse(gfx::Player& p, const platform::InputFrame& in) {
+    if (!in.mouseLeft) { pickerHeld_ = false; return; }
+    if (in.mouseX < 0 || in.mouseY < 0) return;
+    gfx::MovieClip* sel = findClipNamed(p.root(), "selectClip_mc");
+    if (!sel || !sel->script || !sel->parent || !sel->parent->script || !sel->visible || sel->removed) return;
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    if (vm.toNumber(vm.get(sel->script, "_alpha")) < 50.0) return;   // the picker is closed (the selector fades out)
+    const gfx::Matrix inv = GfxRendererGL::movieMatrix(p, viewW_, viewH_).inverse();
+    const gfx::Point stage = inv.apply({(float)in.mouseX, (float)in.mouseY});   // stage twips
+    const gfx::Point local = sel->parent->worldMatrix().inverse().apply(stage);
+    const float x = local.x / 20.0f, y = local.y / 20.0f;
+    const bool inside = x >= 0.0f && x <= 255.0f && y >= 0.0f && y <= 255.0f;
+    if (!pickerHeld_ && !inside) return;   // a press elsewhere (the swatches, the buttons) is the movie's
+    pickerHeld_ = true;
+    vm.set(sel->script, "_x", V((double)std::max(0.0f, std::min(255.0f, x))));
+    vm.set(sel->script, "_y", V((double)std::max(0.0f, std::min(255.0f, y))));
+    if (vm.get(sel->parent->script, "selectionUpdated").isObject()) vm.callMethod(V(sel->parent->script), "selectionUpdated", {});
+}
+
 // ONLINE_LOBBY_FLOW_V2 1.1: the party lobby's Private Match row hosts at once (the last-used mode; offline the same lobby
 // with bots) instead of opening the mode list and the options page. Versus only (GTS_TeamGame): the Escalation and Campaign
 // party lobbies keep the original Host Game (mc_menuEscalationHostGame / mc_menuCampaignHostGame, PartyLobby_GFX sprites
@@ -2295,6 +2320,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     }
     deliverKeys(in);
     deliverMouse(in);
+    if (gfx::Player* fp = focusPlayer()) colourPickerMouse(*fp, in);
     if (!stickCallbacks_.empty()) {
         // Left stick for registered callbacks: the pad (XInput +Y up -> +Y down) or, on PC, the movement keys (W / A / S / D,
         // the PC left-stick equivalent) and the held arrow keys as full deflection [PC ADAPTATION: the shipped PC
