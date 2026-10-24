@@ -4193,3 +4193,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 20:40 SPLITSCREEN_RE.md (RE a952b13): the original has no split screen -> ours to define; decisions in docs/DLC_PLAN.md (all
   modes, horizontal default + vertical option, KB+M = seat 1, full quality per view). MERGED f2c2ca5d chapter-level
   texture fallback (loader side of the PNG dedupe).
+2026-10-23 20:42 MERGED f6500a29 campaign tactical volumes + object lists (post-build; FINAL_BASE_ITEMS 13). Gameplay's split-screen plan
+  taken (seat 2 as a local participant on the remote-seat path). DECISION (user ~22:00, "whatever saves Claude points"):
+  finish and hand over the current package as is; the user's playtest findings + DLC + Language + split screen go into ONE
+  next build; lanes report only merge-ready patches / blockers / per-map done; one headless per item; no confirm reruns.
