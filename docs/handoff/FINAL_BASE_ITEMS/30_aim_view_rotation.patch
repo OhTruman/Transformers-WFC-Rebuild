@@ -1,0 +1,44 @@
+diff --git a/src/game/PlayerController.cpp b/src/game/PlayerController.cpp
+index 04288a0..db13b4e 100644
+--- a/src/game/PlayerController.cpp
++++ b/src/game/PlayerController.cpp
+@@ -861,7 +861,8 @@ void PlayerController::applyToPawn(World& world, float dt) {
+                 }
+                 world.noteVehicleShot(sock, origin);
+                 if (two) vw->muzzleSocket = (sock + 1) % 2;   // ChangeSocket after the shot's effects
+-                core::Vec3 camDir = core::forwardFromYawPitch(viewYaw_, viewPitch_);
++                render::Camera pov; updateCamera(pov);   // the camera POV the frame draws (strategy wiggle + shake): GetPlayerViewPoint
++                core::Vec3 camDir = core::forwardFromYawPitch(pov.yaw, pov.pitch);
+                 core::Vec3 camPos = cameraPos();
+                 float range = vw->rangeM > 0.0f ? vw->rangeM : 300.0f;
+                 // TnPlayerPawn.GetWeaponStartTraceLocation: ViewLoc + ProjectOnTo(Location - ViewLoc, view dir) - the point on the
+@@ -887,14 +888,15 @@ void PlayerController::applyToPawn(World& world, float dt) {
+             pawn_->exposeSelf();          // TnWeapon.OnPreServerFire -> ExposeSelf (decloak)
+             static const bool noRecoil = std::getenv("WFC_NORECOIL") != nullptr;   // A/B diagnostic
+             if (!noRecoil) pawn_->notifyFired(w.def ? w.def->id : nullptr);   // per-shot skeletal recoil (TnRecoiler), the weapon's values
+-            const float trigPitch = camPitch_, trigYaw = camYaw_;   // the rotation the crosshair showed at the trigger (WFC_AIMLOG)
++            render::Camera pov; updateCamera(pov);   // the camera POV the frame draws (shake included): GetPlayerViewPoint / GetBaseAimRotation
++            const float trigPitch = pov.pitch, trigYaw = pov.yaw;   // the rotation the crosshair showed at the trigger (WFC_AIMLOG)
+             // TnPlayerPawn.GetWeaponStartTraceLocation: ViewLoc + ProjectOnTo(Location - ViewLoc, view dir) - the point on the
+             // camera's crosshair ray nearest the pawn. Instant-hit / beam traces run from there along the aim for the weapon range
+             // [CONF RE, script TransGame.TnPlayerPawn]. Projectiles: Weapon.ProjectileFire spawns at RealStartLoc = GetMuzzleLoc()
+             // (the held weapon mesh's MuzzleFlash socket) aimed at that trace's hit point [CONF]; without a posed socket (mid
+             // switch, no mesh) the pawn eye + 1.5 m stands in [fallback].
+             core::Vec3 eye = pawn_->actorLocation() + core::Vec3{0, pawn_->robotParams().eyeHeight, 0};   // BaseEyeHeight above the actor
+-            core::Vec3 camDir = core::forwardFromYawPitch(camYaw_, camPitch_);
++            core::Vec3 camDir = core::forwardFromYawPitch(pov.yaw, pov.pitch);
+             core::Vec3 camPos = cameraPos();
+             const core::Vec3 start = camPos + camDir * core::dot(pawn_->actorLocation() - camPos, camDir);
+             float range = pawn_->weapon().rangeM;
+@@ -913,8 +915,9 @@ void PlayerController::applyToPawn(World& world, float dt) {
+             static const bool aimLog = std::getenv("WFC_AIMLOG") != nullptr;   // diagnostic: the shot rotation vs the trigger's
+             if (aimLog) {
+                 const float sp = std::asin(core::clampf(camDir.y, -1.0f, 1.0f)), sy = std::atan2(-camDir.x, -camDir.z);
+-                LOG_INFO("AIMLOG %s shot-vs-trigger pitch %+.3f deg yaw %+.3f deg", w.def ? w.def->id : "IonBlaster",
+-                         (sp - trigPitch) * 57.29578f, std::remainder(sy - trigYaw, 6.2831853f) * 57.29578f);
++                LOG_INFO("AIMLOG %s shot-vs-trigger pitch %+.3f deg yaw %+.3f deg | view-vs-orbit pitch %+.3f yaw %+.3f", w.def ? w.def->id : "IonBlaster",
++                         (sp - trigPitch) * 57.29578f, std::remainder(sy - trigYaw, 6.2831853f) * 57.29578f,
++                         (pov.pitch - camPitch_) * 57.29578f, std::remainder(pov.yaw - camYaw_, 6.2831853f) * 57.29578f);
+             }
+             // TnPlayerController.OnWeaponFired after the shot: camera recoil (the permanent pitch step) + shake, as the vehicle path
+             onLocalShot(w.def ? w.def->id : nullptr);

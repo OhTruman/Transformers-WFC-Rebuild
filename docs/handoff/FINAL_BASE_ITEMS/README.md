@@ -269,3 +269,12 @@ Apply it after 28. Verified (2026-10-24):
 - A fresh full build of wfc_rebuild.exe has 0 errors.
 - The headless SIMHASH streams are identical to the c39b7d29 head build: Streets TDM 4,201, Remnant 8,101, BrokenHope 2,484,
   A1 7,261, D1 7,261 steps.
+
+## 30: the shot follows the drawn camera view (c39b7d29 -> 5239fc0f)
+
+`30_aim_view_rotation.patch`: the exact tree step c39b7d29 -> 5239fc0f over the base paths (src/game/PlayerController.cpp only).
+GAMEPLAY_AIM_VIEW_ROTATION: robot and vehicle shots use the camera POV the frame draws, strategy wiggle and shake included (UE3
+GetBaseAimRotation -> GetPlayerViewPoint); SIMHASH changes by design for local shots. Apply it after 29. Verified
+(2026-10-24): a fresh af4d0731 + 01-30 applies, every base path equals 5239fc0f, a fresh full build of wfc_rebuild.exe has 0
+errors, and the headless SIMHASH streams are identical to the 5239fc0f head build (Streets TDM 4,201, Remnant 8,101,
+BrokenHope 2,484, A1 7,261, D1 7,261 steps).
