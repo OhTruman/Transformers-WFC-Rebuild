@@ -4369,3 +4369,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   rows (+ FG-output capture, menu 60 re-measure) -> Experimental final 3-flow gate on the build head. Headless:
   Gameplay 10-chapter + 4 ESC sweep on 74e41849; Systems load-time stages + build_slim --plan with DLC. AssetTools
   Pack 2 status asked twice.
+2026-10-24 01:19 MERGED a7cde068 load-stage timing (WFC_LOADSTAGES) + DLC level audio Pulse / Metropolis / Sector. Load times: texture
+  decode = 82 % of a Streets load (GDI+ PNG on the main thread); Systems GO on a lossless decoder (WIC / bundled,
+  byte-identical over every shipped PNG, worker threads). build_slim --plan with the DLC root: 0 PROBLEMs. Static's
+  export is the last AssetTools input (routed).
