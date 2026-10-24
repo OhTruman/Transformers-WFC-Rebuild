@@ -1,6 +1,6 @@
-# Hand-over note 2, 2026-10-24: build (pending) = the laptop-ready package with the playtest-3 fixes
+# Hand-over note 2, 2026-10-24: build 277d6e33 = the laptop-ready package with the playtest-3 fixes
 
-Package: (pending: Rebuild-Systems/work/playtest_slim_<sha>, Play.bat; the HD pack beside it). This one is self-contained:
+Package: F:/Transformers Rebuild/Rebuild-Systems/work/playtest_slim_277d6e33 (Play.bat; the HD pack beside it as playtest_slim_277d6e33_HDpack). This one is self-contained:
 copy the folder to the laptop and run Play.bat there (no dev folders needed). First launch of a new build compiles its
 shaders once (~30-50 s into the first map); every later launch reads the shader cache (~10 s).
 
@@ -28,11 +28,11 @@ Multiplayer
   82 fps was the 5v5 with ten ray-traced characters). The Escalation 30 s load was the shader prewarm: now cached.
 - Join code leaking into Create a Character, "Cancel Start" during the countdown (mouse, pad B, Esc), Start Game grey
   while enabled (the solo-host enable flag), Decepticon Chassis box (it was mirrored 180 degrees), scoreboard rows
-  (pending batch 2b).
+  (not reproduced with 5 + 4 bots: send a screenshot if you see it again).
 
 Escalation
-- Solo hosting: a private host starts alone (the original's rule). Map list: all six Escalation maps are selectable in
-  the lobby map row (pending batch 2b; the data was never missing). Duplicate Optimus: the DLC Escalation maps had no
+- Solo hosting: a private host starts alone (the original's rule). Map list: all six Escalation maps now cycle in
+  the lobby map row (the public playlist picked a random map behind a veto a lone host can never win; now Host's Choice). Duplicate Optimus: the DLC Escalation maps had no
   character list so the wheel showed all 31 iconics; fixed. Load time: shader cache (above).
 
 Settings / frontend
@@ -40,7 +40,7 @@ Settings / frontend
   Preview panel: one standard size, LEFT = baseline OFF, RIGHT = the selected value, hover to zoom; pairs for Upscaling
   incl. FSR 3.1 Q / B / P, HD, Ray Tracing (Realistic's brighter look is real: RT GI + sky light), Volumetric, Lens
   Flare; Frame Generation is text only. Language moved to Audio; Split-Screen Layout at the bottom by FPS Counter.
-  Menus stay at 60. Backing out of a solo Campaign returns to the main menu. Main-menu fade: (pending batch 2b).
+  Menus stay at 60. Backing out of a solo Campaign returns to the main menu. Main-menu fade: not reproduced windowed (the soft-edge layer holds); tell us your display mode if it persists.
 
 Campaign: deferred as you asked; your findings are recorded in USER_PLAYTEST_2026-10-24.md.
 
