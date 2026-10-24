@@ -4242,3 +4242,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Split screen status: render phases 1-3 + Gameplay seat 2 (join, HUD state, bot-slot handover) + Systems input / audio
   interfaces merged; the Frontend's per-seat HUD + pad-Start join + lobby rows are the last offline piece; online
   two-locals = Systems' later wire patch.
+2026-10-23 21:32 MERGED 04f6f3b6 Frontend split step 2 (per-seat HUD in its view rect, pad-Start join / Back leave, both locals in the lobby
+  rows, setLanguage on boot / Apply): OFFLINE SPLIT SCREEN CODE COMPLETE (needs the first windowed two-pad check: the user
+  or a scripted join). MERGED ebbbdf05 DLC audio 1 (Fortress + Havoc level audio) + the DLC packaging rule (+0.4 GB / 2
+  maps). Experimental: Havoc rows PASS; Fortress re-check 0 texture failures; Streets identity holds through the split code.
+  Open data: materials parent rerun, LightsVisibilitiesVolume, 147 _LOC twins (AssetTools).
