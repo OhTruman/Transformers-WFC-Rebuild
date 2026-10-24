@@ -4534,3 +4534,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 12:28 FINAL_BASE_ITEMS for the next package: Gameplay OWNS the chain (22-25 theirs, 26-27 Systems' hitch loads / threads, 28
   hull / LOS, Rendering's a-d incl. the constant rename next to the Config.h change and the ESC_MECH game half); one
   fresh full af4d0731 + chain build; the gate launches the game exe only (no wfc_fidelity.exe item).
+2026-10-24 12:36 FINAL_BASE_ITEMS 22-28 complete through b8963b8e (Gameplay a446ba6a; fresh full build 0 errors; SIMHASH identical on 5
+  rows). Experimental pre-builds the base arm final13. All lanes idle or on standby; the user is playing 48e42af6.
