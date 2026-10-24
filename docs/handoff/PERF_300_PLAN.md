@@ -157,6 +157,16 @@ behaviour, not our current frame.
     submission. The 3.33 ms budget cannot hold sim and draw back to back on a heavy chapter.
 
 ### Platform (Systems)
+**Systems' section:** docs/handoff/PERF_300_SYSTEMS_SECTION.md (agents/systems 92c1bfad). It covers:
+- present at VSync 0 / FrameLimit 0 (WFC_PRESENTTRACE; 2-frame latency);
+- the main-thread input / audio / voice timers;
+- mid-level hitches: body loads, texture uploads, streaming;
+- the binary animation cache (WFC_ANIMHASH gate).
+
+**Ownership, agreed 2026-10-24:**
+- **Systems:** present (1), and the CPU / file side of loads (3) on workers.
+- **Rendering:** the GL side of (3), i.e. upload and prewarm sliced per frame inside the renderer, through the existing load / prewarm
+  entry points.
 13. **Present and pacing.**
     - D3D12 presenter cost per present.
     - GL-D3D12 interop copy at 4K.
