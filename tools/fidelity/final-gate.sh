@@ -23,6 +23,8 @@ MAPS=${FINAL_MAPS:-"501 502 503 504 505 506 507 508 509 510"}; RES=${FINAL_RES:-
 # takes either; MP_ESC_ maps boot in Escalation). FINAL_MAPS set = exactly those maps.
 DLC_MAPS="511:MP_ORB_Havoc 512:MP_KON_Fortress MP_ESC_Tranquillity MP_ESC_District MP_IAC_Horizon MP_IAC_Metropolis MP_KON_Sector MP_ESC_Pulse MP_ESC_Static"
 RENDER_ROOT=${FINAL_RENDER_ROOT:-"F:/Transformers Rebuild/Rebuild/work/render"}; SM_DLC=""
+# FINAL_ASSETS=<VerticalSlice root holding the DLC maps> (e.g. Rebuild/work/assets_dlc/VerticalSlice): passed as WFC_ASSETS to every arm
+ASX=""; [ -n "$FINAL_ASSETS" ] && ASX=";WFC_ASSETS=$FINAL_ASSETS"
 for e in $DLC_MAPS; do id=${e%%:*}; nm=${e##*:}; [ -d "$RENDER_ROOT/$nm" ] || continue; SM_DLC="$SM_DLC $id"; [ -z "$FINAL_MAPS" ] && MAPS="$MAPS $id"; done
 st() { echo "$(date +%T) $*" | tee -a $L; pool_guard; }
 pool_guard() { [ $WHATIF = 1 ] && return; local gb; gb=$(powershell -NoProfile -Command "[math]::Round((Get-Counter '\Memory\Pool Nonpaged Bytes').CounterSamples[0].CookedValue/1GB,2)" | tr -d '[:space:]')
@@ -43,7 +45,7 @@ if [ "$PH" = pre ]; then
   [ -f $BASE/build-release/bin/wfc_rebuild.exe ] || run "BASE_REF=af4d0731 bash tools/fidelity/gate-base.sh $BN $ITEMS > $O/build_base.out 2>&1"
   [ $WHATIF = 1 ] || [ -f $BASE/build-release/bin/wfc_rebuild.exe ] || { st "base build failed ($O/build_base.out)"; exit 1; }
   st "same match (headless): Streets TDM + Remnant ESC + BrokenHope ESC, base vs head; negative control = the hover-only base"
-  for m in 508 506 505 $SM_DLC; do run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/samematch-$m -Map $m -Arms 'base|$BASE|WFC_NULLRENDER=1;;head|$HEAD|WFC_NULLRENDER=1;;neg|$NEG|WFC_NULLRENDER=1' -Steps 9600 -From 600 -PlayerBot 1 -Reps 1 -Seed 1234 > $O/samematch-$m.out 2>&1"
+  for m in 508 506 505 $SM_DLC; do run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/samematch-$m -Map $m -Arms 'base|$BASE|WFC_NULLRENDER=1$ASX;;head|$HEAD|WFC_NULLRENDER=1$ASX;;neg|$NEG|WFC_NULLRENDER=1$ASX' -Steps 9600 -From 600 -PlayerBot 1 -Reps 1 -Seed 1234 > $O/samematch-$m.out 2>&1"
     sm=$(grep -oE "lockstep\.head\.r1: head: steps [0-9]+ \([0-9-]+\), same match as 'base' [A-Za-z]+" $O/samematch-$m.out 2>/dev/null); ng=$(grep -oE "lockstep\.neg\.r1: neg: steps [0-9]+ \([0-9-]+\), same match as 'base' [A-Za-z]+" $O/samematch-$m.out 2>/dev/null)
     st "map $m same match: ${sm:-?}; negative control: ${ng:-?}"
     [ $WHATIF = 1 ] || case "$sm" in *True) ;; *) st "STOP: the base does not play the head's match on $m - not gating (a sim-only diff is missing)"; exit 2;; esac
@@ -65,7 +67,7 @@ elif [ "$PH" = gate ]; then
   st "hold set; waiting for a clear card"; run "touch work/PERF_HOLD; sleep 60; until [ \"\$(busy)\" = 0 ]; do sleep 15; done"
   for res in $RES; do for m in $MAPS; do
     D=$O/regress-$res/map-$m; mkdir -p $O/regress-$res
-    CMD="powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $D -Map $m -Arms 'base|$BASE|$RD0;;head|$HEAD|$RD0' -Steps 9600 -From 600 -RenderSize $res -PlayerBot 1 -Reps 2 -Seed 1234 > $D.out 2>&1"
+    CMD="powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $D -Map $m -Arms 'base|$BASE|$RD0$ASX;;head|$HEAD|$RD0$ASX' -Steps 9600 -From 600 -RenderSize $res -PlayerBot 1 -Reps 2 -Seed 1234 > $D.out 2>&1"
     st "regress $res map $m"; run "$CMD"; recontam $D "$CMD"
   done; done
   run "rm -f work/PERF_HOLD"; st "TIMED DONE (hold removed)"
