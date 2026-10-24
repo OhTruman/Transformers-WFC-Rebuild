@@ -4362,3 +4362,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   no regression; MP 11 / 11 on the head. Section 43 sim side CLOSED (Gameplay); menu side PASS (Experimental gate).
   RE §7: chapter select = all ten chapters in one row + checkpoint row (matches ours); pre-match screen = mode icon +
   mode name + countdown + PlayerList (the 'scrunched names' = that list; no big title).
+2026-10-24 01:12 MERGED 74e41849 menus held at 60 take 2 (frontend loop took the fallback wait at the player's limit: 90 FPS measured) +
+  Rendering's measured settings audit (docs/handoff/QC_RENDER_SETTINGS_AUDIT.md: 4 runs, 12 / 12 self-test per arm,
+  every apply line, RT + GI built, FG 0 resets) + the perf pass plan (PERF_PASS_PLAN_RENDERING.md). Card: Frontend
+  slot (calibration shots, arrows / popups, D1 Megatron, PM team row, countdown cancel, CaC dump) -> Rendering perf
+  rows (+ FG-output capture, menu 60 re-measure) -> Experimental final 3-flow gate on the build head. Headless:
+  Gameplay 10-chapter + 4 ESC sweep on 74e41849; Systems load-time stages + build_slim --plan with DLC. AssetTools
+  Pack 2 status asked twice.
