@@ -10,9 +10,9 @@ item has had a windowed / real-controller / real-microphone run yet, unless it s
 |---|---|---|---|
 | 7 Voice channel switch on the fly | fixed | SYSTEMS_QC_VOICEKEY ca8ff641 (merged) | Keyboard N (Settings > Audio "Voice Channel Key", rebindable), pad D-pad Right (unbound in both original MP schemes); Team -> All -> Proximity -> Radio + Proximity, saved, HUD line; only in a match, no menu / scoreboard. PTT stays V (the user's pick; V is also jet Hover Down, the PttConflict hint shows it). |
 | Audio / Voice settings audit | fixed | SYSTEMS_QC_VOICE efa38d7a (merged) | OK as found: FX / Dialogue / Music Volume (device-wide, survive map change), Language, Voice Chat mode, PTT key, Voice Volume. Fixed: Proximity Volume (did nothing), All Radio (was radio + proximity), Input Device (listed only Default), Mic Test (always 0), Voice Chat turned on mid-match (stayed silent). |
-| Subtitles (no display existed) | data side fixed; draw = Frontend | SYSTEMS_QC_SUBTITLES bf51d6e2 (c51e9a3f) | World::currentSubtitle(): the campaign line on screen now, dialogue language, the original's per-line show flag. Timing checked on A1: 169 lines, 0 wrong. Font packaging: build_slim ebfcb915. |
+| Subtitles (no display existed) | fixed | SYSTEMS_QC_SUBTITLES bf51d6e2 (c51e9a3f) + Frontend draw 7f0efe32 | World::currentSubtitle(): the campaign line on screen now, dialogue language, the original's per-line show flag. Timing checked on A1: 169 lines, 0 wrong. Font packaging: build_slim ebfcb915. |
 | 6 Menus at 60 FPS | not Systems | Rendering RENDERING_MENU_CAP2 (74e41849) | No Systems share. |
-| Pad -> match actions (nothing fired on a controller) | fixed | SYSTEMS_QC_PADACTIONS be7508b6 (1e4b6130) | The original's authored MP layout; X = Interact + Reload (RE: tap = interact else reload, hold = revive / pickup); both profile remaps (SwitchRightThumbstickAndB, UseAlternateControlScheme); seat 2's pad too. Open (Gameplay): a tap next to an interactable also reloads. |
+| Pad -> match actions (nothing fired on a controller) | fixed | SYSTEMS_QC_PADACTIONS be7508b6 (1e4b6130) | The original's authored MP layout; X = Interact + Reload (RE: tap = interact else reload, hold = revive / pickup); both profile remaps (SwitchRightThumbstickAndB, UseAlternateControlScheme); seat 2's pad too. The tap's interact-else-reload context: Gameplay 9c94b50d (fixed). |
 | Seat routing (controller ownership) | fixed | SYSTEMS_QC_SEATS 24966b02 (d95ebc91) | A lone pad on any XInput slot drives the menus; the only pad never becomes seat 2; a mirrored virtual pad is refused. Not the "Scout cannot move" cause (that was Gameplay's wire seat). |
 
 ## Split screen (the user's request for this build)
@@ -20,7 +20,7 @@ item has had a windowed / real-controller / real-microphone run yet, unless it s
 | Part | Status | Commit (merge) | Notes |
 |---|---|---|---|
 | Split input + audio | fixed | SYSTEMS_SPLITSCREEN_1 b4c35e7d (5d6454b9) | Seat 2 = the next other pad pressing Start; nearest-listener audio for two views. |
-| Two locals online | fixed (net side) | SYSTEMS_TWO_LOCALS_ONLINE 85c4cd06 | A peer owns a second lockstep seat (commands in a CMDS trailer); UdpSession setSecondLocal (0x57) + owner lists in the launch. Two processes: 2,401 ticks status 0, incl. 10 % loss; the real session path too. Open (Frontend): joinSeat2 online -> setSecondLocal (answered: no need to wait for the fingerprint). |
+| Two locals online | fixed (net side) | SYSTEMS_TWO_LOCALS_ONLINE 85c4cd06 | A peer owns a second lockstep seat (commands in a CMDS trailer); UdpSession setSecondLocal (0x57) + owner lists in the launch. Two processes: 2,401 ticks status 0, incl. 10 % loss; the real session path too. Frontend lobby hook (joinSeat2 online -> setSecondLocal): 070f6705 (fixed). |
 
 ## Load times (performance pass, lossless gates)
 
