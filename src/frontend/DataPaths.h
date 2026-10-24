@@ -11,6 +11,11 @@ namespace frontend {
 //   3. the compile-time source tree (WFC_SOURCE_DIR/data/frontend), the old behaviour.
 // A candidate counts when it holds profile_defaults.json. No trailing slash.
 const std::string& frontendDataDir();
+// The package / workspace root that holds AssetTools, ExtractedAssets and Rebuild ("Transformers Rebuild"): from the package roots
+// WFC_ASSETS (<root>/ExtractedAssets/VerticalSlice), WFC_CONTENT (<root>/ExtractedAssets/content) or WFC_FRONTEND_DATA
+// (<root>/Rebuild/data/frontend), else the nearest parent of the exe's folder that contains AssetTools. Every frontend default path
+// derives from it (no absolute dev path); the WFC_* overrides keep priority.
+const std::string& packageRoot();
 
 // frontendDataDir() + "/" + name.
 std::string frontendDataFile(const char* name);

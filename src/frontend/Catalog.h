@@ -9,7 +9,7 @@
 //   AssetTools/manifests/frontend_localization.json UIText / TransGame INT+FRA                                 [CONFIRMED]
 //   RE notes/MILESTONE05_FRONTEND_MATCH_BOOTSTRAP.md (fields the manifests do not carry yet, section 4)        [CONFIRMED RE]
 //
-// The manifest root defaults to F:/Transformers Rebuild/AssetTools/manifests; override with WFC_FRONTEND_MANIFESTS.
+// The manifest root defaults to <package root>/AssetTools/manifests (DataPaths::packageRoot); override with WFC_FRONTEND_MANIFESTS.
 #pragma once
 #include <map>
 #include <string>
