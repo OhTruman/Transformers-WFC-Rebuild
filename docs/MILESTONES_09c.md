@@ -4257,3 +4257,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   14 (through split screen). Dev root gains work/AssetTools junction (horde bodies at <root>/../../AssetTools/out/
   escalation_characters). District ESCTEST 7 / 7 here. Experimental runs the DLC ESC rows; AssetTools: the jet's
   roster_package row; Systems: the escalation_characters packaging check.
+2026-10-23 22:26 DLC PACK 1 COMPLETE (AssetTools): Fortress, Havoc, Tranquillity, District done (District's 22 transforming actors
+  exported; the jet AICD's roster_package row with its real cylinder; existing rows byte-identical). FINAL_BASE_ITEMS 14
+  self-contained (6438ac5b). Next: Tranquillity_AUDIO reparse, LOC twins, then Pack 2 (Horizon, Metropolis, Sector,
+  Pulse, Static).
