@@ -4170,3 +4170,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Stopped / Disabled, C: 101 GB free, desktop 2560x1440 @ 144 (208 modes). Lanes relaunched (rendering-11, gameplay-91,
   experimental-e1, assettools-d6, re-workspace-a6; Integration = rebuild-5f). TIMED FINAL GATE GRANTED to Experimental
   (final-gate.sh d5bb6863 gate, base final7); freeze sent to every lane. Then: cut word -> refresh.sh -> verify -> hand-over.
+2026-10-23 20:19 NEXT PHASE (user ~20:20): the two WFC DLC packs (Map and Character Pack #1 / #2, STFS packages in F:\Transformers
+  Rebuild\4156084C, read-only) go in AFTER the current build, split across the lanes by content: docs/DLC_PLAN.md.
