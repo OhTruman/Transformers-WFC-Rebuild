@@ -56,3 +56,18 @@ Never modify / extract INTO this folder; extraction goes to AssetTools' own work
 - Rendering: per map render check + lightmaps / RT / calibration + eye pass; the 2 new skeletal meshes.
 - Systems: DLC audio / dialogue banks per map; the Language audio setter; packaging (DLC in the base).
 - Experimental: final-gate map list 10 -> 19; identity rows per new map.
+
+## Also in the next build (user 2026-10-23 ~21:30): split screen on PC
+Two local players on one PC (the original's 2-player split screen: campaign co-op, Escalation and local versus, per RE):
+- RE: SPLITSCREEN_RE.md: which modes the original splits, the layout (horizontal / vertical, HUD placement per view),
+  the second player's sign-in / profile rules, camera / audio listener rules, what the lobby does with two local seats.
+- Rendering: two viewports per frame (two cameras, split render targets or scissored halves, post-process per view, the
+  RT path per view), the HUD composite per half.
+- Frontend: second local profile sign-in (press Start on a second pad), per-view GFx HUD instances, menus with two local
+  seats (party of two locals), settings per profile.
+- Gameplay: a second local human participant (the sim already has multi-human seats: the local loop gets two input
+  owners), pad 2 input routing, campaign co-op with two locals, Escalation / versus with two local seats in online too.
+- Systems: two audio listeners (the original's rule), input device routing (pad 1 / pad 2 / keyboard+mouse).
+- Experimental: a split-screen identity + perf row (two views cost ~2x).
+Order: RE first, then Rendering + Gameplay in parallel, Frontend + Systems after; it ships with the DLC build if ready,
+else in the one after (the user decides at the cut).

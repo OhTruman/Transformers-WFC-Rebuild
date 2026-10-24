@@ -4189,3 +4189,4 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 20:36 MERGED e54dcd34 Language option in Settings (Frontend 579c9727: profile Language INT default, INT + FRA from the Coalesced
   packs, FRA text overlaid key by key, FRA map names, FRA logo / movies; Systems' audio setLanguage follows the package)
   + the harness steps (00c61cbf). 250 frontend tests, identity. Not in the d5bb6863 package (next build).
+2026-10-23 20:37 User ~21:30: split screen on PC -> next build scope (docs/DLC_PLAN.md); RE spec first, then Rendering + Gameplay.
