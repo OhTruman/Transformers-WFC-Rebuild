@@ -184,7 +184,7 @@ void fillOnlineLaunch(game::MatchLaunch& gl, const frontend::MatchLaunch& m) {
         gl.remotes.push_back(r);
     }
     gl.seed = m.seed;   // online: the host's match seed (0 offline)
-    gl.online = !m.onlineSlots.empty();   // a session launch: the wire path for every human (offline: none)
+    gl.online = !gl.remotes.empty();   // the wire path only with REMOTE humans: a solo host (our own slot only) runs the local loop (the frozen-pawn P0: a lone local player became a driverless wire seat)
     if (!m.onlineSlots.empty()) frontend::FlowTrace::emit("online.launchRemotes", {{"remotes", std::to_string(gl.remotes.size())}});
 }
 template <class W> void applySlotSwaps(W& w, frontend::GameFlow& flow) {
