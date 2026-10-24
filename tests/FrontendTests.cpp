@@ -2549,6 +2549,10 @@ static void testLaunchRecordAndIdleKick() {
 
 int main() {
     setEnv("WFC_NOCLIPBOARD", "1");   // invite tests must not overwrite the desktop clipboard
+    // environment-independent: the frontend data of the source being tested (not whatever tree the build dir sits under), and no
+    // profile files left in the working directory by an earlier run or a playtest
+    if (!std::getenv("WFC_FRONTEND_DATA")) setEnv("WFC_FRONTEND_DATA", (std::string(WFC_SOURCE_DIR) + "/data/frontend").c_str());
+    for (const char* f : {"wfc_profile.ini", "wfc_profile_2.ini", "wfc_characters.ini"}) std::remove(f);
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
     Catalog c;
     bool ok = c.load(Catalog::defaultManifestRoot(), Catalog::defaultExtractedRoot(), vs + "/Maps");

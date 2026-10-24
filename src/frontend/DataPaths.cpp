@@ -40,9 +40,13 @@ std::string parentOf(std::string p, int levels) {
 
 std::string findPackageRoot() {
     auto env = [](const char* k) { const char* e = std::getenv(k); return e && *e ? std::string(e) : std::string(); };
-    if (std::string a = env("WFC_ASSETS"); !a.empty()) if (std::string r = parentOf(a, 2); !r.empty()) return r;
-    if (std::string c = env("WFC_CONTENT"); !c.empty()) if (std::string r = parentOf(c, 2); !r.empty()) return r;
-    if (std::string d = env("WFC_FRONTEND_DATA"); !d.empty()) if (std::string r = parentOf(d, 3); !r.empty()) return r;
+    auto isRoot = [](const std::string& r) {   // a derived root counts only when it holds AssetTools (a dev scratch tree's data
+        std::error_code ec;                     // dir, e.g. <worktree>/work/gpm/data/frontend, is not 3 levels below the root)
+        return !r.empty() && std::filesystem::is_directory(openPath(r + "/AssetTools"), ec);
+    };
+    if (std::string a = env("WFC_ASSETS"); !a.empty()) if (std::string r = parentOf(a, 2); isRoot(r)) return r;
+    if (std::string c = env("WFC_CONTENT"); !c.empty()) if (std::string r = parentOf(c, 2); isRoot(r)) return r;
+    if (std::string d = env("WFC_FRONTEND_DATA"); !d.empty()) if (std::string r = parentOf(d, 3); isRoot(r)) return r;
     std::string dir = exeDir();
     for (int i = 0; i < 8 && !dir.empty(); ++i) {   // the package: <root>/Rebuild/build/release/bin; a dev tree: <root>/<worktree>/...
         std::error_code ec;
@@ -62,6 +66,14 @@ std::string resolve() {
             const std::filesystem::path p = std::filesystem::weakly_canonical(c, ec);
             return ec ? c : p.generic_string();
         }
+    }
+    // a lane / dev build whose exe sits deeper than the guesses above: the build's own source data (compile-time; it does not
+    // exist on a player's machine, so a package never uses it) before another tree's data - de6d4302 read the shared Rebuild
+    // tree's (possibly older) strings there and three frontend tests failed in a lane build
+    {
+        std::error_code ec;
+        const std::string src = std::string(WFC_SOURCE_DIR) + "/data/frontend";
+        if (std::filesystem::is_regular_file(openPath(src + "/profile_defaults.json"), ec)) return src;
     }
     return findPackageRoot() + "/Rebuild/data/frontend";   // the package's Rebuild tree
 }
