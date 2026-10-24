@@ -3,7 +3,7 @@
 Always checked: the flow reaches its end (else: the first missing checkpoint + the last script step = where it stuck), no modal
 popup left open outside a '*quitbox' / '*prompt' / '*popup' checkpoint, at most one focused overlay, an input owner on every menu
 screen. Flow-file lines '#expect <kind> <args>' add:
-  mode <TAG>                      the 'FLOW loading match world ... mode <TAG>' of the (first) match
+  mode <TAG>[|<TAG>]              the 'FLOW loading match world ... mode <TAG>' of the (first) match (Escalation = SV in the frontend)
   chassis-kept                    every match.selectCharacterResult ok=true, the same chassis until a 'changechar' checkpoint
   no-charselect-after-ingame      no 'uistate ... -> CharacterSelect' after the first InGame unless after a 'changechar' checkpoint
   state <checkpoint> <UiState>    the navcheck at <checkpoint> reports uiState=<UiState>
@@ -113,7 +113,7 @@ def check_flow(out, flow):
         name = 'expect ' + ' '.join(ex)
         if k == 'mode':
             got = modes[0][1] if modes else None
-            rows.append((name, 'PASS' if got == a[0] else 'FAIL', f"match mode {got}"))
+            rows.append((name, 'PASS' if got in a[0].split('|') else 'FAIL', f"match mode {got}"))   # 'SV|ESC': the frontend's Escalation tag is SV (TnGameLobbyGameSurvival)
         elif k == 'chassis-kept':
             okp = [p for p in picks if p[1] == 'true']
             first = okp[0][2] if okp else None

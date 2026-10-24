@@ -2,7 +2,8 @@
 # -> SPAWN -> ACTUALLY PLAY -> RETURN. Steps: the Frontend's, verified windowed on the head 2026-10-24 (full clickclip paths).
 # The base game's Escalation has NO Game Settings and NO difficulty: Host a Game -> Host Options (privacy, Create Game) only.
 # P0 #9 / #14: Escalation identity end to end; #15: after the load a PreGameCountdown, never a second character screen.
-#expect mode ESC
+#expect mode SV|ESC
+#expect log match: launched \S+ ESC
 #expect log controller=TnUIControllerSurvival
 #expect nolog-after FLOW.loading.match.world OpenUI.*(CustomTransformers_GFX|CharacterSelect_GFX)
 #expect no-charselect-after-ingame
