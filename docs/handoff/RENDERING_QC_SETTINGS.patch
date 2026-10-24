@@ -1,0 +1,232 @@
+diff -ru a/src/render/Renderer.h b/src/render/Renderer.h
+--- a/src/render/Renderer.h	2026-10-23 23:43:25.357997300 -0500
++++ b/src/render/Renderer.h	2026-10-23 23:43:25.339935600 -0500
+@@ -181,6 +181,9 @@
+     // (<chapter>/postprocess_volumes.json, tools/render/build_campaign_pp.py); Kismet toggles them by actor name
+     // (SeqAct_Toggle on a (Dynamic)PostProcessVolume: "PostProcessVolume_15759").
+     virtual void setPostProcessVolumeEnabled(const std::string& volume, bool on) { (void)volume; (void)on; }
++    // Settings > Texture Quality: 0 Low / 1 Medium / 2 High (the original's full textures): a mip LOD bias of 2 / 1 / 0 on
++    // material textures (lightmaps, cube maps and UI untouched); live, kept across map changes
++    virtual void setTextureQuality(int level) { (void)level; }
+     // A matinee cutscene's per-frame view (Gameplay's SeqAct_Interp playback): the camera itself goes through the normal
+     // camera and notifyCameraCut("matinee") on director cuts; this carries the rest. Unset fields keep the defaults.
+     struct PostOverride {                 // the CameraActor's CamOverridePostProcess (UE3 FPostProcessSettings fields)
+diff -ru a/src/render/d3d12/D3D12Presenter.cpp b/src/render/d3d12/D3D12Presenter.cpp
+--- a/src/render/d3d12/D3D12Presenter.cpp	2026-10-23 23:43:25.646987900 -0500
++++ b/src/render/d3d12/D3D12Presenter.cpp	2026-10-23 23:43:25.629427600 -0500
+@@ -7,6 +7,7 @@
+ #if defined(_WIN32)
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
++#include <atomic>
+ #include <d3d12.h>
+ #include <dxgi1_5.h>
+ #include <d3d11.h>
+@@ -456,7 +457,8 @@
+         ID3D12CommandList* lists[] = {list_};
+         queue_->ExecuteCommandLists(1, lists);
+         const clk::time_point t4 = clk::now();
+-        HRESULT hr = swap_->Present(vsync_ ? 1 : 0, !vsync_ && tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0);
++        const bool vs = vsync_ || userVsync_.load();     // (Settings > VSync: the window's swap interval, setUserVSync)
++        HRESULT hr = swap_->Present(vs ? 1 : 0, !vs && tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0);
+         // (verification) WFC_D3D12_SIMLOST=<n>: the n-th present reports DXGI_ERROR_DEVICE_REMOVED (the GL fallback path)
+         static const int simLost = [] { const char* e = std::getenv("WFC_D3D12_SIMLOST"); return e ? std::atoi(e) : -1; }();
+         if (presented_ == simLost) hr = DXGI_ERROR_DEVICE_REMOVED;
+@@ -928,6 +930,10 @@
+     double phSum_[5] = {}, phMax_[5] = {}, subSum_[4] = {}, subMax_[4] = {};
+     int phN_ = 0;
+     bool tearing_ = false, vsync_ = false;
++    std::atomic<bool> userVsync_{false};                 // (Settings > VSync on this present path; vsync_: WFC_D3D12_VSYNC)
++public:
++    void setUserVSync(bool on) { userVsync_.store(on); }
++private:
+     static std::string shotFile_() { const char* e = std::getenv("WFC_D3D12SHOT"); std::string t = e ? e : ""; size_t c = t.find(','); return c == std::string::npos ? t : t.substr(c + 1); }
+ };
+ 
+@@ -960,6 +966,13 @@
+ }
+ bool presentHook() {
+     if (!g_presenter) return false;
++    {   // Settings > VSync (Win32Window::setVSync sets the GL swap interval): on this present path it is the D3D12 sync
++        // interval - it was ignored here, the D3D12 path only read WFC_D3D12_VSYNC (QC audit). Main thread, GL current
++        typedef int(WINAPI * GetSwapInterval)();
++        static GetSwapInterval getSI = nullptr;
++        if (!getSI) getSI = reinterpret_cast<GetSwapInterval>(reinterpret_cast<void*>(wglGetProcAddress("wglGetSwapIntervalEXT")));
++        if (getSI) g_presenter->setUserVSync(getSI() > 0);
++    }
+     if (!g_presenter->failed() && g_presenter->present() && !g_presenter->failed()) return true;
+     // device lost / no swapchain. GL cannot take over: once a flip-model swapchain has owned the window, SwapBuffers no
+     // longer reaches the screen (WFC_D3D12_SIMLOST captures: frozen). So: a new device + swapchain (the standard answer to a
+diff -ru a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
+--- a/src/render/gl/GLRenderer.cpp	2026-10-23 23:43:25.431248000 -0500
++++ b/src/render/gl/GLRenderer.cpp	2026-10-23 23:43:25.411680700 -0500
+@@ -474,7 +474,7 @@
+         slowFrameEnd();
+         glx::gpuTimerEnd();
+         glx::gpuStamp("2D: marker, reticle, screen batches");
+-        if (!slotWaited_) { watchdog::phase("frame limiter"); limiter_.wait(); }   // the loop did not call waitFrameSlot
++        if (!slotWaited_) { applyLimit(userLimit_); watchdog::phase("frame limiter"); limiter_.wait(); }   // the loop did not call waitFrameSlot (load frames: the player's limit)
+         slotWaited_ = false;
+         { static int frames = 0; watchdog::frameDone(++frames);
+           if (frames == 60 && WFC_ENV("WFC_HANGTEST")) {   // diagnostics: a 7 s stall to exercise the watchdog
+@@ -1417,22 +1417,33 @@
+     int liveParticleEffects() const override { return wfc_.liveFx(); }
+     void setParticleEffectPooled(int handle) override { wfc_.markFxPooled(handle); }
+     void setEmitterPoolCap(bool on) override { wfc_.setEmitterPoolCap(on); }
++    void setTextureQuality(int level) override { wfc_.setTextureQuality(level); }
+     bool drawsAuthoredMapFx() const override { return wfc_.active(); }
+     void setMapClock(float t) override { wfc_.setMapClock(t); }
+     void setDestructibleState(const std::string& a, int s) override { wfc_.setDestructibleState(a, s); }
+ 
+     FrameLimiter limiter_;
+     bool limitFromEnv_ = false, slotWaited_ = false;
++    float userLimit_ = 0.0f;                         // the player's Frame Rate Limit (0 = uncapped): a match's limit
++    // (user playtest 2026-10-23b item 6) the menus are held at 60 FPS (they ran at 72); a match runs at the player's limit.
++    // Menu frames = the main loop's waitFrameSlot outside a match map; load-screen frames (endFrame's own wait) keep the
++    // player's limit so a load is never slowed by the menu cap
++    float menuLimit() const { return userLimit_ > 0.0f ? std::min(userLimit_, 60.0f) : 60.0f; }
++    void applyLimit(float hz) { if (!limitFromEnv_ && hz != limiter_.limit()) limiter_.setLimit(hz); }
+     void setFrameLimit(float hz) override {
+         if (limitFromEnv_) return;                 // a test override wins
+-        if (hz != limiter_.limit()) LOG_INFO("renderer: frame limit %s", hz > 0 ? std::to_string((int)hz).c_str() : "off");
+-        limiter_.setLimit(hz);
++        if (hz != userLimit_) LOG_INFO("renderer: frame limit %s (menus %d)", hz > 0 ? std::to_string((int)hz).c_str() : "off", (int)menuLimit());
++        userLimit_ = hz;
++        applyLimit(matchMap_ ? hz : menuLimit());
+     }
+-    float frameLimit() const override { return limiter_.limit(); }
++    float frameLimit() const override { return limitFromEnv_ ? limiter_.limit() : userLimit_; }
+     void setHudScreenEffect(int chain) override { wfc_.setHudScreenEffect(chain); }
+     float drawOwnerRenderAge(int owner) const override { return wfc_.drawOwnerRenderAge(owner); }
+     void notePresentedFrame() override { watchdog::phase("presented outside the renderer (movie / frontend)"); }
+-    void waitFrameSlot() override { watchdog::phase("frame limiter"); limiter_.wait(); slotWaited_ = true; }
++    void waitFrameSlot() override {
++        applyLimit(matchMap_ ? userLimit_ : menuLimit());
++        watchdog::phase("frame limiter"); limiter_.wait(); slotWaited_ = true;
++    }
+     // M73 decal receivers: compact copy (positions + triangle indices) of the authored world geometry - the full CPU
+     // world mesh is dropped after upload - with a ground-plane (x, z) grid of triangles for the box query
+     struct DecalReceivers {
+diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-23 23:43:25.576245800 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 23:43:25.557180500 -0500
+@@ -1390,6 +1390,7 @@
+     const float keepGamma = displayGamma_;              // caller settings survive a map change
+     const float keepFsrScale = fsrScale_, keepFsrSharp = fsrSharpness_;
+     const int keepAniso = anisotropy_;
++    const int keepTexQ = texQuality_;
+     const bool keepHd = hdTextures_;
+     const bool keepFsr3 = fsr3On_;                     // (the Upscaling row's FSR 3.1: lost here before, FSR 1 in matches)
+     const bool keepModern = modern_;                   // (the HD row's Modern materials: lost here before - Original after the
+@@ -1412,6 +1413,7 @@
+     displayGamma_ = keepGamma;
+     fsrScale_ = keepFsrScale; fsrSharpness_ = keepFsrSharp;
+     anisotropy_ = keepAniso;
++    texQuality_ = keepTexQ;
+     hdTextures_ = keepHd;
+     fsr3On_ = keepFsr3;
+     modern_ = keepModern;
+@@ -1424,14 +1426,14 @@
+ void Pipeline::runSettingsSelfTest() {
+     int pass = 0, fail = 0;
+     auto check = [&](bool ok, const char* what) { (ok ? pass : fail)++; LOG_INFO("settings-test %s: %s", ok ? "PASS" : "FAIL", what); };
+-    const float g = displayGamma_; const float fs = fsrScale_, fsh = fsrSharpness_; const int an = anisotropy_;
++    const float g = displayGamma_; const float fs = fsrScale_, fsh = fsrSharpness_; const int an = anisotropy_; const int tq = texQuality_;
+     const bool hd = hdTextures_, f3 = fsr3On_, mo = modern_;
+     const int rm = rtMode_;
+     const bool vo = volUser_;
+     const int lf = lensFlareMode_;
+     const int sm = smokeMode_;
+     const int wm = waterMode_;
+-    displayGamma_ = 2.0f; fsrScale_ = 0.5f; fsrSharpness_ = 0.3f; anisotropy_ = 8; hdTextures_ = true; fsr3On_ = true; modern_ = true;
++    displayGamma_ = 2.0f; fsrScale_ = 0.5f; fsrSharpness_ = 0.3f; anisotropy_ = 8; texQuality_ = 0; hdTextures_ = true; fsr3On_ = true; modern_ = true;
+     rtMode_ = 2; volUser_ = false; lensFlareMode_ = 1; smokeMode_ = 1; waterMode_ = 1;
+     release();
+     check(rtMode_ == 2, "Ray Tracing mode");
+@@ -1441,8 +1443,8 @@
+     check(waterMode_ == 1, "Water");
+     rtMode_ = rm; volUser_ = vo; lensFlareMode_ = lf; smokeMode_ = sm; waterMode_ = wm;
+     check(displayGamma_ == 2.0f, "display gamma"); check(fsrScale_ == 0.5f && fsrSharpness_ == 0.3f, "FSR scale / sharpness");
+-    check(anisotropy_ == 8, "anisotropy"); check(hdTextures_, "HD textures"); check(fsr3On_, "FSR 3.1"); check(modern_, "Modern materials");
+-    displayGamma_ = g; fsrScale_ = fs; fsrSharpness_ = fsh; anisotropy_ = an; hdTextures_ = hd; fsr3On_ = f3; modern_ = mo;
++    check(anisotropy_ == 8, "anisotropy"); check(texQuality_ == 0, "texture quality"); check(hdTextures_, "HD textures"); check(fsr3On_, "FSR 3.1"); check(modern_, "Modern materials");
++    displayGamma_ = g; fsrScale_ = fs; fsrSharpness_ = fsh; anisotropy_ = an; texQuality_ = tq; hdTextures_ = hd; fsr3On_ = f3; modern_ = mo;
+     LOG_INFO("settings-test: %d pass, %d fail", pass, fail);
+ }
+ 
+@@ -2386,6 +2388,7 @@
+             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, lv.size() > 1 ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
+             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)anisotropy_);
++            glTexParameterf(GL_TEXTURE_2D, 0x8501 /*GL_TEXTURE_LOD_BIAS*/, texLodBias(""));   // (HD material maps)
+             glBindTexture(GL_TEXTURE_2D, 0);
+             glx::textureCacheInvalidate();
+             ++gMemPbrMaps; gMemPbrBytes += bytes;
+@@ -2618,6 +2621,7 @@
+             gTexPool.erase(pt);
+             glBindTexture(GL_TEXTURE_2D, id);
+             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)anisotropy_);   // (the setting may have changed)
++            glTexParameterf(GL_TEXTURE_2D, 0x8501 /*GL_TEXTURE_LOD_BIAS*/, texLodBias(file));
+             texCache_[key] = id;
+             ++texPoolHits_;
+             return id;
+@@ -2641,6 +2645,7 @@
+             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, clampU ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, clampV ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)anisotropy_);
++            glTexParameterf(GL_TEXTURE_2D, 0x8501 /*GL_TEXTURE_LOD_BIAS*/, texLodBias(file));
+             texCache_[key] = id;
+             touchQueue_.push_back({id, false});
+             yieldLoad();
+@@ -2671,6 +2676,7 @@
+         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, clampU ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, clampV ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)anisotropy_);
++        glTexParameterf(GL_TEXTURE_2D, 0x8501 /*GL_TEXTURE_LOD_BIAS*/, texLodBias(file));
+     } else if (!file.empty()) {
+         LOG_WARN("wfc: texture decode failed: %s", file.c_str());
+     }
+@@ -7454,6 +7460,28 @@
+     LOG_INFO("renderer: anisotropic filtering %dx%s (%zu textures)", a, a == 4 ? " (original)" : "", done.size());
+ }
+ 
++// Texture Quality: the mip LOD bias of a material texture (lightmaps / cube maps: none)
++float Pipeline::texLodBias(const std::string& file) const {
++    if (file.find("/lightmaps/") != std::string::npos || file.compare(0, 5, "cube|") == 0) return 0.0f;
++    return (float)(2 - texQuality_);
++}
++
++void Pipeline::setTextureQuality(int level) {
++    const int q = level <= 0 ? 0 : level >= 2 ? 2 : 1;
++    if (q == texQuality_) return;
++    texQuality_ = q;
++    std::set<GLuint> done;
++    for (const auto& kv : texCache_) {
++        if (!kv.second || !done.insert(kv.second).second || kv.first.compare(0, 5, "cube|") == 0) continue;
++        glBindTexture(GL_TEXTURE_2D, kv.second);
++        glTexParameterf(GL_TEXTURE_2D, 0x8501 /*GL_TEXTURE_LOD_BIAS*/, texLodBias(kv.first));
++    }
++    for (auto& kv : hdPbrTex_)
++        if (kv.second && done.insert(kv.second).second) { glBindTexture(GL_TEXTURE_2D, kv.second); glTexParameterf(GL_TEXTURE_2D, 0x8501, texLodBias("")); }
++    glBindTexture(GL_TEXTURE_2D, 0);
++    LOG_INFO("renderer: texture quality %s (LOD bias %d, %zu textures)", q == 2 ? "High (original)" : q == 1 ? "Medium" : "Low", 2 - q, done.size());
++}
++
+ void Pipeline::evictSkin(bool all) {
+     if (all) rtSkinForget(nullptr);                     // (M7 RT characters: the feed forgets every model / slot)
+     for (auto it = skinInsts_.begin(); it != skinInsts_.end();) {
+diff -ru a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h	2026-10-23 23:43:25.502492200 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-23 23:43:25.484932300 -0500
+@@ -1351,7 +1351,10 @@
+     void setCinematicView(const IRenderer::CinematicView& v) { cin_ = v; }
+     void setFsr3(bool on) { fsr3On_ = on; }            // with setUpscaling's scale: FSR 3.1 instead of FSR 1 (WfcFsr3.cpp)
+     static bool fsr3RuntimeShipped();                  // the FFX loader + Agility runtime beside the exe (file checks)
+-    void setAnisotropy(int level);              // 4 (original MaxAnisotropy, default) / 8 / 16
++    void setAnisotropy(int level);
++    void setTextureQuality(int level);   // 0 Low / 1 Medium / 2 High: mip LOD bias 2 / 1 / 0 on material textures
++    int texQuality_ = 2;
++    float texLodBias(const std::string& file) const;              // 4 (original MaxAnisotropy, default) / 8 / 16
+     static bool hdTexturesAvailable();          // IRenderer::hdTexturesAvailable
+     static bool hdEnhancedAvailable();          // HD level 2: the colour pack + the M6 modern material maps (hd_pbr_index)
+     void setHdTextures(bool on);
