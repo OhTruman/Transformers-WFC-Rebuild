@@ -1,0 +1,244 @@
+diff -ruN a/data/frontend/pc_strings.int b/data/frontend/pc_strings.int
+--- a/data/frontend/pc_strings.int	2026-10-23 23:47:18.301414200 -0500
++++ b/data/frontend/pc_strings.int	2026-10-23 23:47:18.314960800 -0500
+@@ -67,7 +67,7 @@
+ VoicePushToTalk=Push to Talk
+ VoiceOpenMic=Open Mic
+ VoiceChannel=Voice Channel
+-VoiceChannelDesc=Radio: heard anywhere. Proximity: players near you.
++VoiceChannelDesc=Team Radio: your team, anywhere. All Radio: everyone. Proximity: players near you.
+ VoiceTeamRadio=Team Radio
+ VoiceAllRadio=All Radio
+ VoiceProximity=Proximity
+@@ -81,6 +81,8 @@
+ PushToTalkKey=Push-to-Talk Key
+ PushToTalkKeyDesc=Hold this key to talk.
+ PttCustom=Custom...
++ChannelKey=Voice Channel Key
++ChannelKeyDesc=Switches the voice channel during a match. Controller: D-pad Right.
+ PressKeyPrompt=Press a key for push-to-talk, Esc to cancel.
+ MicTest=Mic Test
+ MicTestDesc=Speak to check your microphone level.
+diff -ruN a/src/frontend/DataStores.cpp b/src/frontend/DataStores.cpp
+--- a/src/frontend/DataStores.cpp	2026-10-23 23:47:18.370149600 -0500
++++ b/src/frontend/DataStores.cpp	2026-10-23 23:47:18.383696500 -0500
+@@ -114,6 +114,7 @@
+     if (markup == "<PCSettings:VoiceAudience>") return std::to_string(flow_.profile().voice.audience);
+     if (markup == "<PCSettings:VoiceDevice>") return flow_.profile().voice.device;
+     if (markup == "<PCSettings:VoicePushToTalkKey>") return flow_.profile().voice.pttKey;
++    if (markup == "<PCSettings:VoiceChannelKey>") return flow_.profile().voice.channelKey;
+     if (markup == "<PCSettings:VoiceVolume>") return std::to_string(flow_.profile().voice.volume);
+     if (markup == "<PCSettings:ProximityVolume>") return std::to_string(flow_.profile().voice.proximityVolume);
+     if (markup == "<PCSettings:VoiceMicTest>") return "0";   // the meter row (its value text is the live level)
+@@ -499,6 +500,7 @@
+         if (m == "<PCSettings:VoiceMode>") v.mode = std::clamp(std::atoi(a.c_str()), 0, 2);
+         else if (m == "<PCSettings:VoiceAudience>") v.audience = std::clamp(std::atoi(a.c_str()), 0, 3);
+         else if (m == "<PCSettings:VoiceDevice>") v.device = a;
++        else if (m == "<PCSettings:VoiceChannelKey>") { if (!a.empty()) v.channelKey = a; }
+         else if (m == "<PCSettings:VoicePushToTalkKey>") { if (a == "__custom") flow_.beginPttCapture(); else v.pttKey = a; }
+         else if (m == "<PCSettings:VoiceVolume>") v.volume = std::clamp(std::atoi(a.c_str()), 0, 100);
+         else if (m == "<PCSettings:ProximityVolume>") v.proximityVolume = std::clamp(std::atoi(a.c_str()), 0, 100);
+diff -ruN a/src/frontend/FrontendRuntime.cpp b/src/frontend/FrontendRuntime.cpp
+--- a/src/frontend/FrontendRuntime.cpp	2026-10-23 23:47:18.437380500 -0500
++++ b/src/frontend/FrontendRuntime.cpp	2026-10-23 23:47:18.450926400 -0500
+@@ -1423,6 +1423,7 @@
+ 
+ void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt) {
+     updateOnlineVoice();   // push-to-talk in the match too
++    updateVoiceChannelKey(input);
+     platform::InputFrame in = input;
+     hideRealPointer(in);
+     script_.applySynthetic(in);
+@@ -1608,6 +1609,21 @@
+                                                {"hudHidden", FlowTrace::boolean(cinematicHudHidden_)}});
+ }
+ 
++void FrontendRuntime::updateVoiceChannelKey(const platform::InputFrame& input) {
++    // Only while the player plays: a menu (pause, settings: D-pad Right moves its selection) or the scoreboard has the input.
++    const bool online = flow_.online() && flow_.sessionRole() != GameFlow::SessionRole::Offline;
++    const bool gameplay = flow_.ui().state() == UIState::InGame && !scoreboard_;
++    const int vk = platform::virtualKeyForName(flow_.profile().voice.channelKey);
++    const bool down = online && gameplay && ((vk && platform::isKeyHeld(vk)) || (input.padButtons & platform::kPadDPadRight));
++    if (down && !voiceChannelWas_) {
++        static const char* const kNames[] = {"$WfcPC.Voice.VoiceTeamRadio", "$WfcPC.Voice.VoiceAllRadio", "$WfcPC.Voice.VoiceProximity",
++                                             "$WfcPC.Voice.VoiceRadioProximity"};
++        const int a = flow_.cycleVoiceAudience();
++        hud_.announce(catalog_.localizeKey("$WfcPC.Voice.VoiceChannel") + ": " + catalog_.localizeKey(kNames[a]));
++    }
++    voiceChannelWas_ = down;
++}
++
+ void FrontendRuntime::updateOnlineVoice() {
+     if (flow_.pttCaptureActive()) {
+         const uint16_t vk = keyProbe ? keyProbe() : platform::firstKeyDown();
+diff -ruN a/src/frontend/FrontendRuntime.h b/src/frontend/FrontendRuntime.h
+--- a/src/frontend/FrontendRuntime.h	2026-10-23 23:47:18.506617400 -0500
++++ b/src/frontend/FrontendRuntime.h	2026-10-23 23:47:18.520665800 -0500
+@@ -303,6 +303,8 @@
+     bool cinematicHudHidden_ = false, cinematicShowPending_ = false;
+     void updateCinematicHud();
+     void updateOnlineVoice();
++    void updateVoiceChannelKey(const platform::InputFrame& input);   // [Systems] the Voice Channel key / D-pad Right in a match
++    bool voiceChannelWas_ = false;
+     bool voiceUiOverride_ = false;
+     bool pttCaptureArmed_ = false;   // the capture waits for every key to be released first (the key that chose "Custom...")
+     std::string spectateSent_;            // SetSpectateTarget: the name last sent to the respawn movie
+diff -ruN a/src/frontend/GameFlow.h b/src/frontend/GameFlow.h
+--- a/src/frontend/GameFlow.h	2026-10-23 23:47:18.578363200 -0500
++++ b/src/frontend/GameFlow.h	2026-10-23 23:47:18.592411800 -0500
+@@ -402,6 +402,7 @@
+     void setPushToTalkHeld(bool held);                 // the runtime samples the key; sent on change
+     float micLevel() const { return session_ ? session_->micLevel() : 0.0f; }
+     bool simHeld() const { return session_ && session_->simHeld(); }   // the online load gate holds the World (ARCHITECTURE 10.4)
++    int cycleVoiceAudience();                          // the Voice Channel key / D-pad Right: the next audience (saved); returns it
+     static std::string micMeterText(float level);      // the Mic Test row's value: ten marks, "|||||....." at 0.5
+     // Push-to-Talk Key "Custom..." (PC EXTENSION): a prompt; the runtime captures the next key (Esc / Cancel: unchanged).
+     void beginPttCapture();
+diff -ruN a/src/frontend/GameFlow_Online.cpp b/src/frontend/GameFlow_Online.cpp
+--- a/src/frontend/GameFlow_Online.cpp	2026-10-23 23:47:18.650611800 -0500
++++ b/src/frontend/GameFlow_Online.cpp	2026-10-23 23:47:18.664659200 -0500
+@@ -271,6 +271,13 @@
+                                            {"self", match_.self.fingerprint}, {"team", std::to_string(match_.teamIndex)}});
+ }
+ 
++int GameFlow::cycleVoiceAudience() {
++    profile_.voice.audience = (std::clamp(profile_.voice.audience, 0, 3) + 1) % 4;
++    profile_.save();   // the session follows on the next syncVoiceSettings (the key changed)
++    FlowTrace::emit("online.voiceChannel", {{"audience", std::to_string(profile_.voice.audience)}});
++    return profile_.voice.audience;
++}
++
+ void GameFlow::syncVoiceSettings() {   // the Audio rows to the session, whenever they change (and when the session starts)
+     const LocalProfile::Voice& v = profile_.voice;
+     const std::string key = std::to_string(v.mode) + "|" + std::to_string(v.audience) + "|" + v.device + "|" + std::to_string(v.volume) +
+diff -ruN a/src/frontend/Profile.cpp b/src/frontend/Profile.cpp
+--- a/src/frontend/Profile.cpp	2026-10-23 23:47:18.720852200 -0500
++++ b/src/frontend/Profile.cpp	2026-10-23 23:47:18.734900000 -0500
+@@ -123,6 +123,7 @@
+             else if (k == "Audience") voice.audience = std::clamp(std::atoi(v.c_str()), 0, 3);
+             else if (k == "Device") voice.device = v;
+             else if (k == "PushToTalkKey") voice.pttKey = v;
++            else if (k == "VoiceChannelKey" && !v.empty()) voice.channelKey = v;
+             else if (k == "Volume") voice.volume = std::clamp(std::atoi(v.c_str()), 0, 100);
+             else if (k == "ProximityVolume") voice.proximityVolume = std::clamp(std::atoi(v.c_str()), 0, 100);
+             else if (k == "Muted" || k == "Blocked") {
+@@ -237,7 +238,7 @@
+     for (const auto& [id, v] : progression.stats) if (v != 0) f << "Stat." << id << "=" << v << "\n";
+     if (!voice.isDefault()) {   // voice chat settings / mutes: only when changed (offline profiles unchanged)
+         f << "\n[Voice]\nMode=" << voice.mode << "\nAudience=" << voice.audience << "\nDevice=" << voice.device
+-          << "\nPushToTalkKey=" << voice.pttKey << "\nVolume=" << voice.volume << "\nProximityVolume=" << voice.proximityVolume << "\nMuted=";
++          << "\nPushToTalkKey=" << voice.pttKey << "\nVoiceChannelKey=" << voice.channelKey << "\nVolume=" << voice.volume << "\nProximityVolume=" << voice.proximityVolume << "\nMuted=";
+         for (size_t i = 0; i < voice.muted.size(); ++i) f << (i ? "," : "") << voice.muted[i];
+         f << "\n";
+         if (!voice.blocked.empty()) {
+diff -ruN a/src/frontend/Profile.h b/src/frontend/Profile.h
+--- a/src/frontend/Profile.h	2026-10-23 23:47:18.788082100 -0500
++++ b/src/frontend/Profile.h	2026-10-23 23:47:18.803134100 -0500
+@@ -133,11 +133,12 @@
+         int audience = 0;             // 0 Team Radio (the original: team-only voice, RE TnVoiceMuteHandler), 1 All Radio, 2 Proximity, 3 Radio + Proximity
+         std::string device;           // "" = System Default
+         std::string pttKey = "V";
++        std::string channelKey = "N";   // PC EXTENSION (user playtest 2026-10-23b): cycles the Voice Channel in a match; pad: D-pad Right
+         int volume = 70, proximityVolume = 70;
+         std::vector<std::string> muted;
+         std::vector<std::string> blocked;   // PC addition: the player card's Block (always muted; a local list, no server report)
+         bool isDefault() const {
+-            return mode == 1 && audience == 0 && device.empty() && pttKey == "V" && volume == 70 && proximityVolume == 70 && muted.empty() &&
++            return mode == 1 && audience == 0 && device.empty() && pttKey == "V" && channelKey == "N" && volume == 70 && proximityVolume == 70 && muted.empty() &&
+                    blocked.empty();
+         }
+     };
+diff -ruN a/src/platform/Input.h b/src/platform/Input.h
+--- a/src/platform/Input.h	2026-10-23 23:47:18.860330800 -0500
++++ b/src/platform/Input.h	2026-10-23 23:47:18.873876300 -0500
+@@ -29,6 +29,8 @@
+ // Menu / UI keys (frontend movies): keyboard keys and gamepad buttons, platform-neutral.
+ enum class UiKey { Up, Down, Left, Right, Accept, Back, X, Y, Start, Select, LB, RB, LT, RT, LThumb, RThumb, Count };
+ 
++constexpr uint32_t kPadDPadUp = 0x0001, kPadDPadDown = 0x0002, kPadDPadLeft = 0x0004, kPadDPadRight = 0x0008;
++
+ struct InputFrame {
+     uint32_t uiDown = 0;          // bit (1 << UiKey) held (keyboard or pad)
+     bool  down[(int)Button::Count]    = {};   // currently held
+@@ -37,6 +39,7 @@
+     float mouseDY = 0.0f;
+     // Gamepad (optional; zeroed if none connected)
+     bool  padConnected = false;
++    uint32_t padButtons = 0;      // the frame's pad buttons (XInput wButtons bit values: kPadDPadRight ...); 0 without a pad
+     float padLX = 0, padLY = 0;   // left stick, -1..1
+     float padRX = 0, padRY = 0;   // right stick, -1..1
+     float padLT = 0;              // left trigger, 0..1
+diff -ruN a/src/platform/win32/Win32Window.cpp b/src/platform/win32/Win32Window.cpp
+--- a/src/platform/win32/Win32Window.cpp	2026-10-23 23:47:18.929567200 -0500
++++ b/src/platform/win32/Win32Window.cpp	2026-10-23 23:47:18.943114100 -0500
+@@ -238,6 +238,7 @@
+                 for (uint32_t m : uiPad_[i]) if (padBits_ & m) ui |= 1u << i;
+             }
+         input.uiDown = ui;
++        input.padButtons = padBits_ & 0xFFFFu;   // the XInput buttons only (the synthetic trigger / stick bits sit above)
+         input.padActive = padBits_ != 0 || std::fabs(input.padRX) > 0.5f || std::fabs(input.padRY) > 0.5f;
+         input.keyActive = keyUi;
+         for (int i = 0; i < (int)Button::Count && !input.keyActive; ++i) input.keyActive = input.down[i];
+diff -ruN a/src/ui/GfxPresenter.cpp b/src/ui/GfxPresenter.cpp
+--- a/src/ui/GfxPresenter.cpp	2026-10-23 23:47:18.997299400 -0500
++++ b/src/ui/GfxPresenter.cpp	2026-10-23 23:47:19.010845900 -0500
+@@ -1288,23 +1288,26 @@
+         vm.set(item, "text", V(std::string(label)));
+         a.o->elems.push_back(V(item));
+     };
+-    std::vector<V> mode, aud, dev, ptt, vol, pvol, mic;
++    std::vector<V> mode, aud, dev, ptt, vol, pvol, mic, chk;
+     choice(mode, V(0.0), "$WfcPC.Voice.VoiceOff"); choice(mode, V(1.0), "$WfcPC.Voice.VoicePushToTalk"); choice(mode, V(2.0), "$WfcPC.Voice.VoiceOpenMic");
+     choice(aud, V(0.0), "$WfcPC.Voice.VoiceTeamRadio"); choice(aud, V(1.0), "$WfcPC.Voice.VoiceAllRadio");
+     choice(aud, V(2.0), "$WfcPC.Voice.VoiceProximity"); choice(aud, V(3.0), "$WfcPC.Voice.VoiceRadioProximity");
+     choice(dev, V(std::string()), "$WfcPC.Voice.InputDeviceDefault");
+     for (const std::string& d : net::voiceCaptureDevices()) choice(dev, V(d), d);   // Systems: the active capture endpoints by name
+     pttChoices(vm, ptt, pttKey);
++    // the Voice Channel key: keys no match action uses (WFC's PC card + ours); the pad's is D-pad Right (shown in the description)
++    for (const char* k : {"N", "H", "J", "K", "L", "M", "U", "Y"}) choice(chk, V(std::string(k)), k);
+     choice(mic, V(0.0), frontend::GameFlow::micMeterText(0.0f));
+     for (int t = 0; t <= 100; t += 10) { choice(vol, V((double)t), std::to_string(t)); choice(pvol, V((double)t), std::to_string(t)); }
+     row(mode, "<PCSettings:VoiceMode>", "$WfcPC.Voice.VoiceChatDesc", "$WfcPC.Voice.VoiceChat");
+     row(aud, "<PCSettings:VoiceAudience>", "$WfcPC.Voice.VoiceChannelDesc", "$WfcPC.Voice.VoiceChannel");
+     row(dev, "<PCSettings:VoiceDevice>", "$WfcPC.Voice.InputDeviceDesc", "$WfcPC.Voice.InputDevice");
+     row(ptt, "<PCSettings:VoicePushToTalkKey>", "$WfcPC.Voice.PushToTalkKeyDesc", "$WfcPC.Voice.PushToTalkKey");
++    row(chk, "<PCSettings:VoiceChannelKey>", "$WfcPC.Voice.ChannelKeyDesc", "$WfcPC.Voice.ChannelKey");
+     row(vol, "<PCSettings:VoiceVolume>", "$WfcPC.Voice.VoiceVolumeDesc", "$WfcPC.Voice.VoiceVolume");
+     row(pvol, "<PCSettings:ProximityVolume>", "$WfcPC.Voice.ProximityVolumeDesc", "$WfcPC.Voice.ProximityVolume");
+     row(mic, "<PCSettings:VoiceMicTest>", "$WfcPC.Voice.MicTestDesc", "$WfcPC.Voice.MicTest");
+-    frontend::FlowTrace::emit("settings.voiceRows", {{"rows", "7"}, {"provenance", "PC EXTENSION"}});
++    frontend::FlowTrace::emit("settings.voiceRows", {{"rows", "8"}, {"provenance", "PC EXTENSION"}});
+     return true;
+ }
+ 
+diff -ruN a/tests/FrontendTests.cpp b/tests/FrontendTests.cpp
+--- a/tests/FrontendTests.cpp	2026-10-23 23:47:19.065534000 -0500
++++ b/tests/FrontendTests.cpp	2026-10-23 23:47:19.079582000 -0500
+@@ -1408,16 +1408,26 @@
+         frontend::LocalProfile c;
+         // All Radio (1) differs from the default audience either way (Team Radio 0, the original's rule, after Systems' voice channels)
+         c.voice.mode = 2; c.voice.audience = 1; c.voice.pttKey = "Mouse 4"; c.voice.muted = {"WFC-AAAA-AAAA-1", "WFC-BBBB-BBBB-2"};
++        c.voice.channelKey = "K";
+         c.save();
+         std::ifstream b("wfc_profile.ini"); frontend::LocalProfile r; r.loadFrom(b); b.close();
+         check(as.str().find("[Voice]") == std::string::npos && r.voice.mode == 2 && r.voice.audience == 1 && r.voice.pttKey == "Mouse 4" &&
+               r.voice.muted.size() == 2 && r.voice.muted[1] == "WFC-BBBB-BBBB-2" && d.voice.mode == 1 &&
+-              d.voice.audience == frontend::LocalProfile::Voice{}.audience, "profile.voice_settings_persisted");
++              d.voice.audience == frontend::LocalProfile::Voice{}.audience && r.voice.channelKey == "K" && d.voice.channelKey == "N",
++              "profile.voice_settings_persisted");
+         std::remove("wfc_profile.ini");
+     }
+     SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD-4H"; o.address = "192.168.1.20:7777";
+     OnlineRig r({after("host", o)});
+     const bool host = r.ok && hostLobby(r);
++    {   // V1b (Systems QC): the Voice Channel key's cycle - Team -> All -> Proximity -> Radio + Proximity -> Team, each step saved
++        const int start = r.f().profile().voice.audience;
++        const int a1 = r.f().cycleVoiceAudience(), a2 = r.f().cycleVoiceAudience(), a3 = r.f().cycleVoiceAudience();
++        std::ifstream b("wfc_profile.ini"); frontend::LocalProfile saved; saved.loadFrom(b); b.close();
++        const int a4 = r.f().cycleVoiceAudience();
++        check(start == 0 && a1 == 1 && a2 == 2 && a3 == 3 && saved.voice.audience == 3 && a4 == 0, "online.voice_channel_cycle");
++        r.frames(2);
++    }
+     // V2: the settings reach the session when the session starts and on each change; push-to-talk only in that mode, on change
+     const std::string aud = std::to_string(frontend::LocalProfile::Voice{}.audience);   // Team Radio 0 (Systems' voice channels)
+     const bool first = r.fake->count("setVoiceSettings") == 1 && r.fake->last("setVoiceSettings")->arg == "1," + aud + ",,70";
