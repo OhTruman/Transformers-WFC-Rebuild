@@ -4282,3 +4282,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   overlap, calibration preview broken, 40 items: docs/handoff/USER_PLAYTEST_2026-10-23b.md + playtest_2026-10-23b/.
   ORDER: (1) QUALITY PASS now (settings do what they say; everything per the user or else the base game), (2) the new
   settings items, (3) a complete performance pass; DLC / split screen feature work PAUSED for Frontend + Gameplay.
+2026-10-23 23:24 USER ORDER (disk): delete the builds / files we aren't using. Integration swept its own work/ (old gates, archives,
+  render backups, hang dumps: 2 GB). Lanes sweep their own work/ (Systems: 5 old packages ~121 GB; AssetTools: dlc_maps +
+  the 11,154 shadow texture copies after Pack 2; Experimental: old ab arms; others: old builds / shots / logs).
+  MERGED 5285ea0a build_movers per-group binding (tool).
