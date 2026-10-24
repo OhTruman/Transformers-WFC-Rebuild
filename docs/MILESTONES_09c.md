@@ -4165,3 +4165,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   d5bb6863; Systems re-pointed. Then the reboot -> gate -> cut.
 2026-10-23 18:13 A1 intro CONFIRMED once (Frontend handover6/ on d5bb6863): a1text + a1intro each play once, one skip -> gameplay; in-game
   shots at +60 / +90 (the lift ride matinee at +30). BLOCKER CLOSED. Waiting only on the user's reboot.
+2026-10-23 19:20 REBOOT DONE (boot 19:13). The nonpaged leak was an ORPHANED Malwarebytes FlightRecorder.sys boot driver (Malwarebytes
+  itself uninstalled); the user disabled it (sc config start= disabled) and restarted: nonpaged 9.8 GB -> 925 MB, driver
+  Stopped / Disabled, C: 101 GB free, desktop 2560x1440 @ 144 (208 modes). Lanes relaunched (rendering-11, gameplay-91,
+  experimental-e1, assettools-d6, re-workspace-a6; Integration = rebuild-5f). TIMED FINAL GATE GRANTED to Experimental
+  (final-gate.sh d5bb6863 gate, base final7); freeze sent to every lane. Then: cut word -> refresh.sh -> verify -> hand-over.
