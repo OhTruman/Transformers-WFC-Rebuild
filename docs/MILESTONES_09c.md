@@ -4437,3 +4437,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   fallback (Faithful never black), 12 setting previews, Rendering hand-over. P1 found by Rendering: the calibration panel
   draws over gameplay (TDM + D1 start) -> Frontend has the card for the fix + its 5-min check = the last item before the
   build sha.
+2026-10-24 04:12 MERGED 55df5657 P1 calibration leak fixed (extras close with their owner; autoplay skips the first-launch calibration);
+  Frontend checked the preview panel, colour picker, first-launch calibration windowed. CANDIDATE BUILD HEAD 55df5657;
+  one open question to Rendering (HD level applying live = a 9 s menu freeze vs the 'next map' hint). Experimental
+  pre-builds the head arm; Systems pre-checks the plan.
