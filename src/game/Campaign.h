@@ -11,6 +11,7 @@
 #include "assets/SkinnedModel.h"
 
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
@@ -91,7 +92,7 @@ struct CampaignSkel {
     core::Vec3 pos{0, 0, 0};
     float yawDeg = 0.0f, time = 0.0f;
     bool loop = false, active = false, tried = false, ok = false;
-    assets::SkinnedModel model;
+    std::shared_ptr<assets::SkinnedModel> model;   // shared by every actor of the same mesh + anim files (cpLoadSkeletal)
     render::MeshData skinned;
     std::vector<core::Mat4> scratch;
     std::vector<core::Mat4> palette;     // GPU skin: the bone palette of (posedClip, posedT), its serial for the renderer's cache

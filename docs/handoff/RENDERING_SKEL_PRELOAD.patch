@@ -1,0 +1,102 @@
+diff -ruN a/src/game/Campaign.h b/src/game/Campaign.h
+--- a/src/game/Campaign.h	2026-10-24 10:46:47.263508600 -0500
++++ b/src/game/Campaign.h	2026-10-24 10:46:47.319701100 -0500
+@@ -11,6 +11,7 @@
+ #include "assets/SkinnedModel.h"
+ 
+ #include <map>
++#include <memory>
+ #include <set>
+ #include <string>
+ #include <vector>
+@@ -91,7 +92,7 @@
+     core::Vec3 pos{0, 0, 0};
+     float yawDeg = 0.0f, time = 0.0f;
+     bool loop = false, active = false, tried = false, ok = false;
+-    assets::SkinnedModel model;
++    std::shared_ptr<assets::SkinnedModel> model;   // shared by every actor of the same mesh + anim files (cpLoadSkeletal)
+     render::MeshData skinned;
+     std::vector<core::Mat4> scratch;
+     std::vector<core::Mat4> palette;     // GPU skin: the bone palette of (posedClip, posedT), its serial for the renderer's cache
+diff -ruN a/src/game/WorldCampaignMatinee.cpp b/src/game/WorldCampaignMatinee.cpp
+--- a/src/game/WorldCampaignMatinee.cpp	2026-10-24 10:46:47.273041300 -0500
++++ b/src/game/WorldCampaignMatinee.cpp	2026-10-24 10:46:47.320203300 -0500
+@@ -6,6 +6,7 @@
+ #include "assets/Json.h"
+ #include "assets/SkinnedModel.h"
+ #include "game/GpuSkin.h"
++#include "core/LoadYield.h"
+ #include "render/Renderer.h"
+ #include "core/Log.h"
+ 
+@@ -435,7 +436,27 @@
+         if (k.unit.size() > 2 && k.unit.compare(k.unit.size() - 2, 2, "_m") == 0) k.unit.resize(k.unit.size() - 2);
+         if (!k.mesh.empty()) cpSkel_[shortName(r["actor"].asString())] = k;
+     }
+-    LOG_INFO("campaign: %zu matinee skeletal actors", cpSkel_.size());
++    // (300 fps: a first-draw load stalled D1 4.5 s in play) every distinct mesh + anim set loads here, under the loading screen
++    const std::string root = "F:/Transformers Rebuild/ExtractedAssets/";
++    std::map<std::string, std::shared_ptr<assets::SkinnedModel>> models;
++    size_t failed = 0;
++    for (auto& kv : cpSkel_) {
++        CampaignSkel& k = kv.second;
++        std::string key = k.mesh;
++        for (const std::string& f : k.animFiles) key += "|" + f;
++        auto it = models.find(key);
++        if (it == models.end()) {
++            auto m = std::make_shared<assets::SkinnedModel>();
++            if (assets::loadSkinnedGlb(root + k.mesh, *m)) {
++                for (const std::string& f : k.animFiles) assets::loadAnimationsByName(root + f, *m);
++                if (renderer_ && onMainThread()) prewarmSkin(*m);
++            } else { LOG_WARN("campaign: skeletal actor %s: no mesh %s", kv.first.c_str(), k.mesh.c_str()); m.reset(); ++failed; }
++            it = models.emplace(key, m).first;
++            core::loadYield("campaign skeletal");
++        }
++        k.model = it->second; k.tried = true; k.ok = k.model != nullptr;
++    }
++    LOG_INFO("campaign: %zu matinee skeletal actors (%zu distinct models loaded, %zu failed)", cpSkel_.size(), models.size(), failed);
+ }
+ 
+ // Draw the active ones: the clip sampled at its matinee time. GPU-skinned (D1 Crash runs 244 at once: CPU skinning them every
+@@ -452,30 +473,25 @@
+             if (h == cp_.actorHidden.end()) h = cp_.actorHidden.find(kv.first);
+             if (h != cp_.actorHidden.end() && h->second) continue;
+         }
+-        if (!k.tried) {
+-            k.tried = true;
+-            k.ok = assets::loadSkinnedGlb(root + k.mesh, k.model);
+-            if (k.ok) for (const std::string& f : k.animFiles) assets::loadAnimationsByName(root + f, k.model);
+-            if (!k.ok) LOG_WARN("campaign: skeletal actor %s: no mesh %s", kv.first.c_str(), k.mesh.c_str());
+-        }
+-        if (!k.ok) continue;
+-        const int clip = k.model.clipByName(k.clip);
++        if (!k.ok || !k.model) continue;   // (loaded at chapter load: cpLoadSkeletal)
++        const assets::SkinnedModel& model = *k.model;
++        const int clip = model.clipByName(k.clip);
+         if (clip < 0) continue;
+         const core::Mat4 world = core::Mat4::translate(k.pos) * core::Mat4::rotateY(-k.yawDeg * 3.14159265f / 180.0f);
+-        if (!k.model.joints.empty()) {
++        if (!model.joints.empty()) {
+             if (clip != k.posedClip || k.time != k.posedT || k.palette.empty()) {
+                 assets::LocalPose lp;
+-                assets::samplePose(k.model, clip, k.time, k.loop, lp);
+-                assets::poseGlobals(k.model, lp, k.scratch);
+-                buildPalette(k.model, k.scratch, k.palette);
++                assets::samplePose(model, clip, k.time, k.loop, lp);
++                assets::poseGlobals(model, lp, k.scratch);
++                buildPalette(model, k.scratch, k.palette);
+                 k.posedClip = clip; k.posedT = k.time; ++k.serial;
+             }
+-            render::MeshData& bind = bindMeshOf(k.model);
+-            syncMats(bind.mats, k.model.mats);
+-            if (drawSkinnedGpu(r, bind, k.model.joints, k.model.weights, k.palette, nullptr, 1.0f, world, core::Vec3{1, 1, 1}, &k, k.serial, 0))
++            render::MeshData& bind = bindMeshOf(model);
++            syncMats(bind.mats, model.mats);
++            if (drawSkinnedGpu(r, bind, model.joints, model.weights, k.palette, nullptr, 1.0f, world, core::Vec3{1, 1, 1}, &k, k.serial, 0))
+                 continue;
+         }
+-        assets::evaluatePose(k.model, clip, k.time, k.scratch, k.skinned, k.loop);
++        assets::evaluatePose(model, clip, k.time, k.scratch, k.skinned, k.loop);
+         r.drawDynamicMesh(k.skinned, world, core::Vec3{1, 1, 1});
+     }
+ }
