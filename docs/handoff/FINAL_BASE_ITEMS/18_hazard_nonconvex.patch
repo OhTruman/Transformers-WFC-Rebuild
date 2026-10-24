@@ -1,0 +1,619 @@
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index 2c7c604e..36444c5c 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -251,6 +251,7 @@ bool Application::init() {
+     if (std::getenv("WFC_UDPSESSIONTEST")) { runUdpSessionTest(); return false; }   // [Systems] the real online session on loopback UDP
+     if (std::getenv("WFC_CAMPAIGNAUDIOTEST")) { runCampaignAudioTest(); return false; }   // [Systems] campaign Kismet audio ops, headless
+     if (std::getenv("WFC_ONLINEFLOWTEST")) { runOnlineFlowTest(); return false; }   // [Frontend] two frontend flows on real UdpSessions
++    if (std::getenv("WFC_FLOWSIMTEST")) { runFlowSimTest(); return false; }   // the section 43 flows' sim half, headless
+     if (std::getenv("WFC_SOLOLAUNCHTEST")) { runSoloLaunchTest(); return false; }   // [Systems] a solo private launch: local loop, deterministic
+     if (std::getenv("WFC_VOICETEST")) { runVoiceTest(); return false; }   // [Systems] voice end to end, headless
+     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
+@@ -1265,6 +1266,44 @@ Application::MatchExit Application::runMatch() {
+             hb.x = 0.30f * W; hb.y = 0.72f * H; hb.params = {{"Health", {0.6f, 0, 0, 0}}, {"Neutral", {1, 0, 0, 0}}};
+             renderer_->drawMaterialTile(hb);
+         }
++        // [Frontend, QC] Subtitles (the Audio row, default off as the original): the campaign dialogue line on screen now
++        // (Systems World::currentSubtitle, in the dialogue language). Hud_GFX has no subtitle element - UE3 drew them on the
++        // canvas: centred lines stacked up from the bottom of the 80 % safe region, white with a drop shadow [H: UE3
++        // GameViewportClient SubtitleRegion]. Font: the original UI_TransEngineFonts_p.SubtitleFont when the render data has it,
++        // else MarkerFont. Read before launchStep (the World is idle between joins).
++        if (frontend_ && frontend_->flow().campaign() && frontend_->flow().profile().get("Subtitles") == "True") {
++            const std::string sub = world_.currentSubtitle();
++            if (!sub.empty()) {
++                const float W = (float)window_->width(), H = (float)window_->height(), scale = H / 720.0f;
++                static std::string font;
++                if (font.empty()) { float tw, th; font = renderer_->canvasTextSize("SubtitleFont", "A", tw, th) ? "SubtitleFont" : "MarkerFont"; }
++                std::vector<std::string> lines;   // word wrap to the safe width
++                std::string cur, word;
++                auto fits = [&](const std::string& t) { float tw = 0, th = 0; renderer_->canvasTextSize(font, t, tw, th, scale); return tw <= W * 0.8f; };
++                for (size_t i = 0; i <= sub.size(); ++i) {
++                    if (i == sub.size() || sub[i] == ' ' || sub[i] == (char)10) {
++                        const std::string cand = cur.empty() ? word : cur + " " + word;
++                        if (!cur.empty() && !fits(cand)) { lines.push_back(cur); cur = word; } else cur = cand;
++                        word.clear();
++                        if (i < sub.size() && sub[i] == (char)10) { lines.push_back(cur); cur.clear(); }
++                    } else word += sub[i];
++                }
++                if (!cur.empty()) lines.push_back(cur);
++                float lineH = 0, tw = 0;
++                renderer_->canvasTextSize(font, "Ag", tw, lineH, scale);
++                if (lineH <= 0) lineH = 22.0f * scale;
++                float y = H * 0.9f - lineH * (float)lines.size();
++                const uint8_t white[4] = {255, 255, 255, 255}, shadow[4] = {0, 0, 0, 255};
++                for (const std::string& l : lines) {
++                    float lw = 0, lh = 0;
++                    renderer_->canvasTextSize(font, l, lw, lh, scale);
++                    const float x = (W - lw) * 0.5f;
++                    renderer_->drawCanvasText(font, l, x + scale, y + scale, shadow, scale);
++                    renderer_->drawCanvasText(font, l, x, y, white, scale);
++                    y += lineH;
++                }
++            }
++        }
+         // [integration 09c] Async step (3): launched after the integration draws that still read World directly (diagnostics);
+         // the match markers read the published presented() buffer. Overlaps endFrame / present / frontend.
+         world_.launchStep();   // the step's background part overlaps endFrame / present / HUD (joined at the next frame start)
+diff --git a/src/core/Application.h b/src/core/Application.h
+index 890ddca2..97255bdb 100644
+--- a/src/core/Application.h
++++ b/src/core/Application.h
+@@ -11,7 +11,7 @@
+ 
+ namespace platform { class IWindow; }
+ namespace render { class IRenderer; }
+-namespace frontend { class FrontendRuntime; struct MatchLaunch; }
++namespace frontend { class FrontendRuntime; struct MatchLaunch; class LocalProfile; }
+ namespace net { class UdpSession; class NetMatchDriver; class VoiceSession; }
+ namespace ui { class GfxPresenter; }
+ 
+@@ -40,6 +40,7 @@ private:
+     void runCampaignAudioTest();   // [Systems] WFC_CAMPAIGNAUDIOTEST=<chapter audio JSON>: the campaign Kismet audio ops, headless
+     void runUdpSessionMatch();  // [Systems] WFC_UDPHOST / WFC_UDPJOIN: a headless lockstep match through UdpSession + NetMatchDriver (identity rows)
+     void runOnlineFlowTest();   // [Frontend] WFC_ONLINEFLOWTEST: two frontend flows, each on a real UdpSession, over loopback UDP
++    void runFlowSimTest();     // WFC_FLOWSIMTEST=<MP|ESC|CP>: the playtest section 43 flows' sim half (solo launch -> play -> QA)
+     void runSoloLaunchTest();   // [Systems] WFC_SOLOLAUNCHTEST: a private match hosted alone takes the local loop (no driver); same seed = same hash
+     void runVoiceTest();        // [Systems] WFC_VOICETEST: the voice lane end to end over loopback (SNR, loss, mute, indicator)
+     int exitCode_ = -1;        // [Systems] set by the headless / net runs (main returns it when init stops); -1 = the default
+@@ -50,6 +51,7 @@ private:
+     void unloadMatch();
+     void drawFrontendFrame();
+     void attachPresenter();
++    void applyRendererSettings(const frontend::LocalProfile& p, const char* when, bool force);   // boot / Apply / a recreated renderer
+     static void applyStartupGraphics();   // before the renderer exists: settings it can only take at start-up (frame generation)
+     void applyBootProfile();              // WFC_BOOT_PROFILE=1: the direct boot applies the profile's display / graphics rows (harness)
+     void shutdownFrontend();
+@@ -95,6 +97,7 @@ private:
+     int appliedRayTracing_ = -1;   // PC EXTENSION [PCSettings] RayTracing last handed to the renderer
+     int appliedVolumetric_ = -1;   // PC ADAPTATION [PCSettings] VolumetricLighting last handed to the renderer
+     int appliedLensFlare_ = -1;     // the Lens Flares row last applied to the renderer
++    int appliedTextureQuality_ = -1;   // [PCSettings] TextureQuality last applied (Rendering setTextureQuality)
+     void qaTick(const platform::InputFrame& in);
+     void playtestOverlayTick(const platform::InputFrame& in);
+     std::unique_ptr<platform::QaPanel> qa_;
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index a7f4e03d..d164df30 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -643,6 +643,10 @@ void Application::applyBootProfile() {
+     appliedRayTracing_ = d.rayTracing;
+     frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(d.rayTracing)}, {"by", applyRayTracing(renderer_, d.rayTracing, hw.rtAvailable)},
+                                                      {"when", "boot"}, {"provenance", "PC EXTENSION"}});
++    if (renderer_) {
++        renderer_->setTextureQuality(std::clamp(d.textureQuality, 0, 2));
++        renderer_->setWaterMode(std::getenv("WFC_DEV_ROWS") ? d.water : 0);
++    }
+     applyGamma(renderer_, p.getInt("GammaSetting"));
+ }
+ 
+@@ -665,6 +669,67 @@ bool Application::wantsFrontendBoot() {
+     return true;
+ }
+ 
++// [Frontend, QC 2026-10-24] Every renderer-owned setting from the profile, in one place: the frontend boot (force), every
++// profile Apply (only what changed) and a recreated renderer after a match (force: a new renderer starts at its defaults and
++// the applied*_ caches described the old one - only Brightness was re-applied before, so the next Apply pushed nothing).
++// Water: its row is dev-only (WFC_DEV_ROWS), so a stored Water=1 applies only while that row is shown.
++void Application::applyRendererSettings(const frontend::LocalProfile& p, const char* when, bool force) {
++    const auto& d = p.display;
++    if (force || d.frameLimit != appliedFrameLimit_) {   // the Frame Rate Limit selector applies on every step
++        int cap = d.frameLimit;
++        if (const char* e = std::getenv("WFC_FPS_LIMIT")) cap = std::max(0, std::atoi(e));
++        appliedFrameLimit_ = d.frameLimit;
++        pacingHz_ = cap;
++        const char* by = applyFrameLimit(renderer_, window_, cap, pacingFg_);
++        frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(cap)}, {"by", by}, {"when", when}});
++    }
++    const int hdNow = frontend_->hdTexturesEffectiveLevel();
++    if (force || d.upscaling != appliedUpscaling_ || hdNow != appliedHdTextures_ || d.anisotropy != appliedAnisotropy_) {
++        appliedUpscaling_ = d.upscaling;
++        appliedHdTextures_ = hdNow;
++        appliedAnisotropy_ = d.anisotropy;
++        int up = appliedUpscaling_, af = appliedAnisotropy_;
++        int hd = appliedHdTextures_;
++        bool env = false;
++        const char* gx = applyGraphicsExtensions(renderer_, up, hd, af, env);
++        frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", std::to_string(hd)},
++                                                                 {"anisotropy", std::to_string(af)},
++                                                                 {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", when},
++                                                                 {"provenance", "PC EXTENSION"}});
++        applyModernMaterials(renderer_, hd, when);
++    }
++    if (force || d.rayTracing != appliedRayTracing_) {
++        appliedRayTracing_ = d.rayTracing;
++        frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(appliedRayTracing_)}, {"by", applyRayTracing(renderer_, appliedRayTracing_, frontend_->rayTracingAvailable())},
++                                                         {"when", when}, {"provenance", "PC EXTENSION"}});
++    }
++    if (force || (d.volumetricLighting ? 1 : 0) != appliedVolumetric_) {   // restart-free (Rendering): next frame
++        appliedVolumetric_ = d.volumetricLighting ? 1 : 0;
++        frontend::FlowTrace::emit("display.volumetricLighting", {{"on", frontend::FlowTrace::boolean(d.volumetricLighting)},
++                                                                 {"by", applyVolumetric(renderer_, d.volumetricLighting)},
++                                                                 {"when", when}, {"provenance", "PC ADAPTATION"}});
++    }
++    if (force || d.lensFlares != appliedLensFlare_) {   // restart-free (Rendering): next frame
++        appliedLensFlare_ = d.lensFlares;
++        frontend::FlowTrace::emit("display.lensFlares", {{"mode", std::to_string(appliedLensFlare_)}, {"by", applyLensFlare(renderer_, appliedLensFlare_)},
++                                                         {"when", when}, {"provenance", "PC EXTENSION"}});
++    }
++    if (renderer_) {
++        const int water = std::getenv("WFC_DEV_ROWS") ? d.water : 0;   // Rendering 760257b9: the Smoke / Water rows (0 Original, 1 Enhanced)
++        if (force || d.smoke != renderer_->smokeMode() || water != renderer_->waterMode()) {
++            renderer_->setSmokeMode(d.smoke);
++            renderer_->setWaterMode(water);
++            frontend::FlowTrace::emit("display.smokeWater", {{"smoke", std::to_string(d.smoke)}, {"water", std::to_string(water)}, {"when", when}});
++        }
++        if (force || d.textureQuality != appliedTextureQuality_) {   // Rendering RENDERING_QC_SETTINGS: 0 Low / 1 Medium / 2 High, live
++            appliedTextureQuality_ = d.textureQuality;
++            renderer_->setTextureQuality(std::clamp(d.textureQuality, 0, 2));
++            frontend::FlowTrace::emit("display.textureQuality", {{"level", std::to_string(d.textureQuality)}, {"when", when}});
++        }
++    }
++    applyGamma(renderer_, p.getInt("GammaSetting"));
++}
++
+ void Application::attachPresenter() {
+     // The shipped GFx movies (WFC_FRONTEND_NOGFX=1: flow only, no presentation).
+     if (std::getenv("WFC_FRONTEND_NOGFX")) return;
+@@ -694,38 +759,8 @@ void Application::attachPresenter() {
+         window_->setVSync(d.vsync);
+         // PC ADAPTATION frame-rate limit: [PCSettings] FrameLimit (Hz, 0 = unlimited, the default; the PC graphics menu's
+         // Frame Rate Limit entry), or WFC_FPS_LIMIT for tests. Presentation only: the simulation's fixed step is unaffected.
+-        int cap = d.frameLimit;
+-        if (const char* e = std::getenv("WFC_FPS_LIMIT")) cap = std::max(0, std::atoi(e));
+-        const char* by = applyFrameLimit(renderer_, window_, cap, pacingFg_);
+-        pacingHz_ = cap;
+-        frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(cap)}, {"by", by}, {"when", "boot"}});
+-        appliedUpscaling_ = d.upscaling;
+-        appliedHdTextures_ = frontend_->hdTexturesEffectiveLevel();
+-        appliedAnisotropy_ = d.anisotropy;
+-        int up = d.upscaling, af = d.anisotropy;
+-        int hd = appliedHdTextures_;
+-        bool env = false;
+-        const char* gx = applyGraphicsExtensions(renderer_, up, hd, af, env);
+-        frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", std::to_string(hd)},
+-                                                                 {"anisotropy", std::to_string(af)},
+-                                                                 {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", "boot"},
+-                                                                 {"provenance", "PC EXTENSION"}});
+-        applyModernMaterials(renderer_, hd, "boot");
+-        appliedRayTracing_ = d.rayTracing;
+-        frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(d.rayTracing)}, {"by", applyRayTracing(renderer_, d.rayTracing, frontend_->rayTracingAvailable())},
+-                                                         {"when", "boot"}, {"provenance", "PC EXTENSION"}});
+-        appliedVolumetric_ = d.volumetricLighting ? 1 : 0;
+-        frontend::FlowTrace::emit("display.volumetricLighting", {{"on", frontend::FlowTrace::boolean(d.volumetricLighting)},
+-                                                                 {"by", applyVolumetric(renderer_, d.volumetricLighting)}, {"when", "boot"},
+-                                                                 {"provenance", "PC ADAPTATION"}});
+-        appliedLensFlare_ = d.lensFlares;
+-        frontend::FlowTrace::emit("display.lensFlares", {{"mode", std::to_string(d.lensFlares)}, {"by", applyLensFlare(renderer_, d.lensFlares)},
+-                                                         {"when", "boot"}, {"provenance", "PC EXTENSION"}});
+-        if (renderer_) {   // Rendering 760257b9: the Smoke / Water rows (0 Original, 1 Enhanced), restart-free
+-            renderer_->setSmokeMode(d.smoke);
+-            renderer_->setWaterMode(d.water);
+-            frontend::FlowTrace::emit("display.smokeWater", {{"smoke", std::to_string(d.smoke)}, {"water", std::to_string(d.water)}, {"when", "boot"}});
+-        }
++        // PC ADAPTATION frame-rate limit etc.: every renderer setting from the profile (applyRendererSettings)
++        applyRendererSettings(frontend_->flow().profile(), "boot", true);
+     }
+     // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
+     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
+@@ -750,52 +785,11 @@ void Application::attachPresenter() {
+         }
+     }
+     frontend_->flow().profile().onApplied = [this](const frontend::LocalProfile& p) {
+-        applyGamma(renderer_, p.getInt("GammaSetting"));
+         window_->setPadScheme(p.getBool("UseAlternateControlScheme"), p.getBool("SwitchRightThumbstickAndB"));
+ #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
+         game::LevelAudioHost::applyProfileVolumes(p.getInt("Music Volume"), p.getInt("FX Volume"), p.getInt("Dialogue Volume"));
+ #endif
+-        if (p.display.frameLimit != appliedFrameLimit_) {   // the Frame Rate Limit selector applies on every step
+-            appliedFrameLimit_ = p.display.frameLimit;
+-            pacingHz_ = appliedFrameLimit_;
+-            const char* by = applyFrameLimit(renderer_, window_, appliedFrameLimit_, pacingFg_);
+-            frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(appliedFrameLimit_)}, {"by", by}, {"when", "apply"}});
+-        }
+-        const int hdNow = frontend_->hdTexturesEffectiveLevel();
+-        if (p.display.upscaling != appliedUpscaling_ || hdNow != appliedHdTextures_ || p.display.anisotropy != appliedAnisotropy_) {
+-            appliedUpscaling_ = p.display.upscaling;
+-            appliedHdTextures_ = hdNow;
+-            appliedAnisotropy_ = p.display.anisotropy;
+-            int up = appliedUpscaling_, af = appliedAnisotropy_;
+-            int hd = appliedHdTextures_;
+-            bool env = false;
+-            const char* gx = applyGraphicsExtensions(renderer_, up, hd, af, env);
+-            frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", std::to_string(hd)},
+-                                                                     {"anisotropy", std::to_string(af)},
+-                                                                     {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", "apply"}});
+-            applyModernMaterials(renderer_, hd, "apply");
+-        }
+-        if (p.display.rayTracing != appliedRayTracing_) {
+-            appliedRayTracing_ = p.display.rayTracing;
+-            frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(appliedRayTracing_)}, {"by", applyRayTracing(renderer_, appliedRayTracing_, frontend_->rayTracingAvailable())},
+-                                                             {"when", "apply"}, {"provenance", "PC EXTENSION"}});
+-        }
+-        if ((p.display.volumetricLighting ? 1 : 0) != appliedVolumetric_) {   // restart-free (Rendering): next frame
+-            appliedVolumetric_ = p.display.volumetricLighting ? 1 : 0;
+-            frontend::FlowTrace::emit("display.volumetricLighting", {{"on", frontend::FlowTrace::boolean(p.display.volumetricLighting)},
+-                                                                     {"by", applyVolumetric(renderer_, p.display.volumetricLighting)},
+-                                                                     {"when", "apply"}, {"provenance", "PC ADAPTATION"}});
+-        }
+-        if (renderer_ && (p.display.smoke != renderer_->smokeMode() || p.display.water != renderer_->waterMode())) {
+-            renderer_->setSmokeMode(p.display.smoke);
+-            renderer_->setWaterMode(p.display.water);
+-            frontend::FlowTrace::emit("display.smokeWater", {{"smoke", std::to_string(p.display.smoke)}, {"water", std::to_string(p.display.water)}, {"when", "apply"}});
+-        }
+-        if (p.display.lensFlares != appliedLensFlare_) {   // restart-free (Rendering): next frame
+-            appliedLensFlare_ = p.display.lensFlares;
+-            frontend::FlowTrace::emit("display.lensFlares", {{"mode", std::to_string(appliedLensFlare_)}, {"by", applyLensFlare(renderer_, appliedLensFlare_)},
+-                                                             {"when", "apply"}, {"provenance", "PC EXTENSION"}});
+-        }
++        applyRendererSettings(p, "apply", false);
+         if (applyLookSettings(world_.player().controller(), p))
+             frontend::FlowTrace::emit("profile.lookSettings", {{"CameraSensitivity", p.get("CameraSensitivity")}, {"owner", "gameplay"}});
+         frontend::FlowTrace::emit("profile.apply", {{"FXVolume", p.get("FX Volume")}, {"DialogueVolume", p.get("Dialogue Volume")},
+@@ -2135,7 +2129,7 @@ void Application::unloadMatch() {
+         delete renderer_;
+         renderer_ = render::createGLRenderer();
+         if (g_scene) g_scene->setRenderer(renderer_);
+-        applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));   // the new renderer starts at its default
++        applyRendererSettings(frontend_->flow().profile(), "rendererRecreated", true);   // the new renderer starts at its defaults
+     }
+     // Measurement only (WFC_GLCENSUS): the live-name scan is up to millions of glIs* calls, so normal play skips it at
+     // every match transition; GlCensus::release (the per-match GL release above) always runs.
+@@ -2365,3 +2359,85 @@ void core::Application::runSoloLaunchTest() {
+     LOG_INFO("SOLOLAUNCHTEST SUMMARY: %s (%d failed)", fails ? "FAIL" : "PASS", fails);
+     exitCode_ = fails ? 1 : 0;
+ }
++
++// WFC_FLOWSIMTEST=<MP|ESC|CP> (headless, WFC_NULLRENDER; WFC_MAP the map): the sim half of the playtest 2026-10-23b section 43
++// end-to-end flows. The launch is built the way the frontend builds it (fillOnlineLaunch from a session hosted alone: our own slot),
++// then the human, driven through its normal input by the player bot, must spawn, move, shoot and transform; the QA panel's kill /
++// respawn and character change must take effect; a relaunch (the QA Restart's sim side) must spawn again. One SUMMARY line.
++
++
++
++void core::Application::runFlowSimTest() {
++    const std::string mode = std::getenv("WFC_FLOWSIMTEST");
++    // the human is driven by the player bot through its normal input: WFC_PLAYERBOT (default difficulty 1 when unset)
++    if (!std::getenv("WFC_PLAYERBOT")) { _putenv("WFC_PLAYERBOT=1"); LOG_INFO("FLOWSIMTEST: WFC_PLAYERBOT unset - set to 1 (the bot-driven human)"); }
++    const float dt = (float)clock_.stepSeconds();
++    int checks = 0, fails = 0;
++    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("FLOWSIMTEST %s %s: %s", ok ? "PASS" : "FAIL", mode.c_str(), what.c_str()); };
++    std::string url;
++    if (mode == "MP") url = world_.mapName() + "?GameModeTag=TDM?BotsAutobot=4?BotsDecepticon=5";
++    else if (mode == "ESC") url = world_.mapName() + "?GameModeTag=ESC";
++    else url = world_.mapName() + "_Base_m?GameModeTag=SOLO?Character=0";
++    // the frontend's launch: a session hosted alone (our own Human slot only)
++    frontend::MatchLaunch m;
++    m.seed = 0x5eed0710u; m.teamIndex = 0;
++    m.self.fingerprint = "WFC-FLOW-HOST";
++    frontend::SessionSlot me; me.kind = frontend::SessionSlot::Kind::Human; me.member = m.self; me.team = 0;
++    m.onlineSlots = {me};
++    game::MatchLaunch L;
++    game::MatchLaunch::fromURL(url, L);
++    L.map = world_.mapName(); L.localTeam = 0;
++    if (mode != "CP") fillOnlineLaunch(L, m);
++    check(game::World::playerBotDifficulty() >= 0, "the player bot drives the human (WFC_PLAYERBOT)");
++    check(!L.online && L.remotes.empty() && L.humans.empty(), "the solo launch is offline (local loop, no wire seat)");
++    check(world_.launchMatch(L), "launchMatch(" + url + ")");
++    const int me_ = world_.localMatchPlayer();
++    if (mode == "MP") {   // the pre-match pick (Scout: the playtest's class)
++        for (const auto& c : world_.qaCharacterChoicesAlways()) if (c.customSlot == "Scout") world_.match().selectCharacter(me_, c);
++    }
++    auto step = [&] { platform::InputFrame in; world_.playerBotInput(in, dt); world_.handleInput(in, dt); world_.tick(dt); };
++    auto alive = [&] { return !world_.localPlayerDead() && world_.match().players()[(size_t)me_].alive; };
++    float t = 0.0f;
++    while (t < 60.0f && !alive()) { step(); t += dt; }
++    check(alive(), "the human spawns (" + std::to_string((int)t) + " s)");
++    // play 45 s: movement, shots (ammo spent or a reload), a transform
++    const core::Vec3 p0 = world_.player().pawn().position();
++    float maxD = 0.0f; int shots = 0, transforms = 0;
++    int lastAmmo = world_.player().pawn().weapon().ammo;
++    game::Form lastForm = world_.player().pawn().form();
++    for (t = 0.0f; t < 45.0f; t += dt) {
++        step();
++        if (!alive()) continue;
++        const game::Character& pc = world_.player().pawn();
++        maxD = std::max(maxD, core::length(pc.position() - p0));
++        if (pc.weapon().ammo < lastAmmo) ++shots;
++        lastAmmo = pc.weapon().ammo;
++        if (pc.form() != lastForm) ++transforms;
++        lastForm = pc.form();
++    }
++    LOG_INFO("FLOWSIMTEST %s: moved up to %.1f m, %d shots, %d form changes, online %d", mode.c_str(), maxD, shots, transforms, (int)world_.onlineSeats());
++    check(maxD > 5.0f, "the human moves (" + std::to_string((int)maxD) + " m)");
++    check(shots > 0 || mode == "CP", "the human shoots (" + std::to_string(shots) + ")");   // CP: the chapter start may have no enemy in view
++    check(transforms > 0 || mode == "CP", "the human transforms (" + std::to_string(transforms) + ")");
++    if (mode == "MP") {
++        // the QA panel's character change (Soldier), then its kill / respawn: the next spawn is the new character
++        const std::string before = world_.match().players()[(size_t)me_].chassis;
++        for (const auto& c : world_.qaCharacterChoicesAlways()) if (c.customSlot == "Soldier") world_.qaSetCharacter(c);
++        bool died = false;
++        for (t = 0.0f; t < 30.0f; t += dt) { step(); died = died || !alive(); if (died && alive()) break; }
++        const std::string after = world_.match().players()[(size_t)me_].chassis;
++        LOG_INFO("FLOWSIMTEST MP: character change %s -> %s, respawned %d after %.1f s", before.c_str(), after.c_str(), (int)alive(), t);
++        check(died && alive() && after != before, "QA character change: killed, respawned as the new character");
++        for (t = 0.0f; t < 2.0f; t += dt) step();
++        world_.qaRespawn();
++        died = false;
++        for (t = 0.0f; t < 30.0f; t += dt) { step(); died = died || !alive(); if (died && alive()) break; }
++        check(died && alive(), "QA kill / respawn: dead, then respawned (" + std::to_string((int)t) + " s)");
++        // the QA Restart's sim side: the same launch again
++        check(world_.launchMatch(L), "relaunch (the QA Restart's launch)");
++        for (t = 0.0f; t < 60.0f && !alive(); t += dt) step();
++        check(alive(), "spawned after the relaunch");
++    }
++    LOG_INFO("FLOWSIMTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
++    exitCode_ = fails ? 1 : 0;
++}
+diff --git a/src/frontend/DataStores.cpp b/src/frontend/DataStores.cpp
+index e56a83a3..5adfaa82 100644
+--- a/src/frontend/DataStores.cpp
++++ b/src/frontend/DataStores.cpp
+@@ -266,6 +266,10 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
+         const MatchValues& mv = flow_.matchValues();
+         const bool live = inMatch && mv.valid;   // [integration] Gameplay's PRI values in a match
+         int team = live ? mv.myTeam : inMatch ? flow_.currentMatch().teamIndex : flow_.lobby().localTeam;
++        // The party lobby has no teams (TnPartyLobbyGame TeamHandler = TnTeamHandlerNoTeams: TeamID 255 for everyone), so
++        // PlayerList draws one plain list - a stale / unset team (-1) drew AUTOBOTS / DECEPTICONS there [RE BASE_GAME_FLOWS_RE 2;
++        // playtest 2026-10-23b #19]. 255 is also the original's "no team yet" anywhere else.
++        if (flow_.level() == LevelKind::PartyLobby || team < 0) team = 255;
+         std::string teamName = team == 0 ? cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName")
+                              : team == 1 ? cat_.localize("TransGame", "TnFactionTeamDecepticons", "TeamName") : "";
+         // A fresh profile is level 1 in every specialty (no XP / progression service yet) [PARTIAL].
+@@ -345,7 +349,8 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
+             for (const GameFlow::OnlineMember& m : flow_.onlineMembers()) {
+                 std::string headset;
+                 const std::string shown = onlineRow(m, headset);
+-                c.rows.push_back({shown, std::to_string(m.team), teamNameOf(m.team), "0", "0", "0", "0", headset, "", "0",
++                const int mt = flow_.level() == LevelKind::PartyLobby || m.team < 0 ? 255 : m.team;   // no teams in the party lobby
++                c.rows.push_back({shown, std::to_string(mt), teamNameOf(mt), "0", "0", "0", "0", headset, "", "0",
+                                   m.connecting ? "1" : "0", "0", "", "", "0", "0", "0", "0", std::to_string(m.info.level)});
+                 c.enabled.push_back(true);
+             }
+@@ -357,7 +362,7 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
+         c.columns = {"TeamName", "TeamID", "TeamIndex", "Score"};
+         bool inMatch = flow_.level() == LevelKind::Match;
+         int gts = inMatch ? flow_.currentMatch().gameTeamStatus : flow_.lobby().gameTeamStatus;
+-        if (gts == 3) {
++        if (gts == 3 && flow_.level() != LevelKind::PartyLobby) {   // the party lobby has no teams (TnTeamHandlerNoTeams)
+             const MatchValues& mv = flow_.matchValues();
+             const bool live = inMatch && mv.valid;   // [integration] Gameplay's TeamInfo.Score in a match
+             c.rows.push_back({cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName"), "0", "0", std::to_string(live ? mv.teamScore[0] : 0)});
+diff --git a/src/frontend/GameFlow.cpp b/src/frontend/GameFlow.cpp
+index 0e7b3993..1f892bfd 100644
+--- a/src/frontend/GameFlow.cpp
++++ b/src/frontend/GameFlow.cpp
+@@ -958,6 +958,17 @@ void GameFlow::clearSelectedCharacter() {
+ }
+ 
+ void GameFlow::quitToMainMenu() {
++    // PC ADAPTATION (the user, playtest 2026-10-23b #25): Back during the host's start countdown cancels it instead of leaving
++    // (the original has no cancel: Start stays disabled until the level loads [RE BASE_GAME_FLOWS_RE 3]). Only before the final
++    // countdown and with nobody joined - online, the launch record goes out at the start.
++    if (level_ == LevelKind::GameLobby && lobby_.countingDown && !lobby_.finalCountdown && lobby_.playlistId < 0 &&
++        role_ != SessionRole::Member && onlineMembers_.empty() && !isCampaignTag(lobby_.gameModeTag)) {
++        lobby_.countingDown = lobby_.countdownRubicon = false;
++        lobby_.countdown = 0;
++        lobby_.countdownTimer = 0.0f;
++        FlowTrace::emit("gamelobby.countdown", {{"state", "cancelled"}, {"by", "Back"}, {"provenance", "PC ADAPTATION (user playtest 2026-10-23b #25)"}});
++        return;
++    }
+     // Game.QuitToMainMenu -> UIController.ShowCustomPopupUI(TnQuitMessageBox): TnGame.GetQuitGameMessage
+     // (LeaveLobby / LeaveLobbyConfirm), A Yes -> ConfirmQuitToMainMenu (waiting icon, "Quitting..." post-confirm
+     // message, then QuitGame(0) once TnGame.IsSafeToQuit), B No [CONFIRMED script].
+@@ -1031,6 +1042,27 @@ void GameFlow::popupClosedByMovie() {
+     if (popup_.open && !quitPending_) closePopup();
+ }
+ 
++void GameFlow::requestSettingsCommit() {
++    Popup p;
++    p.title = txt("$WfcPC.Settings.ApplyTitle");
++    p.message = txt("$WfcPC.Settings.ApplyMessage");
++    p.a = PopupButton{txt("$WfcPC.Settings.ApplyButton"), "settingsApply", true};
++    p.b = PopupButton{txt("$UIText.MessagePrompts.GenericCancelButton"), "settingsCancel", true};
++    p.showDefaultButtons = false;
++    settingsCommitAnswer_ = 0;
++    showPopup(p);
++    FlowTrace::emit("settings.commit", {{"state", "asked"}, {"provenance", "PC ADAPTATION (user playtest 2026-10-23b #4)"}});
++}
++
++void GameFlow::settingsCommitted(bool needsRestart, bool nextMap) {
++    Popup p;
++    p.title = txt(needsRestart ? "$WfcPC.Settings.RestartTitle" : "$WfcPC.Settings.AppliedTitle");
++    p.message = txt(needsRestart ? "$WfcPC.Settings.RestartMessage" : nextMap ? "$WfcPC.Settings.NextMapMessage" : "$WfcPC.Settings.AppliedMessage");
++    if (needsRestart && nextMap) p.message += " " + txt("$WfcPC.Settings.NextMapMessage");
++    showPopup(p);   // the default Ok button
++    FlowTrace::emit("settings.commit", {{"state", "applied"}, {"restart", FlowTrace::boolean(needsRestart)}, {"nextMap", FlowTrace::boolean(nextMap)}});
++}
++
+ void GameFlow::popupButton(char which) {
+     if (!popup_.open) return;
+     PopupButton btn = which == 'A' ? popup_.a : which == 'B' ? popup_.b : which == 'X' ? popup_.x : popup_.y;
+@@ -1050,6 +1082,8 @@ void GameFlow::popupButton(char which) {
+         FlowTrace::emit("online.join", {{"result", "cancelled"}});
+     }
+     if (btn.action == "pttCancel") endPttCapture("");
++    if (btn.action == "settingsApply") settingsCommitAnswer_ = 1;
++    if (btn.action == "settingsCancel") settingsCommitAnswer_ = 2;
+     if (btn.action.rfind("inviteJoin:", 0) == 0) joinFriendGame(btn.action.substr(11));
+     if ((btn.action == "cardMute" || btn.action == "cardBlock") && !cardMember_.empty()) {
+         auto toggle = [&](std::vector<std::string>& v) {
+@@ -1117,6 +1151,10 @@ void GameFlow::gameLobbyBegin() {
+     lobby_.countingDown = lobby_.countdownRubicon = lobby_.finalCountdown = false;
+     lobby_.countdown = 0;
+     lobby_.localTeam = -1;
++    // PC ADAPTATION (the user, playtest 2026-10-23b #23): in a Private Match team lobby the host is on a side from the start
++    // (shown under AUTOBOTS / DECEPTICONS, switched with the lobby's Team row; that side is the match team). The original keeps
++    // everyone unassigned until the final countdown under Autobalanced [RE BASE_GAME_FLOWS_RE 3].
++    if (isPrivate && lobby_.gameTeamStatus == 3 && role_ == SessionRole::Offline) lobby_.localTeam = pickTeam();   // online: the host's balancing (S10 / S11)
+     launchLobby_ = SessionLobby{};
+     FlowTrace::emit("gamelobby.game", {{"gameClass", levelUrl_.option("Game")}, {"tag", tag}, {"settings", gs ? gs->className : "?"},
+                                        {"private", FlowTrace::boolean(isPrivate)}, {"mapSelectionMethod", std::to_string(lobby_.mapSelectionMethod)}});
+@@ -1366,6 +1404,15 @@ void GameFlow::gameLobbyTick(float dt) {
+         startLevel();
+         return;
+     }
++    // TnGameLobbyGameSolo.PendingMatch: Tick / NotifyCharacterSelected -> TryToStartLevel: AreGameAutoStartConditionsMet
++    // (LobbyGRI.AllPlayersHaveCharacter) -> StartLevel() at once - no countdown, no Start item (GameLobby_GFX hides the whole
++    // SOLO lobby: sprite 99 _alpha 0) [CONFIRMED UI_Lobby_m script]. Without it a Solo pick sat behind the invisible lobby
++    // forever: the blank screen of playtest 2026-10-23b #38 / #39.
++    if (lobby_.gameModeTag == "SOLO" && selected_.valid && !lobby_.countingDown && !travelPending_ && !loading_.active) {
++        FlowTrace::emit("gamelobby.soloStart", {{"mapId", std::to_string(lobby_.mapId)}, {"checkpoint", lobby_.checkpoint}, {"character", selected_.name}});
++        startLevel();
++        return;
++    }
+     if (!lobby_.countingDown) return;
+     // GRI.ResetCountdown: a 1 s repeating DecrementCountdown timer.
+     lobby_.countdownTimer += dt;
+@@ -1552,10 +1599,12 @@ void GameFlow::matchLoaded() {
+     // controller with UseInGameLobby = !PRI.HasSelectedCharacter() = true [CONFIRMED script]. WaitingOnGameStart then
+     // ignores OnBeginGame (Choose Character stays up until a character is chosen) and the UI enters InGame when the
+     // player's pawn spawns (OnRespawn, event 5).
+-    // Escalation: the Survival GRI has RetainSelectedCharacterOnTransition = True - the lobby pick carries into the map and the
+-    // player goes straight to the countdown; versus (False) picks again [RE BASE_GAME_FLOWS_RE 1.5; playtest 2026-10-23b #15]
++    // Escalation and the campaign: their GRIs keep RetainSelectedCharacterOnTransition = True (only the multiplayer GRI sets it
++    // False) and lobby -> map is seamless, so the lobby pick carries into the map - no in-map select for a valid pick; the
++    // campaign lobby clears it on entry instead. Versus picks again [RE BASE_GAME_FLOWS_RE 1.5, CAMPAIGN_FRONTEND_FLOW_RE 8;
++    // playtest 2026-10-23b #15 and its campaign twin]
+     const bool survival = match_.modeTag == "SV";
+-    if (!survival) selected_ = SelectedCharacter{};
++    if (!survival && !campaign()) selected_ = SelectedCharacter{};
+     // a late joiner enters a running match: GRI.bMatchHasBegun is already true, so its pick spawns it at once (no pre-game
+     // countdown screen) [RE ONLINE_JOIN_IN_PROGRESS_RE]
+     matchHasBegun_ = match_.lateSeat >= 0;
+diff --git a/src/frontend/GameFlow.h b/src/frontend/GameFlow.h
+index 61bac30f..c0f644df 100644
+--- a/src/frontend/GameFlow.h
++++ b/src/frontend/GameFlow.h
+@@ -208,6 +208,11 @@ public:
+     };
+     const Popup& popup() const { return popup_; }
+     void popupButton(char which);     // 'A' 'B' 'X' 'Y'
++    // PC ADAPTATION (the user, playtest 2026-10-23b #3 / #4): Graphics > Commit Changes asks first (Apply / Cancel), then says what
++    // happened: applied, or which changes wait for a restart / the next map. takeSettingsCommitAnswer: 0 none, 1 Apply, 2 Cancel.
++    void requestSettingsCommit();
++    int takeSettingsCommitAnswer() { const int a = settingsCommitAnswer_; settingsCommitAnswer_ = 0; return a; }
++    void settingsCommitted(bool needsRestart, bool nextMap);
+     void popupClosedByMovie();
+     // TnUIController.ShowPopupUI(Title, Message): a message box with the default Ok button.
+     void showMessage(const std::string& title, const std::string& message) { Popup p; p.title = title; p.message = message; showPopup(p); }
+@@ -547,6 +552,7 @@ private:
+     uint32_t selectionSerial_ = 0;
+     int gpPerTeam_ = 32, gpMaxPlayers_ = 64, gpBotsPerTeam_ = 32;   // Gameplay clamp (detected); defaults = the extended target (32 v 32)
+     int gameTeamStatus_ = 0;                          // GRI.SetGameTeamStatus (party lobby)
++    int settingsCommitAnswer_ = 0;                    // requestSettingsCommit's popup: 1 Apply, 2 Cancel
+     std::map<std::string, std::map<std::string, int>> settingValues_;   // class -> field -> value index
+     MatchLaunch match_;
+     bool campaignForced_ = false;
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index cb6f2d50..426bfba4 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -5603,6 +5603,15 @@ void World::loadHazards() {
+             float w = core::dot(n, P(0));
+             if (core::dot(n, c) > w) { n = n * -1.0f; w = -w; }   // outward: the centroid is inside
+             h.planes.push_back(HazardVolume::Plane{n, w});
++            for (size_t k = 1; k + 1 < polys[p].size(); ++k) { h.tris.push_back(P(0)); h.tris.push_back(P(k)); h.tris.push_back(P(k + 1)); }
++        }
++        {   // convex: every vertex on the inner side of every face plane; else the parity test (the centroid can lie outside the solid)
++            h.lo = h.hi = h.tris.empty() ? c : h.tris[0];
++            for (const core::Vec3& q : h.tris) {
++                h.lo = {std::min(h.lo.x, q.x), std::min(h.lo.y, q.y), std::min(h.lo.z, q.z)}; h.hi = {std::max(h.hi.x, q.x), std::max(h.hi.y, q.y), std::max(h.hi.z, q.z)};
++                for (const HazardVolume::Plane& pl : h.planes) if (core::dot(pl.n, q) > pl.w + 0.05f) h.concave = true;
++            }
++            if (!h.concave) h.tris.clear();
+         }
+         hazards_.push_back(std::move(h));
+     }
+@@ -5614,8 +5623,26 @@ int World::hazardAt(const core::Vec3& p) const {
+         const std::string& u = hazards_[i].unit;   // campaign: only while its unit is loaded (streaming)
+         if (campaignMap_ && !u.empty() && u != cpChapter_.persistentDir && !cpUnitLoaded_.count(u)) continue;
+         if (!hazards_[i].on) continue;   // switched off (Escalation mechanisms)
+-        bool in = !hazards_[i].planes.empty();
+-        for (const HazardVolume::Plane& pl : hazards_[i].planes) if (core::dot(pl.n, p) > pl.w) { in = false; break; }
++        const HazardVolume& H = hazards_[i];
++        bool in = !H.planes.empty();
++        if (H.concave) {   // ray-crossing parity (a fixed skewed direction: no edge-aligned rays on axis-aligned brushes)
++            in = p.x >= H.lo.x && p.y >= H.lo.y && p.z >= H.lo.z && p.x <= H.hi.x && p.y <= H.hi.y && p.z <= H.hi.z;
++            if (in) {
++                const core::Vec3 d = core::normalize(core::Vec3{0.3137f, 0.9134f, 0.2593f});
++                int crossings = 0;
++                for (size_t t = 0; t + 2 < H.tris.size(); t += 3) {   // Moller-Trumbore, hits at distance > 0
++                    const core::Vec3 e1 = H.tris[t + 1] - H.tris[t], e2 = H.tris[t + 2] - H.tris[t];
++                    const core::Vec3 pv = core::cross(d, e2); const float det = core::dot(e1, pv);
++                    if (std::fabs(det) < 1e-9f) continue;
++                    const float inv = 1.0f / det; const core::Vec3 tv = p - H.tris[t];
++                    const float u = core::dot(tv, pv) * inv; if (u < 0.0f || u > 1.0f) continue;
++                    const core::Vec3 qv = core::cross(tv, e1); const float v = core::dot(d, qv) * inv;
++                    if (v < 0.0f || u + v > 1.0f) continue;
++                    if (core::dot(e2, qv) * inv > 0.0f) ++crossings;
++                }
++                in = (crossings & 1) != 0;
++            }
++        } else for (const HazardVolume::Plane& pl : H.planes) if (core::dot(pl.n, p) > pl.w) { in = false; break; }
+         if (in) return (int)i;
+     }
+     return -1;
+diff --git a/src/game/World.h b/src/game/World.h
+index 886c637d..446e4ea7 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -578,7 +578,9 @@ public:
+                           std::string unit;   // campaign: its level's unit (object path prefix without _m); active only while loaded
+                           core::Vec3 centroid{0, 0, 0};
+                           struct Plane { core::Vec3 n; float w; };
+-                          std::vector<Plane> planes; };   // outward normal n, offset w (inside: n.p <= w)
++                          std::vector<Plane> planes;      // outward normal n, offset w (inside: n.p <= w)
++                          bool concave = false;           // a non-convex brush: inside by ray-crossing parity over tris (bounds first)
++                          std::vector<core::Vec3> tris; core::Vec3 lo{0, 0, 0}, hi{0, 0, 0}; };
+     const std::vector<HazardVolume>& hazardVolumes() const { return hazards_; }
+     int hazardAt(const core::Vec3& p) const;
+     std::string mapDir() const;
+diff --git a/data/frontend/pc_strings.int b/data/frontend/pc_strings.int
+index 93b9d20f..dca00080 100644
+--- a/data/frontend/pc_strings.int
++++ b/data/frontend/pc_strings.int
+@@ -43,6 +43,14 @@ ChooseName=Choose the name other players will see.
+ ChooseNameButton=Choose Name
+ VoiceSettings=Voice Settings
+ [Settings]
++ApplyTitle=Apply Settings
++ApplyMessage=Apply the changed graphics settings?
++ApplyButton=Apply
++AppliedTitle=Settings Applied
++AppliedMessage=Your graphics settings have been applied.
++RestartTitle=Restart Required
++RestartMessage=This setting requires the game to be restarted before it takes effect.
++NextMapMessage=Some changes take effect when the next map loads.
+ VolumetricLighting=Volumetric Lighting
+ VolumetricLightingDesc=Light shafts and haze. Needs Ray Tracing: Realistic.
+ LensFlares=Lens Flares
+@@ -91,6 +99,8 @@ VoiceVolume=Voice Volume
+ VoiceVolumeDesc=How loud other players' voices are.
+ MicBlocked=The browser has not allowed the microphone.
+ [Lobby]
++Team=Team
++TeamDesc=Switch sides: your team for this match.
+ GameSettings=Game Settings
+ GameSettingsDesc=Game mode, limits, bots and the other match options.
+ VoteNone=None of these
