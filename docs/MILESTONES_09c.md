@@ -4441,3 +4441,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Frontend checked the preview panel, colour picker, first-launch calibration windowed. CANDIDATE BUILD HEAD 55df5657;
   one open question to Rendering (HD level applying live = a 9 s menu freeze vs the 'next map' hint). Experimental
   pre-builds the head arm; Systems pre-checks the plan.
+2026-10-24 04:16 BUILD SHA a2e9fbd9 (HD level deferred to the next map load: the 9 s menu freeze was the setter verifying 3,505 HD files on
+  the spot). Experimental builds the head arm; Systems runs the staged refresh (W: base, X: HD; NOPROMOTE); then the
+  card: 3-flow menu gate + final-gate.sh timed rows under a freeze; then verify_everything; then the hand-over note.
