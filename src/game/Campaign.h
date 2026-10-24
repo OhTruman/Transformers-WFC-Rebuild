@@ -96,6 +96,7 @@ struct CampaignSkel {
     std::vector<core::Mat4> scratch;
     std::vector<core::Mat4> palette;     // GPU skin: the bone palette of (posedClip, posedT), its serial for the renderer's cache
     int posedClip = -1; float posedT = -1.0f; uint64_t serial = 0;
+    std::string object, unit;            // its full object path (cp_.actorHidden key) and streaming unit (chapter.json dir)
 };
 
 struct CampaignFactory {

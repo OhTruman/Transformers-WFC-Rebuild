@@ -430,6 +430,9 @@ void World::cpLoadSkeletal() {
         const assets::Json& L = r["location_gltf"];
         if (L.size() >= 3) k.pos = core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
         k.yawDeg = r["rotation_deg"]["yaw"].asFloat(0.0f);
+        k.object = r["object"].asString();
+        k.unit = r["sublevel"].asString();   // the level package; the unit dir drops its "_m"
+        if (k.unit.size() > 2 && k.unit.compare(k.unit.size() - 2, 2, "_m") == 0) k.unit.resize(k.unit.size() - 2);
         if (!k.mesh.empty()) cpSkel_[shortName(r["actor"].asString())] = k;
     }
     LOG_INFO("campaign: %zu matinee skeletal actors", cpSkel_.size());
@@ -442,6 +445,13 @@ void World::cpDrawSkeletal(render::IRenderer& r) const {
     for (auto& kv : cpSkel_) {
         CampaignSkel& k = kv.second;
         if (!k.active || k.clip.empty()) continue;
+        {   // (300 fps, RE CAMPAIGN_CULLING_LOD_RE.md 5-6) not in the original's world: its unit not Visible, or hidden / destroyed
+            auto uv = cp_.unitVisible.find(k.unit);
+            if (uv != cp_.unitVisible.end() && !uv->second) continue;
+            auto h = cp_.actorHidden.find(k.object.empty() ? kv.first : k.object);
+            if (h == cp_.actorHidden.end()) h = cp_.actorHidden.find(kv.first);
+            if (h != cp_.actorHidden.end() && h->second) continue;
+        }
         if (!k.tried) {
             k.tried = true;
             k.ok = assets::loadSkinnedGlb(root + k.mesh, k.model);

@@ -73,6 +73,16 @@ Nothing merges that changes a pixel without a stated reason.
 These are the original's own rules, so following them is lossless by definition. Identity is checked against the original's
 behaviour, not our current frame.
 
+**Update 2026-10-24, from RE §7 measured (culling_lod_tables.json):**
+- **Streaming (0b) is the dominant lever.** The active state holds 10-25 % of a chapter's primitives.
+  - Our units already follow it: D1 loads 9 of 48 units at Level_Started.
+  - The leak was matinee set dressing, fixed by RENDERING_SKEL_VIS.patch (d350ed6a).
+- **Cull distance (0a) is small:** 6.5 % of primitives, mostly beyond 16k UU.
+  - Delivery is a sidecar from tools/render/build_cull_distance.py (<render dir>/cull_distance.json; the asset root is untouched).
+  - D1 carries none on static meshes (only 810 emitters at 300000 UU).
+- **Skeletal LOD (0c) is dropped:** the cook has no LOD1+ (401 meshes, one LOD each).
+- **The hidden-at-start lists (0d)** are in RE's tables: A1 10, A4 9, D1 12, D3A 14, BrokenHope 29.
+
 0a. **Per-component cull distance** (RE §2).
    - **Rule:** a primitive is not drawn when the view-to-bounds distance exceeds its shipped CachedCullDistance (0 = never).
    - **Data:** ~15k components carry one. Use the value as shipped; don't recompute it from the CullDistanceVolumes.
