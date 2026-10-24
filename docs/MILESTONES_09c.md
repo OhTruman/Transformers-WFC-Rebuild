@@ -4571,3 +4571,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   follow-up: the 'cube' = the Energon cubes (touch pickup check -> Gameplay); the hitbox = the central Energon POOL on
   Streets (photo docs/handoff/playtest3/streets_hitbox_pool.jpg), not the cylinder -> actor / volume query (Gameplay; RE
   asked). Pending: Rendering pixel proof + previews + headlight + vignette; Frontend batch 2b + bots dump.
+2026-10-24 13:25 MERGED c49a2dfb ammo crates refill every weapon (the cubes = placed touch pickups, working; not taken when not needed
+  = the user's case). Crater = ENV_CraterUpNoRing_STAT's authored convex hull (27.7 m lens, knife-edge rim 0.4-0.8 m
+  up that our horizontal knee probe hits): decision (b) per-mesh per-poly collision for that mesh (a walkable-slope
+  movement model = post-build). Item 31 = ammo crate + crater.
