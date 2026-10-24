@@ -2024,7 +2024,14 @@ static void testDlcMerge() {
     const bool thumb = png.find("dlc_content") != std::string::npos || std::getenv("WFC_DLC_CONTENT");
     // the packs' TransGame text: the new generators (Escalation prompts), INT; FRA after setLanguage
     const std::string tele = c.localize("TransGame", "SurvivalGeneratorNames", "TeleporterGenerator");
-    const bool text = c.dlcTextKeys() == 0 || tele.find("Teleporter") != std::string::npos;
+    bool text = c.dlcTextKeys() == 0 || tele.find("Teleporter") != std::string::npos;
+    if (c.dlcTextKeys() > 0) {   // FRA: pack 2's Latin-1 text arrives as UTF-8 ("t\xC3\xA9l\xC3\xA9porteur"); INT again restores it
+        Catalog fr = c;
+        fr.setLanguage("FRA");
+        text = text && fr.localize("TransGame", "SurvivalGeneratorNames", "TeleporterGenerator").find("t\xC3\xA9l\xC3\xA9porteur") != std::string::npos;
+        fr.setLanguage("INT");
+        text = text && fr.localize("TransGame", "SurvivalGeneratorNames", "TeleporterGenerator") == tele;
+    }
     const ChassisInfo* tank4 = rt.roster().chassis("Tank4");
     const bool unlocked = tank4 && !tank4->lockedChassis && !tank4->lockedCharacter && c.dlcUnlockedChassis().size() == 7;
     check(maps && thumb && unlocked && text, "dlc.merge", std::to_string(c.dlcMapCount()) + " " + std::to_string(maps) + std::to_string(thumb) +
