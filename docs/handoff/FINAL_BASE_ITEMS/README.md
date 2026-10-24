@@ -189,3 +189,14 @@ Re-baseline, deliberate: Escalation spawn positions change on every ESC map wher
 base ESCTEST rows still pass: Remnant 15/15, BrokenHope 36/36); Tranquillity / District failed spawns 1 / 5 -> 0; Pulse 0 -> 134
 spawns. Versus is unchanged (ESC only). Apply it after 18. Verified: a fresh full af4d0731 + 01-19 applies and builds with 0
 errors; its Remnant and Pulse ESCTEST logs equal the head build's line for line.
+
+## 20: Pulse Power_Generator_Action + the DLC mechanisms' presentation data (19 tree -> 9e1e46e5 + 19 + GAMEPLAY_ESC_PULSE_VISUALS)
+
+`20_esc_pulse_visuals.patch`: the same paths, from the 19 tree. It covers:
+- Pulse (RE section 8): the generators' Zone_Manager chains flattened (Enable Survival Zones / Disable Generator Volumes), the 10
+  managers (fired by RE's resolved chains incl. the remote events and first-of-two gates) open their doors' collision (per-name
+  switchable blockers from the pawn collision) once their matinee has played;
+- the presentation actors / matinee positions of every DLC mechanism (the earlier held visuals item, re-cut here);
+- ESCTEST: the presentation check and a Pulse manager check.
+Apply it after 19. Verified: a fresh full af4d0731 + 01-20 applies and builds with 0 errors; its Pulse ESCTEST log equals the head
+build's line for line.

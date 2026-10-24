@@ -77,6 +77,14 @@ void SvMech::parse(const assets::Json& j, SvMech& out) {
             out.baseDoors.push_back(B);
         }
         out.doorHold = f["doorHold"].asFloat(1.25f); out.doorOpened = f["doorOpened"].asFloat(4.35f); out.doorLength = f["doorLength"].asFloat(6.67f);
+        out.floodBlockers = out.blockers;
+    }
+    for (size_t k = 0; k < j["managers"].size(); ++k) {
+        const assets::Json& r = j["managers"][k];
+        Manager G; G.seq = r["seq"].asString(); G.delay = r["delay"].asFloat(0.0f);
+        strings(r["gens"], G.gens); strings(r["interps"], G.interps); strings(r["blockers"], G.blockers); strings(r["actors"], G.actors);
+        for (const std::string& b : G.blockers) if (std::find(out.blockers.begin(), out.blockers.end(), b) == out.blockers.end()) out.blockers.push_back(b);
+        out.managers.push_back(G);
     }
 }
 
@@ -95,6 +103,23 @@ void World::svMechAddBlockers() {
 void World::svMechSetBlockers(bool on) {
     for (int id : escBlockerSets_) collision_.setDynamicEnabled(id, on);
     escBlockersOn_ = on;
+    escBlockerOn_.assign(escBlockerSets_.size(), on ? 1 : 0);
+}
+
+bool World::svMechSetBlocker(const std::string& name, bool on) {   // one blocking volume / door by actor name
+    bool found = false;
+    for (size_t i = 0; i < escBlockerTris_.size() && i < escBlockerSets_.size(); ++i)
+        if (escBlockerTris_[i].first == name) {
+            collision_.setDynamicEnabled(escBlockerSets_[i], on); found = true;
+            if (escBlockerOn_.size() < escBlockerSets_.size()) escBlockerOn_.resize(escBlockerSets_.size(), 1);
+            escBlockerOn_[i] = on ? 1 : 0;
+        }
+    return found;
+}
+
+bool World::svMechBlockerOn(const std::string& name) const {
+    for (size_t i = 0; i < escBlockerTris_.size() && i < escBlockerOn_.size(); ++i) if (escBlockerTris_[i].first == name) return escBlockerOn_[i] != 0;
+    return true;
 }
 
 bool World::svMechHazard(const std::string& actor, bool on) {
@@ -126,6 +151,8 @@ void World::svMechSetup() {
     for (size_t k = 0; k < M.lasers.size(); ++k) S.lasers[k].switchPos = M.lasers[k].switchLength;   // GameplayStarted: forward = disabled
     S.floodT.assign(M.floods.size(), -1.0f);
     S.doorPos = M.doorHold;
+    S.managerT.assign(M.managers.size(), -1.0f); S.managerDone.assign(M.managers.size(), 0);
+    for (SvMech::Manager& G : M.managers) { G.g.clear(); for (const std::string& id : G.gens) { const int gi = gen(id); if (gi >= 0) G.g.push_back(gi); else ++missing; } }
     S.detpacks.assign(M.detpacks.size(), {});
     S.prevInteract.assign(match_.players().size(), 0);
     LOG_INFO("escalation: map mechanisms: %zu lasers (%zu pain volumes off), %zu sentries, %zu detpacks, outage %s, %zu floodgates, %zu blockers%s",
@@ -155,6 +182,11 @@ void World::svMechGenerator(int g, bool levelDrop) {
             ++S.sentryRuns;
             LOG_INFO("escalation: sentry %s (%s) awake for %.0f s", M.sentries[k].seq.c_str(), M.sentries[k].repair ? "repair" : "ion", M.sentries[k].time);
         }
+    for (size_t k = 0; k < M.managers.size(); ++k)   // a Zone_Manager: its door matinee plays (the zones / volumes: the flattened actions)
+        if (S.managerT[k] < 0.0f && std::find(M.managers[k].g.begin(), M.managers[k].g.end(), g) != M.managers[k].g.end()) {
+            S.managerT[k] = 0.0f;
+            LOG_INFO("escalation: %s fired by generator %s (doors open in %.2f s)", M.managers[k].seq.c_str(), svData_.generators[(size_t)g].id.c_str(), M.managers[k].delay);
+        }
     for (size_t k = 0; k < M.floods.size(); ++k)
         if (M.floods[k].g == g && S.floodBought < (int)M.floods.size()) {   // resume the drain to its next pause; its pain volume off
             ++S.floodBought;
@@ -175,6 +207,14 @@ void World::svMechTick(float dt) {
         S.lasers[k].switchPos = std::clamp(S.lasers[k].switchPos + (S.lasers[k].active ? -dt : dt), 0.0f, M.lasers[k].switchLength);
     if (M.outage.on) S.outagePos = std::clamp(S.outagePos + (S.outageLeft > 0.0f ? dt : -dt), 0.0f, M.outage.interpLength);
     for (float& t : S.floodT) if (t >= 0.0f) t += dt;
+    for (size_t k = 0; k < M.managers.size(); ++k) {   // a fired manager's doors: their collision off once the matinee has played
+        if (S.managerT[k] < 0.0f) continue;
+        S.managerT[k] += dt;
+        if (S.managerDone[k] || S.managerT[k] < M.managers[k].delay) continue;
+        S.managerDone[k] = 1;
+        for (const std::string& b : M.managers[k].blockers) svMechSetBlocker(b, false);
+        LOG_INFO("escalation: %s doors open (%zu blocking actors off)", M.managers[k].seq.c_str(), M.managers[k].blockers.size());
+    }
     if (S.gateT >= 0.0f) { S.gateT += dt; S.doorPos = std::min(M.doorLength, M.doorHold + S.gateT); }   // OpenBase: the doors play on
     std::vector<uint8_t> press(P.size(), 0);   // a player's Interact press this step (rising edge)
     for (size_t q = 0; q < P.size(); ++q) {
@@ -301,8 +341,8 @@ void World::svMechTick(float dt) {
     }
     if (S.gateT >= 0.0f && !S.gatesOpen && S.gateT >= M.gateOpenDelay) {   // "Opened"
         S.gatesOpen = true;
-        svMechSetBlockers(false);
-        LOG_INFO("escalation: base doors Opened (%zu blocking volumes off)", escBlockerSets_.size());
+        for (const std::string& b : M.floodBlockers) svMechSetBlocker(b, false);
+        LOG_INFO("escalation: base doors Opened (%zu blocking volumes off)", M.floodBlockers.size());
     }
 }
 

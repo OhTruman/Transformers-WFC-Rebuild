@@ -51,7 +51,13 @@ struct SvMech {
     struct BaseDoor { std::string interp, blocker; std::vector<std::string> pistons; };
     std::vector<BaseDoor> baseDoors;
     float doorHold = 1.25f, doorOpened = 4.35f, doorLength = 6.67f;
-    bool any() const { return !hazardsOff.empty() || !lasers.empty() || !sentries.empty() || !detpacks.empty() || outage.on || !floods.empty(); }
+    std::vector<std::string> floodBlockers;   // the base doors' blocking volumes (blockers = these + the managers')
+    // Pulse Power_Generator_Action: a Zone_Manager instance fired by any of its generators (RE's resolved chains: remote events, the
+    // first-of-two gates); its zones / volumes are the generators' flattened actions; here its door matinee: the doors' collision
+    // (blockers, nodes of the pawn collision) goes off once the matinee has played (delay); actors / interps for the presentation.
+    struct Manager { std::string seq; std::vector<std::string> gens, interps, blockers, actors; float delay = 0.0f; std::vector<int> g; };
+    std::vector<Manager> managers;
+    bool any() const { return !hazardsOff.empty() || !lasers.empty() || !sentries.empty() || !detpacks.empty() || outage.on || !floods.empty() || !managers.empty(); }
     static void parse(const assets::Json& j, SvMech& out);
 };
 
@@ -71,6 +77,8 @@ struct SvMechState {
     int floodBought = 0;
     float drainT = 0.0f, gateT = -1.0f, doorPos = 1.25f, outagePos = 0.0f;
     std::vector<float> floodT;
+    std::vector<float> managerT;              // s since a manager fired (-1 not yet); its doors open at its delay
+    std::vector<uint8_t> managerDone;
     bool drained = false, gatesOpen = false;
     int laserRuns = 0, sentryRuns = 0, detonations = 0;   // test counters (WFC_ESCTEST)
 };

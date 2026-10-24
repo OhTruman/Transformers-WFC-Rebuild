@@ -86,12 +86,12 @@ for m in COOP:
     # the actions AssetTools' flattened chains do not follow - Open Doors -> transform, Enable Survival Zones -> zone on, Disable
     # Volumes -> TriggerVolume off (NavMeshCells: the original NavigationCell gating, the escNav path only; not carried).
     SUBVARS = {'Open Doors': ('transform', 'TnTransformingWorldActor'), 'Enable Survival Zones': ('on', 'TnSurvivalZoneVolume'),
-               'Disable Volumes': ('off', 'TriggerVolume')}
+               'Disable Volumes': ('off', 'TriggerVolume'), 'Disable Generator Volumes': ('off', 'TriggerVolume')}   # (Pulse's name)
     subacts = {}
     for e in re_.get('events', []):
         if e.get('class') != 'TnSeqEvent_SurvivalGenerator': continue
         for y in e.get('downstream', [])[1:]:
-            if y.get('class') != 'Sequence' or not str(y.get('via') or '').endswith('New Power Level'): continue
+            if y.get('class') != 'Sequence' or not (str(y.get('via') or '').endswith('New Power Level') or str(y.get('input')) == 'Generator Used'): continue
             for k, (op, cls) in SUBVARS.items():
                 for t in (y.get('vars') or {}).get(k, []):
                     subacts.setdefault(e['originator'], []).append({'op': op, 'class': cls, 'target': t})
@@ -174,6 +174,7 @@ for m in COOP:
                          ('TnInteractDetpack_14838', [('TnStaticDestructibleActor_171', 0.0), ('TnStaticDestructibleActor_11555', 1.0)])],
             'outage': True,
         },
+        'MP_ESC_Pulse': {'managers': True},   # Power_Generator_Action: built below from RE's chains
         'MP_ESC_Tranquillity': {
             # FloodgateGenerators in RE's order with their TriggerVolume / DynamicPhysicsVolume pair (both off on purchase)
             'floodgates': [('3589', '10055', '14764'), ('15956', '6407', '2157'), ('14278', '9646', '576')],
@@ -273,6 +274,41 @@ for m in COOP:
                 'baseDoors': [{'interp': 'SeqAct_Interp_6026', 'pistons': ['HmSkeletalMeshActor_7715', 'HmSkeletalMeshActor_13308'], 'blocker': 'DynamicBlockingVolume_9335'},
                               {'interp': 'SeqAct_Interp_10535', 'pistons': ['HmSkeletalMeshActor_16151', 'HmSkeletalMeshActor_817'], 'blocker': 'DynamicBlockingVolume_8499'}],
                 'doorHold': 1.25, 'doorOpened': 4.35, 'doorLength': 6.67})
+        if m == 'MP_ESC_Pulse':   # Power_Generator_Action (RE section 8): the 10 Zone_Manager instances' door matinees + destroyed actors
+            # Which manager each generator fires: RE's resolved chains (the remote events / first-of-two gates already followed).
+            MGR_INTERPS = {'Zone_Manager': ['SeqAct_Interp_54', 'SeqAct_Interp_4544'], 'Zone_Manager_1': ['SeqAct_Interp_5622', 'SeqAct_Interp_8917'],
+                           'Zone_Manager_2': ['SeqAct_Interp_7549'], 'Zone_Manager_3': ['SeqAct_Interp_12776'], 'Zone_Manager_4': ['SeqAct_Interp_11165'],
+                           'Zone_Manager_5': ['SeqAct_Interp_11287'], 'Zone_Manager_6': ['SeqAct_Interp_14950'], 'Zone_Manager_8': ['SeqAct_Interp_12613'],
+                           'Zone_Manager_9': ['SeqAct_Interp_7793'], 'Zone_Manager_10': ['SeqAct_Interp_542']}
+            fired = {}
+            for e in re_.get('events', []):
+                if e.get('class') != 'TnSeqEvent_SurvivalGenerator': continue
+                for y in e.get('downstream', [])[1:]:
+                    if y.get('class') == 'Sequence' and y['op'].startswith('Zone_Manager'):
+                        fired.setdefault(y['op'], set()).add(e['originator'].replace('TnSurvivalGenerator_', ''))
+            xe = json.load(open(ROOT + '/RE-Workspace/notes/data/escalation/' + m + '_kismet_extra.json'))
+            iactors, destroyed = {}, set()
+            for x in xe['mechanisms']:
+                for y in x['downstream'][1:]:
+                    v = y.get('vars') or {}
+                    if y['class'] == 'SeqAct_Interp':
+                        for k, lst in v.items():
+                            if k != 'Data':
+                                for a in lst:
+                                    if 'InterpActor' in a or 'SkeletalMeshActor' in a: iactors.setdefault(y['op'], set()).add(a)
+                    if y['class'] == 'SeqAct_Destroy':
+                        destroyed.update(a for a in v.get('Target', []) if 'InterpActor' in a)
+            gp = json.load(open(ROOT + '/AssetTools/out/dlc_content/VerticalSlice/Maps/' + m + '/gameplay.json'))
+            ilen = {e['action']: e['length_s'] for e in gp.get('matinee', [])}
+            pawn_glb = open(ROOT + '/AssetTools/out/dlc_content/VerticalSlice/Maps/' + m + '/collision_pawn.glb', 'rb').read()
+            def colliding(a): return a.encode() in pawn_glb   # a node of the pawn collision (the door / window / force field blocks)
+            mech['managers'] = []
+            for mgr, interps in MGR_INTERPS.items():
+                acts = sorted({a for i in interps for a in iactors.get(i, set())})
+                mech['managers'].append({'seq': mgr, 'gens': sorted(fired.get(mgr, set())), 'interps': interps,
+                                         'delay': round(max([ilen.get(i, 0.0) for i in interps] + [0.0]), 3),   # collision off when the door is open
+                                         'blockers': [a for a in acts if colliding(a)], 'actors': acts})
+            mech['blockersAll'] = sorted({a for mm in mech['managers'] for a in mm['blockers']})
         own = {x['gen'] for x in mech.get('lasers', [])} | {x['gen'] for x in mech.get('sentries', [])}
         for g in out['generators']:   # their flattened chains cross the prefab copies (RE 1104a86 section 0): the mechanism runs them
             if g['id'] in own: g['actions'] = []
