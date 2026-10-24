@@ -164,7 +164,7 @@ void World::cpLoadMatinees() {
     cp_.matinees.clear(); cp_.interps.clear();
     const char* mr = std::getenv("WFC_MANIFESTS");
     assets::Json j;
-    if (!readJ(std::string(mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests") + "/next_map/" + cpChapter_.chapter + "_matinee.json", j)) {
+    if (!readJ((mr ? std::string(mr) : core::projectRoot() + "/AssetTools/manifests") + "/next_map/" + cpChapter_.chapter + "_matinee.json", j)) {
         LOG_WARN("campaign: no matinee data for %s", cpChapter_.chapter.c_str());
         return;
     }
@@ -511,7 +511,7 @@ void World::cpLoadPawnGroups() {
     if (robodefChassis.empty()) {
         assets::Json r;
         const char* mr = std::getenv("WFC_MANIFESTS");
-        if (readJ(std::string(mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests") + "/mp_content/roster_package.json", r))
+        if (readJ((mr ? std::string(mr) : core::projectRoot() + "/AssetTools/manifests") + "/mp_content/roster_package.json", r))
             for (const auto& kv : r["chassis"].obj) robodefChassis[kv.second["robot"]["definition"].asString()] = kv.first;
     }
     const assets::Json& gs = j["pawn_groups"];
@@ -540,6 +540,7 @@ void World::cpLoadPawnGroups() {
         }
     }
     if (preloaded) LOG_INFO("campaign: %d matinee pawn clip files preloaded", preloaded);
+    cpCharacterTargets("");   // its ROBODEF -> chassis table (roster_package.json) builds now, not in the first Character-targeted op
 }
 
 // Play `clip` at `time` on every participant of the group's characters (the human or the squad holding that chassis): the clip is

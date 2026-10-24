@@ -16,6 +16,7 @@ static bool endsWith(const std::string& s, const std::string& t) { return s.size
 
 bool KismetVM::load(const assets::Json& root) {
     ops_.clear(); vars_.clear(); byPath_.clear(); varByPath_.clear(); stacks_.clear(); seqChildren_.clear(); seqRoots_.clear(); pending_.clear(); time_ = 0.0f; tickNo_ = 0;
+    touched_.clear(); latentList_.clear(); inLatent_.clear();
     const assets::Json& levels = root["levels"];
     if (!levels.isObject()) return false;
     // Pass 1: variables and ops by path.
@@ -301,6 +302,7 @@ void KismetVM::drain(int seq) {
     while (!stacks_[(size_t)seq].empty()) {
         if (++steps > 1000) { ++queueCapHits; if (log) LOG_INFO("KISMET: 1000-step cap at t %.2f (%zu carried over)", time_, stacks_[(size_t)seq].size()); break; }
         const Link l = stacks_[(size_t)seq].back(); stacks_[(size_t)seq].pop_back();
+        touched_.push_back(l.op);   // (its activation may make it latent: the latent pass picks it up)
         Op& o = ops_[(size_t)l.op];
         ++activations[o.cls];
         if (log) LOG_INFO("KISMET t %.2f %s [%d] %s", time_, o.cls.c_str(), l.input, o.path.c_str());
@@ -320,13 +322,27 @@ void KismetVM::drain(int seq) {
 void KismetVM::tick(float dt) {
     time_ += dt; dt_ = dt; ++tickNo_;
     run();   // this tick's new work (with the carried-over steps); new latent ops take their first update in it
-    for (size_t i = 0; i < ops_.size(); ++i) {   // then every older latent op once [C: re-queued after the drain]
+    if (inLatent_.size() != ops_.size()) {   // first pass after a load: every op already latent
+        inLatent_.assign(ops_.size(), 0); latentList_.clear(); touched_.clear();
+        for (size_t i = 0; i < ops_.size(); ++i) if (ops_[i].latent) { inLatent_[i] = 1; latentList_.push_back((int)i); }
+    }
+    bool added = false;
+    for (int t : touched_) if (ops_[(size_t)t].latent && !inLatent_[(size_t)t]) { inLatent_[(size_t)t] = 1; latentList_.push_back(t); added = true; }
+    touched_.clear();
+    if (added) std::sort(latentList_.begin(), latentList_.end());
+    for (size_t k = 0; k < latentList_.size(); ++k) {   // then every older latent op once, in index order [C: re-queued after the drain]
+        const size_t i = (size_t)latentList_[k];
         Op& o = ops_[i];
         if (!o.latent || o.startTick == tickNo_) continue;
         if (o.cls == "SeqAct_Delay") {
             if (!o.paused && (o.timer -= dt) <= 0.0f) { o.latent = false; output((int)i, "Finished"); }
         } else if (host_) host_->updateLatent(*this, (int)i, dt);
         flush();
+    }
+    {   // the ops that left latent leave the list (re-noted at their next activation)
+        size_t w = 0;
+        for (int i : latentList_) { if (ops_[(size_t)i].latent) latentList_[w++] = i; else inLatent_[(size_t)i] = 0; }
+        latentList_.resize(w);
     }
     run();
 }

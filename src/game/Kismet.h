@@ -105,6 +105,10 @@ private:
     std::vector<int> seqRoots_;
     std::vector<Link> pending_;   // the current op's impulsed targets in link order (pushed reversed when it finishes)
     int tickNo_ = 0; float dt_ = 0.0f;
+    // The latent pass (tick): every op drain() popped since the last pass (latent is only set in an activation), and the latent ops
+    // in index order with a membership flag.
+    std::vector<int> touched_, latentList_;
+    std::vector<uint8_t> inLatent_;
     void flush() { for (size_t k = pending_.size(); k-- > 0;) stacks_[(size_t)ops_[(size_t)pending_[k].op].seqId].push_back(pending_[k]); pending_.clear(); }
     void drain(int seq);
     Host* host_ = nullptr;
