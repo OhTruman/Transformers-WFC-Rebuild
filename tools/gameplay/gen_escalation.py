@@ -175,6 +175,7 @@ for m in COOP:
             'outage': True,
         },
         'MP_ESC_Pulse': {'managers': True},   # Power_Generator_Action: built below from RE's chains
+        'MP_ESC_Static': {'traps': True},     # the fire-jet trap generators: built below from RE's chains
         'MP_ESC_Tranquillity': {
             # FloodgateGenerators in RE's order with their TriggerVolume / DynamicPhysicsVolume pair (both off on purchase)
             'floodgates': [('3589', '10055', '14764'), ('15956', '6407', '2157'), ('14278', '9646', '576')],
@@ -274,6 +275,41 @@ for m in COOP:
                 'baseDoors': [{'interp': 'SeqAct_Interp_6026', 'pistons': ['HmSkeletalMeshActor_7715', 'HmSkeletalMeshActor_13308'], 'blocker': 'DynamicBlockingVolume_9335'},
                               {'interp': 'SeqAct_Interp_10535', 'pistons': ['HmSkeletalMeshActor_16151', 'HmSkeletalMeshActor_817'], 'blocker': 'DynamicBlockingVolume_8499'}],
                 'doorHold': 1.25, 'doorOpened': 4.35, 'doorLength': 6.67})
+        if m == 'MP_ESC_Static':   # RE section 9: the DoorGenerators are root Toggle chains (flattened as usual); here the fire-jet traps
+            # A trap generator: New Power Level -> Toggle Turn On DynamicPhysicsVolumes + a matinee; its Completed -> the same Toggle Turn
+            # Off, a Delay (a SeqVar_Float), then ModifySurvivalGeneratorPower (re-buyable) + its TriggerVolume on. GameplayStarted: off.
+            gp_path = ROOT + '/AssetTools/out/dlc_content/VerticalSlice/Maps/' + m + '/gameplay.json'
+            gp = json.load(open(gp_path)) if os.path.exists(gp_path) else {}
+            ilen = {e['action']: e['length_s'] for e in gp.get('matinee', [])}
+            def float_var(name):   # a SeqVar_Float's FloatValue from the map's Kismet (gameplay.json "kismet"), None when not exported
+                def walk(o):
+                    if isinstance(o, dict):
+                        if o.get('object') == name: return (o.get('props') or {}).get('FloatValue')
+                        for v in o.values():
+                            r = walk(v)
+                            if r is not None: return r
+                    elif isinstance(o, list):
+                        for v in o:
+                            r = walk(v)
+                            if r is not None: return r
+                    return None
+                return walk(gp.get('kismet', {}))
+            mech['traps'] = []
+            for e in re_.get('events', []):
+                if e.get('class') != 'TnSeqEvent_SurvivalGenerator': continue
+                ds = e.get('downstream', [])[1:]
+                on = [y for y in ds if y['class'] == 'SeqAct_Toggle' and str(y['input']) == 'Turn On' and
+                      any(t.startswith('DynamicPhysicsVolume') for t in (y.get('vars') or {}).get('Target', []))]
+                if not on: continue
+                hz = [t for t in on[0]['vars']['Target'] if t.startswith('DynamicPhysicsVolume')]
+                interp = next((y['op'] for y in ds if y['class'] == 'SeqAct_Interp'), '')
+                delay = next((y for y in ds if y['class'] == 'SeqAct_Delay'), None)
+                dvar = ((delay or {}).get('vars') or {}).get('Duration', [None])[0]
+                cool = float_var(dvar) if dvar else None
+                mech['traps'].append({'gen': e['originator'].replace('TnSurvivalGenerator_', ''), 'hazards': hz, 'interp': interp,
+                                      'time': round(ilen.get(interp, 10.0), 3), 'cooldown': round(cool if cool is not None else 0.0, 3),
+                                      'prov': [k for k, v in (('time', interp in ilen), ('cooldown', cool is not None)) if not v]})
+            mech['hazardsOff'] = sorted({h for t in mech['traps'] for h in t['hazards']} | set(mech.get('hazardsOff', [])))
         if m == 'MP_ESC_Pulse':   # Power_Generator_Action (RE section 8): the 10 Zone_Manager instances' door matinees + destroyed actors
             # Which manager each generator fires: RE's resolved chains (the remote events / first-of-two gates already followed).
             MGR_INTERPS = {'Zone_Manager': ['SeqAct_Interp_54', 'SeqAct_Interp_4544'], 'Zone_Manager_1': ['SeqAct_Interp_5622', 'SeqAct_Interp_8917'],

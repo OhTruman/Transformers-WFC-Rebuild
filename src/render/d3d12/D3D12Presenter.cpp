@@ -459,6 +459,7 @@ public:
         const clk::time_point t4 = clk::now();
         const bool vs = vsync_ || userVsync_.load();     // (Settings > VSync: the window's swap interval, setUserVSync)
         HRESULT hr = swap_->Present(vs ? 1 : 0, !vs && tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0);
+        fgCaptureFlush();                                 // (WFC_FGCAPTURE: a copied generated frame to disk once done)
         // (verification) WFC_D3D12_SIMLOST=<n>: the n-th present reports DXGI_ERROR_DEVICE_REMOVED (the GL fallback path)
         static const int simLost = [] { const char* e = std::getenv("WFC_D3D12_SIMLOST"); return e ? std::atoi(e) : -1; }();
         if (presented_ == simLost) hr = DXGI_ERROR_DEVICE_REMOVED;
@@ -666,7 +667,9 @@ public:
         c.swapChain = swap_;
         c.frameGenerationCallback = [](ffxDispatchDescFrameGeneration* params, void* ctx) -> ffxReturnCode_t {
             D3D12Presenter* self = (D3D12Presenter*)ctx;
-            return self->ffx_.Dispatch(&self->fgCtx_, &params->header);
+            const ffxReturnCode_t rc = self->ffx_.Dispatch(&self->fgCtx_, &params->header);
+            if (rc == FFX_API_RETURN_OK) self->fgCaptureAfterDispatch(params);   // (WFC_FGCAPTURE verification only)
+            return rc;
         };
         c.frameGenerationCallbackUserContext = this;
         c.frameGenerationEnabled = have;                 // menus / frames without inputs: real frames only
@@ -931,6 +934,84 @@ private:
     int phN_ = 0;
     bool tearing_ = false, vsync_ = false;
     std::atomic<bool> userVsync_{false};                 // (Settings > VSync on this present path; vsync_: WFC_D3D12_VSYNC)
+#if defined(WFC_FFX_SDK)
+    // (verification) WFC_FGCAPTURE=<n>: generated frames n .. n+2 copied in the FG callback, written 8 presents later
+    struct FgCap { ID3D12Resource* rb = nullptr; D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp{}; UINT w = 0, h = 0; DXGI_FORMAT fmt{}; int due = -1, k = 0; };
+    FgCap fgCap_[3];
+    std::atomic<int> fgCapSeen_{0};
+public:
+    void fgCaptureAfterDispatch(ffxDispatchDescFrameGeneration* params) {
+        // WFC_FGCAPTURE=<n>[@<s>]: generated frames n .. n+2 counted from the first one after <s> seconds of process time
+        // (a match, not the menus - FG generates there too)
+        static const int first = [] { const char* e = std::getenv("WFC_FGCAPTURE"); return e ? std::atoi(e) : -1; }();
+        static const double after = [] { const char* e = std::getenv("WFC_FGCAPTURE"); const char* a = e ? std::strchr(e, '@') : nullptr;
+                                          return a ? std::atof(a + 1) : 0.0; }();
+        static const auto t0 = std::chrono::steady_clock::now();
+        if (first < 0 || params->numGeneratedFrames < 1 || !params->outputs[0].resource || !params->commandList) return;
+        if (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < after) return;
+        const int n = fgCapSeen_++;
+        if (n < first || n >= first + 3) return;
+        FgCap& c = fgCap_[n - first];
+        ID3D12Resource* src = (ID3D12Resource*)params->outputs[0].resource;
+        ID3D12GraphicsCommandList* cl = (ID3D12GraphicsCommandList*)params->commandList;
+        const D3D12_RESOURCE_DESC d = src->GetDesc();
+        UINT64 bytes = 0;
+        dev_->GetCopyableFootprints(&d, 0, 1, 0, &c.fp, nullptr, nullptr, &bytes);
+        D3D12_HEAP_PROPERTIES hp{}; hp.Type = D3D12_HEAP_TYPE_READBACK;
+        D3D12_RESOURCE_DESC rd{}; rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER; rd.Width = bytes; rd.Height = 1; rd.DepthOrArraySize = 1;
+        rd.MipLevels = 1; rd.SampleDesc.Count = 1; rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        if (FAILED(dev_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                                 __uuidof(ID3D12Resource), (void**)&c.rb))) { c.rb = nullptr; return; }
+        const uint32_t st = params->outputs[0].state;
+        const D3D12_RESOURCE_STATES before = (st & FFX_API_RESOURCE_STATE_UNORDERED_ACCESS) ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+                                           : (st & FFX_API_RESOURCE_STATE_COPY_SRC) ? D3D12_RESOURCE_STATE_COPY_SOURCE
+                                           : (st & FFX_API_RESOURCE_STATE_COPY_DEST) ? D3D12_RESOURCE_STATE_COPY_DEST
+                                           : D3D12_RESOURCE_STATE_COMMON;
+        D3D12_RESOURCE_BARRIER b{}; b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; b.Transition.pResource = src;
+        b.Transition.Subresource = 0; b.Transition.StateBefore = before; b.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        if (before != D3D12_RESOURCE_STATE_COPY_SOURCE) cl->ResourceBarrier(1, &b);
+        D3D12_TEXTURE_COPY_LOCATION dl{}; dl.pResource = c.rb; dl.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT; dl.PlacedFootprint = c.fp;
+        D3D12_TEXTURE_COPY_LOCATION sl{}; sl.pResource = src; sl.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX; sl.SubresourceIndex = 0;
+        cl->CopyTextureRegion(&dl, 0, 0, 0, &sl, nullptr);
+        std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
+        if (before != D3D12_RESOURCE_STATE_COPY_SOURCE) cl->ResourceBarrier(1, &b);
+        c.w = (UINT)d.Width; c.h = d.Height; c.fmt = d.Format; c.k = n; c.due = presented_ + 8;
+    }
+private:
+    void fgCaptureFlush() {
+        for (FgCap& c : fgCap_) {
+            if (!c.rb || c.due < 0 || presented_ < c.due) continue;
+            const bool bgra = c.fmt == DXGI_FORMAT_B8G8R8A8_UNORM || c.fmt == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+            const bool rgba = c.fmt == DXGI_FORMAT_R8G8B8A8_UNORM || c.fmt == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+            void* p = nullptr;
+            if ((bgra || rgba) && SUCCEEDED(c.rb->Map(0, nullptr, &p)) && p) {
+                char name[64]; std::snprintf(name, sizeof name, "fg_gen_%d.bmp", c.k);
+                if (FILE* f = std::fopen(name, "wb")) {
+                    const uint32_t rowB = c.w * 4, img = rowB * c.h;
+                    unsigned char hdr[54] = {'B', 'M'};
+                    auto put = [&](int o, uint32_t v) { for (int i = 0; i < 4; ++i) hdr[o + i] = (unsigned char)(v >> (8 * i)); };
+                    put(2, 54 + img); put(10, 54); put(14, 40); put(18, c.w); put(22, c.h); hdr[26] = 1; hdr[28] = 32; put(34, img);
+                    std::fwrite(hdr, 1, 54, f);
+                    std::vector<unsigned char> row(rowB);
+                    for (int y = (int)c.h - 1; y >= 0; --y) {           // (BMP: bottom-up, BGRA)
+                        const unsigned char* s = (const unsigned char*)p + c.fp.Offset + (size_t)y * c.fp.Footprint.RowPitch;
+                        for (UINT x = 0; x < c.w; ++x) {
+                            row[x * 4 + 0] = s[x * 4 + (bgra ? 0 : 2)]; row[x * 4 + 1] = s[x * 4 + 1];
+                            row[x * 4 + 2] = s[x * 4 + (bgra ? 2 : 0)]; row[x * 4 + 3] = 255;
+                        }
+                        std::fwrite(row.data(), 1, rowB, f);
+                    }
+                    std::fclose(f);
+                    LOG_INFO("FGCAPTURE: generated frame %d -> %s (%ux%u)", c.k, name, c.w, c.h);
+                }
+                c.rb->Unmap(0, nullptr);
+            } else LOG_WARN("FGCAPTURE: generated frame %d format %d not written", c.k, (int)c.fmt);
+            c.rb->Release(); c.rb = nullptr; c.due = -1;
+        }
+    }
+#else
+    void fgCaptureFlush() {}
+#endif
 public:
     void setUserVSync(bool on) { userVsync_.store(on); }
 private:

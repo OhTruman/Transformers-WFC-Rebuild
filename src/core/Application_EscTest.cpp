@@ -233,6 +233,19 @@ void Application::runEscalationTest() {
                 check(MS.detpacks[0].used && MS.detonations >= 1, "detpack: a press plants it; after the countdown its destructible is hit");
             }
             if (MD.outage.on) LOG_INFO("ESCTEST %s: power outages so far %d (Round Begins %d)", map.c_str(), MS.outages, S.roundBegins);
+            if (!MD.traps.empty()) {   // Static: a fire-jet trap - its pain volumes off at start, on when bought, off after its matinee
+                const auto& T = MD.traps[0];
+                const int before = hazardOn(T.hazards.front());
+                const bool bought = buyGen(T.g);
+                const int on = hazardOn(T.hazards.front());
+                run(T.time + 1.0f);
+                const int after = hazardOn(T.hazards.front());
+                run(T.cooldown + 1.0f);
+                const bool again = T.g >= 0 && !S.generatorDone[(size_t)T.g] && !S.generatorOff[(size_t)T.g];
+                LOG_INFO("ESCTEST %s: trap %s (%zu volumes): off at start %d, bought %d, on %d, off after %.1f s %d, re-buyable after %.1f s %d", map.c_str(), T.gen.c_str(),
+                         T.hazards.size(), (int)(before == 0), (int)bought, on, T.time, (int)(after == 0), T.cooldown, (int)again);
+                check(before == 0 && bought && on == 1 && after == 0 && again, "fire-jet trap: off at start, on when bought, off after its matinee, re-buyable");
+            }
             if (!MD.managers.empty()) {   // Pulse: a Zone_Manager door generator opens its zone and, after its matinee, its doors
                 int mk = -1;
                 for (size_t k = 0; k < MD.managers.size() && mk < 0; ++k)
