@@ -1,0 +1,502 @@
+diff -ruN a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt	2026-10-24 01:29:34.857713900 -0500
++++ b/CMakeLists.txt	2026-10-24 01:29:34.346962900 -0500
+@@ -147,7 +147,7 @@
+     # (no llvm-mingw DLLs required beside it).
+     # The linker map lands beside the exe: the crash report names its frames from it (RenderWatchdog.cpp).
+     target_link_options(wfc_rebuild PRIVATE -static "-Wl,-Map=${CMAKE_BINARY_DIR}/bin/wfc_rebuild.map")
+-    target_link_libraries(wfc_rebuild PRIVATE opengl32 gdi32 gdiplus user32 xinput winmm mfplat mfreadwrite mfuuid ole32 ws2_32)   # ws2_32: [Systems] net
++    target_link_libraries(wfc_rebuild PRIVATE opengl32 gdi32 gdiplus windowscodecs user32 xinput winmm mfplat mfreadwrite mfuuid ole32 ws2_32)   # ws2_32: [Systems] net
+ endif()
+ 
+ set_target_properties(wfc_rebuild PROPERTIES
+diff -ruN a/src/core/Application.cpp b/src/core/Application.cpp
+--- a/src/core/Application.cpp	2026-10-24 01:29:34.892834300 -0500
++++ b/src/core/Application.cpp	2026-10-24 01:29:34.466372100 -0500
+@@ -255,6 +255,7 @@
+     if (std::getenv("WFC_FLOWSIMTEST")) { runFlowSimTest(); return false; }   // the section 43 flows' sim half, headless
+     if (std::getenv("WFC_SOLOLAUNCHTEST")) { runSoloLaunchTest(); return false; }   // [Systems] a solo private launch: local loop, deterministic
+     if (std::getenv("WFC_VOICETEST")) { runVoiceTest(); return false; }   // [Systems] voice end to end, headless
++    if (std::getenv("WFC_IMAGECMPTEST")) { runImageCompareTest(); return false; }   // [Systems] WIC vs GDI+ identity over shipped PNGs
+     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
+     if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
+     if (std::getenv("WFC_BOTTEST")) { runBotTest(); return false; }                 // offline bots: TDM human + bots, then 7 v 8
+diff -ruN a/src/core/Application.h b/src/core/Application.h
+--- a/src/core/Application.h	2026-10-24 01:29:34.904875300 -0500
++++ b/src/core/Application.h	2026-10-24 01:29:34.505506500 -0500
+@@ -42,7 +42,8 @@
+     void runOnlineFlowTest();   // [Frontend] WFC_ONLINEFLOWTEST: two frontend flows, each on a real UdpSession, over loopback UDP
+     void runFlowSimTest();     // WFC_FLOWSIMTEST=<MP|ESC|CP>: the playtest section 43 flows' sim half (solo launch -> play -> QA)
+     void runSoloLaunchTest();   // [Systems] WFC_SOLOLAUNCHTEST: a private match hosted alone takes the local loop (no driver); same seed = same hash
+-    void runVoiceTest();        // [Systems] WFC_VOICETEST: the voice lane end to end over loopback (SNR, loss, mute, indicator)
++    void runVoiceTest();
++    void runImageCompareTest();  // [Systems] WFC_IMAGECMPTEST: every PNG under WFC_IMAGECMP_ROOTS decoded by GDI+ and WIC, compared per class        // [Systems] WFC_VOICETEST: the voice lane end to end over loopback (SNR, loss, mute, indicator)
+     int exitCode_ = -1;        // [Systems] set by the headless / net runs (main returns it when init stops); -1 = the default
+ public:
+     int exitCode() const { return exitCode_; }
+diff -ruN a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+--- a/src/core/Application_Frontend.cpp	2026-10-24 01:29:34.915913600 -0500
++++ b/src/core/Application_Frontend.cpp	2026-10-24 01:29:34.546145700 -0500
+@@ -662,7 +662,7 @@
+                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
+                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
+                           "WFC_VEHTEST", "WFC_FOVTEST", "WFC_SCREENTEST", "WFC_TILETEST", "WFC_MODETEST", "WFC_CHASSISTEST",
+-                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_CAMPAIGNAUDIOTEST", "WFC_UDPHOST", "WFC_UDPJOIN", "WFC_UDPLEAVE_AT", "WFC_UDPPICK_EARLY", "WFC_HEADLESS_REALTIME", "WFC_UDPSERVICE", "WFC_LOADDELAY_MS", "WFC_ONLINEFLOWTEST", "WFC_SOLOLAUNCHTEST", "WFC_VOICETEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
++                          "WFC_CHASSIS", "WFC_IMAGECMPTEST", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_TRANSACTTEST", "WFC_SESSIONTEST", "WFC_VOICEFRAMETEST", "WFC_UDPSESSIONTEST", "WFC_CAMPAIGNAUDIOTEST", "WFC_UDPHOST", "WFC_UDPJOIN", "WFC_UDPLEAVE_AT", "WFC_UDPPICK_EARLY", "WFC_HEADLESS_REALTIME", "WFC_UDPSERVICE", "WFC_LOADDELAY_MS", "WFC_ONLINEFLOWTEST", "WFC_SOLOLAUNCHTEST", "WFC_VOICETEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
+                           "WFC_SPAWNFILLTEST", "WFC_EXTRABODYTEST", "WFC_DOUBLEJUMPTEST",
+                           "WFC_DETERMINISMTEST", "WFC_WEAPONAUDIT", "WFC_VEHFRAMETEST", "WFC_VEHICLEAUDIT", "WFC_QABOTTEST", "WFC_MARKERSTEST", "WFC_STUCKSPOT_BOT", "WFC_ASYNCSTEPTEST", "WFC_ENGAGETEST", "WFC_EVICTTEST", "WFC_BARRIERWALKTEST"})   // [integration 09c] Gameplay 26d / 26h / 26k harnesses
+         if (std::getenv(v)) return false;
+diff -ruN a/src/core/Application_ImageCompare.cpp b/src/core/Application_ImageCompare.cpp
+--- a/src/core/Application_ImageCompare.cpp	1969-12-31 18:00:00.000000000 -0600
++++ b/src/core/Application_ImageCompare.cpp	2026-10-24 01:29:34.814063700 -0500
+@@ -0,0 +1,85 @@
++// [Systems, load-time pass] WFC_IMAGECMPTEST: the proof behind Win32Image's WIC classes. Every *.png under WFC_IMAGECMP_ROOTS
++// ('|'-separated directories: the package's base tree, the HD pack, the DLC trees) is decoded by GDI+ (the reference) and by WIC and
++// the RGBA bytes compared, tallied per PNG class (colour type / depth / interlace / colour chunks). A class is safe for WIC only with
++// every file identical and none failing. WFC_IMAGECMP_THREADS (default 8). Read-only: nothing is written but the log.
++#include "core/Application.h"
++#include "core/Log.h"
++#include "platform/Image.h"
++#include "platform/LongPath.h"
++
++#include <atomic>
++#include <chrono>
++#include <cstdlib>
++#include <filesystem>
++#include <map>
++#include <mutex>
++#include <string>
++#include <thread>
++#include <vector>
++
++namespace core {
++
++void Application::runImageCompareTest() {
++    namespace fs = std::filesystem;
++    std::vector<std::string> roots, files;
++    if (const char* r = std::getenv("WFC_IMAGECMP_ROOTS")) {
++        std::string s(r);
++        for (size_t a = 0, b; a <= s.size(); a = b + 1) { b = s.find('|', a); if (b == std::string::npos) b = s.size(); if (b > a) roots.push_back(s.substr(a, b - a)); }
++    }
++    for (const std::string& root : roots) {
++        std::error_code ec;
++        const size_t before = files.size();
++        for (fs::recursive_directory_iterator it(platform::longPath(root), fs::directory_options::skip_permission_denied, ec), end; it != end; it.increment(ec)) {
++            if (ec) break;
++            if (!it->is_regular_file(ec)) continue;
++            std::string ext = it->path().extension().string();
++            for (char& c : ext) c = (char)std::tolower((unsigned char)c);
++            if (ext == ".png") files.push_back(it->path().string());
++        }
++        LOG_INFO("IMAGECMP root %s: %zu PNGs", root.c_str(), files.size() - before);
++    }
++    struct Tally { long n = 0, same = 0, differ = 0, gdiFail = 0, wicFail = 0; std::string example; };
++    std::map<std::string, Tally> byClass;
++    std::mutex mx;
++    std::atomic<size_t> next{0};
++    std::atomic<long> doneN{0};
++    const int nThreads = std::getenv("WFC_IMAGECMP_THREADS") ? std::max(1, std::atoi(std::getenv("WFC_IMAGECMP_THREADS"))) : 8;
++    const auto t0 = std::chrono::steady_clock::now();
++    auto work = [&] {
++        for (size_t i; (i = next++) < files.size();) {
++            const std::string& p = files[i];
++            const std::string cls = platform::pngClass(p);
++            render::ImageData g, w;
++            const bool gok = platform::decodeImageWith(0, p, g), wok = platform::decodeImageWith(1, p, w);
++            const bool same = gok && wok && g.w == w.w && g.h == w.h && g.rgba == w.rgba;
++            std::lock_guard<std::mutex> lk(mx);
++            Tally& t = byClass[cls];
++            ++t.n;
++            if (!gok) ++t.gdiFail;
++            else if (!wok) ++t.wicFail;
++            else if (same) ++t.same;
++            else { ++t.differ; if (t.example.empty()) t.example = p; }
++            const long d = ++doneN;
++            if (d % 5000 == 0) LOG_INFO("IMAGECMP progress %ld / %zu", d, files.size());
++        }
++    };
++    std::vector<std::thread> th;
++    for (int k = 0; k < nThreads; ++k) th.emplace_back(work);
++    for (std::thread& t : th) t.join();
++    const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
++    long all = 0, allSame = 0;
++    std::string safe;
++    for (const auto& kv : byClass) {
++        const Tally& t = kv.second;
++        all += t.n; allSame += t.same;
++        const bool ok = t.n > 0 && t.same == t.n;
++        if (ok) safe += (safe.empty() ? "" : ", ") + std::string("\"") + kv.first + "\"";
++        LOG_INFO("IMAGECMP class %-28s %7ld files: %7ld identical, %5ld differ, %4ld GDI+ fail, %4ld WIC fail%s%s", kv.first.c_str(), t.n, t.same,
++                 t.differ, t.gdiFail, t.wicFail, ok ? "  SAFE" : "", t.example.empty() ? "" : ("  e.g. " + t.example).c_str());
++    }
++    LOG_INFO("IMAGECMP SUMMARY: %ld PNGs in %zu classes, %ld identical (%.1f s, %d threads); WIC-safe classes: %s", all, byClass.size(), allSame,
++             secs, nThreads, safe.empty() ? "none" : safe.c_str());
++    exitCode_ = all > 0 ? 0 : 1;
++}
++
++} // namespace core
+diff -ruN a/src/core/LoadYield.cpp b/src/core/LoadYield.cpp
+--- a/src/core/LoadYield.cpp	2026-10-24 01:29:34.928456200 -0500
++++ b/src/core/LoadYield.cpp	2026-10-24 01:31:11.054473700 -0500
+@@ -31,6 +31,7 @@
+ auto g_stageAt = g_t0;
+ struct StageTime { double ms = 0.0; long steps = 0; };
+ std::map<std::string, StageTime> g_stageTimes;
++std::map<std::string, StageTime> g_partTimes;   // addLoadTime: measured inside the steps
+ const char* kProfileFile = "wfc_loadprofile.ini";   // (next to wfc_profile.ini: key=steps per line)
+ std::map<std::string, long> readProfile() {
+     std::map<std::string, long> m;
+@@ -101,6 +102,12 @@
+     LOG_INFO("load progress: %s done in %ld steps (expected %ld)", g_progKey.c_str(), g_steps, g_expected);
+ }
+ 
++void addLoadTime(const char* what, double ms) {
++    if (!g_stagesOn) return;
++    StageTime& st = g_partTimes[what ? what : "?"];
++    st.ms += ms; ++st.steps;
++}
++
+ void logLoadStages(const char* when) {
+     if (!g_stagesOn) return;
+     const auto t = std::chrono::steady_clock::now();
+@@ -115,6 +122,9 @@
+     for (size_t i = 0; i < v.size() && i < 15; ++i)
+         LOG_INFO("LOADSTAGES   %8.0f ms %5.1f%%  %6ld steps  %s", v[i].second.ms, total > 0 ? 100.0 * v[i].second.ms / total : 0.0,
+                  v[i].second.steps, v[i].first.c_str());
++    for (const auto& kv : g_partTimes)   // measured parts (inside the steps above, not added to them)
++        LOG_INFO("LOADSTAGES part %8.0f ms %5.1f%%  %6ld calls  %s", kv.second.ms, total > 0 ? 100.0 * kv.second.ms / total : 0.0, kv.second.steps,
++                 kv.first.c_str());
+ }
+ 
+ LoadProgress loadProgress() {
+diff -ruN a/src/core/LoadYield.h b/src/core/LoadYield.h
+--- a/src/core/LoadYield.h	2026-10-24 01:29:34.934476900 -0500
++++ b/src/core/LoadYield.h	2026-10-24 01:31:11.043435500 -0500
+@@ -7,6 +7,7 @@
+ // animation, its Bink underlay and one presented frame. Nothing else runs inside it (no flow transitions, no game
+ // tick), and it never runs in the middle of a GL upload because callers only yield between whole operations.
+ #pragma once
++#include <chrono>
+ #include <functional>
+ #include <string>
+ 
+@@ -34,5 +35,11 @@
+ // DIAGNOSTIC (WFC_LOADSTAGES=1, Systems' load-time pass): the wall time between consecutive loadYield calls, summed per stage label
+ // (the work that ended at that step), and logLoadStages() prints the table: the top labels, their share, the step counts.
+ void logLoadStages(const char* when);
++void addLoadTime(const char* what, double ms);   // a measured part inside the steps (e.g. "texture decode"), listed by logLoadStages
++struct LoadPartTimer {   // scope -> addLoadTime(what, its wall time)
++    const char* what; std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
++    explicit LoadPartTimer(const char* w) : what(w) {}
++    ~LoadPartTimer() { addLoadTime(what, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count()); }
++};
+ 
+ } // namespace core
+diff -ruN a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-24 01:29:34.943006100 -0500
++++ b/src/game/World.cpp	2026-10-24 01:31:11.067016300 -0500
+@@ -341,6 +341,7 @@
+     if (!okMap) return false;
+     auto resolveOne = [&](const std::string& uri) { return resolveTexture(uri); };
+     auto resolveTextures = [&](std::vector<render::Material>& mats) {
++        prefetchMaterialTextures(mats);
+         for (render::Material& M : mats) {
+             M.tex = resolveOne(M.baseColorUri);
+             M.emissiveTexHandle = resolveOne(M.emissiveUri);   // WFC glow (may be absent)
+@@ -5228,14 +5229,31 @@
+     if (it != texCache_.end()) return it->second;
+     render::ImageData img;
+     render::TextureHandle th = render::kInvalidTexture;
+-    if (platform::decodeImage(uri, img)) { th = renderer_->uploadTexture(img); ++texLoaded_; }
++    const auto td0 = std::chrono::steady_clock::now();
++    const bool decoded = platform::decodeImage(uri, img);
++    const auto td1 = std::chrono::steady_clock::now();
++    core::addLoadTime("texture decode (main-thread wait)", std::chrono::duration<double, std::milli>(td1 - td0).count());
++    if (decoded) {
++        th = renderer_->uploadTexture(img); ++texLoaded_;
++        core::addLoadTime("texture upload", std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - td1).count());
++    }
+     else ++texFailed_;
+     texCache_[uri] = th;
+     core::loadYield("World: texture");   // [integration M07] the loading screen presents between texture uploads
+     return th;
+ }
+ 
++void World::prefetchMaterialTextures(const std::vector<render::Material>& mats) {   // [Systems] decode ahead on worker threads
++    if (!renderer_) return;
++    std::vector<std::string> uris;
++    for (const render::Material& M : mats)
++        for (const std::string* u : {&M.baseColorUri, &M.emissiveUri})
++            if (!u->empty() && !texCache_.count(*u)) uris.push_back(*u);
++    platform::prefetchImages(uris);
++}
++
+ void World::resolveModelTextures(assets::SkinnedModel& m) {
++    prefetchMaterialTextures(m.mats);
+     for (render::Material& M : m.mats) {
+         M.tex = resolveTexture(M.baseColorUri);
+         M.emissiveTexHandle = resolveTexture(M.emissiveUri);
+diff -ruN a/src/game/World.h b/src/game/World.h
+--- a/src/game/World.h	2026-10-24 01:29:34.955549300 -0500
++++ b/src/game/World.h	2026-10-24 01:29:34.625417500 -0500
+@@ -1862,6 +1862,7 @@
+     void prewarmSkin(const assets::SkinnedModel& m);   // GPU-skin model build at load (Rendering's prewarmSkinnedMesh)
+     int texLoaded_ = 0, texFailed_ = 0;
+     render::TextureHandle resolveTexture(const std::string& uri);
++    void prefetchMaterialTextures(const std::vector<render::Material>& mats);   // [Systems] the batch's PNGs decode on worker threads
+     void resolveModelTextures(assets::SkinnedModel& m);
+ 
+     // Ion Blaster as an animated skeletal mesh (own Fire/Reload/Idle anims, sockets, notifies).
+diff -ruN a/src/platform/Image.h b/src/platform/Image.h
+--- a/src/platform/Image.h	2026-10-24 01:29:34.961570200 -0500
++++ b/src/platform/Image.h	2026-10-24 01:29:34.386598800 -0500
+@@ -2,6 +2,7 @@
+ // The gameplay/asset layers call this; the implementation lives in a platform adapter.
+ #pragma once
+ #include <string>
++#include <vector>
+ #include "render/Mesh.h"   // render::ImageData
+ 
+ namespace platform {
+@@ -16,4 +17,13 @@
+ using ImageFallback = bool (*)(const std::string& path, render::ImageData& out);
+ void setImageFallback(ImageFallback f);
+ 
++// [Systems, load-time pass] Decode a batch on worker threads ahead of the decodeImage calls that follow (same pixels; the caller
++// still uploads on its own thread). WFC_IMAGETHREADS=<n> (0 = off). dropPrefetched() forgets what nobody asked for (a load's end).
++void prefetchImages(const std::vector<std::string>& paths);
++void dropPrefetched();
++// The decoder choice and its proof (WFC_IMAGECMPTEST): a PNG's class "ct<colour type>-<depth>[-i][+gAMA+sRGB+iCCP+cHRM+tRNS+sBIT]";
++// decodeImageWith(0 GDI+ | 1 WIC). WFC_IMAGEDECODER=gdiplus|wic forces one (A/B).
++std::string pngClass(const std::string& path);
++bool decodeImageWith(int decoder, const std::string& path, render::ImageData& out);
++
+ } // namespace platform
+diff -ruN a/src/platform/win32/Win32Image.cpp b/src/platform/win32/Win32Image.cpp
+--- a/src/platform/win32/Win32Image.cpp	2026-10-24 01:29:34.970600700 -0500
++++ b/src/platform/win32/Win32Image.cpp	2026-10-24 01:29:34.425231200 -0500
+@@ -1,16 +1,27 @@
+-// Clean-room reconstruction — Win32 image decoder (GDI+) for PNG textures.
++// Clean-room reconstruction — Win32 image decoder for PNG textures: GDI+ (the reference) and WIC (Windows Imaging Component).
++// [Systems, load-time pass] WIC decodes only the PNG classes (colour type / bit depth / colour chunks) that the WFC_IMAGECMPTEST tool
++// proved byte-identical to GDI+ over every shipped PNG (kWicClasses); every other file stays on GDI+, so the pixels never change.
++// prefetchImages() decodes a batch on worker threads ahead of the main thread's decodeImage calls (uploads stay on the main thread).
+ #if defined(_WIN32)
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
+ #include <objidl.h>
+ #include <gdiplus.h>
++#include <wincodec.h>
+ 
+ #include "platform/Image.h"
+ #include "platform/LongPath.h"
+ #include "core/Log.h"
+ 
++#include <condition_variable>
+ #include <cstdlib>
++#include <cstring>
++#include <deque>
++#include <fstream>
++#include <map>
+ #include <mutex>
++#include <thread>
++#include <vector>
+ 
+ namespace platform {
+ namespace {
+@@ -25,19 +36,7 @@
+     });
+ }
+ 
+-} // namespace
+-
+-ImageFallback g_fallback = nullptr;
+-
+-void setImageFallback(ImageFallback f) { g_fallback = f; }
+-
+-bool decodeImage(const std::string& path, render::ImageData& out) {
+-    const std::wstring wpath = platform::longPath(path).wstring();   // [Systems] long / non-ASCII paths (GDI+ takes \\?\ paths)
+-    static const bool ddsFirst = std::getenv("WFC_DDSFIRST") != nullptr;
+-    static const bool pngLog = std::getenv("WFC_PNGLOG") != nullptr;
+-    if (g_fallback && (ddsFirst || GetFileAttributesW(wpath.c_str()) == INVALID_FILE_ATTRIBUTES) && g_fallback(path, out))
+-        return true;
+-    if (pngLog) LOG_INFO("PNGLOG opened %s", path.c_str());
++bool decodeGdiplus(const std::wstring& wpath, const std::string& path, render::ImageData& out) {
+     ensureGdiplus();
+     Gdiplus::Bitmap bmp(wpath.c_str());
+     if (bmp.GetLastStatus() != Gdiplus::Ok) {
+@@ -70,5 +69,174 @@
+     return true;
+ }
+ 
++// CLSID_WICImagingFactory {cacaf262-9370-4615-a13b-9f5539da4c0a}; GUID_WICPixelFormat32bppRGBA {f5c7ad2d-6a8d-43dd-a7a8-a29935261ae9}
++// (defined here: no import library for the GUIDs)
++const GUID kClsidWicFactory = {0xcacaf262, 0x9370, 0x4615, {0xa1, 0x3b, 0x9f, 0x55, 0x39, 0xda, 0x4c, 0x0a}};
++const GUID kWicRgba = {0xf5c7ad2d, 0x6a8d, 0x43dd, {0xa7, 0xa8, 0xa2, 0x99, 0x35, 0x26, 0x1a, 0xe9}};
++
++template <class T> void rel(T*& p) { if (p) { p->Release(); p = nullptr; } }
++
++bool decodeWic(const std::wstring& wpath, const std::string& path, render::ImageData& out) {
++    const HRESULT co = CoInitializeEx(nullptr, COINIT_MULTITHREADED);   // S_FALSE / RPC_E_CHANGED_MODE: this thread already has COM
++    IWICImagingFactory* f = nullptr; IWICBitmapDecoder* dec = nullptr; IWICBitmapFrameDecode* fr = nullptr; IWICBitmapSource* rgba = nullptr;
++    bool ok = SUCCEEDED(CoCreateInstance(kClsidWicFactory, nullptr, CLSCTX_INPROC_SERVER, __uuidof(IWICImagingFactory), (void**)&f));
++    ok = ok && SUCCEEDED(f->CreateDecoderFromFilename(wpath.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &dec));
++    ok = ok && SUCCEEDED(dec->GetFrame(0, &fr));
++    ok = ok && SUCCEEDED(WICConvertBitmapSource(kWicRgba, fr, &rgba));
++    UINT w = 0, h = 0;
++    ok = ok && SUCCEEDED(rgba->GetSize(&w, &h)) && w > 0 && h > 0;
++    if (ok) {
++        out.w = (int)w; out.h = (int)h;
++        out.rgba.resize((size_t)w * h * 4);
++        ok = SUCCEEDED(rgba->CopyPixels(nullptr, w * 4, (UINT)out.rgba.size(), out.rgba.data()));
++    }
++    rel(rgba); rel(fr); rel(dec); rel(f);
++    if (SUCCEEDED(co)) CoUninitialize();
++    if (!ok) LOG_WARN("image: WIC decode failed %s", path.c_str());
++    return ok;
++}
++
++// The WIC classes proven byte-identical to GDI+ (WFC_IMAGECMPTEST over the shipped base / HD / DLC PNGs; see the patch note).
++const char* const kWicClasses[] = {"ct0-8", "ct2-8", "ct6-8", nullptr};   // 60,458 / 60,458 identical (base 53,668 + DLC 6,790; no gAMA / sRGB / iCCP in any)
++
++bool wicAllowed(const std::string& cls) {
++    for (const char* const* c = kWicClasses; *c; ++c) if (cls == *c) return true;
++    return false;
++}
++
++// ---- the prefetch pool ----
++struct Pending { bool started = false, done = false, ok = false, orphan = false; render::ImageData img; };   // orphan: dropped in flight
++std::mutex g_poolMx;
++std::condition_variable g_poolCv, g_doneCv;
++std::deque<std::string> g_queue;
++std::map<std::string, Pending> g_pending;
++std::vector<std::thread> g_workers;
++bool decodeNow(const std::string& path, render::ImageData& out);
++
++void workerLoop() {
++    for (;;) {
++        std::string path;
++        {
++            std::unique_lock<std::mutex> lk(g_poolMx);
++            g_poolCv.wait(lk, [] { return !g_queue.empty(); });
++            path = g_queue.front(); g_queue.pop_front();
++            auto it = g_pending.find(path);
++            if (it == g_pending.end() || it->second.started) continue;   // taken by the main thread meanwhile
++            it->second.started = true;
++        }
++        render::ImageData img;
++        const bool ok = decodeNow(path, img);
++        {
++            std::lock_guard<std::mutex> lk(g_poolMx);
++            auto it = g_pending.find(path);
++            if (it != g_pending.end() && it->second.orphan) g_pending.erase(it);   // dropPrefetched while decoding: nobody collects it
++            else if (it != g_pending.end()) { it->second.img = std::move(img); it->second.ok = ok; it->second.done = true; }
++        }
++        g_doneCv.notify_all();
++    }
++}
++
++int poolThreads() {
++    static const int n = [] {
++        const char* e = std::getenv("WFC_IMAGETHREADS");   // 0 = no prefetch (the A/B arm)
++        if (e) return std::max(0, std::atoi(e));
++        const unsigned hw = std::thread::hardware_concurrency();
++        return (int)std::max(1u, std::min(6u, hw > 2 ? hw - 2 : 1u));
++    }();
++    return n;
++}
++
++} // namespace
++
++ImageFallback g_fallback = nullptr;
++
++void setImageFallback(ImageFallback f) { g_fallback = f; }
++
++std::string pngClass(const std::string& path) {
++    std::ifstream f(platform::longPath(path), std::ios::binary);
++    unsigned char sig[8];
++    if (!f.read((char*)sig, 8) || std::memcmp(sig, "\x89PNG\r\n\x1a\n", 8) != 0) return "notpng";
++    std::string cls, flags;
++    for (int guard = 0; guard < 64; ++guard) {
++        unsigned char hdr[8];
++        if (!f.read((char*)hdr, 8)) break;
++        const uint32_t len = (uint32_t)hdr[0] << 24 | (uint32_t)hdr[1] << 16 | (uint32_t)hdr[2] << 8 | hdr[3];
++        const std::string type((const char*)hdr + 4, 4);
++        if (type == "IHDR" && len >= 13) {
++            unsigned char ih[13];
++            if (!f.read((char*)ih, 13)) break;
++            cls = "ct" + std::to_string((int)ih[9]) + "-" + std::to_string((int)ih[8]) + (ih[12] ? "-i" : "");   // colour type, depth, interlace
++            f.seekg((std::streamoff)(len - 13 + 4), std::ios::cur);
++            continue;
++        }
++        if (type == "IDAT" || type == "IEND") break;
++        if (type == "gAMA" || type == "sRGB" || type == "iCCP" || type == "cHRM" || type == "tRNS" || type == "sBIT") flags += "+" + type;
++        f.seekg((std::streamoff)len + 4, std::ios::cur);
++    }
++    return cls.empty() ? "badpng" : cls + flags;
++}
++
++bool decodeImageWith(int decoder, const std::string& path, render::ImageData& out) {
++    const std::wstring wpath = platform::longPath(path).wstring();
++    return decoder == 1 ? decodeWic(wpath, path, out) : decodeGdiplus(wpath, path, out);
++}
++
++namespace {
++bool decodeNow(const std::string& path, render::ImageData& out) {
++    const std::wstring wpath = platform::longPath(path).wstring();   // [Systems] long / non-ASCII paths (GDI+ takes \\?\ paths)
++    static const bool ddsFirst = std::getenv("WFC_DDSFIRST") != nullptr;
++    static const bool pngLog = std::getenv("WFC_PNGLOG") != nullptr;
++    static const int forced = [] { const char* e = std::getenv("WFC_IMAGEDECODER"); return !e ? -1 : std::strcmp(e, "wic") == 0 ? 1 : 0; }();
++    if (g_fallback && (ddsFirst || GetFileAttributesW(wpath.c_str()) == INVALID_FILE_ATTRIBUTES) && g_fallback(path, out))
++        return true;
++    if (pngLog) LOG_INFO("PNGLOG opened %s", path.c_str());
++    const bool wic = forced >= 0 ? forced == 1 : wicAllowed(pngClass(path));
++    return wic ? decodeWic(wpath, path, out) : decodeGdiplus(wpath, path, out);
++}
++} // namespace
++
++bool decodeImage(const std::string& path, render::ImageData& out) {
++    if (poolThreads() > 0) {
++        std::unique_lock<std::mutex> lk(g_poolMx);
++        auto it = g_pending.find(path);
++        if (it != g_pending.end()) {
++            if (!it->second.started) { g_pending.erase(it); lk.unlock(); return decodeNow(path, out); }   // not begun: decode here
++            g_doneCv.wait(lk, [&] { auto j = g_pending.find(path); return j == g_pending.end() || j->second.done; });
++            auto j = g_pending.find(path);
++            if (j != g_pending.end()) {
++                const bool ok = j->second.ok;
++                out = std::move(j->second.img);
++                g_pending.erase(j);
++                return ok;
++            }
++        }
++    }
++    return decodeNow(path, out);
++}
++
++void prefetchImages(const std::vector<std::string>& paths) {
++    const int n = poolThreads();
++    if (n <= 0) return;
++    {
++        std::lock_guard<std::mutex> lk(g_poolMx);
++        while ((int)g_workers.size() < n) { g_workers.emplace_back(workerLoop); g_workers.back().detach(); }
++        for (const std::string& p : paths) {
++            if (p.empty() || g_pending.count(p)) continue;
++            g_pending[p];
++            g_queue.push_back(p);
++        }
++    }
++    g_poolCv.notify_all();
++}
++
++void dropPrefetched() {
++    std::unique_lock<std::mutex> lk(g_poolMx);
++    g_queue.clear();
++    for (auto it = g_pending.begin(); it != g_pending.end();) {
++        if (it->second.started && !it->second.done) { it->second.orphan = true; ++it; }   // the worker drops it when it finishes
++        else it = g_pending.erase(it);
++    }
++}
++
+ } // namespace platform
+ #endif

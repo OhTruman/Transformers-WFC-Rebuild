@@ -7,6 +7,7 @@
 // animation, its Bink underlay and one presented frame. Nothing else runs inside it (no flow transitions, no game
 // tick), and it never runs in the middle of a GL upload because callers only yield between whole operations.
 #pragma once
+#include <chrono>
 #include <functional>
 #include <string>
 
@@ -34,5 +35,11 @@ LoadProgress loadProgress();
 // DIAGNOSTIC (WFC_LOADSTAGES=1, Systems' load-time pass): the wall time between consecutive loadYield calls, summed per stage label
 // (the work that ended at that step), and logLoadStages() prints the table: the top labels, their share, the step counts.
 void logLoadStages(const char* when);
+void addLoadTime(const char* what, double ms);   // a measured part inside the steps (e.g. "texture decode"), listed by logLoadStages
+struct LoadPartTimer {   // scope -> addLoadTime(what, its wall time)
+    const char* what; std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+    explicit LoadPartTimer(const char* w) : what(w) {}
+    ~LoadPartTimer() { addLoadTime(what, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count()); }
+};
 
 } // namespace core

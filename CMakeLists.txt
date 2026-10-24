@@ -147,7 +147,7 @@ if(WIN32)
     # (no llvm-mingw DLLs required beside it).
     # The linker map lands beside the exe: the crash report names its frames from it (RenderWatchdog.cpp).
     target_link_options(wfc_rebuild PRIVATE -static "-Wl,-Map=${CMAKE_BINARY_DIR}/bin/wfc_rebuild.map")
-    target_link_libraries(wfc_rebuild PRIVATE opengl32 gdi32 gdiplus user32 xinput winmm mfplat mfreadwrite mfuuid ole32 ws2_32)   # ws2_32: [Systems] net
+    target_link_libraries(wfc_rebuild PRIVATE opengl32 gdi32 gdiplus windowscodecs user32 xinput winmm mfplat mfreadwrite mfuuid ole32 ws2_32)   # ws2_32: [Systems] net
 endif()
 
 set_target_properties(wfc_rebuild PROPERTIES

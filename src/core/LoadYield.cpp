@@ -31,6 +31,7 @@ const auto g_t0 = std::chrono::steady_clock::now();
 auto g_stageAt = g_t0;
 struct StageTime { double ms = 0.0; long steps = 0; };
 std::map<std::string, StageTime> g_stageTimes;
+std::map<std::string, StageTime> g_partTimes;   // addLoadTime: measured inside the steps
 const char* kProfileFile = "wfc_loadprofile.ini";   // (next to wfc_profile.ini: key=steps per line)
 std::map<std::string, long> readProfile() {
     std::map<std::string, long> m;
@@ -101,6 +102,12 @@ void endLoadProgress() {
     LOG_INFO("load progress: %s done in %ld steps (expected %ld)", g_progKey.c_str(), g_steps, g_expected);
 }
 
+void addLoadTime(const char* what, double ms) {
+    if (!g_stagesOn) return;
+    StageTime& st = g_partTimes[what ? what : "?"];
+    st.ms += ms; ++st.steps;
+}
+
 void logLoadStages(const char* when) {
     if (!g_stagesOn) return;
     const auto t = std::chrono::steady_clock::now();
@@ -115,6 +122,9 @@ void logLoadStages(const char* when) {
     for (size_t i = 0; i < v.size() && i < 15; ++i)
         LOG_INFO("LOADSTAGES   %8.0f ms %5.1f%%  %6ld steps  %s", v[i].second.ms, total > 0 ? 100.0 * v[i].second.ms / total : 0.0,
                  v[i].second.steps, v[i].first.c_str());
+    for (const auto& kv : g_partTimes)   // measured parts (inside the steps above, not added to them)
+        LOG_INFO("LOADSTAGES part %8.0f ms %5.1f%%  %6ld calls  %s", kv.second.ms, total > 0 ? 100.0 * kv.second.ms / total : 0.0, kv.second.steps,
+                 kv.first.c_str());
 }
 
 LoadProgress loadProgress() {

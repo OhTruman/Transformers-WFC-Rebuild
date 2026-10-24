@@ -341,6 +341,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     if (!okMap) return false;
     auto resolveOne = [&](const std::string& uri) { return resolveTexture(uri); };
     auto resolveTextures = [&](std::vector<render::Material>& mats) {
+        prefetchMaterialTextures(mats);
         for (render::Material& M : mats) {
             M.tex = resolveOne(M.baseColorUri);
             M.emissiveTexHandle = resolveOne(M.emissiveUri);   // WFC glow (may be absent)
@@ -5228,14 +5229,31 @@ render::TextureHandle World::resolveTexture(const std::string& uri) {
     if (it != texCache_.end()) return it->second;
     render::ImageData img;
     render::TextureHandle th = render::kInvalidTexture;
-    if (platform::decodeImage(uri, img)) { th = renderer_->uploadTexture(img); ++texLoaded_; }
+    const auto td0 = std::chrono::steady_clock::now();
+    const bool decoded = platform::decodeImage(uri, img);
+    const auto td1 = std::chrono::steady_clock::now();
+    core::addLoadTime("texture decode (main-thread wait)", std::chrono::duration<double, std::milli>(td1 - td0).count());
+    if (decoded) {
+        th = renderer_->uploadTexture(img); ++texLoaded_;
+        core::addLoadTime("texture upload", std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - td1).count());
+    }
     else ++texFailed_;
     texCache_[uri] = th;
     core::loadYield("World: texture");   // [integration M07] the loading screen presents between texture uploads
     return th;
 }
 
+void World::prefetchMaterialTextures(const std::vector<render::Material>& mats) {   // [Systems] decode ahead on worker threads
+    if (!renderer_) return;
+    std::vector<std::string> uris;
+    for (const render::Material& M : mats)
+        for (const std::string* u : {&M.baseColorUri, &M.emissiveUri})
+            if (!u->empty() && !texCache_.count(*u)) uris.push_back(*u);
+    platform::prefetchImages(uris);
+}
+
 void World::resolveModelTextures(assets::SkinnedModel& m) {
+    prefetchMaterialTextures(m.mats);
     for (render::Material& M : m.mats) {
         M.tex = resolveTexture(M.baseColorUri);
         M.emissiveTexHandle = resolveTexture(M.emissiveUri);

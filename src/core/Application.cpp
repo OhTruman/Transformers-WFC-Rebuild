@@ -255,6 +255,7 @@ bool Application::init() {
     if (std::getenv("WFC_FLOWSIMTEST")) { runFlowSimTest(); return false; }   // the section 43 flows' sim half, headless
     if (std::getenv("WFC_SOLOLAUNCHTEST")) { runSoloLaunchTest(); return false; }   // [Systems] a solo private launch: local loop, deterministic
     if (std::getenv("WFC_VOICETEST")) { runVoiceTest(); return false; }   // [Systems] voice end to end, headless
+    if (std::getenv("WFC_IMAGECMPTEST")) { runImageCompareTest(); return false; }   // [Systems] WIC vs GDI+ identity over shipped PNGs
     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
     if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
     if (std::getenv("WFC_BOTTEST")) { runBotTest(); return false; }                 // offline bots: TDM human + bots, then 7 v 8

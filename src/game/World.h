@@ -1864,6 +1864,7 @@ private:
     void prewarmSkin(const assets::SkinnedModel& m);   // GPU-skin model build at load (Rendering's prewarmSkinnedMesh)
     int texLoaded_ = 0, texFailed_ = 0;
     render::TextureHandle resolveTexture(const std::string& uri);
+    void prefetchMaterialTextures(const std::vector<render::Material>& mats);   // [Systems] the batch's PNGs decode on worker threads
     void resolveModelTextures(assets::SkinnedModel& m);
 
     // Ion Blaster as an animated skeletal mesh (own Fire/Reload/Idle anims, sockets, notifies).

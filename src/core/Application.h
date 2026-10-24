@@ -42,7 +42,8 @@ private:
     void runOnlineFlowTest();   // [Frontend] WFC_ONLINEFLOWTEST: two frontend flows, each on a real UdpSession, over loopback UDP
     void runFlowSimTest();     // WFC_FLOWSIMTEST=<MP|ESC|CP>: the playtest section 43 flows' sim half (solo launch -> play -> QA)
     void runSoloLaunchTest();   // [Systems] WFC_SOLOLAUNCHTEST: a private match hosted alone takes the local loop (no driver); same seed = same hash
-    void runVoiceTest();        // [Systems] WFC_VOICETEST: the voice lane end to end over loopback (SNR, loss, mute, indicator)
+    void runVoiceTest();
+    void runImageCompareTest();  // [Systems] WFC_IMAGECMPTEST: every PNG under WFC_IMAGECMP_ROOTS decoded by GDI+ and WIC, compared per class        // [Systems] WFC_VOICETEST: the voice lane end to end over loopback (SNR, loss, mute, indicator)
     int exitCode_ = -1;        // [Systems] set by the headless / net runs (main returns it when init stops); -1 = the default
 public:
     int exitCode() const { return exitCode_; }
