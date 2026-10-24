@@ -779,7 +779,8 @@ void World::buildGraybox() {
 
 void World::handleInput(const platform::InputFrame& in, float dt) {
     struct ProfScope { double t0 = profNowMs(); ~ProfScope() { const double ms = profNowMs() - t0; if (spawnProf() && ms > 8.0) LOG_INFO("SPAWNPROF World::handleInput %.1f ms", ms); } } profScope;
-    player_.controller().handleInput(cp_.active && cp_.cinematicMode ? platform::InputFrame{} : in, dt);   // Dash (Shift) is latched by PlayerController; campaign cinematic mode: no input
+    player_.controller().handleInput(cp_.active && cp_.cinematicMode ? platform::InputFrame{} : in, dt);
+    seat2HandleInput(dt);   // split screen: the second local seat's controller   // Dash (Shift) is latched by PlayerController; campaign cinematic mode: no input
     if (in.wasPressed(platform::Button::DebugNextStart)) teleportToStart(startCursor_ + 1);   // test spawn cycling
     if (in.wasPressed(platform::Button::DebugPrevStart)) teleportToStart(startCursor_ - 1);
 }
@@ -2188,6 +2189,8 @@ void World::preloadHeldWeaponsOfPawns() {
 
 void World::tickPrefix(float dt) {
     joinStep();
+    seat2QueueCommand();   // split screen: the second local seat's command for this step (applied with the remote ones)
+    if (seat2_ >= 0) seat2Ctl_.tickCameraCollision(dt);
     applyQueuedRemoteCommands(dt);   // the Remote seats' commands for this step (main thread, after the background part joined)
     tickSlotSwaps(dt);   // session slot handovers at their agreed tick (main thread, before any bot / pawn work)
     applyPendingLateSeats();    // join in progress: dormant seats waking this tick (before their picks)
@@ -3228,6 +3231,9 @@ bool World::launchMatch(const MatchLaunch& l) {
     evictUnusedAssets();
     LOG_INFO("match: launched %s %s (goal %d, time %d s, bots %d: friendly %d enemy %d %s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore,
              l.settings.timeLimit, nb, l.bots.friendly, l.bots.enemy, botDifficultyName(l.bots.difficulty));
+    seat2_ = -1; seat2Pad_ = -1;   // a new match: no second local seat until a pad joins
+    if (std::getenv("WFC_SEAT2BOT") && localPlayer_ >= 0)   // test only: seat 2 joins with the first player's pick
+        addLocalSeat(1, match_.players()[(size_t)localPlayer_].selection, match_.players()[(size_t)localPlayer_].hasSelectedCharacter);
     {   // [integration 09b] Systems M09b / M09c glue: every other participant's (bots') weapon cues and character cue set are
         // decoded at match load, not on a bot's first shot / spawn (PC ADAPTATION, load scheduling).
         std::vector<std::string> cls;
@@ -3814,6 +3820,36 @@ RemoteCommand World::encodeLocalCommand() {
         const core::Vec3 camPos = ctl.cameraPos(), dir = core::forwardFromYawPitch(yaw, pitch);
         const core::Vec3 start = camPos + dir * core::dot(player_.pawn().actorLocation() - camPos, dir);
         const Weapon* w = veh ? player_.pawn().vehicleWeapon() : &player_.pawn().weapon();
+        const float range = w && w->rangeM > 0.0f ? w->rangeM : 300.0f;
+        core::Vec3 end = start + dir * range; float t;
+        const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+        if (line && line->segmentHit(start, end, t)) end = start + dir * (range * t);
+        c.aimPoint = core::Vec3{std::round(end.x * 100.0f) / 100.0f, std::round(end.y * 100.0f) / 100.0f, std::round(end.z * 100.0f) / 100.0f};
+        c.buttons |= kRemoteBitAimPoint;
+    }
+    return c;
+}
+
+// Split screen: the same encoding for seat 2's controller and pawn.
+RemoteCommand World::encodeSeatCommand(PlayerController& ctl, Character* pawnp, int p, bool dead) {
+    Character& pawn = *pawnp;
+    RemoteCommand c; c.tick = (uint32_t)(simTick_ + 1);
+    const MoveIntent& mi = ctl.moveIntent();
+    auto q8 = [](float v) { return (int8_t)std::lround(core::clampf(v, -1.0f, 1.0f) * 127.0f); };
+    c.moveForward = q8(mi.moveForward); c.moveRight = q8(mi.moveRight);
+    if (const SeatMissile* gm = seatMissile(p); gm && gm->alive) { c.moveForward = q8(ctl.guideUD()); c.moveRight = q8(ctl.guideLR()); }
+    const bool veh = !dead && pawn.moveForm() == Form::Vehicle;
+    const float yaw = veh ? mi.faceYaw : ctl.camYaw(), pitch = veh ? mi.viewPitch : ctl.camPitch();   // the aim the direct path uses
+    const float kR = 65536.0f / 6.2831853f;   // rotator units
+    const uint16_t qy = (uint16_t)(std::lround(yaw * kR) & 0xffff);
+    const int16_t qp = (int16_t)std::lround(core::clampf(pitch, -1.5707963f, 1.5707963f) * kR);
+    c.aimYaw = std::remainder((float)qy / kR, 6.2831853f); c.aimPitch = (float)qp / kR;
+    c.buttons = ctl.heldBits(); c.pressed = ctl.takePressedBits();
+    if (ctl.takeLookActive()) c.buttons |= kRemoteBitActive;
+    if (!dead) {   // the crosshair ray's hit, from the direct path's start (the camera line's point nearest the pawn), absolute, 1 cm
+        const core::Vec3 camPos = ctl.cameraPos(), dir = core::forwardFromYawPitch(yaw, pitch);
+        const core::Vec3 start = camPos + dir * core::dot(pawn.actorLocation() - camPos, dir);
+        const Weapon* w = veh ? pawn.vehicleWeapon() : &pawn.weapon();
         const float range = w && w->rangeM > 0.0f ? w->rangeM : 300.0f;
         core::Vec3 end = start + dir * range; float t;
         const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);

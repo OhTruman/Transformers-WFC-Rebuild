@@ -1,0 +1,203 @@
+diff --git a/src/game/PlayerController.h b/src/game/PlayerController.h
+index 36c468a0..125e6a21 100644
+--- a/src/game/PlayerController.h
++++ b/src/game/PlayerController.h
+@@ -276,6 +276,8 @@ private:
+     bool wireSeat_ = false;   // online: the pawn moves only through the seat commands (no direct pawn writes from input)
+ public:
+     void setWireSeat(bool w) { wireSeat_ = w; }
++    // A controller that never steps its pawn (split-screen seat 2) takes the collision worlds here (applyToPawn sets them otherwise).
++    void setWorlds(const CollisionWorld* col, const CollisionWorld* ray) { col_ = col; colRay_ = ray; }
+     bool tryBeginTransformSeat(Character& pawn, const CollisionWorld* col) { return tryBeginTransformOn(pawn, col, &cantTransformCount_, &transformFailedCount_); }   // + the HUD pulses
+ private:
+     float guideYaw0_ = 0.0f, guidePitch0_ = 0.0f, guideLR_ = 0.0f, guideUD_ = 0.0f;
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 6f647909..2cceb39e 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -779,7 +779,8 @@ void World::buildGraybox() {
+ 
+ void World::handleInput(const platform::InputFrame& in, float dt) {
+     struct ProfScope { double t0 = profNowMs(); ~ProfScope() { const double ms = profNowMs() - t0; if (spawnProf() && ms > 8.0) LOG_INFO("SPAWNPROF World::handleInput %.1f ms", ms); } } profScope;
+-    player_.controller().handleInput(cp_.active && cp_.cinematicMode ? platform::InputFrame{} : in, dt);   // Dash (Shift) is latched by PlayerController; campaign cinematic mode: no input
++    player_.controller().handleInput(cp_.active && cp_.cinematicMode ? platform::InputFrame{} : in, dt);
++    seat2HandleInput(dt);   // split screen: the second local seat's controller   // Dash (Shift) is latched by PlayerController; campaign cinematic mode: no input
+     if (in.wasPressed(platform::Button::DebugNextStart)) teleportToStart(startCursor_ + 1);   // test spawn cycling
+     if (in.wasPressed(platform::Button::DebugPrevStart)) teleportToStart(startCursor_ - 1);
+ }
+@@ -2188,6 +2189,8 @@ void World::preloadHeldWeaponsOfPawns() {
+ 
+ void World::tickPrefix(float dt) {
+     joinStep();
++    seat2QueueCommand();   // split screen: the second local seat's command for this step (applied with the remote ones)
++    if (seat2_ >= 0) seat2Ctl_.tickCameraCollision(dt);
+     applyQueuedRemoteCommands(dt);   // the Remote seats' commands for this step (main thread, after the background part joined)
+     tickSlotSwaps(dt);   // session slot handovers at their agreed tick (main thread, before any bot / pawn work)
+     applyPendingLateSeats();    // join in progress: dormant seats waking this tick (before their picks)
+@@ -3228,6 +3231,9 @@ bool World::launchMatch(const MatchLaunch& l) {
+     evictUnusedAssets();
+     LOG_INFO("match: launched %s %s (goal %d, time %d s, bots %d: friendly %d enemy %d %s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore,
+              l.settings.timeLimit, nb, l.bots.friendly, l.bots.enemy, botDifficultyName(l.bots.difficulty));
++    seat2_ = -1; seat2Pad_ = -1;   // a new match: no second local seat until a pad joins
++    if (std::getenv("WFC_SEAT2BOT") && localPlayer_ >= 0)   // test only: seat 2 joins with the first player's pick
++        addLocalSeat(1, match_.players()[(size_t)localPlayer_].selection, match_.players()[(size_t)localPlayer_].hasSelectedCharacter);
+     {   // [integration 09b] Systems M09b / M09c glue: every other participant's (bots') weapon cues and character cue set are
+         // decoded at match load, not on a bot's first shot / spawn (PC ADAPTATION, load scheduling).
+         std::vector<std::string> cls;
+@@ -3824,6 +3830,36 @@ RemoteCommand World::encodeLocalCommand() {
+     return c;
+ }
+ 
++// Split screen: the same encoding for seat 2's controller and pawn.
++RemoteCommand World::encodeSeatCommand(PlayerController& ctl, Character* pawnp, int p, bool dead) {
++    Character& pawn = *pawnp;
++    RemoteCommand c; c.tick = (uint32_t)(simTick_ + 1);
++    const MoveIntent& mi = ctl.moveIntent();
++    auto q8 = [](float v) { return (int8_t)std::lround(core::clampf(v, -1.0f, 1.0f) * 127.0f); };
++    c.moveForward = q8(mi.moveForward); c.moveRight = q8(mi.moveRight);
++    if (const SeatMissile* gm = seatMissile(p); gm && gm->alive) { c.moveForward = q8(ctl.guideUD()); c.moveRight = q8(ctl.guideLR()); }
++    const bool veh = !dead && pawn.moveForm() == Form::Vehicle;
++    const float yaw = veh ? mi.faceYaw : ctl.camYaw(), pitch = veh ? mi.viewPitch : ctl.camPitch();   // the aim the direct path uses
++    const float kR = 65536.0f / 6.2831853f;   // rotator units
++    const uint16_t qy = (uint16_t)(std::lround(yaw * kR) & 0xffff);
++    const int16_t qp = (int16_t)std::lround(core::clampf(pitch, -1.5707963f, 1.5707963f) * kR);
++    c.aimYaw = std::remainder((float)qy / kR, 6.2831853f); c.aimPitch = (float)qp / kR;
++    c.buttons = ctl.heldBits(); c.pressed = ctl.takePressedBits();
++    if (ctl.takeLookActive()) c.buttons |= kRemoteBitActive;
++    if (!dead) {   // the crosshair ray's hit, from the direct path's start (the camera line's point nearest the pawn), absolute, 1 cm
++        const core::Vec3 camPos = ctl.cameraPos(), dir = core::forwardFromYawPitch(yaw, pitch);
++        const core::Vec3 start = camPos + dir * core::dot(pawn.actorLocation() - camPos, dir);
++        const Weapon* w = veh ? pawn.vehicleWeapon() : &pawn.weapon();
++        const float range = w && w->rangeM > 0.0f ? w->rangeM : 300.0f;
++        core::Vec3 end = start + dir * range; float t;
++        const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
++        if (line && line->segmentHit(start, end, t)) end = start + dir * (range * t);
++        c.aimPoint = core::Vec3{std::round(end.x * 100.0f) / 100.0f, std::round(end.y * 100.0f) / 100.0f, std::round(end.z * 100.0f) / 100.0f};
++        c.buttons |= kRemoteBitAimPoint;
++    }
++    return c;
++}
++
+ core::Vec3 World::seatEye(int p) const {
+     const Character* c = participantPawn(p);
+     return c ? botEye(*c) : core::Vec3{0, 0, 0};
+diff --git a/src/game/World.h b/src/game/World.h
+index 871c2a19..f11daa92 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -929,6 +929,14 @@ public:
+     bool applyRemoteCommand(int matchPlayer, const RemoteCommand& c);
+     // Online: this machine's command for tick simTick() + 1 from the local controller (the wire encoding; see the contract).
+     RemoteCommand encodeLocalCommand();
++    // Split screen: a second local human seat (a Remote participant fed by its own local controller; GAMEPLAY_SPLITSCREEN_PLAN.md).
++    int addLocalSeat(int pad, const CharacterSelection& sel, bool selected);   // the seat's match player (-1: none)
++    void removeLocalSeat();
++    void setSeat2Input(const platform::InputFrame& in);   // pad 2's frame, before handleInput
++    int localSeatCount() const;
++    int localSeatPlayer(int seat) const;   // split seat 0 / 1 -> its match player
++    void seatCamera(int seat, render::Camera& cam) const;
++    RemoteCommand encodeSeatCommand(PlayerController& ctl, Character* pawn, int p, bool dead);
+     bool onlineSeats() const { return onlineSeats_; }
+     void setLocalWireOverride(int v) { localWireOverride_ = v; }   // tests: -1 auto (seed), 0 direct, 1 wire; applies at the next launch
+     core::Vec3 seatEye(int matchPlayer) const;                      // the seat path's shot origin (eye) of a participant
+@@ -1231,6 +1239,11 @@ private:
+     void respawnPlayer();
+ 
+     Player player_;
++    int seat2_ = -1, seat2Pad_ = -1;          // split screen: the second local seat's match player, its pad
++    PlayerController seat2Ctl_;                // its camera / aim / intent (wire seat: commands only)
++    platform::InputFrame seat2In_;
++    void seat2HandleInput(float dt);
++    void seat2QueueCommand();
+     std::vector<Block> blocks_;
+     std::vector<std::unique_ptr<Actor>> actors_;
+     std::vector<PickupFactory*> pickupFactories_;     // owned by actors_
+diff --git a/src/game/WorldLocalSeat.cpp b/src/game/WorldLocalSeat.cpp
+new file mode 100644
+index 00000000..db40db06
+--- /dev/null
++++ b/src/game/WorldLocalSeat.cpp
+@@ -0,0 +1,83 @@
++// Split screen, Gameplay part 1 (docs/handoff/GAMEPLAY_SPLITSCREEN_PLAN.md): a second local human seat on the remote-seat path.
++// Seat 2 is a participant of kind Remote whose RemoteCommand is built locally every step from its own PlayerController (wire seat:
++// it never writes the pawn directly), fed by pad 2's InputFrame; the seat path (applyRemoteNow / applySeat / tickRemoteSeats) then
++// simulates it as it simulates an online peer. WFC_SEAT2BOT=1 (test only): seat 2 joins at the match start and a scripted input
++// (forward + a slow turn, fire bursts, a jump every 5 s) drives it.
++#include "game/World.h"
++#include "core/Log.h"
++
++#include <cmath>
++#include <cstdlib>
++
++namespace game {
++
++int World::addLocalSeat(int pad, const CharacterSelection& sel, bool selected) {
++    if (seat2_ >= 0 || !matchActive_) return seat2_;
++    RemoteSeat r;
++    r.name = "Player 2";
++    const int me = localPlayer_;
++    r.team = me >= 0 && (size_t)me < match_.players().size() ? match_.players()[(size_t)me].team : 0;   // the first player's side
++    r.member = "local:pad" + std::to_string(pad);
++    r.selection = sel; r.selected = selected;
++    seat2_ = addRemoteParticipant(r, true);
++    seat2Pad_ = pad;
++    seat2Ctl_ = PlayerController{};
++    seat2Ctl_.setWireSeat(true);
++    seat2In_ = platform::InputFrame{};
++    LOG_INFO("local seat 2: pad %d joined as p%d (team %d)", pad, seat2_, r.team);
++    return seat2_;
++}
++
++void World::removeLocalSeat() {
++    if (seat2_ < 0) return;
++    SlotSwap s; s.matchPlayer = seat2_; s.toBot = true;   // leave-to-bot, as an online seat that leaves
++    applySlotSwap(s);
++    LOG_INFO("local seat 2: p%d left (a bot takes the slot)", seat2_);
++    seat2_ = -1; seat2Pad_ = -1;
++}
++
++void World::setSeat2Input(const platform::InputFrame& in) { seat2In_ = in; }
++
++// Per frame (handleInput): seat 2's controller takes its input (camera, intent, buttons) for its pawn.
++void World::seat2HandleInput(float dt) {
++    if (seat2_ < 0) return;
++    static const bool bot = [] { const char* e = std::getenv("WFC_SEAT2BOT"); return e && std::atoi(e) != 0; }();
++    if (bot) {   // the scripted test input
++        platform::InputFrame f;
++        const double t = (double)simTick_ / 60.0;
++        f.down[(int)platform::Button::Forward] = true;
++        f.mouseDX = 2.0f;                                       // a slow turn
++        f.down[(int)platform::Button::Fire] = std::fmod(t, 4.0) < 1.5;
++        if (std::fmod(t, 5.0) < 1.0 / 60.0) { f.pressed[(int)platform::Button::Jump] = true; f.down[(int)platform::Button::Jump] = true; }
++        seat2In_ = f;
++    }
++    Character* pc = participantPawnMutable(seat2_);
++    seat2Ctl_.possess(pc);
++    seat2Ctl_.setWorlds(collision_.valid() ? &collision_ : nullptr, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
++    if (pc) seat2Ctl_.handleInput(cp_.active && cp_.cinematicMode ? platform::InputFrame{} : seat2In_, dt);
++}
++
++// Per step (tickPrefix, before the queued remote commands apply): seat 2's command for the step about to run.
++void World::seat2QueueCommand() {
++    if (seat2_ < 0) return;
++    Character* pc = participantPawnMutable(seat2_);
++    if (!pc) return;
++    const bool dead = !match_.players()[(size_t)seat2_].alive;
++    applyRemoteCommand(seat2_, encodeSeatCommand(seat2Ctl_, pc, seat2_, dead));
++    static const bool bot = std::getenv("WFC_SEAT2BOT") != nullptr;
++    if (bot && simTick_ % 600 == 0) {
++        const core::Vec3 p = pc->actorLocation();
++        const MatchPlayer& mp = match_.players()[(size_t)seat2_];
++        LOG_INFO("SEAT2 tick %lld p%d at %.1f %.1f %.1f yaw %.2f alive %d kills %d deaths %d", (long long)simTick_, seat2_, p.x, p.y, p.z,
++                 seat2Ctl_.camYaw(), (int)mp.alive, mp.kills, mp.deaths);
++    }
++}
++
++int World::localSeatCount() const { return seat2_ >= 0 ? 2 : 1; }
++int World::localSeatPlayer(int seat) const { return seat == 1 ? seat2_ : localPlayer_; }
++void World::seatCamera(int seat, render::Camera& cam) const {
++    if (seat == 1 && seat2_ >= 0) seat2Ctl_.updateCamera(cam);
++    else player_.controller().updateCamera(cam);
++}
++
++} // namespace game

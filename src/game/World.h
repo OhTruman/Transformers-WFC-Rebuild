@@ -929,6 +929,14 @@ public:
     bool applyRemoteCommand(int matchPlayer, const RemoteCommand& c);
     // Online: this machine's command for tick simTick() + 1 from the local controller (the wire encoding; see the contract).
     RemoteCommand encodeLocalCommand();
+    // Split screen: a second local human seat (a Remote participant fed by its own local controller; GAMEPLAY_SPLITSCREEN_PLAN.md).
+    int addLocalSeat(int pad, const CharacterSelection& sel, bool selected);   // the seat's match player (-1: none)
+    void removeLocalSeat();
+    void setSeat2Input(const platform::InputFrame& in);   // pad 2's frame, before handleInput
+    int localSeatCount() const;
+    int localSeatPlayer(int seat) const;   // split seat 0 / 1 -> its match player
+    void seatCamera(int seat, render::Camera& cam) const;
+    RemoteCommand encodeSeatCommand(PlayerController& ctl, Character* pawn, int p, bool dead);
     bool onlineSeats() const { return onlineSeats_; }
     void setLocalWireOverride(int v) { localWireOverride_ = v; }   // tests: -1 auto (seed), 0 direct, 1 wire; applies at the next launch
     core::Vec3 seatEye(int matchPlayer) const;                      // the seat path's shot origin (eye) of a participant
@@ -1231,6 +1239,11 @@ private:
     void respawnPlayer();
 
     Player player_;
+    int seat2_ = -1, seat2Pad_ = -1;          // split screen: the second local seat's match player, its pad
+    PlayerController seat2Ctl_;                // its camera / aim / intent (wire seat: commands only)
+    platform::InputFrame seat2In_;
+    void seat2HandleInput(float dt);
+    void seat2QueueCommand();
     std::vector<Block> blocks_;
     std::vector<std::unique_ptr<Actor>> actors_;
     std::vector<PickupFactory*> pickupFactories_;     // owned by actors_

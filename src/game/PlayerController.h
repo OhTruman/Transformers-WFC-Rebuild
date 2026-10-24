@@ -276,6 +276,8 @@ private:
     bool wireSeat_ = false;   // online: the pawn moves only through the seat commands (no direct pawn writes from input)
 public:
     void setWireSeat(bool w) { wireSeat_ = w; }
+    // A controller that never steps its pawn (split-screen seat 2) takes the collision worlds here (applyToPawn sets them otherwise).
+    void setWorlds(const CollisionWorld* col, const CollisionWorld* ray) { col_ = col; colRay_ = ray; }
     bool tryBeginTransformSeat(Character& pawn, const CollisionWorld* col) { return tryBeginTransformOn(pawn, col, &cantTransformCount_, &transformFailedCount_); }   // + the HUD pulses
 private:
     float guideYaw0_ = 0.0f, guidePitch0_ = 0.0f, guideLR_ = 0.0f, guideUD_ = 0.0f;
