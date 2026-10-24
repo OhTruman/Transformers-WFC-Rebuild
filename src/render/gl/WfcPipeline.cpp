@@ -1717,6 +1717,7 @@ bool Pipeline::load(const std::string& mapArg) {
         }
     }
     loadMovers(dataDir_ + "/movers.json");
+    loadCullDistances(dataDir_);
     yieldLoad();
     loadMapFx(mapFxPath());
     loadFogVolumes(dataDir_ + "/fog_volumes.json");
@@ -4068,6 +4069,7 @@ int Pipeline::upload(const MeshData& m) {
             d.actorPath = s.actorPath;
             std::transform(d.actorPath.begin(), d.actorPath.end(), d.actorPath.begin(), ::tolower);
         }
+        d.cullKey = s.nodeName + "|" + s.sourceMesh;
         // authored bHidden: actor-placed nodes stay resident (Gameplay may unhide them, e.g. SeqAct_ToggleHidden
         // by game rule); collection components without an actor identity are dropped as before
         // AssetTools world.glb extras.hidden_game (PrimitiveComponent.HiddenGame; e.g. Seed's 29 tubelight
@@ -4959,7 +4961,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                                   pl[2] >= 0 ? s.bmax.z : s.bmin.z};
                     if (pl[0] * pv.x + pl[1] * pv.y + pl[2] * pv.z + pl[3] < 0) out = true;
                 }
-                if (out) { ++counts_.culled; continue; }
+                if (out || beyondCullDistance(s)) { ++counts_.culled; continue; }
             }
             if (P.fogShape) {                              // linked fog-volume shape (non-linked ones never get here)
                 drawFogVolume(s, subModel, s.prog, fogVolumeFor(s.comp));
@@ -7060,7 +7062,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
                 core::Vec3 pv{pl[0] >= 0 ? s.bmax.x : s.bmin.x, pl[1] >= 0 ? s.bmax.y : s.bmin.y, pl[2] >= 0 ? s.bmax.z : s.bmin.z};
                 if (pl[0] * pv.x + pl[1] * pv.y + pl[2] * pv.z + pl[3] < 0) out = true;
             }
-            if (out) { ++counts_.culled; continue; }
+            if (out || beyondCullDistance(s)) { ++counts_.culled; continue; }
             if (occEst) occSubs.push_back(si);
             if (!mdiEnvFilled_[(size_t)s.mdiRow]) {              // the static light environment, first sight
                 if (!s.envReady) {
@@ -10148,6 +10150,32 @@ void Pipeline::ppvFogFrame() {
 
 // Chapter loader, stage 1 (docs/handoff/RENDERING_CHAPTER_LOADER.md): one more unit merged into the loaded Pipeline - after
 // load() of the persistent unit, which keeps its post-process, R1 data and LightsVisibilitiesVolume.
+// (300 fps, RE CAMPAIGN_CULLING_LOD_RE.md 2) the per-primitive cull distances (tools/render/build_cull_distance.py), merged over
+// the map's / chapter units' render dirs; none = nothing culled by distance (the file is optional)
+void Pipeline::loadCullDistances(const std::string& dir) {
+    const std::string t = readText(dir + "/cull_distance.json");
+    assets::Json J;
+    if (t.empty() || !assets::Json::parse(t, J)) return;
+    size_t n = 0;
+    for (const auto& kv : J["nodes"].obj) { const float d = kv.second.asFloat(0.0f); if (d > 0.0f) { cullDist_[kv.first] = d * 0.01f; ++n; } }
+    for (auto& g : meshes_) for (Sub& s : g.subs) s.cullDist = -1.0f;   // re-resolve (a unit may load after a draw)
+    LOG_INFO("wfc: cull distances: %zu primitives (%s)", n, dir.c_str());
+}
+
+// UE3 (stock, RE section 2): a primitive is culled when |bounds origin - view origin| > CachedCullDistance + the bounds' sphere radius
+bool Pipeline::beyondCullDistance(Sub& s) {
+    if (s.cullDist < 0.0f) {
+        auto it = cullDist_.empty() ? cullDist_.end() : cullDist_.find(s.cullKey);
+        s.cullDist = it == cullDist_.end() ? 0.0f : it->second;
+    }
+    if (s.cullDist <= 0.0f) return false;
+    static const bool off = std::getenv("WFC_NOCULLDIST") != nullptr;   // A/B
+    if (off) return false;
+    const core::Vec3 c = (s.bmin + s.bmax) * 0.5f;
+    const float r = core::length(s.bmax - s.bmin) * 0.5f;
+    return core::length(c - camPos_) > s.cullDist + r;
+}
+
 bool Pipeline::loadSublevel(const std::string& unitDir) {
     if (!active_) { LOG_WARN("wfc: sublevel %s: no loaded Pipeline to merge into", unitDir.c_str()); return false; }
     std::string dir = unitDir;
@@ -10165,6 +10193,7 @@ bool Pipeline::loadSublevel(const std::string& unitDir) {
     addLightingRecords(L, dir, false);
     yieldLoad();
     loadMovers(dir + "/movers.json");
+    loadCullDistances(dir);
     loadMapFx(dir + "/map_fx_runtime.json");
     loadFogVolumes(dir + "/fog_volumes.json", true);
     {   // MaterialInstanceActor -> MIC; energy-death instances; slot materials: added by key

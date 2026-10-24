@@ -373,6 +373,8 @@ private:
         LightEnv env;
         std::string actor;        // lower-case actor name of actor-placed world nodes (movers / hidden state)
         std::string actorPath;    // lower-case full actor path (extras.actor_path; empty in older data)
+        std::string cullKey;      // "<node>|<mesh>": its cull_distance.json key
+        float cullDist = -1.0f;   // its CachedCullDistance in metres (0 = never culled; < 0 = not looked up yet)
     };
     struct GpuMesh {
         GLuint vao = 0, vbo = 0, ibo = 0;
@@ -1595,6 +1597,10 @@ private:
     std::set<std::string> actorHiddenViaPathOnly_;            // short names set only through a full path (not for path subs)
     std::set<std::string> authoredHiddenActors_;
     bool loadMovers(const std::string& path);
+    // (300 fps, RE CAMPAIGN_CULLING_LOD_RE.md 2) <render dir>/cull_distance.json: "<node>|<mesh>" -> CachedCullDistance (UE units)
+    void loadCullDistances(const std::string& dir);
+    bool beyondCullDistance(Sub& s);
+    std::unordered_map<std::string, float> cullDist_;
     core::Mat4 moverDelta(const MoverRT& m, float t) const;
     void updateMovers();
     bool actorHidden(const std::string& actorLower, const std::string& pathLower = std::string()) const;
