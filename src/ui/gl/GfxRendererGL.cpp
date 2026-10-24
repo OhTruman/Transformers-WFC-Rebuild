@@ -49,6 +49,7 @@ uniform vec4 uColor, uMul, uAdd;
 uniform sampler2D uTex;
 uniform vec2 uTexSize;
 uniform float uFocal;
+uniform float uGammaExp;
 varying vec2 vFill;
 void main() {
     vec4 c;
@@ -64,6 +65,7 @@ void main() {
         c = texture2D(uTex, vec2(1.0 / max(t, 1e-6), 0.5));
     } else c = texture2D(uTex, vFill / uTexSize);
     c = clamp(c * uMul + uAdd, 0.0, 1.0);
+    c.rgb = pow(c.rgb, vec3(uGammaExp));   // (bGammaCorrection movies: the display gamma; else 1)
     gl_FragColor = vec4(c.rgb * c.a, c.a);
 }
 )";
@@ -171,6 +173,7 @@ bool GfxRendererGL::init() {
     uW1_ = glx::GetUniformLocation(prog_, "uW1");
     uF1_ = glx::GetUniformLocation(prog_, "uF1");
     uMode_ = glx::GetUniformLocation(prog_, "uMode");
+    uGamma_ = glx::GetUniformLocation(prog_, "uGammaExp");
     uColor_ = glx::GetUniformLocation(prog_, "uColor");
     uMul_ = glx::GetUniformLocation(prog_, "uMul");
     uAdd_ = glx::GetUniformLocation(prog_, "uAdd");
@@ -926,6 +929,7 @@ void GfxRendererGL::setFill(const gfx::FillStyle& fs, const gfx::Matrix& world, 
     else if (fs.type == gfx::FillStyle::Focal) mode = 3;
     else if (fs.isBitmap()) mode = 4;
     glx::Uniform1i(uMode_, mode);
+    glx::Uniform1f(uGamma_, gammaExp_);
     glx::Uniform4f(uColor_, fs.color.r / 255.0f, fs.color.g / 255.0f, fs.color.b / 255.0f, fs.color.a / 255.0f);
     if (mode >= 1 && mode <= 3 && !fs.grad.empty()) {
         glBindTexture(GL_TEXTURE_2D, gradientTexture(fs));

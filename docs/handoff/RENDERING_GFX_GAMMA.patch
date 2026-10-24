@@ -1,0 +1,56 @@
+diff -ru a/src/ui/gl/GfxRendererGL.cpp b/src/ui/gl/GfxRendererGL.cpp
+--- a/src/ui/gl/GfxRendererGL.cpp	2026-10-23 23:27:20.195254800 -0500
++++ b/src/ui/gl/GfxRendererGL.cpp	2026-10-23 23:27:20.176691200 -0500
+@@ -49,6 +49,7 @@
+ uniform sampler2D uTex;
+ uniform vec2 uTexSize;
+ uniform float uFocal;
++uniform float uGammaExp;
+ varying vec2 vFill;
+ void main() {
+     vec4 c;
+@@ -64,6 +65,7 @@
+         c = texture2D(uTex, vec2(1.0 / max(t, 1e-6), 0.5));
+     } else c = texture2D(uTex, vFill / uTexSize);
+     c = clamp(c * uMul + uAdd, 0.0, 1.0);
++    c.rgb = pow(c.rgb, vec3(uGammaExp));   // (bGammaCorrection movies: the display gamma; else 1)
+     gl_FragColor = vec4(c.rgb * c.a, c.a);
+ }
+ )";
+@@ -171,6 +173,7 @@
+     uW1_ = glx::GetUniformLocation(prog_, "uW1");
+     uF1_ = glx::GetUniformLocation(prog_, "uF1");
+     uMode_ = glx::GetUniformLocation(prog_, "uMode");
++    uGamma_ = glx::GetUniformLocation(prog_, "uGammaExp");
+     uColor_ = glx::GetUniformLocation(prog_, "uColor");
+     uMul_ = glx::GetUniformLocation(prog_, "uMul");
+     uAdd_ = glx::GetUniformLocation(prog_, "uAdd");
+@@ -926,6 +929,7 @@
+     else if (fs.type == gfx::FillStyle::Focal) mode = 3;
+     else if (fs.isBitmap()) mode = 4;
+     glx::Uniform1i(uMode_, mode);
++    glx::Uniform1f(uGamma_, gammaExp_);
+     glx::Uniform4f(uColor_, fs.color.r / 255.0f, fs.color.g / 255.0f, fs.color.b / 255.0f, fs.color.a / 255.0f);
+     if (mode >= 1 && mode <= 3 && !fs.grad.empty()) {
+         glBindTexture(GL_TEXTURE_2D, gradientTexture(fs));
+diff -ru a/src/ui/gl/GfxRendererGL.h b/src/ui/gl/GfxRendererGL.h
+--- a/src/ui/gl/GfxRendererGL.h	2026-10-23 23:27:20.119996900 -0500
++++ b/src/ui/gl/GfxRendererGL.h	2026-10-23 23:27:20.100931300 -0500
+@@ -22,6 +22,9 @@
+     // Base matrix that maps a movie stage (twips) into the window ("showAll": uniform scale, centred).
+     static gfx::Matrix stageMatrix(float stageW, float stageH, int width, int height);
+     static gfx::Matrix movieMatrix(const gfx::Player& p, int width, int height);   // honours Stage.scaleMode noScale
++    // UE3 GFxMovie bGammaCorrection: the movie's colours go through the display gamma like the scene - exponent
++    // 2.2 / DisplayGamma while such a movie draws (the brightness calibration image), 1 otherwise (every other movie)
++    void setGammaExponent(float e) { gammaExp_ = e > 0.0f ? e : 1.0f; }
+     // (split screen) the same fits into a view rect of the window (pixels, origin top-left: render::splitViewPixels) - one
+     // HUD movie per seat. No clip: a movie's off-stage content can cross into the other view (the stage itself stays inside)
+     static gfx::Matrix stageMatrix(float stageW, float stageH, int x, int y, int width, int height);
+@@ -157,6 +160,7 @@
+     int uW1_ = -1, uF1_ = -1;   // the second matrix rows (looked up once, not per draw)
+     unsigned boundBuf_ = ~0u;   // the GL_ARRAY_BUFFER this renderer last bound (~0 = unknown)
+     void bindArray(unsigned buffer);
++    int uGamma_ = -1; float gammaExp_ = 1.0f;   // (setGammaExponent)
+     int uView_ = -1, uWorld_ = -1, uFillInv_ = -1, uMode_ = -1, uColor_ = -1, uMul_ = -1, uAdd_ = -1, uTex_ = -1, uTexSize_ = -1, uFocal_ = -1;
+ };
+ 

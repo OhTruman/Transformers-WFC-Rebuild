@@ -22,6 +22,9 @@ public:
     // Base matrix that maps a movie stage (twips) into the window ("showAll": uniform scale, centred).
     static gfx::Matrix stageMatrix(float stageW, float stageH, int width, int height);
     static gfx::Matrix movieMatrix(const gfx::Player& p, int width, int height);   // honours Stage.scaleMode noScale
+    // UE3 GFxMovie bGammaCorrection: the movie's colours go through the display gamma like the scene - exponent
+    // 2.2 / DisplayGamma while such a movie draws (the brightness calibration image), 1 otherwise (every other movie)
+    void setGammaExponent(float e) { gammaExp_ = e > 0.0f ? e : 1.0f; }
     // (split screen) the same fits into a view rect of the window (pixels, origin top-left: render::splitViewPixels) - one
     // HUD movie per seat. No clip: a movie's off-stage content can cross into the other view (the stage itself stays inside)
     static gfx::Matrix stageMatrix(float stageW, float stageH, int x, int y, int width, int height);
@@ -157,6 +160,7 @@ private:
     int uW1_ = -1, uF1_ = -1;   // the second matrix rows (looked up once, not per draw)
     unsigned boundBuf_ = ~0u;   // the GL_ARRAY_BUFFER this renderer last bound (~0 = unknown)
     void bindArray(unsigned buffer);
+    int uGamma_ = -1; float gammaExp_ = 1.0f;   // (setGammaExponent)
     int uView_ = -1, uWorld_ = -1, uFillInv_ = -1, uMode_ = -1, uColor_ = -1, uMul_ = -1, uAdd_ = -1, uTex_ = -1, uTexSize_ = -1, uFocal_ = -1;
 };
 
