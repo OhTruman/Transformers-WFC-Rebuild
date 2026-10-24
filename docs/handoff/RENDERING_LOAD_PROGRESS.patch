@@ -1,0 +1,125 @@
+diff -ru a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+--- a/src/core/Application_Frontend.cpp	2026-10-23 23:48:45.718578100 -0500
++++ b/src/core/Application_Frontend.cpp	2026-10-23 23:48:45.698508900 -0500
+@@ -1425,6 +1425,7 @@
+     // The loading screen keeps presenting during the synchronous load (core::loadYield): window messages, the
+     // LoadScreen_GFX animation and the TF_LoadingScreen underlay, one frame per yield.
+     core::resetLoadYieldStats();
++    core::beginLoadProgress(m.map->runtimeDir + "|" + m.modeTag);   // (the loading screen's bar: core::loadProgress)
+     core::setLoadYield([this](double dt) {
+         platform::InputFrame in;
+         window_->pump(in);   // a close request stays pending and ends the frontend loop after the load
+@@ -1507,6 +1508,7 @@
+     }
+     gameMode_.begin(world_);
+     core::setLoadYield(nullptr);
++    core::endLoadProgress();
+     const core::LoadYieldStats ys = core::loadYieldStats();
+     core::trimHeap("match loaded");   // [Systems] load-time garbage back to the OS, still under the loading screen
+     frontend::FlowTrace::emit("match.loaded", {{"map", m.map->runtimeDir}, {"mode", m.modeTag},
+diff -ru a/src/core/LoadYield.cpp b/src/core/LoadYield.cpp
+--- a/src/core/LoadYield.cpp	2026-10-23 23:48:45.641814700 -0500
++++ b/src/core/LoadYield.cpp	2026-10-23 23:48:45.627264900 -0500
+@@ -3,6 +3,10 @@
+ #include "core/Log.h"
+ 
+ #include <chrono>
++#include <cmath>
++#include <fstream>
++#include <map>
++#include <sstream>
+ 
+ namespace core {
+ 
+@@ -12,6 +16,23 @@
+ LoadYieldStats g_stats;
+ bool g_inside = false;
+ constexpr double kIntervalMs = 1000.0 / 60.0;
++// loading progress (beginLoadProgress)
++bool g_progOn = false;
++std::string g_progKey;
++long g_steps = 0, g_expected = 0;
++float g_frac = 0.0f;
++const char* g_stage = "";
++const char* kProfileFile = "wfc_loadprofile.ini";   // (next to wfc_profile.ini: key=steps per line)
++std::map<std::string, long> readProfile() {
++    std::map<std::string, long> m;
++    std::ifstream f(kProfileFile);
++    std::string line;
++    while (std::getline(f, line)) {
++        const size_t eq = line.rfind('=');
++        if (eq != std::string::npos && eq > 0) m[line.substr(0, eq)] = std::atol(line.c_str() + eq + 1);
++    }
++    return m;
++}
+ }
+ 
+ void setLoadYield(LoadYieldFn fn) {
+@@ -20,6 +41,13 @@
+ }
+ 
+ void loadYield(const char* where) {
++    if (g_progOn && !g_inside) {                       // (every call is a load step, presented or not)
++        ++g_steps;
++        g_stage = where ? where : "";
++        const float f = g_expected > 0 ? std::min(0.99f, (float)g_steps / (float)g_expected)
++                                       : 0.9f * (1.0f - std::exp(-(float)g_steps / 600.0f));
++        if (f > g_frac) g_frac = f;
++    }
+     if (!g_fn || g_inside) return;
+     auto now = std::chrono::steady_clock::now();
+     double ms = std::chrono::duration<double, std::milli>(now - g_last).count();
+@@ -40,4 +68,28 @@
+ 
+ LoadYieldStats loadYieldStats() { return g_stats; }
+ 
++void beginLoadProgress(const std::string& key) {
++    g_progOn = true; g_progKey = key; g_steps = 0; g_frac = 0.0f; g_stage = "";
++    const auto m = readProfile();
++    const auto it = m.find(key);
++    g_expected = it != m.end() ? it->second : 0;
++    LOG_INFO("load progress: %s, %ld steps expected%s", key.c_str(), g_expected, g_expected ? "" : " (first load: no history)");
++}
++
++void endLoadProgress() {
++    if (!g_progOn) return;
++    g_progOn = false; g_frac = 1.0f;
++    auto m = readProfile();
++    m[g_progKey] = g_steps;
++    std::ofstream f(kProfileFile, std::ios::trunc);
++    for (const auto& kv : m) f << kv.first << '=' << kv.second << '\n';
++    LOG_INFO("load progress: %s done in %ld steps (expected %ld)", g_progKey.c_str(), g_steps, g_expected);
++}
++
++LoadProgress loadProgress() {
++    LoadProgress p;
++    p.active = g_progOn; p.fraction = g_frac; p.stage = g_stage; p.steps = g_steps; p.expected = g_expected;
++    return p;
++}
++
+ } // namespace core
+diff -ru a/src/core/LoadYield.h b/src/core/LoadYield.h
+--- a/src/core/LoadYield.h	2026-10-23 23:48:45.570570900 -0500
++++ b/src/core/LoadYield.h	2026-10-23 23:48:45.556020300 -0500
+@@ -8,6 +8,7 @@
+ // tick), and it never runs in the middle of a GL upload because callers only yield between whole operations.
+ #pragma once
+ #include <functional>
++#include <string>
+ 
+ namespace core {
+ 
+@@ -21,4 +22,13 @@
+ void resetLoadYieldStats();
+ LoadYieldStats loadYieldStats();
+ 
++// Loading progress from the loader's own steps: every loadYield call is one step. beginLoadProgress(key) at a load's start
++// (key = map + mode: the step total of its last load comes from wfc_loadprofile.ini), endLoadProgress() at its end (the
++// total recorded). fraction: steps / the last total (capped at 0.99 until the end), a first load eases toward 0.9;
++// never decreasing. stage: the current step's label ("World: texture", "Render: load step", ...).
++struct LoadProgress { bool active = false; float fraction = 0.0f; const char* stage = ""; long steps = 0, expected = 0; };
++void beginLoadProgress(const std::string& key);
++void endLoadProgress();
++LoadProgress loadProgress();
++
+ } // namespace core
