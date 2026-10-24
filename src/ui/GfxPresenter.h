@@ -140,6 +140,9 @@ private:
     // Graphics -> Recommended Settings: re-apply the auto-detect preset, then leave and re-enter the page (queued
     // Escape / Enter, frames from now) so the original rows re-read their values.
     void recommendedSettingsPressed();
+    void syncSettingsCommit();   // Commit Changes' confirmation (requestSettingsCommit) -> the original commit + apply + the result
+    gfx::Player* commitPlayer_ = nullptr;
+    gfx::avm1::Value commitFn_, commitSelf_;   // the original writeGraphicsSettings and the button it ran on
     struct QueuedKey { int frames; int code; bool down; };
     std::vector<QueuedKey> keyQueue_;                 // [PCSettings] FrameLimit for the graphics menu's Frame Rate Limit entry
     float scoreScroll_ = 0.0f;   // in-match scoreboard scroll (stage units), PC EXTENSION for extended matches

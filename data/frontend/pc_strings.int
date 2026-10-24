@@ -43,6 +43,14 @@ ChooseName=Choose the name other players will see.
 ChooseNameButton=Choose Name
 VoiceSettings=Voice Settings
 [Settings]
+ApplyTitle=Apply Settings
+ApplyMessage=Apply the changed graphics settings?
+ApplyButton=Apply
+AppliedTitle=Settings Applied
+AppliedMessage=Your graphics settings have been applied.
+RestartTitle=Restart Required
+RestartMessage=This setting requires the game to be restarted before it takes effect.
+NextMapMessage=Some changes take effect when the next map loads.
 VolumetricLighting=Volumetric Lighting
 VolumetricLightingDesc=Light shafts and haze. Needs Ray Tracing: Realistic.
 LensFlares=Lens Flares

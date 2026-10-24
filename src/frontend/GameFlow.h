@@ -208,6 +208,11 @@ public:
     };
     const Popup& popup() const { return popup_; }
     void popupButton(char which);     // 'A' 'B' 'X' 'Y'
+    // PC ADAPTATION (the user, playtest 2026-10-23b #3 / #4): Graphics > Commit Changes asks first (Apply / Cancel), then says what
+    // happened: applied, or which changes wait for a restart / the next map. takeSettingsCommitAnswer: 0 none, 1 Apply, 2 Cancel.
+    void requestSettingsCommit();
+    int takeSettingsCommitAnswer() { const int a = settingsCommitAnswer_; settingsCommitAnswer_ = 0; return a; }
+    void settingsCommitted(bool needsRestart, bool nextMap);
     void popupClosedByMovie();
     // TnUIController.ShowPopupUI(Title, Message): a message box with the default Ok button.
     void showMessage(const std::string& title, const std::string& message) { Popup p; p.title = title; p.message = message; showPopup(p); }
@@ -546,6 +551,7 @@ private:
     uint32_t selectionSerial_ = 0;
     int gpPerTeam_ = 32, gpMaxPlayers_ = 64, gpBotsPerTeam_ = 32;   // Gameplay clamp (detected); defaults = the extended target (32 v 32)
     int gameTeamStatus_ = 0;                          // GRI.SetGameTeamStatus (party lobby)
+    int settingsCommitAnswer_ = 0;                    // requestSettingsCommit's popup: 1 Apply, 2 Cancel
     std::map<std::string, std::map<std::string, int>> settingValues_;   // class -> field -> value index
     MatchLaunch match_;
     bool campaignForced_ = false;

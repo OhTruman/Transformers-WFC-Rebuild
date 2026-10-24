@@ -1031,6 +1031,27 @@ void GameFlow::popupClosedByMovie() {
     if (popup_.open && !quitPending_) closePopup();
 }
 
+void GameFlow::requestSettingsCommit() {
+    Popup p;
+    p.title = txt("$WfcPC.Settings.ApplyTitle");
+    p.message = txt("$WfcPC.Settings.ApplyMessage");
+    p.a = PopupButton{txt("$WfcPC.Settings.ApplyButton"), "settingsApply", true};
+    p.b = PopupButton{txt("$UIText.MessagePrompts.GenericCancelButton"), "settingsCancel", true};
+    p.showDefaultButtons = false;
+    settingsCommitAnswer_ = 0;
+    showPopup(p);
+    FlowTrace::emit("settings.commit", {{"state", "asked"}, {"provenance", "PC ADAPTATION (user playtest 2026-10-23b #4)"}});
+}
+
+void GameFlow::settingsCommitted(bool needsRestart, bool nextMap) {
+    Popup p;
+    p.title = txt(needsRestart ? "$WfcPC.Settings.RestartTitle" : "$WfcPC.Settings.AppliedTitle");
+    p.message = txt(needsRestart ? "$WfcPC.Settings.RestartMessage" : nextMap ? "$WfcPC.Settings.NextMapMessage" : "$WfcPC.Settings.AppliedMessage");
+    if (needsRestart && nextMap) p.message += " " + txt("$WfcPC.Settings.NextMapMessage");
+    showPopup(p);   // the default Ok button
+    FlowTrace::emit("settings.commit", {{"state", "applied"}, {"restart", FlowTrace::boolean(needsRestart)}, {"nextMap", FlowTrace::boolean(nextMap)}});
+}
+
 void GameFlow::popupButton(char which) {
     if (!popup_.open) return;
     PopupButton btn = which == 'A' ? popup_.a : which == 'B' ? popup_.b : which == 'X' ? popup_.x : popup_.y;
@@ -1050,6 +1071,8 @@ void GameFlow::popupButton(char which) {
         FlowTrace::emit("online.join", {{"result", "cancelled"}});
     }
     if (btn.action == "pttCancel") endPttCapture("");
+    if (btn.action == "settingsApply") settingsCommitAnswer_ = 1;
+    if (btn.action == "settingsCancel") settingsCommitAnswer_ = 2;
     if (btn.action.rfind("inviteJoin:", 0) == 0) joinFriendGame(btn.action.substr(11));
     if ((btn.action == "cardMute" || btn.action == "cardBlock") && !cardMember_.empty()) {
         auto toggle = [&](std::vector<std::string>& v) {
