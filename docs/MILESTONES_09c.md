@@ -4500,3 +4500,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   frontend / ui), 5975369b nav-block grid prefilter (A1 matinee ends 2.1-5.5 -> 0.6-1.7 ms, identical sets). Pending:
   Gameplay PRELOAD delta (roster table at chapter load) + fix F; Rendering kAssetRootDefault; Systems repack 48e42af6 +
   verify (the user's package), env checklist, clean-machine verify.
+2026-10-24 11:40 MERGED 8c670e2f asset root default from the package (kAssetRootDefault -> assetRootDefault()), feaf20bd roster table at
+  chapter load + Kismet latent list (fix F; identical on all ten chapters) + verify_slim env roots + the package env
+  checklist. REPACK 48e42af6 done (+90 files); re-verify running (expected: the reticle only, accepted for this PC).
