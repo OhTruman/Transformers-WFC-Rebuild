@@ -60,6 +60,11 @@ std::string dlcContentRoot() {
     return "F:/Transformers Rebuild/AssetTools/out/dlc_content/content";
 }
 
+std::string settingsPreviewPng(const std::string& row, int value) {
+    const std::string p = frontendDataFile(("previews/" + row + "_" + std::to_string(value) + ".png").c_str());
+    return std::ifstream(openPath(p)).good() ? p : std::string();
+}
+
 std::string dlcTextFile(int pack, const std::string& lang) {
     const std::string root = std::getenv("WFC_DLC_TEXT") ? std::getenv("WFC_DLC_TEXT") : "F:/Transformers Rebuild/AssetTools/work/dlc";
     const std::string dir = pack == 1 ? "DLCMaps" : "DLCMaps2";

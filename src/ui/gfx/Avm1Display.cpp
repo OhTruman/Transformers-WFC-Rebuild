@@ -451,7 +451,19 @@ void VM::installDisplayBuiltins() {
         if (url.rfind("FSCommand:", 0) == 0 && vm.fsCommand) vm.fsCommand(url.substr(10), vm.toString(arg(a, 1)));
         return Value::undef();
     });
-    for (const char* n : {"startDrag", "stopDrag", "attachAudio", "setFocus"})
+    method(vm, P, "startDrag", [](VM& vm, const Value& self, Args& a) -> Value {
+        gfx::MovieClip* mc = clipOf(self);
+        if (!mc || !vm.player()) return Value::undef();
+        const bool rect = a.size() >= 5;
+        vm.player()->startDrag(mc, vm.toBool(arg(a, 0)), rect, rect ? (float)vm.toNumber(a[1]) : 0.0f, rect ? (float)vm.toNumber(a[2]) : 0.0f,
+                               rect ? (float)vm.toNumber(a[3]) : 0.0f, rect ? (float)vm.toNumber(a[4]) : 0.0f);
+        return Value::undef();
+    });
+    method(vm, P, "stopDrag", [](VM& vm, const Value&, Args&) -> Value {
+        if (vm.player()) vm.player()->stopDrag();
+        return Value::undef();
+    });
+    for (const char* n : {"attachAudio", "setFocus"})
         method(vm, P, n, [](VM&, const Value&, Args&) -> Value { return Value::undef(); });
     method(vm, P, "getSWFVersion", [](VM& vm, const Value&, Args&) -> Value { return Value((double)vm.swfVersion); });
     method(vm, P, "getBytesLoaded", [](VM&, const Value&, Args&) -> Value { return Value(1); });

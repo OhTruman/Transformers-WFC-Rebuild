@@ -14,6 +14,9 @@ const std::string& frontendDataDir();
 
 // frontendDataDir() + "/" + name.
 std::string frontendDataFile(const char* name);
+// PC ADAPTATION (the user, playtest 2026-10-23b #5): a Graphics row's preview image, data/frontend/previews/<row>_<value>.png
+// (row: Upscaling / HDTextures / RayTracing / FrameGeneration); "" when that value has none (the panel then hides).
+std::string settingsPreviewPng(const std::string& row, int value);
 // The DLC packs' extracted content (AssetTools out/dlc_content/content; WFC_DLC_CONTENT overrides): the map thumbnails
 // UI_DLCThumbnails_p / UI_DLC2Thumbnails_p live there, not in ExtractedAssets.
 std::string dlcContentRoot();

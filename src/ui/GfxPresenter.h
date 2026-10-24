@@ -12,6 +12,7 @@
 
 #include "frontend/FrontendRuntime.h"
 #include "frontend/FpsMeter.h"
+#include "render/Mesh.h"
 #include "frontend/PackageCredits.h"
 #include "ui/GfxHost.h"
 #include "ui/gl/GfxRendererGL.h"
@@ -141,6 +142,14 @@ private:
     // Escape / Enter, frames from now) so the original rows re-read their values.
     void recommendedSettingsPressed();
     void syncSettingsCommit();
+    void syncSettingsPreview();
+    void colourPickerMouse(gfx::Player& p, const platform::InputFrame& in);   // #21: Create a Character colours by mouse
+    bool pickerHeld_ = false;   // #5: the focused Graphics row's preview image (previewPng_, previewRect_)
+    std::string previewPng_;
+    float previewRect_[4] = {0, 0, 0, 0};
+    render::ImageData previewImage_;
+    std::string previewLoaded_;
+    uint64_t previewKey_ = 0;
     void syncFirstLaunchBrightness(gfx::Player& p, frontend::GameFlow& flow);   // the calibration at the first main menu (#34)
     bool firstBrightnessShown_ = false;   // Commit Changes' confirmation (requestSettingsCommit) -> the original commit + apply + the result
     gfx::Player* commitPlayer_ = nullptr;
