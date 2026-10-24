@@ -157,3 +157,11 @@ errors, and its District ESCTEST log equals the head build's line for line.
 - the Systems audio changes merged since 15 on these paths (LevelAudio.inc, SoundCues.cpp).
 Apply it after 15. Verified: a fresh full af4d0731 + 01-16 applies (`git apply --check`), builds wfc_rebuild with 0 errors, and its
 District and Tranquillity ESCTEST logs equal the head build's line for line.
+
+## 17: DLC mechanism presentation data (16 tree -> 00352cff + GAMEPLAY_ESC_MECH_VISUALS)
+
+`17_esc_mech_visuals.patch`: the visual actors in the mechanisms JSON for Rendering (laser emitters / buttons / switches, sentry
+bodies / TURRETDEFs / emitters, the outage PPVs + screen matinee, the floodgate / drain / base-door matinees and pistons) and their
+matinee positions advanced by the sim (nothing in the sim reads them); ESCTEST checks both; plus the Tranquillity LevelAudio.inc
+merged since 16. Apply it after 16. Verified: a fresh full af4d0731 + 01-17 applies and builds with 0 errors; its Tranquillity
+ESCTEST log equals the head build's.

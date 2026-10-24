@@ -223,6 +223,56 @@ for m in COOP:
             mech['floodgates'] = {'gens': [{'gen': g, 'trigger': 'TriggerVolume_' + t, 'hazard': 'DynamicPhysicsVolume_' + h} for (g, t, h) in mre['floodgates']],
                                   'drainTimes': [1.76, 3.49, 10.03], 'zonesOn': ['64', '7748'], 'energon': 'DynamicPhysicsVolume_672',
                                   'blockers': ['DynamicBlockingVolume_8499', 'DynamicBlockingVolume_9335'], 'gateOpenDelay': 3.1}   # 4.35 - 1.25 s
+        # Presentation actors for Rendering (WorldSurvivalMechPresent.cpp); the sim never reads them. Names from RE's scoped exports
+        # (1104a86: notes/data/escalation, seq per op) and AssetTools' sequence-scoped generator rows (escalation_geometry.json); the
+        # matinee tracks are gameplay.json "matinee" by action (prefab copies share one action name: bind the actors given here).
+        gens_geo = {x['generator'].replace('TnSurvivalGenerator_', ''): x for x in geo['generators']}
+        def gen_targets(gid, cls, op=None):
+            found = []
+            for e in gens_geo.get(gid, {}).get('events', []):
+                for a in e['actions']:
+                    if op and OPS.get(a['class'], {}).get(str(a.get('input'))) != op: continue
+                    for t in a.get('targets', []) or []:
+                        if t['class'] == cls and t['target'] not in found: found.append(t['target'])
+            return found
+        if 'lasers' in mech:
+            xe = json.load(open(ROOT + '/RE-Workspace/notes/data/escalation/' + m + '_kismet_extra.json'))
+            ems = {}
+            for x in xe['mechanisms']:
+                for y in x['downstream'][1:]:
+                    if y['class'] == 'Sequence' and str(y['input']) == 'lasers on':
+                        lst = ems.setdefault(y.get('seq') or x['sequence'], [])
+                        for e_ in (y.get('vars') or {}).get('laser emitters', []):
+                            if e_ not in lst: lst.append(e_)
+            for L, sq in zip(mech['lasers'], ['Door_Lasers', 'Door_Lasers_0', 'Door_Lasers_1', 'Door_Lasers_2', 'Door_Lasers_3']):   # RE table order
+                sw = gen_targets(L['gen'], 'SkeletalMeshActor', 'unhide')
+                bt = gen_targets(L['gen'], 'TnInteractButtonReusable', 'unhide')
+                L.update({'seq': sq, 'emitters': sorted(ems.get(sq, [])), 'buttonActor': bt[0] if bt else '', 'switchActor': sw[0] if sw else '',
+                          'interps': {'button': 'SeqAct_Interp_13587', 'buttonLength': 0.06, 'switch': 'SeqAct_Interp_13276', 'switchLength': 1.84}})
+        for S in mech.get('sentries', []):
+            S.update({'emitters': gen_targets(S['gen'], 'Emitter'), 'body': spots.get(S['seq'], ''),
+                      'template': 'WEP_SentryBlaster01_p.' + ('RepairSentry_TURRETDEF' if S['repair'] else 'LightSentry_TURRETDEF')})
+        if 'outage' in mech:   # the dark grade (PPV swap) and Interp_6320 (screens / switch materials, 1.51 s forward, reversed at the end)
+            mech['outage'].update({'ppvOn': 'PostProcessVolume_4388', 'ppvOff': 'PostProcessVolume_3052', 'interp': 'SeqAct_Interp_6320', 'interpLength': 1.51})
+        if 'floodgates' in mech:
+            unhide = []
+            for e in re_.get('events', []):
+                for y in e.get('downstream', [])[1:]:
+                    gid = (e.get('originator') or '').replace('TnSurvivalGenerator_', '')
+                    for F in mech['floodgates']['gens']:
+                        if F['gen'] != gid or y['class'] != 'SeqAct_Interp' or y['op'] == 'SeqAct_Interp_5361': continue
+                        v = y.get('vars') or {}
+                        if 'Fall_1' in v: F['waterfallInterp'] = y['op']
+                        if 'MatInstance' in v: F['materialInterp'] = y['op']
+                    if y['class'] == 'SeqAct_ToggleHidden' and str(y['input']) == 'UnHide':
+                        for t in (y.get('vars') or {}).get('Target', []):
+                            if t.startswith('TnStaticDestructibleActor') and t not in unhide: unhide.append(t)
+            mech['floodgates'].update({
+                'drainInterp': 'SeqAct_Interp_5361', 'drainLength': 10.03, 'unhideAtDrain': unhide, 'fogOnAtDrain': True,
+                # BaseDoors (Flood_Gate.BaseDoors): both 6.67 s matinees held at 1.25 s; OpenBase resumes; at "Opened" 4.35 s the pistons hide
+                'baseDoors': [{'interp': 'SeqAct_Interp_6026', 'pistons': ['HmSkeletalMeshActor_7715', 'HmSkeletalMeshActor_13308'], 'blocker': 'DynamicBlockingVolume_9335'},
+                              {'interp': 'SeqAct_Interp_10535', 'pistons': ['HmSkeletalMeshActor_16151', 'HmSkeletalMeshActor_817'], 'blocker': 'DynamicBlockingVolume_8499'}],
+                'doorHold': 1.25, 'doorOpened': 4.35, 'doorLength': 6.67})
         own = {x['gen'] for x in mech.get('lasers', [])} | {x['gen'] for x in mech.get('sentries', [])}
         for g in out['generators']:   # their flattened chains cross the prefab copies (RE 1104a86 section 0): the mechanism runs them
             if g['id'] in own: g['actions'] = []

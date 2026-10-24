@@ -13,6 +13,7 @@ namespace game {
 
 namespace {
 core::Vec3 v3(const assets::Json& a) { return core::Vec3{a[0].asFloat(0), a[1].asFloat(0), a[2].asFloat(0)}; }
+void strings(const assets::Json& a, std::vector<std::string>& out) { for (size_t k = 0; k < a.size(); ++k) out.push_back(a[k].asString()); }
 // TnWeaponSentryLight (AssetTools weapon.json, as the campaign sentry table): hitscan 5 every 0.16 s; LightSentry_TURRETDEF
 // MaxAttackRange 16000 / SightRadius 20000 UU, LagDegreesPerSecond 60, AimedAtTargetThreshold 3. RepairSentry_TURRETDEF: range
 // 8000 / sight 10000 UU, lag 80; TnWeaponSentryRepair HealthPerSecond 15 on its team (TnHealTypeRepairTeam).
@@ -28,12 +29,17 @@ void SvMech::parse(const assets::Json& j, SvMech& out) {
         const assets::Json& r = j["lasers"][k];
         Laser L; L.gen = r["gen"].asString(); L.hazard = r["hazard"].asString(); L.button = v3(r["button"]);
         L.time = r["time"].asFloat(45.0f); L.armDelay = r["armDelay"].asFloat(3.0f); L.buttonRange = r["buttonRange"].asFloat(3.0f);
+        L.seq = r["seq"].asString(); L.buttonActor = r["buttonActor"].asString(); L.switchActor = r["switchActor"].asString();
+        L.buttonInterp = r["interps"]["button"].asString(); L.switchInterp = r["interps"]["switch"].asString();
+        L.buttonLength = r["interps"]["buttonLength"].asFloat(0.06f); L.switchLength = r["interps"]["switchLength"].asFloat(1.84f);
+        strings(r["emitters"], L.emitters);
         out.lasers.push_back(L);
     }
     for (size_t k = 0; k < j["sentries"].size(); ++k) {
         const assets::Json& r = j["sentries"][k];
         Sentry S; S.seq = r["seq"].asString(); S.gen = r["gen"].asString(); S.pos = v3(r["pos"]); S.yaw = r["yaw"].asFloat(0);
         S.repair = r["repair"].asBool(); S.time = r["time"].asFloat(45.0f); S.uses = r["uses"].asInt(0);
+        S.body = r["body"].asString(); S.templ = r["template"].asString(); strings(r["emitters"], S.emitters);
         out.sentries.push_back(S);
     }
     for (size_t k = 0; k < j["detpacks"].size(); ++k) {
@@ -48,15 +54,29 @@ void SvMech::parse(const assets::Json& j, SvMech& out) {
         O.on = true; O.fromRound = o["fromRound"].asInt(4); O.lateRound = o["lateRound"].asInt(10); O.max = o["max"].asInt(3);
         O.chance = o["chance"].asFloat(0.25f); O.lateChance = o["lateChance"].asFloat(0.5f); O.delay = o["delay"].asFloat(5.0f);
         O.duration = o["duration"].asFloat(60.0f); O.lockout = o["lockout"].asFloat(180.0f); O.lateLockout = o["lateLockout"].asFloat(300.0f);
+        O.ppvOn = o["ppvOn"].asString(); O.ppvOff = o["ppvOff"].asString(); O.interp = o["interp"].asString(); O.interpLength = o["interpLength"].asFloat(1.51f);
     }
     if (j["floodgates"].isObject()) {
         const assets::Json& f = j["floodgates"];
-        for (size_t k = 0; k < f["gens"].size(); ++k) out.floods.push_back({f["gens"][k]["gen"].asString(), f["gens"][k]["trigger"].asString(), f["gens"][k]["hazard"].asString()});
+        for (size_t k = 0; k < f["gens"].size(); ++k) {
+            const assets::Json& r = f["gens"][k];
+            Flood F; F.gen = r["gen"].asString(); F.trigger = r["trigger"].asString(); F.hazard = r["hazard"].asString();
+            F.waterfallInterp = r["waterfallInterp"].asString(); F.materialInterp = r["materialInterp"].asString();
+            out.floods.push_back(F);
+        }
         for (size_t k = 0; k < f["drainTimes"].size(); ++k) out.drainTimes.push_back(f["drainTimes"][k].asFloat(0));
         for (size_t k = 0; k < f["zonesOn"].size(); ++k) out.zonesOn.push_back(f["zonesOn"][k].asString());
         for (size_t k = 0; k < f["blockers"].size(); ++k) out.blockers.push_back(f["blockers"][k].asString());
         out.energon = f["energon"].asString();
         out.gateOpenDelay = f["gateOpenDelay"].asFloat(3.1f);
+        out.drainInterp = f["drainInterp"].asString(); out.drainLength = f["drainLength"].asFloat(10.03f);
+        strings(f["unhideAtDrain"], out.unhideAtDrain); out.fogOnAtDrain = f["fogOnAtDrain"].asBool(false);
+        for (size_t k = 0; k < f["baseDoors"].size(); ++k) {
+            const assets::Json& r = f["baseDoors"][k];
+            BaseDoor B; B.interp = r["interp"].asString(); B.blocker = r["blocker"].asString(); strings(r["pistons"], B.pistons);
+            out.baseDoors.push_back(B);
+        }
+        out.doorHold = f["doorHold"].asFloat(1.25f); out.doorOpened = f["doorOpened"].asFloat(4.35f); out.doorLength = f["doorLength"].asFloat(6.67f);
     }
 }
 
@@ -103,6 +123,9 @@ void World::svMechSetup() {
     S.lasers.assign(M.lasers.size(), {});
     S.sentries.assign(M.sentries.size(), {});
     for (size_t k = 0; k < M.sentries.size(); ++k) S.sentries[k].yaw = M.sentries[k].yaw;
+    for (size_t k = 0; k < M.lasers.size(); ++k) S.lasers[k].switchPos = M.lasers[k].switchLength;   // GameplayStarted: forward = disabled
+    S.floodT.assign(M.floods.size(), -1.0f);
+    S.doorPos = M.doorHold;
     S.detpacks.assign(M.detpacks.size(), {});
     S.prevInteract.assign(match_.players().size(), 0);
     LOG_INFO("escalation: map mechanisms: %zu lasers (%zu pain volumes off), %zu sentries, %zu detpacks, outage %s, %zu floodgates, %zu blockers%s",
@@ -119,7 +142,7 @@ void World::svMechGenerator(int g, bool levelDrop) {
     SvMechState& S = sv_.mech;
     for (size_t k = 0; k < M.lasers.size(); ++k)
         if (M.lasers[k].g == g) {   // LaserGeneratorUsed: lasers on, the 45 s timer, its activation volume off while active
-            S.lasers[k] = {true, 0.0f};
+            S.lasers[k].active = true; S.lasers[k].t = 0.0f;
             svMechHazard(M.lasers[k].hazard, true);
             sv_.generatorOff[(size_t)g] = 1;
             ++S.laserRuns;
@@ -136,6 +159,7 @@ void World::svMechGenerator(int g, bool levelDrop) {
         if (M.floods[k].g == g && S.floodBought < (int)M.floods.size()) {   // resume the drain to its next pause; its pain volume off
             ++S.floodBought;
             svMechHazard(M.floods[k].hazard, false);
+            if (k < S.floodT.size()) S.floodT[k] = 0.0f;
             LOG_INFO("escalation: floodgate %s bought (%d / %zu)", M.floods[k].gen.c_str(), S.floodBought, M.floods.size());
         }
 }
@@ -146,6 +170,12 @@ void World::svMechTick(float dt) {
     if (!M.any() || sv_.phase == SurvivalState::Phase::Off) return;
     const std::vector<MatchPlayer>& P = match_.players();
     if (S.prevInteract.size() < P.size()) S.prevInteract.resize(P.size(), 0);
+    // the presentation's matinee positions (rate 1)
+    for (size_t k = 0; k < M.lasers.size(); ++k)   // bought: the button matinee reversed (usable); else forward (disabled)
+        S.lasers[k].switchPos = std::clamp(S.lasers[k].switchPos + (S.lasers[k].active ? -dt : dt), 0.0f, M.lasers[k].switchLength);
+    if (M.outage.on) S.outagePos = std::clamp(S.outagePos + (S.outageLeft > 0.0f ? dt : -dt), 0.0f, M.outage.interpLength);
+    for (float& t : S.floodT) if (t >= 0.0f) t += dt;
+    if (S.gateT >= 0.0f) { S.gateT += dt; S.doorPos = std::min(M.doorLength, M.doorHold + S.gateT); }   // OpenBase: the doors play on
     std::vector<uint8_t> press(P.size(), 0);   // a player's Interact press this step (rising edge)
     for (size_t q = 0; q < P.size(); ++q) {
         const bool held = P[q].kind != ParticipantKind::Bot && svInteractHeld((int)q);
@@ -269,7 +299,7 @@ void World::svMechTick(float dt) {
             LOG_INFO("escalation: Drain Completed (zones %zu on, the base doors opening)", M.zonesOn.size());
         }
     }
-    if (S.gateT >= 0.0f && !S.gatesOpen && (S.gateT += dt) >= M.gateOpenDelay) {
+    if (S.gateT >= 0.0f && !S.gatesOpen && S.gateT >= M.gateOpenDelay) {   // "Opened"
         S.gatesOpen = true;
         svMechSetBlockers(false);
         LOG_INFO("escalation: base doors Opened (%zu blocking volumes off)", escBlockerSets_.size());
