@@ -4512,3 +4512,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   verify_everything gains D1 / Remnant / Horizon / Pulse rows for the next package (c5269d64, by file).
 2026-10-24 11:54 MERGED 1d52a479 cull-distance sidecar reader (inert without the file; WFC_NOCULLDIST A/B). Sidecars generating for the
   19 MP / DLC maps (work/render/<map>/cull_distance.json); campaign units next. USER PLAYING: no lane windowed exes.
+2026-10-24 11:59 MERGED 19bc0841 frontend data resolver + tests env (Rendering's 3 test failures explained), 6ddb0abe Systems body cue
+  sets / energon colour with the body + mid-match body CPU load on a worker (Tranquillity 6 -> 0.16 ms, D5 shotFx 2.9 ->
+  0.15 ms; SIMHASH identical; audio events vary by design: no strict audio gate). Cull-distance sidecars: ~0 culled nodes
+  on the MP / DLC maps (Molten 154, Horizon 4, Debris 3): item 0a closed as a no-op; campaign sidecars skipped. Baseline
+  exe -> 6ddb0abe; phase 0 waits for the user's play to end.
