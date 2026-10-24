@@ -9,6 +9,7 @@
 #include <thread>
 #include <string>
 #include <map>
+#include <future>
 #include <set>
 #include <unordered_map>
 #include <vector>
@@ -1253,6 +1254,9 @@ public:
         std::string error;
     };
     const ChassisAssets* chassisAssets(const std::string& id);
+    void buildChassisCpu(const std::string& id, ChassisAssets& a, const std::function<bool(const ChassisDef&, assets::SkinnedModel&)>& robotShared,
+                         double* chProf) const;   // [Systems] the CPU part (any thread)
+    const ChassisAssets* finishChassis(const std::string& id, std::unique_ptr<ChassisAssets> a, double* chProf, const char* how);   // main thread
     // TnPawn.ApplyTransformer for the local pawn: models, rigs, collision, stats, weapon socket. False = unavailable.
     bool applyChassisToLocalPawn(const std::string& id);
     // TnPawn.ApplyTransformer for any pawn (local or participant): models, rigs, collision, stats, weapon / arm sockets.
@@ -1660,10 +1664,27 @@ private:
     // clips (~1.2 s of the ~2 s first load, WFC_SPAWNPROF). Load scheduling only, not original behaviour.
     struct SharedAnimFile { assets::AnimFile file; std::map<std::string, size_t> byName; bool ok = false; unsigned lastUse = 0; };
     std::map<std::string, std::unique_ptr<SharedAnimFile>> animFiles_;
+    // [Systems] a first-time body load in the background (startChassisJob / finishChassisJob); declared after the caches it reads,
+    // so it is destroyed (its future joins) first
+    struct ChassisJob {
+        std::string id;
+        std::unique_ptr<ChassisAssets> a;
+        std::map<std::string, const SharedAnimFile*> known;                  // the cached animation files at the start (by pointer)
+        std::map<std::string, std::unique_ptr<SharedAnimFile>> fresh;        // the files the job loaded itself
+        std::set<std::string> used, cachedUris;
+        double prof[6] = {0, 0, 0, 0, 0, 0};
+        std::future<void> done;
+    };
+    std::unique_ptr<ChassisJob> chassisJob_;
+    void startChassisJob(const std::string& id);
+    const ChassisAssets* finishChassisJob();
+    bool chassisJobReady() const;
     const SharedAnimFile* sharedAnimFile(const std::string& path);
     void prefetchAnimFiles(const std::vector<std::string>& paths);   // [Systems] uncached ones load on worker threads
 public:
     bool loadRobotShared(const ChassisDef& def, assets::SkinnedModel& out);   // false -> the caller uses robot.glb
+    bool loadRobotSharedWith(const ChassisDef& def, assets::SkinnedModel& out,
+                             const std::function<const SharedAnimFile*(const std::string&)>& anim, bool prefetch);   // [Systems] files via `anim`
     // WFC_ANIMSHARECHECK: robot.glb vs loadRobotShared for one chassis; returns a one-line report, ok = identical within eps.
     std::string compareRobotShared(const std::string& chassisId, bool& ok);
 private:
