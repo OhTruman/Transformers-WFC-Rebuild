@@ -673,6 +673,16 @@ Application::MatchExit Application::runMatch() {
         }
         if (WFC_ENV("WFC_AUTOBACK")) input.down[(int)platform::Button::Back] = true;
         if (WFC_ENV("WFC_AUTOFIRE")) input.down[(int)platform::Button::Fire] = true;
+        if (frontend_) {   // [Frontend] the script's buttonhold:<Button>,<s> (DEV / QA gate): down while held, pressed on its first frame
+            static const char* const kNames[] = {"Forward", "Back", "Left", "Right", "Jump", "Transform", "Fire", "Sprint", "Reload", "CameraToggle",
+                                                 "Debug", "Quit", "FineAim", "Dash", "Ascend", "Descend", "NextWeapon", "PrevWeapon", "Melee",
+                                                 "Grenade", "Interact", "Killstreak", "Ability1"};
+            static std::string lastHeld;
+            const std::string& held = frontend_->script().heldGameButton();
+            for (int b = 0; b < (int)(sizeof kNames / sizeof kNames[0]) && b < (int)platform::Button::Count; ++b)
+                if (held == kNames[b]) { input.down[b] = true; if (lastHeld != held) input.pressed[b] = true; }
+            lastHeld = held;
+        }
         // WFC_LATENCYPROBE=fire|move: input-to-photon of the local action (A/B for WFC_ASYNCSTEP). Every ~1.5 s (after 90 idle frames) it
         // holds Fire (or Forward) from this frame's input sample until the first frame whose draw shows the effect (a new shot serial /
         // the pawn moved > 1 mm), then logs the time from the input sample to that frame's present. Not timed against other lanes' runs.
