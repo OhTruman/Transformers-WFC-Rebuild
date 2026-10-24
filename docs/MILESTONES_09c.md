@@ -4183,3 +4183,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   rows (weapon glTFs already shipped as xpr twins) -> build_slim b8940af3 taken (c4155702); packaging phase rerunning.
   Post-build merges: 7f654ad5 (quiet poses; matc plain pow: the DLC maps translate once correctly, shipped maps regen at
   the DLC gate). AssetTools DLC plumbing ~2-3 h, then Fortress; ESC data needs RE's per-map export.
+2026-10-23 20:34 DLC_RE.md (RE 926973d) + the 4 DLC Escalation exports (Tranquillity 17 waves, District 20 + the new Autobot jet AICD,
+  Pulse 30 with tank bosses, Static 21). Gating: every shipped playlist has ContentIds (0) and MapInfo DlcId 0; the
+  Frontend merges the pack ini, HasRequiredAssets true for the 9 maps, chassis unlocked, no DLC popups.
