@@ -1425,6 +1425,7 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     // The loading screen keeps presenting during the synchronous load (core::loadYield): window messages, the
     // LoadScreen_GFX animation and the TF_LoadingScreen underlay, one frame per yield.
     core::resetLoadYieldStats();
+    core::beginLoadProgress(m.map->runtimeDir + "|" + m.modeTag);   // (the loading screen's bar: core::loadProgress)
     core::setLoadYield([this](double dt) {
         platform::InputFrame in;
         window_->pump(in);   // a close request stays pending and ends the frontend loop after the load
@@ -1507,6 +1508,7 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     }
     gameMode_.begin(world_);
     core::setLoadYield(nullptr);
+    core::endLoadProgress();
     const core::LoadYieldStats ys = core::loadYieldStats();
     core::trimHeap("match loaded");   // [Systems] load-time garbage back to the OS, still under the loading screen
     frontend::FlowTrace::emit("match.loaded", {{"map", m.map->runtimeDir}, {"mode", m.modeTag},

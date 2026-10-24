@@ -1,0 +1,18 @@
+diff -ru a/tools/render/matc.py b/tools/render/matc.py
+--- a/tools/render/matc.py	2026-10-23 23:51:05.085824200 -0500
++++ b/tools/render/matc.py	2026-10-23 23:51:05.118435400 -0500
+@@ -198,6 +198,14 @@
+             u = rt_ident(nm)
+             self.rt_used[u] = None
+             return '(uRTSet_%s != 0 ? uRT_%s.x : %s)' % (u, u, glf(v)), 1
++        if nm == 'ColorBrightness' and self.runtime_params and float(v) < 1.0:
++            # (user playtest 2026-10-23b item 22, a requested deviation: the chosen chassis colours clearly visible) a
++            # character instance authoring the custom-colour layer below the master's 1.0 (11 of 51: 0.5 - 0.75, e.g. Arcee /
++            # Barricade / Optimus vehicle) is lifted to 1.0 while the player's colours are set; the default paint (no
++            # chosen colour) keeps the authored value. RE: the path swatch -> (c/255)^2.2 -> Cust_Color_A / B is the original's
++            for k in ('Cust_Color_A', 'Cust_COLOR_B'):
++                self.rt_used.setdefault(k, self.vectors.get(k))
++            return '((uRTSet_Cust_Color_A != 0 || uRTSet_Cust_COLOR_B != 0) ? 1.0 : %s)' % glf(v), 1
+         return glf(v), 1
+ 
+     def x_VectorParameter(self, c, n, p, o):

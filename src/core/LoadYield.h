@@ -8,6 +8,7 @@
 // tick), and it never runs in the middle of a GL upload because callers only yield between whole operations.
 #pragma once
 #include <functional>
+#include <string>
 
 namespace core {
 
@@ -20,5 +21,14 @@ void loadYield(const char* where);   // cheap when not due / not registered
 struct LoadYieldStats { double maxGapMs = 0.0; const char* maxGapAt = ""; int frames = 0; };
 void resetLoadYieldStats();
 LoadYieldStats loadYieldStats();
+
+// Loading progress from the loader's own steps: every loadYield call is one step. beginLoadProgress(key) at a load's start
+// (key = map + mode: the step total of its last load comes from wfc_loadprofile.ini), endLoadProgress() at its end (the
+// total recorded). fraction: steps / the last total (capped at 0.99 until the end), a first load eases toward 0.9;
+// never decreasing. stage: the current step's label ("World: texture", "Render: load step", ...).
+struct LoadProgress { bool active = false; float fraction = 0.0f; const char* stage = ""; long steps = 0, expected = 0; };
+void beginLoadProgress(const std::string& key);
+void endLoadProgress();
+LoadProgress loadProgress();
 
 } // namespace core
