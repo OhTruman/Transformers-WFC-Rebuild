@@ -238,7 +238,6 @@ public:
                 for (uint32_t m : uiPad_[i]) if (padBits_ & m) ui |= 1u << i;
             }
         input.uiDown = ui;
-        input.padButtons = padBits_ & 0xFFFFu;   // the XInput buttons only (the synthetic trigger / stick bits sit above)
         input.padActive = padBits_ != 0 || std::fabs(input.padRX) > 0.5f || std::fabs(input.padRY) > 0.5f;
         input.keyActive = keyUi;
         for (int i = 0; i < (int)Button::Count && !input.keyActive; ++i) input.keyActive = input.down[i];
@@ -825,7 +824,7 @@ private:
     }
     void pollGamepad(InputFrame& input) {
         static const bool noPad = std::getenv("WFC_NOPAD") != nullptr;   // scripted runs: ignore a real controller
-        if (noPad || noInteract()) { padBits_ = fakePad_; return; }   // (NOINTERACT: the user's controller is theirs)
+        if (noPad || noInteract()) { padBits_ = fakePad_; fakeAxes(input); return; }   // (NOINTERACT: the user's controller is theirs)
         pollAllPads();
         const int seat1Pad = split_ ? seatPad_[0] : 0;   // split screen: seat 1's own pad (or none: the keyboard only)
         XINPUT_STATE st{};
@@ -857,7 +856,17 @@ private:
             input.padConnected = false;
             input.padLX = input.padLY = input.padRX = input.padRY = 0.0f;
             input.padLT = 0.0f;
+            fakeAxes(input);
         }
+    }
+    void fakeAxes(InputFrame& input) const {   // scripted pads (injectPad / padhold): stick bits -> full deflection, LT bit -> pulled
+        if (!fakePad_) return;
+        input.padConnected = true;
+        if (fakePad_ & kPadLStickUp) input.padLY = 1.0f;
+        if (fakePad_ & kPadLStickDown) input.padLY = -1.0f;
+        if (fakePad_ & kPadLStickLeft) input.padLX = -1.0f;
+        if (fakePad_ & kPadLStickRight) input.padLX = 1.0f;
+        if (fakePad_ & kPadLT) input.padLT = 1.0f;
     }
 
     static LRESULT CALLBACK wndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {

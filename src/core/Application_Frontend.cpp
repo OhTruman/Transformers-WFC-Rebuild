@@ -58,6 +58,19 @@ constexpr bool kRendererFrameGenStartup =
     !std::is_same_v<decltype(render::setFrameGenerationAtStartup(true)), render::FrameGenStartupMissing>;
 
 namespace {
+// QA gate (Experimental's menu-qa, playtest 2026-10-23b section 43): the local pawn per frame while a match is up, for nav.check.
+// jitter = frames whose pawn movement reverses direction against the previous frame's (both > 1 cm): a pawn fought over by two
+// transforms flips every frame (#16 / #28 'flicker in place'); shots = rounds the local weapon spent (clip decrements).
+struct QaPawnTrack {
+    bool valid = false;
+    core::Vec3 last{}, lastDelta{};
+    int jitter = 0, shots = 0, lastClip = -1;
+    std::string weapon;
+};
+QaPawnTrack g_qaPawn;
+}
+
+namespace {
 // [Frontend, split screen] The renderer's view layout follows the seats: split (the profile's Split Layout row, Horizontal
 // default / Vertical) only in a match with two local seats; menus, loading screens and one seat draw a single view.
 void syncSplitLayout(render::IRenderer* r, const frontend::GameFlow& flow) {
@@ -845,6 +858,26 @@ void Application::attachPresenter() {
             kv.push_back({"glTextures", live.substr(9, live.find(' ') - 9)});
         }
         kv.push_back({"camera", frontend_->scene().view().camera});
+        if (frontend_->flow().level() == frontend::LevelKind::Match) {   // the match fields (QA gate): mode / local pawn / input owner
+            const game::World::PresentedFrame& pf = world_.presented();
+            const int me = pf.localPlayer;
+            const bool has = me >= 0 && (size_t)me < pf.present.size();
+            kv.push_back({"mode", pf.modeTag});
+            kv.push_back({"map", frontend_->flow().currentMatch().map ? frontend_->flow().currentMatch().map->mapFilename : std::to_string(frontend_->flow().currentMatch().mapId)});
+            kv.push_back({"chassis", pf.localChassis});
+            kv.push_back({"alive", has && pf.present[(size_t)me] && pf.hud.alive ? "1" : "0"});
+            kv.push_back({"form", pf.hud.vehicleForm ? "vehicle" : "robot"});
+            if (has && (size_t)me < pf.positions.size()) {
+                const core::Vec3& p = pf.positions[(size_t)me];
+                char b[96]; std::snprintf(b, sizeof b, "%.1f,%.1f,%.1f", p.x, p.y, p.z);
+                kv.push_back({"pos", b});
+            }
+            const std::string ui = frontend::uiStateName(frontend_->flow().ui().state());
+            kv.push_back({"inputOwner", ui == "InGame" && frontend_->flow().ui().openMovie().empty() ? "game" : ui + ":" + frontend_->flow().ui().openMovie()});
+            kv.push_back({"shots", std::to_string(g_qaPawn.shots)});
+            kv.push_back({"jitter", std::to_string(g_qaPawn.jitter)});
+            g_qaPawn.jitter = 0;   // since the last nav.check
+        }
         std::string line;
         for (const auto& [k, v] : kv) line += " " + k + "=" + (v.empty() ? std::string("-") : v);
         LOG_INFO("FLOW nav.check%s", line.c_str());
@@ -1941,6 +1974,24 @@ void Application::routeMatchToFrontend(float dt) {
         for (size_t i = 0; i < pf.damageCaused.size(); ++i) frontend_->hud().causedDamage();               // hit marker per hit
     }
     frontend_->hud().setFrame(hf);
+    {   // QA gate tracking (nav.check match fields)
+        const int qme = pf.localPlayer;
+        if (qme >= 0 && (size_t)qme < pf.positions.size() && (size_t)qme < pf.present.size() && pf.present[(size_t)qme]) {
+            const core::Vec3 p = pf.positions[(size_t)qme];
+            if (g_qaPawn.valid) {
+                const core::Vec3 d{p.x - g_qaPawn.last.x, p.y - g_qaPawn.last.y, p.z - g_qaPawn.last.z};
+                const float len2 = d.x * d.x + d.y * d.y + d.z * d.z, prev2 = g_qaPawn.lastDelta.x * g_qaPawn.lastDelta.x +
+                                   g_qaPawn.lastDelta.y * g_qaPawn.lastDelta.y + g_qaPawn.lastDelta.z * g_qaPawn.lastDelta.z;
+                const float dot = d.x * g_qaPawn.lastDelta.x + d.y * g_qaPawn.lastDelta.y + d.z * g_qaPawn.lastDelta.z;
+                if (len2 > 1.0f && prev2 > 1.0f && dot < 0.0f) ++g_qaPawn.jitter;   // UU: 1 cm
+                if (len2 > 0.0f) g_qaPawn.lastDelta = d;
+            }
+            g_qaPawn.last = p; g_qaPawn.valid = true;
+        } else g_qaPawn.valid = false;
+        if (pf.hud.weaponId != g_qaPawn.weapon) { g_qaPawn.weapon = pf.hud.weaponId; g_qaPawn.lastClip = pf.hud.clipAmmo; }
+        if (g_qaPawn.lastClip >= 0 && pf.hud.clipAmmo < g_qaPawn.lastClip) g_qaPawn.shots += g_qaPawn.lastClip - pf.hud.clipAmmo;
+        g_qaPawn.lastClip = pf.hud.clipAmmo;
+    }
     {   // [Frontend, split screen] seat 2: into the match once per launch (Gameplay assigns its match player on seat 1's team),
         // then its own HUD from PresentedFrame::seats[1]. Until seat 2 has its own Choose Character / characters file it plays
         // the roster's first preset, as the automated pick does.
