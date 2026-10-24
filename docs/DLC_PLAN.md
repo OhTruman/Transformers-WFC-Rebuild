@@ -83,3 +83,9 @@ link, one seat per console). So the modes and layout are ours. Decisions (Integr
 - Render: full quality per view (beauty first); per-view post-process and RT; perf reductions only if visually lossless.
 - Audio: one listener per player, nearest-listener attenuation (stock).
 - The 45 GetLocalPlayerController call sites must use the owning PC (Gameplay / Frontend).
+
+## Packaging rule (2026-10-23 ~23:30)
+- The DLC packages carry LOW mips of 11,154 base-owned textures; only 573 files (48.7 MB) are DLC-only
+  (AssetTools/out/dlc_content/dlc_only_content.tsv). Ship ONLY those into content/; the DLC maps' texture URIs are
+  base-style (../../../content/<pkg>/...), so shared textures resolve to the base high-res exports.
+- Dev runs: Rebuild/work/assets_dlc (junction root: base content + the DLC-only packages; Maps/<DLC map> junctions).

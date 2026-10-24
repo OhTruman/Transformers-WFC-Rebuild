@@ -4216,3 +4216,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Debris re-verified by the user's playtest (lens_flares fix in). MERGED 48c6d1b0 split-screen seat 2 (Gameplay) +
   acc8e648 (step 1 strings / tests). Fortress: every mode plays headless (Gameplay); 19 DLC texture paths fixed via an
   out/ junction. The user playtests now: card held by the user; lanes headless / code only.
+2026-10-23 21:12 DLC textures: the 19 'decode failed' = a URI 5 levels up into AssetTools/out (nonexistent elsewhere); AssetTools re-emits
+  the DLC maps with base-style URIs; packaging ships only the 573 DLC-only content files (the rest are low mips of base
+  textures). Experimental: Fortress headless rows PASS.
