@@ -4309,3 +4309,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   for every chapter; (2) the user's settings extras; (3) the performance pass (timed gate + loads + menus); (4) DLC (9
   maps) + Language + offline split screen in the same build; (5) gate -> refresh.sh -> verify -> hand-over note. Wake the
   user only for something super important.
+2026-10-23 23:49 MERGED d8da7b64 voice channel switch binding (N / D-pad Right; cycles the four channels; Settings > Audio row). Morning
+  note: the default push-to-talk V doubles as jet Hover Down (the user picked V; the hint flags it). RE QC 22: the colour
+  conversion matches; check the material instance scalars (ColorBrightness / Color_Saturation / LUT switches): Rendering.
