@@ -4186,3 +4186,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 20:34 DLC_RE.md (RE 926973d) + the 4 DLC Escalation exports (Tranquillity 17 waves, District 20 + the new Autobot jet AICD,
   Pulse 30 with tank bosses, Static 21). Gating: every shipped playlist has ContentIds (0) and MapInfo DlcId 0; the
   Frontend merges the pack ini, HasRequiredAssets true for the 9 maps, chassis unlocked, no DLC popups.
+2026-10-23 20:36 MERGED e54dcd34 Language option in Settings (Frontend 579c9727: profile Language INT default, INT + FRA from the Coalesced
+  packs, FRA text overlaid key by key, FRA map names, FRA logo / movies; Systems' audio setLanguage follows the package)
+  + the harness steps (00c61cbf). 250 frontend tests, identity. Not in the d5bb6863 package (next build).
