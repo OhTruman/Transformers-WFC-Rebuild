@@ -4337,3 +4337,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   match actions (authored XboxTypeS layout; X tap reload / hold revive per RE; profile remaps). Frontend: pause routing
   closed by the merged fixes; D1 reproduced = the campaign lobby's autostart never fires after the pick (root-causing);
   calibration logos draw as authored (the photo's exposure) and now take the UI gamma. Gate run queued behind the repro exes.
+2026-10-24 00:38 MERGED 1edec0c2 D1 'blank screen' FIXED (Frontend d93b9a16): the SOLO campaign lobby is invisible by design and the
+  original's lobby game class starts the chapter once everyone has a character; ours never did, so the player sat in an
+  invisible lobby; gameLobbyTick now starts the level on the pick (menu run: D1 loads 40 s, spawn, pawn moves). Also
+  merged 7f0efe32 (settings re-apply after recreate, Texture Quality wired, Water neutral, subtitles drawn, loading
+  bar). RE: a campaign lobby pick persists into the map (our clearing = the bug; one-line follow-up). Gate: all three
+  flows on 1edec0c2 once the card frees.
