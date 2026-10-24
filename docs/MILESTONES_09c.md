@@ -4219,3 +4219,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 21:12 DLC textures: the 19 'decode failed' = a URI 5 levels up into AssetTools/out (nonexistent elsewhere); AssetTools re-emits
   the DLC maps with base-style URIs; packaging ships only the 573 DLC-only content files (the rest are low mips of base
   textures). Experimental: Fortress headless rows PASS.
+2026-10-23 21:14 MERGED bf8029a2 split-screen render phase 1 (two views per frame, per-view post into its rect; one view = today's frame;
+  later: RT / FSR per view, one HUD per half). AssetTools moves the DLC map root to out/dlc_content/VerticalSlice/Maps/
+  (base-style URIs); Fortress + Havoc rebuilding there -> re-point my work/assets_dlc junctions when they land.
