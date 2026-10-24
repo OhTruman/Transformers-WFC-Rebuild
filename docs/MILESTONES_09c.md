@@ -4358,3 +4358,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Crash Site -> load -> InGame, 6.4 m, 3 shots), MULTIPLAYER every measured check PASS (Game Settings row, Choose
   Character, 34.9 m jitter 0 = the frozen-pawn P0 fixed on the real input path, shots, transform, pause / resume, quit
   -> party lobby); 5 mp steps pending (filled from 56166868; final run on the final head). Card -> Rendering's audit.
+2026-10-24 00:57 MERGED 508b29ce FLOWSIMTEST sets WFC_PLAYERBOT itself: the 7 / 10 was my env (no player bot = the human stands still),
+  no regression; MP 11 / 11 on the head. Section 43 sim side CLOSED (Gameplay); menu side PASS (Experimental gate).
+  RE §7: chapter select = all ten chapters in one row + checkpoint row (matches ours); pre-match screen = mode icon +
+  mode name + countdown + PlayerList (the 'scrunched names' = that list; no big title).

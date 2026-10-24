@@ -233,3 +233,45 @@ The list is **the map's `CampaignCharacters`** (TransLevels.ini; the in-map Coop
   - Audio: FX / Dialog / Music 0–100 in steps of 10, Subtitles;
   - Controls: Vibration, Layout, Invert Y per form, Camera Sensitivity 0–100 in steps of 10.
   - Every change is applied immediately to the profile.
+
+## 7. Addendum 2026-10-24: chapter-select layout and the match-start screens (C; QC #36 / #27)
+
+### 7.1 Chapter select (CampaignSelect_GFX)
+- **Faction stage:** shown **only when no map is selected yet** (`CurrentMapId == -1`). Otherwise the faction of the selected map is
+  taken automatically (after 20 ms) and the chapter stage opens straight away.
+- **Chapter row:** **all ten chapters in one row** (`mc_missionChapterButton` at x = n·88). There's **no filter by faction**.
+  - **Colour by number:** I–V Decepticon 0xA06FFF, VI–X Autobot 0xF03C3C.
+  - **Enabled (unlocked):** alpha 80, faction colour.
+  - **Disabled:** alpha 25, colour 0x50B5D5.
+  - **Focused:** scaled to 200 %, alpha 100, white, with the "CHAPTER" label shown. So a focused "I" is a big white bar next to
+    CHAPTER.
+  - **Logos:** both faction logos stay at the row ends. The focused chapter's faction drives `factionStreamlineDisplay.SelFaction`.
+  - **Info:** the title and description slide in from the side you moved toward (±50 px, 0.5 s).
+- **The checkpoint row is visible under the chapter row while browsing:** `UpdateCheckpointThumbs(focus MapId)` runs on every focus
+  change.
+  - Pressing A on a chapter enters Checkpoint mode. The chapter row then "expands": the focused numeral grows to 600 % at
+    alpha 15 as a backdrop, the others fade, and the black logos fade over 2 s.
+  - **Thumb width:** (800 − 5·(N − 1)) / N; with **D1's 10 checkpoints** (authored, not padding) that's 75.5 px.
+  - **The selected thumb grows to 180 px** (frame 210 × 150).
+  - Above the row: title `CampaignSelect.CheckpointSelect` plus the checkpoint name.
+- **So our capture matches the browse state** (II–V and VII–X dim, VI enabled red on a new profile, ten D1 thumbs).
+- **Check in our player:**
+  1. the A → checkpoint-mode transition (expand, the 180 px selected thumb, the checkpoint title line);
+  2. the faction stage only on first entry;
+  3. the disabled numerals at alpha 25 in 0x50B5D5.
+
+### 7.2 Names at match start (#27)
+- **The pre-match screen is PreGameCountdown_GFX:**
+  - the game-mode icon (rotates in over 0.5 s);
+  - the mode name `<CurrentGame:GameModeFriendlyName>` **in upper case** in `gameMode_txt`;
+  - the countdown label ("MATCH STARTS IN", or Campaign / Round) and the time at the right;
+  - **the PlayerList movie in `InGame` view at (320, 162)**: the full player and bot list with level and name in columns, team
+    sections in team modes.
+- **That list is the likely "names scrunched together".** Bots and players must use PlayerList's column layout (Level 100 px,
+  Name 300 px, team headers 410 / 65 px). There's no big centred title with wide letter spacing in the original.
+- **World name tags** (TnObjectiveMarkerTypeTransformerVersus):
+  - **Allies:** a marker plus a label (LabelColor R100 G210 B250 A220) **always** shown when on screen. Marker 0.04 of screen,
+    0.08 focused, with a health bar. Off-screen only when downed.
+  - **Enemies:** the label only **when focused** (aimed within 0.027 of centre, auto-focus range 3000 UU, 1 s hysteresis), and only
+    with a buff such as see-enemy, hard-lock or revenge. No label behind cover or while cloaked.
+  - The label sits above the pawn by half its collision height plus 0.04 of the screen.
