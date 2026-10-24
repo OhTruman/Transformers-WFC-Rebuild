@@ -200,3 +200,13 @@ errors; its Remnant and Pulse ESCTEST logs equal the head build's line for line.
 - ESCTEST: the presentation check and a Pulse manager check.
 Apply it after 19. Verified: a fresh full af4d0731 + 01-20 applies and builds with 0 errors; its Pulse ESCTEST log equals the head
 build's line for line.
+
+## 21: Static Escalation data (20 tree -> 2c7e8089 + GAMEPLAY_ESC_STATIC_DATA)
+
+`21_esc_static.patch`: the same paths, from the 20 tree to 2c7e8089 + ESC_STATIC_DATA. It covers:
+- Static's Escalation data (RE section 9): 20 waves, 11 enemy rows, 34 zones, 72 generators (the DoorGenerators flattened), the
+  fire-jet trap (generator 3558, 16 volumes, matinee 7.018 s and cooldown 2.0 s from the export) in EscalationData.inc;
+- ESCTEST: the "due" check covers rows with a MinCount (optional rows depend on budget and kill cadence);
+- everything merged since 20 on these paths (STATIC_PREP, two locals online, the WIC texture decoder, previews, level audio ...).
+District's data regenerates byte-identical after its art-package fix. Apply it after 20. Verified: a fresh full af4d0731 + 01-21
+applies and builds with 0 errors; its Static ESCTEST log equals the head build's line for line.
