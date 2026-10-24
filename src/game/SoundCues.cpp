@@ -314,17 +314,21 @@ bool waveExists(const std::string& path) {
     if (fp) std::fclose(fp);
     return fp != nullptr;
 }
+// The content roots a wave is looked up in, in order: the level's own, then (development) the DLC-only root and the base root -
+// a DLC map run from AssetTools' DLC tree has only the DLC-only files beside it, its cues reuse base waves (dialogue lines,
+// ambiences), and a base map never needs the DLC root. A package merges everything into one content/, so the first root hits.
+// WFC_DLC_CONTENT / WFC_BASE_CONTENT override the two development roots.
+std::vector<std::string> contentRoots(const std::string& contentRoot) {
+    auto norm = [](std::string r) { if (!r.empty() && r.back() != '/' && r.back() != '\\') r += '/'; return r; };
+    static const std::string dlc = norm([] { const char* e = std::getenv("WFC_DLC_CONTENT"); return std::string(e && *e ? e : "F:/Transformers Rebuild/AssetTools/out/dlc_content/content"); }());
+    static const std::string base = norm([] { const char* e = std::getenv("WFC_BASE_CONTENT"); return std::string(e && *e ? e : "F:/Transformers Rebuild/ExtractedAssets/content"); }());
+    std::vector<std::string> out{contentRoot};
+    for (const std::string& r : {dlc, base}) if (r != norm(contentRoot)) out.push_back(r);
+    return out;
+}
 std::string contentFile(const std::string& contentRoot, const std::string& f) {
-    const std::string base = contentRoot + f;
-    static const std::string dlc = [] {
-        const char* e = std::getenv("WFC_DLC_CONTENT");
-        std::string r = e && *e ? e : "F:/Transformers Rebuild/AssetTools/out/dlc_content/content";
-        if (!r.empty() && r.back() != '/' && r.back() != '\\') r += '/';
-        return r;
-    }();
-    if (waveExists(base)) return base;
-    const std::string alt = dlc + f;
-    return waveExists(alt) ? alt : base;
+    for (const std::string& r : contentRoots(contentRoot)) if (waveExists(r + f)) return r + f;
+    return contentRoot + f;
 }
 }
 
@@ -373,13 +377,17 @@ std::string SoundCues::localizedWave(const std::string& rel, const std::string& 
     // The twin's WAV, or (a package without WAVs) its original bank beside it: the audio backend decodes X.fsb for X.wav.
     // [Systems] long / non-ASCII paths: a real open (WFC_FILELOG logs it, as the narrow fopen it replaces), wide via longPath
     auto twinPath = [&](const std::string& tw) -> std::string {
-        const std::string alt = (locRoot && *locRoot ? std::string(locRoot) + "/" : contentRoot + "_LOC/") + tw + "/" + rel;
-        const std::string altPath = alt.size() > 1 && (alt[1] == ':' || alt[0] == '/') ? alt : contentRoot + alt;
-        std::FILE* fp = _wfopen(platform::longPath(altPath).c_str(), L"rb");
-        if (!fp && altPath.size() > 4) fp = _wfopen(platform::longPath(altPath.substr(0, altPath.size() - 4) + ".fsb").c_str(), L"rb");
-        if (!fp) return std::string();
-        std::fclose(fp);
-        return alt;
+        if (locRoot && *locRoot) {
+            const std::string alt = std::string(locRoot) + "/" + tw + "/" + rel;
+            const std::string altPath = alt.size() > 1 && (alt[1] == ':' || alt[0] == '/') ? alt : contentRoot + alt;
+            return waveExists(altPath) ? alt : std::string();
+        }
+        // the level's content root, then the development DLC / base roots (contentRoots): a DLC map's cues reuse base lines
+        for (const std::string& r : contentRoots(contentRoot)) {
+            const std::string alt = r + "_LOC/" + tw + "/" + rel;
+            if (waveExists(alt)) return alt;
+        }
+        return std::string();
     };
     std::string alt = twinPath(twin);
     if (!alt.empty()) { if (account) ++locStats().twin; return alt; }
