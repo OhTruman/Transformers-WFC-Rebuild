@@ -40,12 +40,17 @@ wait:ui=InGame
 wait:t=3
 navcheck:ingame.spawned
 shot:04_spawned.bmp
-# TODO(frontend): keyhold W 2 s (forward), keyhold D 1 s (strafe) - needs the requested keyhold: step
+padhold:LStickUp,2
+wait:t=2.5
+padhold:LStickRight,1
+wait:t=1.5
 navcheck:ingame.moved
 shot:05_moved.bmp
-# TODO(frontend): hold fire 1 s (keyhold / mouse button)
+padhold:RT,1
+wait:t=1.5
 navcheck:ingame.shot
-# TODO(frontend): the transform key, wait 2 s
+padhold:LThumb,0.2
+wait:t=2.5
 navcheck:ingame.transformed
 shot:06_transformed.bmp
 showmenu

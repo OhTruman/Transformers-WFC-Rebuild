@@ -29,7 +29,8 @@ wait:ui=InGame
 wait:t=3
 navcheck:ingame.spawned
 shot:05_spawned.bmp
-# TODO(frontend): keyhold W 3 s - play (move) for a few seconds
+padhold:LStickUp,3
+wait:t=3.5
 navcheck:ingame.played
 shot:06_played.bmp
 showmenu

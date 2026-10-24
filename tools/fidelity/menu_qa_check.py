@@ -8,10 +8,10 @@ screen. Flow-file lines '#expect <kind> <args>' add:
   no-charselect-after-ingame      no 'uistate ... -> CharacterSelect' after the first InGame unless after a 'changechar' checkpoint
   state <checkpoint> <UiState>    the navcheck at <checkpoint> reports uiState=<UiState>
   level <checkpoint> <Level>      ... level=<Level>
-  moved <cpA> <cpB> <metres>      pawn position (navcheck field pawnPos=x,y,z) moved >= metres between the two checkpoints
-  still <checkpoint> <jitter>     navcheck pawnJitter <= jitter (frame-to-frame transform flips: the #16 / #28 flicker)
-  shots <cpA> <cpB>               navcheck shotsFired grew between the checkpoints
-  form <cpA> <cpB>                navcheck pawnForm differs between the checkpoints (a transform happened)
+  moved <cpA> <cpB> <metres>      pawn position (navcheck field pos=x,y,z) moved >= metres between the two checkpoints
+  still <checkpoint> <jitter>     navcheck jitter <= jitter (frame-to-frame transform flips: the #16 / #28 flicker)
+  shots <cpA> <cpB>               navcheck shots grew between the checkpoints
+  form <cpA> <cpB>                navcheck form differs between the checkpoints (a transform happened)
 The pawn checks read fields the Frontend adds to navcheck (requested 2026-10-23); missing fields -> UNKNOWN, never a guessed PASS."""
 import json
 import os
@@ -48,7 +48,7 @@ def parse(log):
 
 def pos(c):
     try:
-        return [float(x) for x in c['pawnPos'].split(',')]
+        return [float(x) for x in c['pos'].split(',')]
     except (KeyError, ValueError):
         return None
 
@@ -94,6 +94,8 @@ def check_flow(out, flow):
         except ValueError:
             pass
         in_match = c.get('level') == 'Match' and c.get('uiState') in ('InGame', 'Spectating')
+        if in_match and c.get('inputOwner') not in (None, 'game'):
+            bad.append(f"in play but input owned by {c.get('inputOwner')} (lost input / stale overlay)")
         if not in_match and not modal:
             if c.get('inputOwnerVisible') in ('false', '0'):
                 bad.append(f"input owner {c.get('inputOwner')} not visible (dimmed / trapped screen)")
@@ -126,19 +128,19 @@ def check_flow(out, flow):
         elif k == 'moved':
             p1, p2 = pos(by.get(a[0], {})), pos(by.get(a[1], {}))
             if p1 is None or p2 is None:
-                rows.append((name, 'UNKNOWN', 'no pawnPos field on navcheck (Frontend request pending)'))
+                rows.append((name, 'UNKNOWN', 'no pos field on navcheck (FRONTEND_QA_GATE_HOOKS not in this build)'))
             else:
                 d = sum((x - y) ** 2 for x, y in zip(p1, p2)) ** 0.5
                 rows.append((name, 'PASS' if d >= float(a[2]) else 'FAIL', f"moved {d:.2f} m"))
         elif k == 'still':
-            j = by.get(a[0], {}).get('pawnJitter')
-            rows.append((name, 'UNKNOWN' if j is None else ('PASS' if float(j) <= float(a[1]) else 'FAIL'), f"pawnJitter={j}"))
+            j = by.get(a[0], {}).get('jitter')
+            rows.append((name, 'UNKNOWN' if j is None else ('PASS' if float(j) <= float(a[1]) else 'FAIL'), f"jitter={j}"))
         elif k == 'shots':
-            s1, s2 = by.get(a[0], {}).get('shotsFired'), by.get(a[1], {}).get('shotsFired')
-            rows.append((name, 'UNKNOWN' if s1 is None or s2 is None else ('PASS' if int(s2) > int(s1) else 'FAIL'), f"shotsFired {s1} -> {s2}"))
+            s1, s2 = by.get(a[0], {}).get('shots'), by.get(a[1], {}).get('shots')
+            rows.append((name, 'UNKNOWN' if s1 is None or s2 is None else ('PASS' if int(s2) > int(s1) else 'FAIL'), f"shots {s1} -> {s2}"))
         elif k == 'form':
-            f1, f2 = by.get(a[0], {}).get('pawnForm'), by.get(a[1], {}).get('pawnForm')
-            rows.append((name, 'UNKNOWN' if f1 is None or f2 is None else ('PASS' if f1 != f2 else 'FAIL'), f"pawnForm {f1} -> {f2}"))
+            f1, f2 = by.get(a[0], {}).get('form'), by.get(a[1], {}).get('form')
+            rows.append((name, 'UNKNOWN' if f1 is None or f2 is None else ('PASS' if f1 != f2 else 'FAIL'), f"form {f1} -> {f2}"))
         else:
             rows.append((name, 'UNKNOWN', 'unknown expectation'))
     return rows
