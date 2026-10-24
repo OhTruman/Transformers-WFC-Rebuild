@@ -99,3 +99,14 @@ SIMHASH note: item 1 changes the local player's shot directions (deliberate); bo
     - (b) a per-mesh data override: per-poly collision for ENV_CraterUpNoRing_STAT only (narrow, but not the original
       collision);
     - (c) keep it as is.
+- **Crater, decision (b) done: `GAMEPLAY_CRATER_PER_POLY.patch` (on 496494d5).**
+  - ENV_CraterUpNoRing_STAT on MP_IAC_Streets now collides with its render triangles (both sections enable_collision; 23,260
+    triangles at the 10 colliding placements of props.json) instead of the authored hull (320 triangles). This applies to the
+    movement and weapon worlds.
+  - It is a PC ADAPTATION, one mesh on one map. WFC_NOPERPOLY=1 restores the hull for A/B. The faithful fix (the movement
+    model ramping up walkable hull faces) is on the post-build list.
+  - Headless proof (WFC_CRATERPROBE): 16 knee-height rays toward each placement, against the crater triangles alone, with
+    floors from the full world. Blocked outside the visible rim (> 21 local units): hull 12 rays (out to 26.4), per-poly 1.
+  - SIMHASH changes by design on Streets.
+  - Correction to the earlier note: the placements carry a vertical scale (0.39 on some), so the hull's lip height varies per
+    placement. The probe measures it directly.
