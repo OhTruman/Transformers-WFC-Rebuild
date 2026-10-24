@@ -2087,8 +2087,13 @@ void World::publishPresented() {
     auto front = [](auto& dst, auto& src) { dst.insert(dst.begin(), std::make_move_iterator(src.begin()), std::make_move_iterator(src.end())); src.clear(); };
     front(b.matchEvents, f.matchEvents); front(b.gameplayEvents, f.gameplayEvents); front(b.kills, f.kills);
     front(b.damageTaken, f.damageTaken); front(b.damageCaused, f.damageCaused); front(b.xpAwards, f.xpAwards); front(b.statAwards, f.statAwards);
+    for (size_t i = 0; i < b.seats.size() && i < f.seats.size(); ++i) {   // split screen: each seat's unconsumed queues, front first
+        if (b.seats[i].player != f.seats[i].player) continue;   // a seat that changed: the old player's entries go
+        front(b.seats[i].damageTaken, f.seats[i].damageTaken); front(b.seats[i].damageCaused, f.seats[i].damageCaused);
+    }
     b.steps += f.steps;
     std::swap(f, b);
+    for (auto& s : b.seats) { s.damageTaken.clear(); s.damageCaused.clear(); }
     b.matchEvents.clear(); b.gameplayEvents.clear(); b.kills.clear(); b.damageTaken.clear(); b.damageCaused.clear();
     b.xpAwards.clear(); b.statAwards.clear(); b.steps = 0;
     constexpr long kCap = 8192;
@@ -2190,7 +2195,7 @@ void World::preloadHeldWeaponsOfPawns() {
 void World::tickPrefix(float dt) {
     joinStep();
     seat2QueueCommand();   // split screen: the second local seat's command for this step (applied with the remote ones)
-    if (seat2_ >= 0) seat2Ctl_.tickCameraCollision(dt);
+    if (seat2_ >= 0 && seat2Ctl_.pawn()) seat2Ctl_.tickCameraCollision(dt);
     applyQueuedRemoteCommands(dt);   // the Remote seats' commands for this step (main thread, after the background part joined)
     tickSlotSwaps(dt);   // session slot handovers at their agreed tick (main thread, before any bot / pawn work)
     applyPendingLateSeats();    // join in progress: dormant seats waking this tick (before their picks)
@@ -3143,6 +3148,7 @@ void World::fillPresented(PresentedFrame& p) {
     p.damageCaused.insert(p.damageCaused.end(), pendingDamageCaused_.begin(), pendingDamageCaused_.end()); pendingDamageCaused_.clear();
     if (p.damageTaken.size() > 1024) p.damageTaken.erase(p.damageTaken.begin(), p.damageTaken.end() - 1024L);
     if (p.damageCaused.size() > 1024) p.damageCaused.erase(p.damageCaused.begin(), p.damageCaused.end() - 1024L);
+    fillSeats(p);   // split screen: the per-seat HUD state
     { auto xp = awards_.drainXp(); p.xpAwards.insert(p.xpAwards.end(), xp.begin(), xp.end()); }
     { auto st = awards_.drainStats(); p.statAwards.insert(p.statAwards.end(), st.begin(), st.end()); }
     constexpr size_t kCap = 8192;
@@ -3312,6 +3318,7 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
         pendingDamageTaken_.push_back({std::remainder(yawTo - player_.controller().camYaw(), 6.2831853f), applied, instigator, lastDamageFrom_});
     }
     if (instigator == localPlayer_ && victim != localPlayer_ && applied > 0.0f) pendingDamageCaused_.push_back({victim, applied, h->isDead()});
+    seat2NoteDamage(victim, instigator, applied, h->isDead());   // split screen: seat 2's own queues
     if (h->isDead() && instigator >= 0 && instigator != victim) {
         Character* kp = instigator == localPlayer_ ? (localDead_ ? nullptr : &player_.pawn()) : nullptr;
         for (MatchOpponent* o : opponents_) if (o->matchPlayer() == instigator && o->spawned()) kp = &o->pawn();
@@ -3394,6 +3401,7 @@ void World::clearMatchActors() {
     partShotFx_.clear();
     pendingDamageTaken_.clear();
     pendingDamageCaused_.clear();
+    seat2Taken_.clear(); seat2Caused_.clear();
     for (auto& kv : partBeams_) kv.second.time = 0.0f;   // stopped at the next draw
 }
 

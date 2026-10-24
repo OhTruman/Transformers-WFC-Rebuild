@@ -1109,6 +1109,22 @@ public:
         std::vector<DamageCaused> damageCaused;
         unsigned steps = 0;                             // steps since the last consumePresented()
         bool extendedLobby = false;                     // World::extendedLobby() at this step
+        // Split screen (GAMEPLAY_SPLITSCREEN_PLAN.md step 2): the per-seat HUD state. seats[0] mirrors the local fields above;
+        // seats[1] exists while a second local seat plays. The view camera is World::seatCamera (main thread, per render frame).
+        // Each seat's death / respawn: dead here + the Respawn match events of its player.
+        struct Seat {
+            int player = -1;                            // the seat's match player
+            bool dead = false;
+            float health = 0.0f, healthMax = 0.0f; std::vector<float> segmentTops;
+            int clip = 0, reserve = 0, mag = 0, reserveMax = 0;   // the held weapon (vehicle weapon in vehicle form)
+            std::string weaponId, chassis;
+            HudAimState aim;
+            HudObservers hud2;                          // seat 2: abilities, grenade, weapon jam / spread, cloak / warcry buffs
+            std::vector<Marker> markers;                // seat 2: seat 1's (same team), enemy labels by seat 2's line of sight
+            std::vector<DamageTaken> damageTaken;       // since the last consumePresented (yaw relative to the seat's view)
+            std::vector<DamageCaused> damageCaused;
+        };
+        std::vector<Seat> seats;
     };
     const PresentedFrame& presented() const { return presented_; }
     // An extended lobby (the PC extension: more than 10 participants, or launched with ExtendedPlayers): the original's visible FX
@@ -1154,7 +1170,8 @@ public:
     static void stepProfileReset();
     static std::vector<std::pair<std::string, double>> stepProfileSums();
     void consumePresented() { presented_.matchEvents.clear(); presented_.gameplayEvents.clear(); presented_.kills.clear();
-                              presented_.damageTaken.clear(); presented_.damageCaused.clear(); presented_.steps = 0; }
+                              presented_.damageTaken.clear(); presented_.damageCaused.clear(); presented_.steps = 0;
+                              for (auto& s : presented_.seats) { s.damageTaken.clear(); s.damageCaused.clear(); } }
     // A command for the simulation: applied in submission order at the start of the next step (select a character, QA actions,
     // look settings, audio volumes / preloads, test damage). Deterministic: the same commands land at the same step boundary.
     void submit(std::function<void(World&)> command) { commands_.push_back(std::move(command)); }
@@ -1244,6 +1261,10 @@ private:
     platform::InputFrame seat2In_;
     void seat2HandleInput(float dt);
     void seat2QueueCommand();
+    std::vector<PresentedFrame::DamageTaken> seat2Taken_;   // seat 2's damage-direction / hit-marker queues (as pendingDamage*)
+    std::vector<PresentedFrame::DamageCaused> seat2Caused_;
+    void fillSeats(PresentedFrame& p);
+    void seat2NoteDamage(int victim, int instigator, float applied, bool killed);
     std::vector<Block> blocks_;
     std::vector<std::unique_ptr<Actor>> actors_;
     std::vector<PickupFactory*> pickupFactories_;     // owned by actors_
