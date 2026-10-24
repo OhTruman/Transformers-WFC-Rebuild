@@ -4211,3 +4211,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   campaign restart glue). Cut status (Systems): packaging rerun 1 done (38.22 GB: base 17 + HD 22); verify: Streets /
   Settings / RT PASS, Gorge + Debris failed on the missing per-map lens_flares.json -> build_slim fix taken (123d3e7f),
   repackage 2 running (IO only), then verify Gorge + Debris. Rendering has the card for 2 split phase-1 runs meanwhile.
+2026-10-23 21:08 PACKAGE HANDED OVER: F:\Transformers Rebuild\Rebuild-Systems\work\playtest_slim_d5bb6863 (base 17 GB; Play.bat) + 
+  playtest_slim_d5bb6863_HDpack (22 GB, optional, merge per README_HD.txt). Verify: Streets / Settings / RT PASS; Gorge +
+  Debris re-verified by the user's playtest (lens_flares fix in). MERGED 48c6d1b0 split-screen seat 2 (Gameplay) +
+  acc8e648 (step 1 strings / tests). Fortress: every mode plays headless (Gameplay); 19 DLC texture paths fixed via an
+  out/ junction. The user playtests now: card held by the user; lanes headless / code only.
