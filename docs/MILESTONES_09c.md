@@ -4197,3 +4197,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   taken (seat 2 as a local participant on the remote-seat path). DECISION (user ~22:00, "whatever saves Claude points"):
   finish and hand over the current package as is; the user's playtest findings + DLC + Language + split screen go into ONE
   next build; lanes report only merge-ready patches / blockers / per-map done; one headless per item; no confirm reruns.
+2026-10-23 20:48 MERGED e7b72e0b: the Frontend's DLC sections 3-4 (9 maps in the lists / playlists / Quick Match / ESC list, DlcId 0,
+  selectable as their data lands; 7 chassis unlocked; thumbnails from out/dlc_content) + Rendering's split-screen
+  interface (SplitScreen.h; GL path next) + the Frontend's split plan. RE's ESC inputs delivered (zone order, factions,
+  kismet extra). Split screen coding starts on all three lanes; Systems' input frames / localSeats / second listener
+  queued after the package. AssetTools: FRA names re-export (U+FFFD), thumbnails in dlc_content.
