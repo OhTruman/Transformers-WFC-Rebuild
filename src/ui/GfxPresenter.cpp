@@ -1751,6 +1751,7 @@ void GfxPresenter::syncSettingsCommit() {
 void GfxPresenter::syncFirstLaunchBrightness(gfx::Player& p, frontend::GameFlow& flow) {
     if (firstBrightnessShown_ || flow.level() != frontend::LevelKind::FrontEnd || flow.ui().state() != frontend::UIState::FrontEnd) return;
     if (std::getenv("WFC_FRONTEND_AUTOPLAY")) { firstBrightnessShown_ = true; return; }   // automation that jumps into a match
+    if (flow.popup().open) return;   // first-boot modals queue: never over another prompt
     if (flow.profile().getBool("HasAdjustedGamma")) { firstBrightnessShown_ = true; return; }
     gfx::MovieClip* mainMenu = findClipNamed(p.root(), "menuMain_mc");
     if (!mainMenu || !mainMenu->script || !mainMenu->visible || !p.root() || !p.root()->script) return;
@@ -2416,6 +2417,21 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     {   // the colour square takes its own presses; the movie then sees no button (the palette arrows' invisible hit areas overlap
         // the square: a press there also shifted the palette)
         gfx::Player* fp = focusPlayer();
+        // playtest 3 MP 5 (reported twice): Create a Character's Decepticon Chassis button mirrors its background / glow / tab with
+        // a VERTICAL flip too (sy -1; Autobot Chassis sy +1), so its box rose above the row while its label stayed. Keep the
+        // horizontal mirror, drop the vertical flip: the box lines up with Autobot Chassis.
+        if (fp) if (gfx::MovieClip* dBtn = findClipNamed(fp->root(), "chassisButtonD_mc"); dBtn && dBtn->script) {
+            gfx::avm1::VM& vm = fp->vm();
+            for (const char* n : {"background_mc", "glow_mc", "tab_mc"}) {
+                const gfx::avm1::Value c = vm.get(dBtn->script, n);
+                // (a -1 / -1 matrix decomposes as _rotation 180 with positive scales: rotation 0 + a negative _xscale = mirror only)
+                if (c.isObject() && std::fabs(vm.toNumber(vm.get(c.o, "_rotation"))) > 179.0) {
+                    const double xs = vm.toNumber(vm.get(c.o, "_xscale"));
+                    vm.set(c.o, "_rotation", gfx::avm1::Value(0.0));
+                    vm.set(c.o, "_xscale", gfx::avm1::Value(-std::fabs(xs)));
+                }
+            }
+        }
         if (fp && colourPickerMouse(*fp, in)) {
             platform::InputFrame noButton = in;
             noButton.mouseLeft = false;
