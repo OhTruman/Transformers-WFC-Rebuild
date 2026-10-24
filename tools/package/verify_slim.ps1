@@ -371,7 +371,11 @@ Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { $
 $env:WFC_MUTE = '1'; $env:WFC_NOINTERACT = '1'; $env:WFC_NOMOUSE = '1'   # silent, never takes the mouse / focus (user 2026-10-13 / 2026-10-15; env-only)
 try {
     foreach ($entry in $(if ($StaticOnly) { @() } else { $Maps.Split(',') })) {
-        $id, $name = $entry.Split(':')
+        # A row: "<map id>:<name>" (the menus: Private Match, TDM) or "direct|<name>|<match url>|<campaign chapter or empty>" (a direct
+        # match boot: Escalation / DLC maps / a campaign chapter - the same file-open checks, no menu flow)
+        $direct = $entry.StartsWith('direct|')
+        if ($direct) { $parts = $entry.Split('|'); $id = ''; $name = $parts[1]; $directUrl = $parts[2]; $directMap = if ($parts.Count -gt 3) { $parts[3] } else { '' } }
+        else { $id, $name = $entry.Split(':') }
         WaitHold
         $run = Join-Path $WorkDir $name
         if (Test-Path -LiteralPath $run) { Remove-Item -LiteralPath $run -Recurse -Force }
@@ -384,6 +388,7 @@ try {
         $env:WFC_FILELOG = $fileLog
         foreach ($k in $roots.Keys) { Set-Item -LiteralPath "env:$k" -Value ($roots[$k] -replace '\\', '/') }
         $env:WFC_BOOT = 'frontend'; $env:WFC_NOMOUSE = '1'; $env:WFC_LOGTIME = '1'
+        Remove-Item env:WFC_MATCH_URL, env:WFC_MAP, env:WFC_MATCH_SECONDS, env:WFC_PLAYERBOT -ErrorAction SilentlyContinue
         if ($SkipIntro) { $env:WFC_SKIPINTRO = '1' } else { Remove-Item env:WFC_SKIPINTRO -ErrorAction SilentlyContinue }
         if ($LobbyOptions) { $env:WFC_LOBBY_OPTIONS = $LobbyOptions } else { Remove-Item env:WFC_LOBBY_OPTIONS -ErrorAction SilentlyContinue }
         Remove-Item env:WFC_HDTEXTURES -ErrorAction SilentlyContinue
@@ -397,7 +402,11 @@ try {
             else { $env:WFC_AUTODETECT = '1'; $env:WFC_AUTODETECT_WINDOWED = '1' }
             if ((Norm $hd.Root) -ne (Norm (Join-Path $pkg 'AssetTools\out\hd'))) { $env:WFC_HD_ROOT = $hd.Root -replace '\\', '/' }
         }
-        $env:WFC_FRONTEND_SCRIPT = "wait:frontend;wait:ui=FrontEnd;wait:t=2;call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby;wait:ui=InLobby;wait:t=1;call:Online.EditGameMode,TDM;call:Online.PlayPrivateGame,TDM;wait:level=GameLobby;wait:ui=InLobby;wait:t=1.5;call:Online.SetSelectedMapID,$id;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;wait:ui=InGame;wait:t=$MatchSeconds;quit"
+        if ($direct) {
+            $env:WFC_BOOT = 'match'; $env:WFC_MATCH_URL = $directUrl; $env:WFC_MATCH_SECONDS = "$MatchSeconds"; $env:WFC_PLAYERBOT = '1'
+            if ($directMap) { $env:WFC_MAP = $directMap }
+            Remove-Item env:WFC_FRONTEND_SCRIPT -ErrorAction SilentlyContinue
+        } else { $env:WFC_FRONTEND_SCRIPT = "wait:frontend;wait:ui=FrontEnd;wait:t=2;call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby;wait:ui=InLobby;wait:t=1;call:Online.EditGameMode,TDM;call:Online.PlayPrivateGame,TDM;wait:level=GameLobby;wait:ui=InLobby;wait:t=1.5;call:Online.SetSelectedMapID,$id;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;wait:ui=InGame;wait:t=$MatchSeconds;quit" }
 
         Write-Host "[$name] map ${id}: starting $exe"
         $t0 = Get-Date
@@ -423,6 +432,10 @@ try {
         $errors = @($log | Where-Object { $_ -match '\[error\]' })
         $matchLine = ($log | Select-String -SimpleMatch 'FLOW level.begin level=Match' | Select-Object -First 1)
         $inGame = [bool]($log | Select-String -Pattern 'ui\.state from=\S+ to=InGame' | Select-Object -First 1)
+        if ($direct) {   # a direct boot: the match ran its WFC_MATCH_SECONDS (no menu flow lines)
+            $matchLine = ($log | Select-String -SimpleMatch 'WFC_MATCH_SECONDS: ' | Select-Object -First 1)
+            $inGame = [bool]$matchLine
+        }
         $shutdown = [bool]($log | Select-String -SimpleMatch 'Shutdown complete' | Select-Object -Last 1)
         $hdLine = $log | Select-String -Pattern 'HD texture pack (available: (\d+) textures|incomplete.*|not installed.*|format .* not supported.*|index has no rows.*)' | Select-Object -First 1
         $hdLog = if ($hdLine) { $hdLine.Matches[0].Value } else { 'no HD pack line' }

@@ -4506,3 +4506,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 11:46 SIM after fixes (Gameplay SOAK_TABLE_AFTER_FIXES): every row p99 <= 1.39 ms; worst steps A1 38 -> 1.0 ms, A3 10 -> 1.05,
   D5 38 -> 3.4, D3B 64 -> 5.3. Left: the first measured step (3.4-6.2 ms, Gameplay), D3B 4310, D1 bot.steer; Systems:
   shotFx 2.4-3.1 ms per shot + Tranquillity's first-melee-death cue-set load (6 ms). Baseline exe -> fast_feaf20bd.
+2026-10-24 11:47 PACKAGE 48e42af6 VERIFIED for this PC (Systems): both passes + HD runtime: 1 failing open per run = the reticle code
+  literal (fixed on the head 203449b7 for the next package); settings 12 / 12, RT, overlay, HD 3,505 + M6 PASS. HANDED
+  OVER to the user (HANDOVER_2026-10-24.md). a2e9fbd9 pair + the failed first attempt deleted (79.4 GB; F: 549 GB free).
+  verify_everything gains D1 / Remnant / Horizon / Pulse rows for the next package (c5269d64, by file).
