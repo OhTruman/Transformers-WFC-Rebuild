@@ -4432,3 +4432,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   fire-jet trap with real values). DLC complete except Static's ambient FIREJETS / FIREEXP bursts + camera Kismet and
   Pulse's healing platform / Nexus / sentries / Trypticon (open list). Before the sha: Rendering mech draw + denoiser
   fallback, Frontend 5-min check.
+2026-10-24 03:58 MERGED 2c40a7fc D1 CPU fix (244 matinee set-dressing actors were CPU-skinned per frame -> GPU skin path: 12.9 -> 56 fps,
+  eye check identical), DLC mechanism presentation draw (also fixes DLC matinees running on the map clock), denoiser
+  fallback (Faithful never black), 12 setting previews, Rendering hand-over. P1 found by Rendering: the calibration panel
+  draws over gameplay (TDM + D1 start) -> Frontend has the card for the fix + its 5-min check = the last item before the
+  build sha.
