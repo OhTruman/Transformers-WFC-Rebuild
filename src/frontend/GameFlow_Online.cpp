@@ -43,6 +43,7 @@ void GameFlow::sendMemberInfo(int teamRequest) {
     info.teamRequest = teamRequest;
     info.mapVote = myVote_;
     session_->setMemberInfo(info);
+    if (seat2Active_) sendSecondLocal();
 }
 
 GameFlow::VoiceState GameFlow::voiceStateOf(const SessionMemberId& m) const {
@@ -138,7 +139,7 @@ bool GameFlow::joinSeat2(int pad) {
     if (seat2Active_) why = "already joined";
     else if (pad < 0 || pad == seat1Pad_) why = "seat 1's device";
     else if (!lobby) why = "not in a lobby";
-    else if (role_ == SessionRole::Member) why = "an online member cannot add a local player";
+    else if (role_ == SessionRole::Member && !(session_ && session_->supportsSecondLocal())) why = "an online member cannot add a local player";
     if (!why.empty()) { FlowTrace::emit("split.join", {{"pad", std::to_string(pad)}, {"result", "refused"}, {"why", why}}); return false; }
     seat2Profile_ = LocalProfile{};
     seat2Profile_.setFile(LocalProfile::kSeat2File);
@@ -146,13 +147,35 @@ bool GameFlow::joinSeat2(int pad) {
     seat2Active_ = true;
     seat2Pad_ = pad;
     FlowTrace::emit("split.join", {{"pad", std::to_string(pad)}, {"result", "joined"}, {"profile", LocalProfile::kSeat2File}});
+    sendSecondLocal();   // online: seat 2 takes a lobby slot as this peer's second member
     return true;
+}
+
+void GameFlow::sendSecondLocal() {
+    // [Systems] two locals on one connection (e36b6654; RE SPLITSCREEN_RE: two PRIs, counted against MaxPlayers): seat 2's own
+    // SessionMemberInfo - its profile's name (else 'Player 2'), level and character state - as <fingerprint>/2. The session
+    // reports it back as a member like any other (other peers show it; our own lobby rows show it once, as the local seat 2).
+    if (!session_ || role_ == SessionRole::Offline || !session_->supportsSecondLocal() || !seat2Active_) return;
+    SessionMemberInfo info;
+    if (!selfId_.fingerprint.empty()) info.id.fingerprint = ISession::secondLocalId(selfId_.fingerprint);
+    std::string name = seat2Profile_.playerName();
+    if (name.empty() || name == profile_.playerName()) name = txt("$WfcPC.Split.Player2");
+    info.displayName = name;
+    info.platform = SessionPlatform::PC;
+    info.hasCharacter = !iconicMode();   // seat 2 plays the roster's first preset until it has its own Choose Character
+    info.level = progression::playerLevel(seat2Profile_.progression);
+    session_->setSecondLocal(&info);
+    FlowTrace::emit("split.online", {{"state", "added"}, {"id", info.id.fingerprint}, {"name", info.displayName}});
 }
 
 void GameFlow::leaveSeat2() {
     if (!seat2Active_) return;
     seat2Profile_.save();
     seat2Active_ = false;
+    if (session_ && role_ != SessionRole::Offline && session_->supportsSecondLocal()) {
+        session_->setSecondLocal(nullptr);
+        FlowTrace::emit("split.online", {{"state", "removed"}});
+    }
     FlowTrace::emit("split.leave", {{"pad", std::to_string(seat2Pad_)}});
     seat2Pad_ = -1;
 }

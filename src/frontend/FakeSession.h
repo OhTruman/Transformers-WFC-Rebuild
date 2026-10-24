@@ -53,6 +53,15 @@ public:
     void leave() override { calls_.push_back(mk("leave")); }
     void publishLobby(const SessionLobby& l) override { Call c = mk("publishLobby"); c.lobby = l; calls_.push_back(c); }
     void setMemberInfo(const SessionMemberInfo& i) override { Call c = mk("setMemberInfo"); c.info = i; calls_.push_back(c); }
+    // split screen online: supportsSecondLocal() follows secondLocal; setSecondLocal records the info ("add") or "remove"
+    bool secondLocal = false;
+    bool supportsSecondLocal() const override { return secondLocal; }
+    void setSecondLocal(const SessionMemberInfo* i) override {
+        Call c = mk("setSecondLocal");
+        c.arg = i ? "add" : "remove";
+        if (i) c.info = *i;
+        calls_.push_back(c);
+    }
     void requestStart() override { calls_.push_back(mk("requestStart")); }
     void setLaunch(const std::string& url, uint32_t seed, const SessionLobby&) override { Call c = mk("setLaunch"); c.arg = url + "|" + std::to_string(seed); calls_.push_back(c); }
     void reportLoaded(uint64_t simId, uint64_t loadHash) override {
