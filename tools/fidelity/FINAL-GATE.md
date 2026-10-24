@@ -30,3 +30,13 @@ stability set. Runner: `tools/fidelity/final-gate.sh <head> pre|gate [--whatif]`
 - Estimated hold: about 80-100 min (2 arms x 2 reps x 20 map-resolution rows, from package 6's per-map times), plus reruns.
 
 Output: work/finalgate/<head>/ (finalgate.log with the per-row 'same match' + p50 / p90 / p99 lines, stability.log, regress-<res>/).
+
+## DLC maps (Integration 2026-10-23, docs/DLC_PLAN.md)
+- lockstep-ab.ps1 takes `-Map <id>` or a bare map name (`-Map MP_IAC_Horizon`); the ids known so far are 511 Havoc and 512 Fortress
+  (add the rest from RE's DLC_RE.md); every MP_ESC_ map boots in Escalation.
+- final-gate.sh: each DLC map (Havoc, Fortress, Tranquillity, District, Horizon, Metropolis, Sector, Pulse, Static) joins the timed rows
+  and the headless same-match list as soon as Rebuild/work/render/<map> exists (FINAL_MAPS set = exactly those maps). The base can only
+  play a DLC map once Gameplay's FINAL_BASE_ITEMS carry the DLC sim (unlocks, the District ESC enemy) and the map data exists for it -
+  the same-match row says so before any timed minute.
+- The stability set (tools/fidelity/broad-pass.ps1 -> tools/fidelity/stab-soak.sh) picks the DLC maps up the same way: versus in the
+  10-map x 300 s soak, the DLC ESC maps in the Escalation rows.
