@@ -1,0 +1,109 @@
+diff -ruN a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-24 01:58:01.965775200 -0500
++++ b/src/game/World.cpp	2026-10-24 01:58:01.982834000 -0500
+@@ -35,6 +35,7 @@
+ #include <set>
+ #include <sstream>
+ #include <functional>
++#include <atomic>
+ #include <thread>
+ 
+ namespace {
+@@ -9464,18 +9465,74 @@
+     return true;
+ }
+ 
++namespace {
++// TEST ONLY (WFC_ANIMHASH=1, the load-time pass's identity check): FNV-1a over a loaded animation file's whole data - node names, clip
++// names / durations, every sampler's times / values / interpolation / components, every channel - logged per file.
++void logAnimHash(const std::string& path, const assets::AnimFile& f) {
++    static const bool on = std::getenv("WFC_ANIMHASH") != nullptr;
++    if (!on) return;
++    uint64_t h = 1469598103934665603ULL;
++    auto mix = [&h](const void* p, size_t n) { const uint8_t* b = (const uint8_t*)p; for (size_t i = 0; i < n; ++i) { h ^= b[i]; h *= 1099511628211ULL; } };
++    for (const std::string& n : f.nodeNames) mix(n.data(), n.size() + 1);
++    for (const assets::AnimClip& c : f.clips) {
++        mix(c.name.data(), c.name.size() + 1); mix(&c.duration, sizeof c.duration);
++        for (const assets::AnimSampler& sm : c.samplers) {
++            mix(sm.times.data(), sm.times.size() * sizeof(float)); mix(sm.values.data(), sm.values.size() * sizeof(float));
++            const int interp = (int)sm.interp; mix(&interp, sizeof interp); mix(&sm.comps, sizeof sm.comps);
++        }
++        for (const assets::AnimChannel& ch : c.channels) { const int v[3] = {ch.sampler, ch.node, (int)ch.path}; mix(v, sizeof v); }
++    }
++    LOG_INFO("ANIMHASH %016llx %zu clips %s", (unsigned long long)h, f.clips.size(), path.c_str());
++}
++}  // namespace
++
+ const World::SharedAnimFile* World::sharedAnimFile(const std::string& path) {
+     auto it = animFiles_.find(path);
+     if (it != animFiles_.end()) { it->second->lastUse = cacheGen_; return it->second.get(); }
+     auto f = std::make_unique<SharedAnimFile>();
+     f->ok = assets::loadAnimationFile(path, f->file);
+     for (size_t i = 0; i < f->file.clips.size(); ++i) f->byName.emplace(f->file.clips[i].name, i);   // first clip of a name
++    logAnimHash(path, f->file);
+     const SharedAnimFile* raw = f.get();
+     f->lastUse = cacheGen_;
+     animFiles_[path] = std::move(f);
+     return raw;
+ }
+ 
++// [Systems, load-time pass] A chassis' animation files not cached yet load in parallel: each is the same assets::loadAnimationFile
++// (an independent file read + JSON parse + key extraction, no shared state), on worker threads; the cache then holds exactly what the
++// serial path builds (WFC_ANIMHASH proves it per file). WFC_ANIMTHREADS=<n> (0 = serial, the A/B arm).
++void World::prefetchAnimFiles(const std::vector<std::string>& paths) {
++    static const int threads = [] {
++        const char* e = std::getenv("WFC_ANIMTHREADS");
++        if (e) return std::max(0, std::atoi(e));
++        const unsigned hw = std::thread::hardware_concurrency();
++        return (int)std::max(1u, std::min(6u, hw > 2 ? hw - 2 : 1u));
++    }();
++    std::vector<std::string> todo;
++    for (const std::string& p : paths)
++        if (!animFiles_.count(p) && std::find(todo.begin(), todo.end(), p) == todo.end()) todo.push_back(p);
++    if (threads <= 0 || todo.size() < 2) return;
++    std::vector<std::unique_ptr<SharedAnimFile>> got(todo.size());
++    std::atomic<size_t> next{0};
++    auto work = [&] {
++        for (size_t i; (i = next++) < todo.size();) {
++            auto f = std::make_unique<SharedAnimFile>();
++            f->ok = assets::loadAnimationFile(todo[i], f->file);
++            for (size_t k = 0; k < f->file.clips.size(); ++k) f->byName.emplace(f->file.clips[k].name, k);   // first clip of a name
++            got[i] = std::move(f);
++        }
++    };
++    std::vector<std::thread> pool;
++    for (int k = 0; k < std::min<int>(threads, (int)todo.size()); ++k) pool.emplace_back(work);
++    for (std::thread& t : pool) t.join();
++    for (size_t i = 0; i < todo.size(); ++i) {
++        logAnimHash(todo[i], got[i]->file);
++        got[i]->lastUse = cacheGen_;
++        animFiles_[todo[i]] = std::move(got[i]);
++    }
++}
++
+ bool World::loadRobotShared(const ChassisDef& def, assets::SkinnedModel& m) {
+     if (def.robotSkelGltf.empty() || def.robotAnims.empty()) return false;
+     const std::string ext = assetRoot() + "/../";
+@@ -9488,6 +9545,11 @@
+         return false;
+     }
+     m.mats = std::move(mats);
++    {   // every source file this chassis needs, in parallel when not cached (prefetchAnimFiles)
++        std::vector<std::string> srcs;
++        for (const ChassisDef::AnimRef& r : def.robotAnims) srcs.push_back(ext + r.source);
++        prefetchAnimFiles(srcs);
++    }
+     // Per source file: file node -> model node by bone name (the matching loadAnimationsByName / appendAnimations use).
+     std::map<const SharedAnimFile*, std::vector<int>> remaps;
+     for (const ChassisDef::AnimRef& r : def.robotAnims) {
+diff -ruN a/src/game/World.h b/src/game/World.h
+--- a/src/game/World.h	2026-10-24 01:58:02.040030100 -0500
++++ b/src/game/World.h	2026-10-24 01:58:02.057590700 -0500
+@@ -1652,6 +1652,7 @@
+     struct SharedAnimFile { assets::AnimFile file; std::map<std::string, size_t> byName; bool ok = false; unsigned lastUse = 0; };
+     std::map<std::string, std::unique_ptr<SharedAnimFile>> animFiles_;
+     const SharedAnimFile* sharedAnimFile(const std::string& path);
++    void prefetchAnimFiles(const std::vector<std::string>& paths);   // [Systems] uncached ones load on worker threads
+ public:
+     bool loadRobotShared(const ChassisDef& def, assets::SkinnedModel& out);   // false -> the caller uses robot.glb
+     // WFC_ANIMSHARECHECK: robot.glb vs loadRobotShared for one chassis; returns a one-line report, ok = identical within eps.
