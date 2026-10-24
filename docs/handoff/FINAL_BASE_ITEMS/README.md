@@ -168,3 +168,12 @@ District and Tranquillity ESCTEST logs equal the head build's line for line.
   routing, QA gate hooks ...).
 Apply it after 16. Verified: a fresh full af4d0731 + 01-17 applies (`git apply --check`), builds wfc_rebuild with 0 errors, and a
 headless Streets CTF 120 s gives identical MATCH events to the head build (18 / 18).
+
+## 18: non-convex hazard volumes (17 tree -> 74e41849 + GAMEPLAY_HAZARD_NONCONVEX)
+
+`18_hazard_nonconvex.patch`: the same paths, from the 17 tree to 74e41849 + HAZARD_NONCONVEX. It covers:
+- hazard (pain) volumes: convex brushes keep the plane test; non-convex ones (73 of 641, all campaign; e.g. A4_ORB
+  PhysicsVolume_6864, which killed the player at the chapter start) use a ray-crossing parity test over the brush triangles;
+- everything merged between the 17 tree and 74e41849 on these paths.
+Apply it after 17. Verified: a fresh full af4d0731 + 01-18 applies (`git apply --check`), builds wfc_rebuild with 0 errors, and its
+A4 campaign run (90 s, bot-driven) equals the head build line for line (no game over).

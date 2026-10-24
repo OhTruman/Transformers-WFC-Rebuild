@@ -578,7 +578,9 @@ public:
                           std::string unit;   // campaign: its level's unit (object path prefix without _m); active only while loaded
                           core::Vec3 centroid{0, 0, 0};
                           struct Plane { core::Vec3 n; float w; };
-                          std::vector<Plane> planes; };   // outward normal n, offset w (inside: n.p <= w)
+                          std::vector<Plane> planes;      // outward normal n, offset w (inside: n.p <= w)
+                          bool concave = false;           // a non-convex brush: inside by ray-crossing parity over tris (bounds first)
+                          std::vector<core::Vec3> tris; core::Vec3 lo{0, 0, 0}, hi{0, 0, 0}; };
     const std::vector<HazardVolume>& hazardVolumes() const { return hazards_; }
     int hazardAt(const core::Vec3& p) const;
     std::string mapDir() const;

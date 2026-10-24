@@ -1,0 +1,64 @@
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index d158944c..426bfba4 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -5603,6 +5603,15 @@ void World::loadHazards() {
+             float w = core::dot(n, P(0));
+             if (core::dot(n, c) > w) { n = n * -1.0f; w = -w; }   // outward: the centroid is inside
+             h.planes.push_back(HazardVolume::Plane{n, w});
++            for (size_t k = 1; k + 1 < polys[p].size(); ++k) { h.tris.push_back(P(0)); h.tris.push_back(P(k)); h.tris.push_back(P(k + 1)); }
++        }
++        {   // convex: every vertex on the inner side of every face plane; else the parity test (the centroid can lie outside the solid)
++            h.lo = h.hi = h.tris.empty() ? c : h.tris[0];
++            for (const core::Vec3& q : h.tris) {
++                h.lo = {std::min(h.lo.x, q.x), std::min(h.lo.y, q.y), std::min(h.lo.z, q.z)}; h.hi = {std::max(h.hi.x, q.x), std::max(h.hi.y, q.y), std::max(h.hi.z, q.z)};
++                for (const HazardVolume::Plane& pl : h.planes) if (core::dot(pl.n, q) > pl.w + 0.05f) h.concave = true;
++            }
++            if (!h.concave) h.tris.clear();
+         }
+         hazards_.push_back(std::move(h));
+     }
+@@ -5614,8 +5623,26 @@ int World::hazardAt(const core::Vec3& p) const {
+         const std::string& u = hazards_[i].unit;   // campaign: only while its unit is loaded (streaming)
+         if (campaignMap_ && !u.empty() && u != cpChapter_.persistentDir && !cpUnitLoaded_.count(u)) continue;
+         if (!hazards_[i].on) continue;   // switched off (Escalation mechanisms)
+-        bool in = !hazards_[i].planes.empty();
+-        for (const HazardVolume::Plane& pl : hazards_[i].planes) if (core::dot(pl.n, p) > pl.w) { in = false; break; }
++        const HazardVolume& H = hazards_[i];
++        bool in = !H.planes.empty();
++        if (H.concave) {   // ray-crossing parity (a fixed skewed direction: no edge-aligned rays on axis-aligned brushes)
++            in = p.x >= H.lo.x && p.y >= H.lo.y && p.z >= H.lo.z && p.x <= H.hi.x && p.y <= H.hi.y && p.z <= H.hi.z;
++            if (in) {
++                const core::Vec3 d = core::normalize(core::Vec3{0.3137f, 0.9134f, 0.2593f});
++                int crossings = 0;
++                for (size_t t = 0; t + 2 < H.tris.size(); t += 3) {   // Moller-Trumbore, hits at distance > 0
++                    const core::Vec3 e1 = H.tris[t + 1] - H.tris[t], e2 = H.tris[t + 2] - H.tris[t];
++                    const core::Vec3 pv = core::cross(d, e2); const float det = core::dot(e1, pv);
++                    if (std::fabs(det) < 1e-9f) continue;
++                    const float inv = 1.0f / det; const core::Vec3 tv = p - H.tris[t];
++                    const float u = core::dot(tv, pv) * inv; if (u < 0.0f || u > 1.0f) continue;
++                    const core::Vec3 qv = core::cross(tv, e1); const float v = core::dot(d, qv) * inv;
++                    if (v < 0.0f || u + v > 1.0f) continue;
++                    if (core::dot(e2, qv) * inv > 0.0f) ++crossings;
++                }
++                in = (crossings & 1) != 0;
++            }
++        } else for (const HazardVolume::Plane& pl : H.planes) if (core::dot(pl.n, p) > pl.w) { in = false; break; }
+         if (in) return (int)i;
+     }
+     return -1;
+diff --git a/src/game/World.h b/src/game/World.h
+index 8ff90084..446e4ea7 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -578,7 +578,9 @@ public:
+                           std::string unit;   // campaign: its level's unit (object path prefix without _m); active only while loaded
+                           core::Vec3 centroid{0, 0, 0};
+                           struct Plane { core::Vec3 n; float w; };
+-                          std::vector<Plane> planes; };   // outward normal n, offset w (inside: n.p <= w)
++                          std::vector<Plane> planes;      // outward normal n, offset w (inside: n.p <= w)
++                          bool concave = false;           // a non-convex brush: inside by ray-crossing parity over tris (bounds first)
++                          std::vector<core::Vec3> tris; core::Vec3 lo{0, 0, 0}, hi{0, 0, 0}; };
+     const std::vector<HazardVolume>& hazardVolumes() const { return hazards_; }
+     int hazardAt(const core::Vec3& p) const;
+     std::string mapDir() const;
