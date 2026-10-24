@@ -31,7 +31,7 @@ still PROV or open on each DLC map. Merge shas are on `integration/milestone-09c
 | D3B_IAC | yes | 2 | 71.8 s: the bot walked off a ledge (KillZ; the known post-build item) | 0 |
 | D5_OME | yes | 1 | 79.5 s: combat death in the Omega fight | 0 |
 
-**Escalation (WFC_ESCTEST, head + 19 + 20):**
+**Escalation (WFC_ESCTEST, head + 19 + 20 + 21):**
 
 | Map | Result | Notes |
 |---|---|---|
@@ -40,6 +40,7 @@ still PROV or open on each DLC map. Merge shas are on `integration/milestone-09c
 | MP_ESC_Tranquillity | 9 / 9 | 6 waves, 257 spawns, 0 failed; floodgates + base doors + presentation |
 | MP_ESC_District | 12 / 12 | 6 waves, 89 spawns, 0 failed; lasers, sentries, detpack, outage, door generator, presentation |
 | MP_ESC_Pulse | 9 / 9 | 6 waves, 134 spawns, 0 failed; Zone_Manager doors |
+| MP_ESC_Static | 9 / 9 | 6 waves, 170 spawns, 0 failed; door generator 10255 (3 / 3 doors, 4 / 4 zones); the fire-jet trap |
 
 **Versus DLC (60 s TDM, 9 bots):**
 
@@ -69,7 +70,7 @@ still PROV or open on each DLC map. Merge shas are on `integration/milestone-09c
 | Tranquillity | waves, floodgates (3-purchase drain), zones, energon off, base doors (switchable blockers), presentation data | the 11 destructibles unhidden at Drain Completed are presentation only (no collision change); FogOn presentation |
 | District | waves, the Autobot jet, doors, laser defense grid, sentries (ion / repair, 3-use), power outage, detpacks, vending (flattened), presentation data | button range 3 m and detpack countdown 3 s (anim lengths not measured); the sentries are not drawn by Gameplay (Rendering); the outage's dark grade / screens are presentation (HudGameState.svPowerOutage) |
 | Pulse | waves, the authored spawn rule, Power_Generator_Action (10 managers: zones, generator volumes, door collision after the matinee), presentation data | **open:** FinalRoomUnlocked (logged, its effect not modelled); the healing platform, Nexus_Attack, the repair / rocket / eye sentries, Tank_AI_Helper_Logic, SpaceVignettes, Trypticon dialogue; the managers' NavMeshCells (our versus nav has no gating) |
-| Static | – | **open:** waits for its AssetTools export (RE §9: about 40 DoorGenerators turning ON zone sets) |
+| Static | waves (20 rows, Autobot horde), the DoorGenerators (40 root Toggle chains, flattened; zones stay on once opened), the fire-jet trap (generator 3558: 16 volumes off at start, on when bought for the 7.018 s matinee, re-buyable after 2.0 s, both from the export), presentation data: 2400c037 + a61249c0 | **open:** the ambient FIREJETS01-16 / FIREEXP01-10 touch-triggered fire bursts and the camera Kismet |
 | Fortress / Havoc / Horizon / Metropolis / Sector | versus: spawns, pickups, objectives, nav | none found in the sweep |
 
 ## Also delivered in this window
@@ -77,3 +78,15 @@ still PROV or open on each DLC map. Merge shas are on `integration/milestone-09c
 - **Split screen offline:** seat 2 on the remote-seat path, per-seat presented frame, bot-slot join, the split draw owner.
 - **Online two locals:** Systems' 85c4cd06, with the World glue per the agreed contract.
 - **Section 43 sim half:** FLOWSIMTEST MP 10 / 10, ESC 6 / 6, CP 6 / 6.
+
+## Static and District data (2026-10-24, later)
+
+- **Static** (RE section 9): STATIC_PREP 2400c037 (the trap mechanism, gen derivation, ESCTEST row) + STATIC_DATA / FINAL_BASE_ITEMS 21 a61249c0.
+  - Static's export needed an extractor fix first, and its Escalation layer (escalation_geometry, escalation_navmesh) was produced by Integration's extras step.
+  - The trap's matinee length and cooldown then came from the real export, so no PROV defaults remain.
+- **ESCTEST rule (honest re-baseline):** the DLC "due" check covers enemy rows with a MinCount only.
+  - The director spawns a type below its MinCount exclusively, and the test clears the horde every 2 s.
+  - So optional rows depend on budget and kill cadence. On Static the optional Rocket / CQC / Shotgun rows never got a free pick in the test; in real play the horde lives and they do.
+  - The director itself is unchanged.
+- **District after the art-package extractor fix** (MP_ESC_District_Art_m had one wrong 4 KB block): the chain re-ran and gen_escalation's District data is **byte-identical**, as are BrokenHope, Remnant, Tranquillity and Pulse.
+  - The fix touched art only; the Escalation data comes from the BASE level.
