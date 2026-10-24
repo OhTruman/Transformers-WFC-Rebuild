@@ -4582,3 +4582,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 13:42 MERGED 463faf3a vehicle headlights follow the drawn frame (the lamps were placed from the simulated bone while the car
   is drawn interpolated at the render rate: the 'flicker' reported twice). Remaining before the cut: Frontend batch 2b
   (scoreboard rows, ESC lobby map row, Upscaling 0-6 mapping, menu fade), Gameplay item 31.
+2026-10-24 13:44 MERGED 277d6e33 frontend batch 2b: Escalation lobbies use Host's Choice (the public playlist's random-map veto needs a
+  quorum a lone host cannot reach = 'only District'); previews need no code; scoreboard rows + the menu fade NOT
+  reproduced (5 + 4 bots clean; screenSoftEdges_mc holds at 1600x900): hand-over asks for the user's shot / mode.
+  Waiting: Gameplay item 31 (-> final sha -> everything.sh -> gate -> hand-over 2).
