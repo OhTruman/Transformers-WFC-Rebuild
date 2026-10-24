@@ -4547,3 +4547,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   ESC maps lacked CampaignCharacters), join panel only with lobby input, 'Cancel Start' hint (mouse / B / Esc), Graphics
   at top + fixed arrows, Language -> Audio, Split layout bottom, standard preview panel (baseline / selected, hover zoom,
   FG text). Open: ESC map list in the package (Systems greps), preview PNGs (Rendering), batch 2 (Frontend).
+2026-10-24 12:55 MERGED 3f1d9c3d frontend batch 2a: solo Campaign Back -> main menu (party lobby kept the last GameTeamStatus), Decepticon
+  Chassis box (a 180-degree mirror matrix) level with Autobot, first-boot modals queued. Card: Rendering max-settings
+  A/B -> Frontend 5-min dump (grey Start, scoreboard rows, pickup prompt). Vignette fade -> Rendering (backdrop matinee).
