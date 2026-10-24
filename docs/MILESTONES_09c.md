@@ -4555,3 +4555,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   a solo private host (the online 'private earns nothing' rule hit hosted-alone sessions), Orbital Beacon's enemy markers
   (the versus marker setup name), Scatter Blaster = authored data (RE asked), Streets cylinder = glass section in the
   collision (RE asked), ESC solo has no sim gate. New headless baseline (the local shot changed by design); item 29 cut.
+2026-10-24 13:01 PERF (playtest-3 item 9): no build regression (Release, Streets fixed route, 1440p: Realistic 124 fps on both a2e9fbd9 and
+  4098c267; the user's Enhanced + Realistic 123 fps); the user's 82 fps = 5v5 (ten RT-skinned characters). The ESC 30 s
+  load = material program prewarm (414 / 467 in ~31 s + 9.9 s warm-up draw) -> Systems' program binary cache. Card:
+  Frontend 5 min -> Systems 10 min -> Rendering (aim proof shot, preview set).
