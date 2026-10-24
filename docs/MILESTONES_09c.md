@@ -4510,3 +4510,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   literal (fixed on the head 203449b7 for the next package); settings 12 / 12, RT, overlay, HD 3,505 + M6 PASS. HANDED
   OVER to the user (HANDOVER_2026-10-24.md). a2e9fbd9 pair + the failed first attempt deleted (79.4 GB; F: 549 GB free).
   verify_everything gains D1 / Remnant / Horizon / Pulse rows for the next package (c5269d64, by file).
+2026-10-24 11:54 MERGED 1d52a479 cull-distance sidecar reader (inert without the file; WFC_NOCULLDIST A/B). Sidecars generating for the
+  19 MP / DLC maps (work/render/<map>/cull_distance.json); campaign units next. USER PLAYING: no lane windowed exes.
