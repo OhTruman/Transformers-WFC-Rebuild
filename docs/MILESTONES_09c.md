@@ -4346,3 +4346,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 00:41 MERGED 7a7b8ba6 the campaign lobby pick carries into the map (no in-map trio select for a valid pick) + per-movie gamma
   (calibration logos respond). Card free: Experimental runs the full gate (mp + esc + camp) on 7a7b8ba6 now; then the
   Frontend's calibration check, then Rendering's measured settings audit.
+2026-10-24 00:47 MERGED 9c94b50d X = interact else reload + FINAL_BASE_ITEMS 17 (P0 record: fixed pawn 110 m from spawn + firing; unfixed
+  never moved); 83df0335 HD 'applies on next map' hint + the multiplayer root shows no teams (#19; base game
+  TnTeamHandlerNoTeams). The settings extras 13-15 (scroll arrows, commit confirm, restart / next-map popups) conflict
+  in GfxPresenter.cpp: recut requested. Gate run on 7a7b8ba6 in progress.
