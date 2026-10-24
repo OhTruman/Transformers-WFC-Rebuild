@@ -69,6 +69,38 @@ shader, a texture upload, a spawn, an allocation storm, a streaming load.
 Each lever gets a 2-rep A/B on one exe, identity (SHOTMATCH frames equal, or a pixel bound stated in advance) and an eye check.
 Nothing merges that changes a pixel without a stated reason.
 
+### Draw only what the original draws (RE CAMPAIGN_CULLING_LOD_RE.md, 6e9d5d7; phase 1, first)
+These are the original's own rules, so following them is lossless by definition. Identity is checked against the original's
+behaviour, not our current frame.
+
+0a. **Per-component cull distance** (RE §2).
+   - **Rule:** a primitive is not drawn when the view-to-bounds distance exceeds its shipped CachedCullDistance (0 = never).
+   - **Data:** ~15k components carry one. Use the value as shipped; don't recompute it from the CullDistanceVolumes.
+   - **Scope:** static meshes (collection-actor components keep their own bounds and distance), skeletal set dressing, decals,
+     emitters.
+   - **Today:** the renderer applies a cull distance only to pickup meshes (WfcPipeline.h:1544), so the world draws everything in
+     the frustum.
+   - **Work:**
+     - AssetTools carries `cached_cull_distance` per component into the render data (world.glb extras / render_index);
+     - the renderer culls in the MDI build and in the dynamic / set-dressing / map FX paths;
+     - RE's §7.1 histogram ranks the chapters.
+0b. **Streaming visibility** (RE §6).
+   - **Today:** units already follow SetStreamingState: a hidden unit is unloaded (World::cpApplyStreamingState ->
+     unloadChapterUnit).
+   - **Gap:** World::cpDrawSkeletal draws every active matinee skeletal actor, whatever its unit's visibility; filter it by the
+     actor's unit.
+   - **Check:** every renderer path drops a hidden unit's draws (lights, FX, decals, set dressing) by a per-state primitive count
+     in the log (§7.5).
+0c. **Skeletal LOD by DisplayFactor** (RE §4).
+   - **Rule:** LOD *n* while the projected screen size is below DisplayFactor(*n*), with hysteresis, for characters and set
+     dressing. That is the original's selection.
+   - **Needs:** the exporter to keep LOD1+ (RE §7.3 lists which meshes have them).
+   - **Check:** the eye check compares against the original's LOD switch distances, not against LOD0.
+0d. **DetailMode 2, hidden / destroyed actors** (RE §4-5).
+   - DetailMode 2 drops nothing at the original settings, so it is only a check.
+   - Actors hidden by PreGameplaySetup / GameplayStarted Kismet and SeqAct_Destroy'd props must leave every render list
+     (RE §7.4 lists).
+
 ### Render CPU (Rendering)
 1. **Campaign dynamic draws.** D1 issues ~470 dynamic draws per frame against Streets' 29. Each is its own drawDynamic: state
    changes, uniforms, its own light environment.
@@ -123,7 +155,7 @@ Nothing merges that changes a pixel without a stated reason.
 
 ## Order of work
 1. **Phase 0:** harness rows plus baseline for all 16 rows at 1440p and the 4K method. One card slot of about 16 x 6 min.
-2. **Phase 1:** D1-class CPU levers 1-3 (the biggest, all render side), then re-measure the campaign rows.
+2. **Phase 1:** first the original's own draw rules 0a-0d (RE), then the D1-class CPU levers 1-3; re-measure the campaign rows.
 3. **Phase 2:** hitch hunt 6, 8-10 on every row (the worst-frame rule).
 4. **Phase 3:** Gameplay's sim items 11-12, then Systems' 13-14 in parallel; Rendering re-measures.
 5. **Phase 4:** 4K GPU items 7.
