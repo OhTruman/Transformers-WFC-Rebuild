@@ -112,6 +112,7 @@ bool Pipeline::loadMovers(const std::string& path) {
         m.kind = 1;
         m.length = e["length_s"].asFloat(9.0f);
         m.looping = e["looping"].asBool(true);
+        { const std::string a = e["action"].asString(); const size_t d = a.rfind('.'); m.action = a.substr(d == std::string::npos ? 0 : d + 1); }
         for (int k = 0; k < 3; ++k) {
             m.L[k] = e["location_ue"][(size_t)k].asFloat();
             m.rot0[k] = e["rotation_ue"][(size_t)k].asFloat();
@@ -152,7 +153,56 @@ bool Pipeline::loadMovers(const std::string& path) {
     for (const char* a : {"tndominationpoint_15247", "tndominationpoint_6703", "tndominationpoint_678"})
         ruleGatedActors_[a] = {"TransGame.TnGameRules_ScoreDomination"};
     LOG_INFO("wfc: movers: %zu (rotating + Matinee), %zu authored-hidden actors", movers_.size(), authoredHiddenActors_.size());
+    loadMatineeToggles(path.substr(0, path.rfind('/') + 1) + "matinee_tracks.json");
     return true;
+}
+
+// (Escalation DLC mechanisms) the InterpTrackToggle tracks of the map's matinees (AssetTools dlc_matinee_tracks.py; the group's
+// bound actors are emitters): applied when Gameplay pushes a matinee's position (setMatineePosition)
+void Pipeline::loadMatineeToggles(const std::string& path) {
+    std::ifstream f(path);
+    if (!f) return;
+    std::stringstream ss; ss << f.rdbuf();
+    assets::Json J;
+    if (!assets::Json::parse(ss.str(), J)) return;
+    auto shortName = [](const std::string& p) { const size_t d = p.rfind('.'); return p.substr(d == std::string::npos ? 0 : d + 1); };
+    size_t n = 0;
+    const assets::Json& M = J["matinees"];
+    for (size_t i = 0; i < M.size(); ++i) {
+        const std::string action = shortName(M[i]["action"].asString());
+        const assets::Json& G = M[i]["groups"];
+        for (size_t gi = 0; gi < G.size(); ++gi)
+            for (size_t ti = 0; ti < G[gi]["tracks"].size(); ++ti) {
+                const assets::Json& T = G[gi]["tracks"][ti];
+                if (T["class"].asString() != "InterpTrackToggle") continue;
+                const assets::Json& K = T["props"]["ToggleTrack"];
+                for (size_t bi = 0; bi < G[gi]["bound"].size(); ++bi) {
+                    MatineeToggle mt;
+                    mt.emitter = shortName(G[gi]["bound"][bi]["actor"].asString());
+                    for (size_t k = 0; k < K.size(); ++k) {
+                        const std::string act = K[k]["ToggleAction"].asString();
+                        if (act == "ETTA_On" || act == "ETTA_Off") mt.keys.push_back({K[k]["Time"].asFloat(0.0f), act == "ETTA_On"});
+                    }
+                    std::sort(mt.keys.begin(), mt.keys.end());
+                    if (!mt.keys.empty()) { matineeToggles_[action].push_back(mt); ++n; }
+                }
+            }
+    }
+    if (n) LOG_INFO("wfc: matinee toggle tracks: %zu", n);
+}
+
+void Pipeline::setMatineePosition(const std::string& action, float t) {
+    matineePos_[action] = t;
+    auto it = matineeToggles_.find(action);
+    if (it == matineeToggles_.end()) return;
+    for (MatineeToggle& g : it->second) {   // the last key reached; applied on a change (a replay from < 0 re-applies)
+        int k = -1;
+        for (size_t i = 0; i < g.keys.size(); ++i) if (g.keys[i].first <= t) k = (int)i;
+        if (k < 0) { g.applied = -1; continue; }
+        if (k == g.applied) continue;
+        g.applied = k;
+        setMapEffectActive(g.emitter, g.keys[(size_t)k].second);
+    }
 }
 
 // Delta for one mover at time t: x' = L + o + B (x - L) in UE space, returned in glTF space.
@@ -229,7 +279,13 @@ void Pipeline::updateMovers() {
     if (motionVectorsOn()) prevMoverDelta_ = moverDelta_;   // motion vectors: last frame's mover poses
     moverDelta_.clear();
     if (frozen) return;
-    for (const MoverRT& m : movers_) moverDelta_[m.actor] = moverDelta(m, mapTime());   // Gameplay's map clock
+    for (const MoverRT& m : movers_) {   // Gameplay's map clock, or (Escalation mechanisms) the sim's matinee position
+        auto it = m.action.empty() ? matineePos_.end() : matineePos_.find(m.action);
+        if (it == matineePos_.end()) { moverDelta_[m.actor] = moverDelta(m, mapTime()); continue; }
+        // two matinees on one actor (Pulse's shared side doors): one that has played wins over one still at its start
+        if (it->second <= 0.0f && moverDelta_.count(m.actor)) continue;
+        moverDelta_[m.actor] = moverDelta(m, std::max(it->second, 0.0f));
+    }
     for (const auto& kv : actorPoses_) moverDelta_[kv.first] = moverDelta(kv.second, 0.0f);   // frontend matinee poses
 }
 

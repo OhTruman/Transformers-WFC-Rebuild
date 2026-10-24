@@ -291,6 +291,7 @@ public:
     int scenePosesApplied() const { return posesApplied_; }
     const std::set<std::string>& scenePosesUnknown() const { return posesUnknown_; }
     void setActorPose(const std::string& actor, const core::Vec3& posUE, const core::Vec3& rotUEdeg);
+    void setMatineePosition(const std::string& action, float t);   // (Escalation DLC) a sim-driven matinee at t s (< 0: not played)
     void setActorScale(const std::string& actor, float drawScale);
     // Downward trace against the level BSP (includes invisible collision brushes): the highest surface at or below
     // zFrom under (x, y), UE units. False if nothing is below.
@@ -1570,6 +1571,7 @@ private:
         float scale = 1.0f;                              // kind 2: matinee DrawScale / authored DrawScale
         float L[3] = {0, 0, 0}, rot0[3] = {0, 0, 0}, rate[3] = {0, 0, 0};
         float length = 0.0f; bool looping = true;
+        std::string action;           // kind 1: its SeqAct_Interp (short name) - setMatineePosition drives it
         struct RotKey { float t; float q[4]; };
         struct PosKey { float t; float v[3], arrive[3], leave[3]; };
         std::vector<RotKey> rotKeys;
@@ -1577,6 +1579,12 @@ private:
     };
     std::vector<MoverRT> movers_;
     std::map<std::string, MoverRT> actorPoses_;        // frontend-driven absolute poses (kind 2)
+    // (Escalation DLC mechanisms) sim-driven matinees: action -> position (s; < 0 not played). A mover of such a matinee takes
+    // this position instead of the map clock; its InterpTrackToggle keys (matinee_tracks.json) switch the bound emitters.
+    std::map<std::string, float> matineePos_;
+    struct MatineeToggle { std::string emitter; std::vector<std::pair<float, bool>> keys; int applied = -1; };
+    std::map<std::string, std::vector<MatineeToggle>> matineeToggles_;
+    void loadMatineeToggles(const std::string& path);
     int posesApplied_ = 0;                             // validation: poses received for known / unknown actors
     std::set<std::string> posesUnknown_;
     std::unordered_map<std::string, core::Mat4> moverDelta_;

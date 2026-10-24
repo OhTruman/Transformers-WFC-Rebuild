@@ -5,6 +5,7 @@
 #include "game/World.h"
 #include "assets/Json.h"
 #include "assets/SkinnedModel.h"
+#include "game/GpuSkin.h"
 #include "render/Renderer.h"
 #include "core/Log.h"
 
@@ -434,7 +435,8 @@ void World::cpLoadSkeletal() {
     LOG_INFO("campaign: %zu matinee skeletal actors", cpSkel_.size());
 }
 
-// Draw the active ones: the clip sampled at its matinee time, CPU-skinned (a handful of cinematic actors).
+// Draw the active ones: the clip sampled at its matinee time. GPU-skinned (D1 Crash runs 244 at once: CPU skinning them every
+// frame cost ~45 ms); the palette is rebuilt only when the clip / time changes. The CPU skin draws when the renderer cannot.
 void World::cpDrawSkeletal(render::IRenderer& r) const {
     const std::string root = "F:/Transformers Rebuild/ExtractedAssets/";
     for (auto& kv : cpSkel_) {
@@ -449,8 +451,22 @@ void World::cpDrawSkeletal(render::IRenderer& r) const {
         if (!k.ok) continue;
         const int clip = k.model.clipByName(k.clip);
         if (clip < 0) continue;
+        const core::Mat4 world = core::Mat4::translate(k.pos) * core::Mat4::rotateY(-k.yawDeg * 3.14159265f / 180.0f);
+        if (!k.model.joints.empty()) {
+            if (clip != k.posedClip || k.time != k.posedT || k.palette.empty()) {
+                assets::LocalPose lp;
+                assets::samplePose(k.model, clip, k.time, k.loop, lp);
+                assets::poseGlobals(k.model, lp, k.scratch);
+                buildPalette(k.model, k.scratch, k.palette);
+                k.posedClip = clip; k.posedT = k.time; ++k.serial;
+            }
+            render::MeshData& bind = bindMeshOf(k.model);
+            syncMats(bind.mats, k.model.mats);
+            if (drawSkinnedGpu(r, bind, k.model.joints, k.model.weights, k.palette, nullptr, 1.0f, world, core::Vec3{1, 1, 1}, &k, k.serial, 0))
+                continue;
+        }
         assets::evaluatePose(k.model, clip, k.time, k.scratch, k.skinned, k.loop);
-        r.drawDynamicMesh(k.skinned, core::Mat4::translate(k.pos) * core::Mat4::rotateY(-k.yawDeg * 3.14159265f / 180.0f), core::Vec3{1, 1, 1});
+        r.drawDynamicMesh(k.skinned, world, core::Vec3{1, 1, 1});
     }
 }
 

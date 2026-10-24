@@ -535,6 +535,10 @@ public:
     // Activate / deactivate an authored map particle component (owner actor name or component path). Components
     // start in their authored bAutoActivate state (pickup factories toggle their effects at runtime).
     virtual void setMapEffectActive(const std::string& ownerOrComponent, bool active) { (void)ownerOrComponent; (void)active; }
+    // (Escalation DLC mechanisms) a sim-driven matinee (its SeqAct_Interp short name) at `t` s, < 0 = not played: its movers
+    // take this position instead of the map clock (a non-looping matinee on the clock would play itself out at map load),
+    // its InterpTrackToggle keys switch their emitters. Pushed every frame. [Gameplay sim; Rendering implements]
+    virtual void setMatineePosition(const std::string& action, float t) { (void)action; (void)t; }
     // Pickup presentation (TnPickupFactory.SetPickupHidden / SetPickupVisible): key "<factory actor>|custom" or
     // "|highlight"; hidden = SetHidden (nothing drawn). Gameplay / Systems own the factory state.
     virtual void setMapEffectState(const std::string& key, bool active, bool hidden) { (void)key; (void)active; (void)hidden; }

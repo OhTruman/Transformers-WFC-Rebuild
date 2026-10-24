@@ -1364,6 +1364,7 @@ public:
         if (wfc_.active()) wfc_.queueDroppedPickup(gltf, posUE, lifeLeft, mines);
     }
     void setMapEffectActive(const std::string& what, bool active) override { wfc_.setMapEffectActive(what, active); }
+    void setMatineePosition(const std::string& action, float t) override { wfc_.setMatineePosition(action, t); }
     void setMapEffectState(const std::string& k, bool a, bool h) override { wfc_.setMapEffectState(k, a, h); }
     void setActiveGameRules(const std::vector<std::string>& r) override { wfc_.setActiveGameRules(r); }
     // glTF metres -> UE component rows: X = forward, Z = up (orthogonalised), Y = Z x X; position x100 (y / z swapped)

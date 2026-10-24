@@ -4737,6 +4737,7 @@ void World::syncMapPresentation(render::IRenderer& r) const {
     for (size_t i = sv_.loot.size(); i < lootFx_.size(); ++i)
         if (lootFx_[i] >= 0) { r.stopParticleEffect(lootFx_[i]); lootFx_[i] = -1; }
     lootFx_.resize(sv_.loot.size());
+    svMechPresent(r);   // (Escalation DLC) the map mechanisms: matinees, emitters, the outage grade
     // (Escalation / campaign) the dropped weapons: the weapon's pickup mesh where it lies (Rendering spins / tilts / settles it)
     for (const SurvivalState::Drop& d : sv_.drops) {
         if (!d.w.def) continue;
@@ -4947,6 +4948,7 @@ void World::draw(render::IRenderer& r) const {
     for (const Sentry& se : sentries_)
         if (se.alive && !se.mesh.positions.empty())
             r.drawDynamicMesh(se.mesh, core::Mat4::translate(se.pos) * core::Mat4::rotateY(se.yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
+    svMechDrawSentries(r);   // (Escalation DLC) District's sentry turrets
     drawMines(r);   // [Gameplay] kamikaze mines (owner 0: the local player's mines, its character colours)
     drawCorpseGibs(r);   // [Gameplay] gib chunks and vehicle hull wrecks
     // Weapon + vehicle boost effects last (translucent/additive over the opaque scene): after the barrier / sentry meshes,
@@ -6826,6 +6828,7 @@ void World::requestBarrier(int owner) {
 // The barrier / sentry meshes load (textures: GL) on the main thread: the local part calls this every step during a match (a flag
 // check after the first time), so an ability actor spawned by the background part never loads.
 void World::ensureAbilityModels() {
+    svMechEnsureModels(assetRoot() + "/../content/WEP_SentryBlaster01_p/");   // (Escalation DLC) District's sentry turrets
     if (!barrierModelTried_ && onMainThread()) {
         barrierModelTried_ = true;
         const std::string ext = assetRoot() + "/../content/WEP_Shield_p/Barrier/";

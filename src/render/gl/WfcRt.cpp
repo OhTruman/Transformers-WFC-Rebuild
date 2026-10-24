@@ -977,7 +977,10 @@ void Pipeline::rtDynMid() {
     else BlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_ZERO, GL_ONE);   // colour *= factor, alpha kept
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
     UseProgram(cp);
-    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, rtSoftActive_ ? t.shadowSoft : t.shadowDn);
+    // (no denoiser - its SM 6.6 PSO needs the D3D12 Agility runtime: shadowDn is never written, and Faithful drew black) the
+    // raw sun visibility, shadowAo .x, stands in; soft shadows are built from the denoised one
+    const bool denoised = rtBridgeDenoised();
+    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, !denoised ? t.shadowAo : rtSoftActive_ ? t.shadowSoft : t.shadowDn);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, t.shadowAo);
     if (r1) { ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, r1SunTex_); }
     ActiveTexture(GL_TEXTURE0);

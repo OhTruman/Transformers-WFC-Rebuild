@@ -20,6 +20,33 @@ Raw logs: work/perfrun/<ARM>/out.txt (Rendering worktree); shots: docs/handoff/p
 | **Campaign D1 Crash Off** | 60.0 | **12.7** | 3.92 / 43.17 / 47.80 | **48.1 / 51.7 / 52.0** | 572 / 572 |
 | **Campaign D1 Crash Realistic** | 60.0 | **12.4** | 43.05 / 46.84 / 50.66 | **49.2 / 52.6 / 54.2** | 556 / 556 |
 | DLC map | - | - | (waits for its final render data) | | |
+| **Campaign D1 Off, GPU-skinned actors** (2 reps, head 62911b5c + D1_GPUSKIN) | 60.0 | **56.1 / 56.4** | 1.27 / 5.24 / 9.43 | **10.4 / 13.3 / 13.9** | 1346 / 14 |
+| **Campaign D1 Realistic, GPU-skinned actors** | 60.0 | **50.0** | 13.95 / 19.85 / 21.83 | 11.5 / 15.2 / 15.9 | 1518 / 16 |
+| TDM Faithful, denoiser on (bin/D3D12 present) | 60.0 | 279 | 3.23 / 3.59 / 4.20 | 3.20 / 3.66 / 4.15 | 3 / 2 |
+| TDM Realistic, denoiser on | 60.0 | 138 | 6.84 / 7.39 / 7.84 | 6.75 / 7.30 / 7.77 | 3 / 2 |
+
+**Correction (RT rows above):** the first Faithful / Realistic rows ran without the shadow denoiser. The run folders lacked
+bin/D3D12 (the Agility runtime its SM 6.6 PSO needs; the release build ships it). Faithful also composited the never-written
+denoised texture there and drew 87-98 % black. The denoiser-on rows are the two above (Faithful 279, Realistic 138).
+RENDERING_RAW_SHADOW.patch makes a machine without the runtime fall back to the raw sun visibility: mean brightness 17.3, like
+Off, instead of black.
+
+## D1 resolved (RENDERING_D1_GPUSKIN.patch)
+- **First split invalid.** The WFC_SKIPMAT=TR_ arm changed nothing (48.6 ms), but that switch only filters the static world draw
+  list, not character draws.
+- **Lights are not the cost.** WFC_OLDCHARENV (no DirectLightEnv rays) saved only 3.4 ms.
+- **Profile.** WFC_CPUPROF + WFC_TICKPROF + WFC_DRAWPROF: the sim step is 2.1 ms and the World::draw actors 2.4 ms.
+- **The cost:** World::cpDrawSkeletal. The chapter's 244 matinee skeletal set-dressing actors were CPU-skinned every frame
+  (evaluatePose / skinPose, normalising every normal), and drawDynamic then re-checked every vertex.
+- **The fix:** the same GPU skin path the characters and transforming actors use (drawSkinnedGpu, palette rebuilt only when the
+  clip / time changes, CPU fallback kept).
+- **Result:** CPU 48 -> 10.4 ms; 12.9 -> 56 fps (Off) and 12.4 -> 50 fps (Realistic); 0 actors fell back to the CPU.
+- **Eye check:** identical actors and world (docs/handoff/perf_pass_shots/d1_cpu_vs_gpuskin_p05.png). The remaining difference is
+  the Frontend's brightness-calibration panel, which the newer head draws in-game.
+
+## FG eye check
+WFC_FGCAPTURE=300@165 captured FSR 3 generated frames ~36 s into a TDM match with the pawn walking:
+docs/handoff/perf_pass_shots/fg_gen_301_match.png and fg_gen_301_pawn.png (crop). One pawn: no doubling, no ghost edges.
 
 ## Findings
 1. **Menus held at 60 (MENU_CAP2): confirmed** in every row (FG rows ~53-54: the real frames under FG).

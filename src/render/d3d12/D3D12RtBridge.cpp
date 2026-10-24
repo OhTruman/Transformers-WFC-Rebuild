@@ -174,6 +174,12 @@ public:
         if (heap_ && depth_.res) writeDescriptors();
     }
 
+#if defined(WFC_RT_DENOISER)
+    bool denoised() const { return dn_.ready(); }
+#else
+    bool denoised() const { return false; }
+#endif
+
     bool prepare(int w, int h, RtTargets* t) {
         if (w != depth_.w || h != depth_.h) {
             if (!waitIdle()) return false;               // (in flight: the old targets are not freed)
@@ -1758,6 +1764,7 @@ bool ensure() {
 bool rtBridgeAvailable() { return g_bridge ? true : !g_failed && probeAvailable(); }
 void rtBridgeShutdown() { if (g_bridge) g_bridge->shutdown(); }
 bool rtBridgePrepare(int w, int h, RtTargets* t) { return ensure() && g_bridge->prepare(w, h, t); }
+bool rtBridgeDenoised() { return g_bridge && g_bridge->denoised(); }
 void rtBridgeSelectView(int view) { if (g_bridge) g_bridge->selectView(view); }
 bool rtBridgeAddStaticWorld(const RtStaticWorld& world, unsigned mask) { return ensure() && g_bridge->addStaticWorld(world, mask); }
 void rtBridgeClearStaticWorld() { if (g_bridge) g_bridge->clearStaticWorld(); }
@@ -1784,6 +1791,7 @@ namespace render {
 bool rtBridgeAvailable() { return false; }
 void rtBridgeShutdown() {}
 bool rtBridgePrepare(int, int, RtTargets*) { return false; }
+bool rtBridgeDenoised() { return false; }
 void rtBridgeSelectView(int) {}
 bool rtBridgeAddStaticWorld(const RtStaticWorld&, unsigned) { return false; }
 void rtBridgeClearStaticWorld() {}
