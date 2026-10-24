@@ -8,6 +8,9 @@ screen. Flow-file lines '#expect <kind> <args>' add:
   no-charselect-after-ingame      no 'uistate ... -> CharacterSelect' after the first InGame unless after a 'changechar' checkpoint
   state <checkpoint> <UiState>    the navcheck at <checkpoint> reports uiState=<UiState>
   level <checkpoint> <Level>      ... level=<Level>
+  chassis <A>[|<B>]               the first successful pick's chassis (e.g. Car2|Car4 = Scout)
+  owner <checkpoint> <text>       the navcheck inputOwner at <checkpoint> contains <text>
+  log <regex> / nolog-after <anchor regex> <regex>   a log line must / must not appear (after the anchor)
   moved <cpA> <cpB> <metres>      pawn position (navcheck field pos=x,y,z) moved >= metres between the two checkpoints
   still <checkpoint> <jitter>     navcheck jitter <= jitter (frame-to-frame transform flips: the #16 / #28 flicker)
   shots <cpA> <cpB>               navcheck shots grew between the checkpoints
@@ -144,6 +147,13 @@ def check_flow(out, flow):
         elif k == 'form':
             f1, f2 = by.get(a[0], {}).get('form'), by.get(a[1], {}).get('form')
             rows.append((name, 'UNKNOWN' if f1 is None or f2 is None else ('PASS' if f1 != f2 else 'FAIL'), f"form {f1} -> {f2}"))
+        elif k == 'chassis':
+            okp = [p for p in picks if p[1] == 'true']
+            got = okp[0][2] if okp else None
+            rows.append((name, 'PASS' if got in a[0].split('|') else 'FAIL', f"first pick chassis {got}"))
+        elif k == 'owner':
+            c = by.get(a[0])
+            rows.append((name, 'UNKNOWN' if not c else ('PASS' if a[1] in (c.get('inputOwner') or '') else 'FAIL'), f"inputOwner={c.get('inputOwner') if c else '-'}"))
         elif k == 'log':
             rx = re.compile(' '.join(a))
             hit = next((n for n, x in enumerate(log) if rx.search(x)), None)

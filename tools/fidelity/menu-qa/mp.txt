@@ -1,21 +1,26 @@
 # FLOW 1 (USER_PLAYTEST_2026-10-23b section 43): MAIN MENU -> MULTIPLAYER -> PRIVATE MATCH -> CHANGE SETTINGS -> SELECT MAP ->
 # SELECT CHARACTER -> START MATCH -> SPAWN -> MOVE / SHOOT / TRANSFORM -> PAUSE / CHANGE CHARACTER -> RETURN TO LOBBY
-# Steps: the Frontend's, verified windowed on the head 2026-10-24 to the match. Versus asks for the character AFTER the load (base
-# game: Choose Character, CustomTransformers_GFX). '# PENDING' lines = steps not scriptable yet (the checker reports them UNKNOWN).
-# PENDING: Game Settings changes inside the row (mode / bots / map) - the row is opened and closed here; its controls follow
-# PENDING: team switch (X, only with Team Balancing = Manual) (#23)
-# PENDING: countdown cancel - not implemented (the base game cannot cancel; the user asked for it, #25)
-# PENDING: Choose Character clip paths to pick Scout (the #16 / #28 class); the default pick is accepted meanwhile
-# PENDING: Pause > Change Character > back (#17 / #29) - the clip paths follow from the Frontend
+# Steps: the Frontend's (2026-10-24; M = lobby_mc.menuAnchor_mc.menu_mc). Verified windowed by them: the lobby to the match, the Team
+# row build, the Choose Character screen, Pause > Change Character > back. From their code, not yet seen windowed (this run verifies):
+# the Game Settings row changes, the map row, the Team click, the countdown cancel, the Scout keys.
 #expect mode TDM
-#expect chassis-kept
+#expect log FLOW.bridge.fn=DataStores.WriteValue.*TnGameSettings
+#expect log FLOW.gamelobby.map.mapId=
+#expect log FLOW.lobby.team.team=
+#expect log FLOW.gamelobby.countdown.*state=cancelled.by=Back
+#expect state countdown.cancelled InLobby
+#expect level countdown.cancelled GameLobby
+#expect chassis Car2|Car4
 #expect no-charselect-after-ingame
 #expect state ingame.spawned InGame
 #expect moved ingame.spawned ingame.moved 2
 #expect still ingame.spawned 2
 #expect shots ingame.moved ingame.shot
 #expect form ingame.shot ingame.transformed
-#expect state resumed InGame
+#expect owner changechar.select customSelection
+#expect owner changechar.pause pauseShell_mc.mainMenu_mc
+#expect state changechar.back InGame
+#expect owner changechar.back game
 #expect level lobby.returned PartyLobby
 wait:ui=FrontEnd
 wait:t=2
@@ -33,41 +38,77 @@ wait:t=3
 navcheck:gamelobby
 shot:03_gamelobby.bmp
 clickclip:lobby_mc.menuAnchor_mc.menu_mc.gameSettings_mc
-wait:t=2
+wait:t=3
 navcheck:gamelobby.settings
 shot:04_gamesettings.bmp
+ui:Down
+wait:t=1
+ui:Right
+wait:t=1.5
+navcheck:gamelobby.settings.changed
+shot:05_settings_changed.bmp
 ui:Back
 wait:t=2
 navcheck:gamelobby.after_settings
+ui:Up
+wait:t=1
+ui:Right
+wait:t=2
+navcheck:gamelobby.map
+shot:06_map.bmp
+clickclip:lobby_mc.menuAnchor_mc.menu_mc.wfcTeam_mc
+wait:t=1.5
+navcheck:gamelobby.team
+shot:07_team.bmp
+clickclip:lobby_mc.menuAnchor_mc.menu_mc.startGame_mc
+wait:t=2
+navcheck:countdown.running
+shot:08_countdown.bmp
+ui:Back
+wait:t=1.5
+navcheck:countdown.cancelled
+shot:09_cancelled.bmp
 clickclip:lobby_mc.menuAnchor_mc.menu_mc.startGame_mc
 wait:level=Match
 wait:t=3
 navcheck:charselect
-shot:05_charselect.bmp
-pressuntil:Accept,InGame
+shot:10_charselect.bmp
+ui:Accept
+wait:t=2
+wait:ui=InGame
 wait:t=3
 navcheck:ingame.spawned
-shot:06_spawned.bmp
+shot:11_spawned.bmp
 buttonhold:Forward,2
 wait:t=2.5
 padhold:LStickRight,1
 wait:t=1.5
 navcheck:ingame.moved
-shot:07_moved.bmp
+shot:12_moved.bmp
 buttonhold:Fire,1
 wait:t=1.5
 navcheck:ingame.shot
 buttonhold:Transform,0.2
 wait:t=2.5
 navcheck:ingame.transformed
-shot:07b_transformed.bmp
+shot:13_transformed.bmp
 showmenu
-wait:t=1
+wait:t=2
 navcheck:pause
-shot:08_pause.bmp
+clickclip:pauseShell_mc.mainMenu_mc.listItem2_mc
+wait:t=4
+navcheck:changechar.select
+shot:14_changechar.bmp
 ui:Back
+wait:t=3
+navcheck:changechar.pause
+ui:Back
+wait:t=3
+navcheck:changechar.back
+shot:15_back_ingame.bmp
+buttonhold:Forward,1
 wait:t=1.5
-navcheck:resumed
+navcheck:changechar.moved_after
 showmenu
 wait:t=1
 call:Game.QuitToMainMenu
@@ -77,4 +118,4 @@ ui:Accept
 wait:level=PartyLobby
 wait:t=2
 navcheck:lobby.returned
-shot:09_lobby.bmp
+shot:16_lobby.bmp

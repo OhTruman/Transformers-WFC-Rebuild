@@ -1,7 +1,7 @@
 # FLOW 3 (USER_PLAYTEST_2026-10-23b section 43): MAIN MENU -> CAMPAIGN -> SOLO -> DIFFICULTY -> CHAPTER I -> CRASH SITE ->
 # SELECT CHARACTER -> LOAD LEVEL -> ACTUALLY PLAY. Steps: the Frontend's, verified from the main menu on 7f0efe32 + d93b9a16 (the Solo
 # start fix - without it the flow stalls in the invisible SOLO lobby, the user's #38 / #39).
-# Fresh profile: the first Campaign entry shows the brightness calibration (base game) - the first ui:Accept accepts it.
+# The profile is seeded with HasAdjustedGamma=True: the brightness calibration (moved to the main menu by 41d04857) does not show.
 # Difficulty: Hard is focused under the mouse after the Solo click; ui:Left -> Medium. Chapter I -> Crash Site -> the trio wheel
 # (Barricade focused), ui:Up -> Megatron. Then the loading bar -> D1 (~40 s) -> the intro FMV (~80 s) -> InGame.
 # WFC_CHARSELECT=1 (the driver sets it): the pick must carry into the map - an in-map trio select asking again is the #15-style
@@ -20,10 +20,6 @@ navcheck:main
 shot:01_main.bmp
 clickclip:menuAnchor_mc.menuMain_mc.campaignBtn_mc
 wait:t=3
-navcheck:campaign.calibration
-shot:02_calibration.bmp
-ui:Accept
-wait:t=2
 navcheck:campaign.root
 shot:03_campaign_root.bmp
 clickclip:menuAnchor_mc.menuCampaign_mc.soloMatchBtn_mc
