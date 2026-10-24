@@ -17,6 +17,7 @@
 #include "net/NetMatchDriver.h"
 #include "net/UdpSession.h"
 #include "core/Config.h"
+#include "core/LoadYield.h"
 #include "core/Debug.h"
 #include "core/Log.h"
 #include "platform/Window.h"
@@ -553,6 +554,7 @@ void Application::runHeadlessMatch() {
     long iters = 0, steps = 0;
     const auto t0 = std::chrono::steady_clock::now();
     LOG_INFO("HEADLESS match: step %.4f s, match seconds %.0f, iteration cap %ld", step, matchSeconds, maxIters);
+    core::logLoadStages("headless match start");   // DIAGNOSTIC (WFC_LOADSTAGES): the boot + map load's stage times
     for (;; ++iters) {
         if (maxIters > 0 && iters >= maxIters) { LOG_INFO("HEADLESS end: %ld iterations", iters); break; }
         if ((float)steps * step > 600.0f) { LOG_INFO("HEADLESS end: 600 s simulated (guard)"); break; }

@@ -5,7 +5,10 @@
 #include <chrono>
 #include <cmath>
 #include <fstream>
+#include <algorithm>
+#include <cstdlib>
 #include <map>
+#include <vector>
 #include <sstream>
 
 namespace core {
@@ -22,6 +25,12 @@ std::string g_progKey;
 long g_steps = 0, g_expected = 0;
 float g_frac = 0.0f;
 const char* g_stage = "";
+// WFC_LOADSTAGES: per-label wall time since the previous step
+const bool g_stagesOn = std::getenv("WFC_LOADSTAGES") != nullptr;
+const auto g_t0 = std::chrono::steady_clock::now();
+auto g_stageAt = g_t0;
+struct StageTime { double ms = 0.0; long steps = 0; };
+std::map<std::string, StageTime> g_stageTimes;
 const char* kProfileFile = "wfc_loadprofile.ini";   // (next to wfc_profile.ini: key=steps per line)
 std::map<std::string, long> readProfile() {
     std::map<std::string, long> m;
@@ -41,6 +50,12 @@ void setLoadYield(LoadYieldFn fn) {
 }
 
 void loadYield(const char* where) {
+    if (g_stagesOn && !g_inside) {
+        const auto t = std::chrono::steady_clock::now();
+        StageTime& st = g_stageTimes[where ? where : "?"];
+        st.ms += std::chrono::duration<double, std::milli>(t - g_stageAt).count(); ++st.steps;
+        g_stageAt = t;
+    }
     if (g_progOn && !g_inside) {                       // (every call is a load step, presented or not)
         ++g_steps;
         g_stage = where ? where : "";
@@ -84,6 +99,22 @@ void endLoadProgress() {
     std::ofstream f(kProfileFile, std::ios::trunc);
     for (const auto& kv : m) f << kv.first << '=' << kv.second << '\n';
     LOG_INFO("load progress: %s done in %ld steps (expected %ld)", g_progKey.c_str(), g_steps, g_expected);
+}
+
+void logLoadStages(const char* when) {
+    if (!g_stagesOn) return;
+    const auto t = std::chrono::steady_clock::now();
+    const double total = std::chrono::duration<double, std::milli>(t - g_t0).count();
+    const double tail = std::chrono::duration<double, std::milli>(t - g_stageAt).count();
+    std::vector<std::pair<std::string, StageTime>> v(g_stageTimes.begin(), g_stageTimes.end());
+    std::sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.second.ms > b.second.ms; });
+    double inSteps = 0.0; long steps = 0;
+    for (const auto& kv : v) { inSteps += kv.second.ms; steps += kv.second.steps; }
+    LOG_INFO("LOADSTAGES %s: %.0f ms since start, %ld steps in %zu labels (%.0f ms), %.0f ms after the last step", when, total, steps,
+             v.size(), inSteps, tail);
+    for (size_t i = 0; i < v.size() && i < 15; ++i)
+        LOG_INFO("LOADSTAGES   %8.0f ms %5.1f%%  %6ld steps  %s", v[i].second.ms, total > 0 ? 100.0 * v[i].second.ms / total : 0.0,
+                 v[i].second.steps, v[i].first.c_str());
 }
 
 LoadProgress loadProgress() {

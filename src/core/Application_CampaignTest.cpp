@@ -4,6 +4,7 @@
 // launch at a checkpoint. One SUMMARY line.
 #include "core/Application.h"
 #include "core/Log.h"
+#include "core/LoadYield.h"
 #include "game/World.h"
 
 #include <algorithm>
@@ -13,6 +14,7 @@
 namespace core {
 
 void Application::runCampaignTest() {
+    core::logLoadStages("campaign test start");   // DIAGNOSTIC (WFC_LOADSTAGES): the chapter load's stage times
     const float dt = (float)clock_.stepSeconds();
     int checks = 0, fails = 0;
     auto check = [&](bool ok, const char* what) { ++checks; if (!ok) ++fails; LOG_INFO("CAMPAIGNTEST %s %s", ok ? "PASS" : "FAIL", what); };

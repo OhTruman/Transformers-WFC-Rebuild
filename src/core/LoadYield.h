@@ -31,4 +31,8 @@ void beginLoadProgress(const std::string& key);
 void endLoadProgress();
 LoadProgress loadProgress();
 
+// DIAGNOSTIC (WFC_LOADSTAGES=1, Systems' load-time pass): the wall time between consecutive loadYield calls, summed per stage label
+// (the work that ended at that step), and logLoadStages() prints the table: the top labels, their share, the step counts.
+void logLoadStages(const char* when);
+
 } // namespace core
