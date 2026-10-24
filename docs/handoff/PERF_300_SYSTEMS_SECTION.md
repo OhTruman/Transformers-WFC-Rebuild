@@ -19,7 +19,8 @@ change is load scheduling or a faster equivalent only (no visible difference), w
 - **Tool already in the tree:** WFC_PRESENTTRACE=<ms> hooks SwapBuffers (and the win32k calls) and dumps the previous frames
   around every stall >= that threshold. Run it at 3 ms on a campaign chapter and an Escalation wave.
 - **Plan:** (a) measure per-frame present time and stall counts at 3.3 ms (PRESENTTRACE + WFC_LOADSTAGES-style timers) on the D3D12
-  and GL paths; (b) if the latency wait dominates, try a 2-frame latency (a setting, not a visual change) and measure input
+  and GL paths, with each stall's GPU ms printed next to it (Rendering 2026-10-24: a stall on a frame with a high GPU time is a GPU
+  problem, Rendering's; a stall with a low one is ours); (b) if the latency wait dominates, try a 2-frame latency (a setting, not a visual change) and measure input
   latency with WFC_LATENCYPROBE at the same time; (c) exclusive / flip-model fullscreen at native resolution only (the
   2026-10-12 EDID incident: no non-native mode switches).
 
@@ -43,6 +44,10 @@ change is load scheduling or a faster equivalent only (no visible difference), w
   enemy classes) that is a 40-50-frame hitch each time. Lossless fix: do the CPU part (glb, animation files, PNG decode - all now
   thread-safe, see the load-time pass) on a worker thread ahead of need, then upload / prewarm on the main thread in slices.
   Identity: the same loaders, so WFC_ANIMHASH / the image decode identity apply unchanged.
+- **Ownership (agreed with Rendering 2026-10-24):** Systems = the CPU / file part on workers (PNG decode, glb parse, animation
+  reads); Rendering = the GL part (uploads, program / skin prewarm sliced per frame with a time budget inside the renderer, behind
+  the existing load / prewarm entry points - the worker hand-off calls them unchanged). Already merged: Rendering bd543d9e moved
+  D1's first-draw skeletal loads (a 4.5 s in-play stall) to the chapter load.
 - **Texture uploads mid-level:** World::resolveTexture uploads on first use; upload cost per frame should be capped (a per-frame
   budget, queued), measured with the new addLoadTime parts.
 - **Campaign streaming:** the chapter's unit loads (Rendering's streaming) - their CPU part can use the same worker pattern; the
@@ -61,3 +66,11 @@ change is load scheduling or a faster equivalent only (no visible difference), w
   AssetTools at packaging time; the package ships both (the cache is optional: missing or stale = the gltf path).
 - **Identity gate:** WFC_ANIMHASH over every shipped animation file, loaded from the cache vs from the gltf: equal hash sets.
 - **Expected:** most of the parse + extraction (~0.2 s per map, more for mid-match class loads), plus about 30 MB less to read.
+- **MEASURED 2026-10-24 - REJECTED.** Built (cache root keyed by the path below "Transformers Rebuild/", a size + head/tail stamp,
+  a clip's shared key-time arrays stored once) over every shipped animation source (base content, campaign / Escalation characters,
+  DLC content): 818 files, 813 with clips, **813 / 813 byte-identical on read-back** (assets::hashAnimFile). But the parsed data is far
+  larger than the sources: the cache came to **924 MB against 213 MB of sources** (1,180 MB before sharing the time arrays), and
+  reading it took **4.8 s against 2.7 s** to parse the sources (both from the OS file cache). The sources store their keys more
+  compactly than the expanded floats the game keeps, so any cache of the parsed AnimFile is bigger and slower to read. Not shipped;
+  the code is kept at work/jip/Application_AnimCache.cpp.rejected + work/jip/animcache_edit.py. What remains for animation loads:
+  the parallel load (merged 4d338915) and the background body load (merged 6ddb0abe), which already take them off the frame.
