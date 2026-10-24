@@ -4267,3 +4267,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 22:34 RE: Tranquillity_AUDIO_m has one short LZO block in the shipped file; AssetTools' reader misplaced later blocks (fix
   sent: 82 of 125 exports recovered incl. every touch / sound / reverb op); 43 exports are damaged in the shipped cook
   itself (brush Models, Package objects, 14 Kismet ops): treated as missing. Systems regenerates after the DB re-export.
+2026-10-23 22:42 MERGED 40e4e7ab District doors load (per-map transforming_actors fallback) + door generators (Zone_Manager flattened:
+  District 8 / 8 with a bought door generator) + base item 15; 8f65b92c level audio (+ Horizon; props-less exports =
+  missing). Gameplay next: the DLC Kismet extras (laser doors, sentries, power outage, vending, flood gates). AssetTools:
+  LZO short-block fix in 3 DLC packages (Tranquillity_AUDIO, District_Art, Static_ART): District rebuilt, Pack 2 resumes.
