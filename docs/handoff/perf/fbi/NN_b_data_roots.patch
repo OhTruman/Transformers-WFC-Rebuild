@@ -1,0 +1,148 @@
+diff --git a/src/core/DataRoots.h b/src/core/DataRoots.h
+new file mode 100644
+index 0000000..9eb5840
+--- /dev/null
++++ b/src/core/DataRoots.h
+@@ -0,0 +1,30 @@
++#pragma once
++// The project tree for data read outside the asset / render / manifest roots (AssetTools' campaign and Escalation exports,
++// ExtractedAssets files by their package-relative path). A package mirrors "F:/Transformers Rebuild" under a mapped drive letter
++// (tools/package/slim_template/Play.bat: F: only when free), so a literal "F:/Transformers Rebuild/..." breaks on a PC with its own
++// F: drive. The root: WFC_PROJECT_ROOT, else WFC_ASSETS when it is <root>/ExtractedAssets/VerticalSlice (the package), else this PC's
++// tree (dev runs, whose WFC_ASSETS may point elsewhere).
++#include "core/Config.h"
++
++#include <cstdlib>
++#include <string>
++
++namespace core {
++
++inline const std::string& projectRoot() {
++    static const std::string r = [] {
++        if (const char* e = std::getenv("WFC_PROJECT_ROOT")) if (*e) return std::string(e);
++        const char* ae = std::getenv("WFC_ASSETS");
++        std::string a = ae && *ae ? ae : config::kAssetRootDefault;
++        for (char& c : a) if (c == '\\') c = '/';
++        while (!a.empty() && a.back() == '/') a.pop_back();
++        const std::string tail = "/ExtractedAssets/VerticalSlice";
++        if (a.size() > tail.size() && a.compare(a.size() - tail.size(), tail.size(), tail) == 0) return a.substr(0, a.size() - tail.size());
++        return std::string("F:/Transformers Rebuild");
++    }();
++    return r;
++}
++inline std::string extractedRoot() { return projectRoot() + "/ExtractedAssets/"; }   // + "content/..." (package-relative paths)
++inline std::string assetToolsOut() { return projectRoot() + "/AssetTools/out/"; }
++
++} // namespace core
+diff --git a/src/game/WorldCampaignDestructibles.cpp b/src/game/WorldCampaignDestructibles.cpp
+index 80a84df..ddef7b8 100644
+--- a/src/game/WorldCampaignDestructibles.cpp
++++ b/src/game/WorldCampaignDestructibles.cpp
+@@ -3,6 +3,7 @@
+ // batteries, out/campaign_characters/destructibles/<blueprint>.json) and the placed ones (<chapter>/destructibles.json when delivered).
+ // Damage (hitscan + radius), timers, notification links, Kismet SeqEvent_HmDestructibleStateNotification, the state meshes drawn.
+ #include "game/World.h"
++#include "core/DataRoots.h"
+ #include "assets/Gltf.h"
+ #include "assets/Json.h"
+ #include "core/Log.h"
+@@ -88,7 +89,7 @@ CampaignDestructible::State* CampaignDestructible::Piece::state() {
+ 
+ int World::cpSpawnDestructible(const std::string& blueprint, const std::string& name, const core::Vec3& at, float yawDeg) {
+     assets::Json bp;
+-    const std::string root = "F:/Transformers Rebuild/AssetTools/out/campaign_characters/destructibles/";
++    const std::string root = core::assetToolsOut() + "campaign_characters/destructibles/";
+     if (!readJ2(root + tail(blueprint) + ".json", bp)) { LOG_WARN("campaign: no destructible blueprint %s", blueprint.c_str()); return -1; }
+     CampaignDestructible d;
+     d.name = name; d.pos = at; d.yawDeg = yawDeg;
+@@ -113,7 +114,7 @@ void World::cpDesBounds(int i) {
+         auto it = cpDesMeshes_.find(s->mesh);
+         if (it == cpDesMeshes_.end()) {
+             CampaignMeshAsset a;
+-            const std::string contentRoot = "F:/Transformers Rebuild/ExtractedAssets/";
++            const std::string contentRoot = core::extractedRoot();
+             a.ok = assets::loadGlb(contentRoot + s->mesh, a.mesh) || assets::loadGlb(contentRoot + "VerticalSlice/../" + s->mesh, a.mesh);
+             if (a.ok && renderer_) a.handle = renderer_->uploadMesh(a.mesh);
+             it = cpDesMeshes_.emplace(s->mesh, std::move(a)).first;
+diff --git a/src/game/WorldCampaignMatinee.cpp b/src/game/WorldCampaignMatinee.cpp
+index 3ecea95..0a15c45 100644
+--- a/src/game/WorldCampaignMatinee.cpp
++++ b/src/game/WorldCampaignMatinee.cpp
+@@ -3,6 +3,7 @@
+ // collision, the renderer's actor transform, pawns standing on them carried along: the A1 intro lift), and the director (camera cuts to
+ // the CameraActor groups, FOVAngle, the fade) into the local view + Rendering's CinematicView. See Campaign.h.
+ #include "game/World.h"
++#include "core/DataRoots.h"
+ #include "assets/Json.h"
+ #include "assets/SkinnedModel.h"
+ #include "game/GpuSkin.h"
+@@ -437,7 +438,7 @@ void World::cpLoadSkeletal() {
+         if (!k.mesh.empty()) cpSkel_[shortName(r["actor"].asString())] = k;
+     }
+     // (300 fps: a first-draw load stalled D1 4.5 s in play) every distinct mesh + anim set loads here, under the loading screen
+-    const std::string root = "F:/Transformers Rebuild/ExtractedAssets/";
++    const std::string root = core::extractedRoot();
+     std::map<std::string, std::shared_ptr<assets::SkinnedModel>> models;
+     size_t failed = 0;
+     for (auto& kv : cpSkel_) {
+@@ -462,7 +463,7 @@ void World::cpLoadSkeletal() {
+ // Draw the active ones: the clip sampled at its matinee time. GPU-skinned (D1 Crash runs 244 at once: CPU skinning them every
+ // frame cost ~45 ms); the palette is rebuilt only when the clip / time changes. The CPU skin draws when the renderer cannot.
+ void World::cpDrawSkeletal(render::IRenderer& r) const {
+-    const std::string root = "F:/Transformers Rebuild/ExtractedAssets/";
++    const std::string root = core::extractedRoot();
+     for (auto& kv : cpSkel_) {
+         CampaignSkel& k = kv.second;
+         if (!k.active || k.clip.empty()) continue;
+@@ -540,7 +541,7 @@ void World::cpPlayPawnClip(CampaignState::Interp& in, const CampaignPawnGroup& g
+         int ci = model.clipByName(clip);
+         if (ci < 0) {
+             auto f = g.clipFile.find(clip);
+-            if (f != g.clipFile.end()) assets::loadAnimationsByName("F:/Transformers Rebuild/ExtractedAssets/" + f->second, model);
++            if (f != g.clipFile.end()) assets::loadAnimationsByName(core::extractedRoot() + f->second, model);
+             ci = model.clipByName(clip);
+             LOG_INFO("campaign: matinee clip %s on %s (p%zu): %s", clip.c_str(), ch.c_str(), q, ci >= 0 ? "loaded" : "NOT FOUND");
+             if (ci < 0) continue;
+diff --git a/src/game/WorldCampaignRuntime.cpp b/src/game/WorldCampaignRuntime.cpp
+index 3a857c7..71355b4 100644
+--- a/src/game/WorldCampaignRuntime.cpp
++++ b/src/game/WorldCampaignRuntime.cpp
+@@ -2,6 +2,7 @@
+ // the spawned AI's alert-to-player awareness, and the in-map character pick (the human takes a trio member, the squad is the rest).
+ // See Campaign.h.
+ #include "game/World.h"
++#include "core/DataRoots.h"
+ #include "assets/Json.h"
+ #include "core/Log.h"
+ 
+@@ -34,10 +35,10 @@ std::string bodyForAicd(const std::string& archetype, std::string& note) {
+     std::string id = afterDot(archetype);
+     const std::string pkg = archetype.substr(0, archetype.find('.'));
+     if (id.size() > 5 && id.compare(id.size() - 5, 5, "_AICD") == 0) id.resize(id.size() - 5);
+-    const std::string cmp = "F:/Transformers Rebuild/AssetTools/out/campaign_characters/";
++    const std::string cmp = core::assetToolsOut() + "campaign_characters/";
+     if (fileExists(cmp + id + "/character.json")) return "CMP_" + id;   // the campaign template
+     if (fileExists(cmp + id + "__" + pkg + "/character.json")) return "CMP_" + id + "__" + pkg;   // a name in two packages: id__<package>
+-    const std::string root = "F:/Transformers Rebuild/AssetTools/out/escalation_characters/";
++    const std::string root = core::assetToolsOut() + "escalation_characters/";
+     if (fileExists(root + id + "/character.json")) return "ESC_" + id;
+     for (const auto& sw : {std::make_pair(std::string("_Autobot"), std::string("_Decepticon")), std::make_pair(std::string("_Decepticon"), std::string("_Autobot"))}) {
+         const size_t k = id.find(sw.first);
+@@ -779,7 +780,7 @@ std::string tailS(const std::string& s) { const size_t k = s.find_last_of('.');
+ void World::cpLoadSentryDefs() {
+     cp_.sentryFactories.clear(); cp_.sentryDefs.clear(); cp_.sentries.clear();
+     assets::Json j;
+-    if (!readJsonFile("F:/Transformers Rebuild/AssetTools/out/campaign_characters/spawnables.json", j)) return;
++    if (!readJsonFile(core::assetToolsOut() + "campaign_characters/spawnables.json", j)) return;
+     const assets::Json& ss = j["sentries"];
+     for (size_t i = 0; i < ss.size(); ++i) {
+         const assets::Json& v = ss[i]["values"];
+@@ -952,7 +953,7 @@ namespace game {
+ void World::cpLoadMineDefs() {
+     cp_.mineFactories.clear(); cp_.mines.clear();
+     assets::Json j;
+-    if (!readJsonFile("F:/Transformers Rebuild/AssetTools/out/campaign_characters/spawnables.json", j)) return;
++    if (!readJsonFile(core::assetToolsOut() + "campaign_characters/spawnables.json", j)) return;
+     const assets::Json& r = j["roller_mine"];
+     const assets::Json& cd = r["class_defaults"];
+     const assets::Json& fs = r["factories"];

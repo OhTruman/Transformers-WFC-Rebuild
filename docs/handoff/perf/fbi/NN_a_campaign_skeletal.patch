@@ -1,0 +1,119 @@
+diff --git a/src/game/Campaign.h b/src/game/Campaign.h
+index d1cd61b..18fcb5f 100644
+--- a/src/game/Campaign.h
++++ b/src/game/Campaign.h
+@@ -11,6 +11,7 @@
+ #include "assets/SkinnedModel.h"
+ 
+ #include <map>
++#include <memory>
+ #include <set>
+ #include <string>
+ #include <vector>
+@@ -91,9 +92,12 @@ struct CampaignSkel {
+     core::Vec3 pos{0, 0, 0};
+     float yawDeg = 0.0f, time = 0.0f;
+     bool loop = false, active = false, tried = false, ok = false;
+-    assets::SkinnedModel model;
++    std::shared_ptr<assets::SkinnedModel> model;   // shared by every actor of the same mesh + anim files (cpLoadSkeletal)
+     render::MeshData skinned;
+     std::vector<core::Mat4> scratch;
++    std::vector<core::Mat4> palette;     // GPU skin: the bone palette of (posedClip, posedT), its serial for the renderer's cache
++    int posedClip = -1; float posedT = -1.0f; uint64_t serial = 0;
++    std::string object, unit;            // its full object path (cp_.actorHidden key) and streaming unit (chapter.json dir)
+ };
+ 
+ struct CampaignFactory {
+diff --git a/src/game/WorldCampaignMatinee.cpp b/src/game/WorldCampaignMatinee.cpp
+index b4e845a..3ecea95 100644
+--- a/src/game/WorldCampaignMatinee.cpp
++++ b/src/game/WorldCampaignMatinee.cpp
+@@ -5,6 +5,8 @@
+ #include "game/World.h"
+ #include "assets/Json.h"
+ #include "assets/SkinnedModel.h"
++#include "game/GpuSkin.h"
++#include "core/LoadYield.h"
+ #include "render/Renderer.h"
+ #include "core/Log.h"
+ 
+@@ -429,28 +431,68 @@ void World::cpLoadSkeletal() {
+         const assets::Json& L = r["location_gltf"];
+         if (L.size() >= 3) k.pos = core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
+         k.yawDeg = r["rotation_deg"]["yaw"].asFloat(0.0f);
++        k.object = r["object"].asString();
++        k.unit = r["sublevel"].asString();   // the level package; the unit dir drops its "_m"
++        if (k.unit.size() > 2 && k.unit.compare(k.unit.size() - 2, 2, "_m") == 0) k.unit.resize(k.unit.size() - 2);
+         if (!k.mesh.empty()) cpSkel_[shortName(r["actor"].asString())] = k;
+     }
+-    LOG_INFO("campaign: %zu matinee skeletal actors", cpSkel_.size());
++    // (300 fps: a first-draw load stalled D1 4.5 s in play) every distinct mesh + anim set loads here, under the loading screen
++    const std::string root = "F:/Transformers Rebuild/ExtractedAssets/";
++    std::map<std::string, std::shared_ptr<assets::SkinnedModel>> models;
++    size_t failed = 0;
++    for (auto& kv : cpSkel_) {
++        CampaignSkel& k = kv.second;
++        std::string key = k.mesh;
++        for (const std::string& f : k.animFiles) key += "|" + f;
++        auto it = models.find(key);
++        if (it == models.end()) {
++            auto m = std::make_shared<assets::SkinnedModel>();
++            if (assets::loadSkinnedGlb(root + k.mesh, *m)) {
++                for (const std::string& f : k.animFiles) assets::loadAnimationsByName(root + f, *m);
++                if (renderer_ && onMainThread()) prewarmSkin(*m);
++            } else { LOG_WARN("campaign: skeletal actor %s: no mesh %s", kv.first.c_str(), k.mesh.c_str()); m.reset(); ++failed; }
++            it = models.emplace(key, m).first;
++            core::loadYield("campaign skeletal");
++        }
++        k.model = it->second; k.tried = true; k.ok = k.model != nullptr;
++    }
++    LOG_INFO("campaign: %zu matinee skeletal actors (%zu distinct models loaded, %zu failed)", cpSkel_.size(), models.size(), failed);
+ }
+ 
+-// Draw the active ones: the clip sampled at its matinee time, CPU-skinned (a handful of cinematic actors).
++// Draw the active ones: the clip sampled at its matinee time. GPU-skinned (D1 Crash runs 244 at once: CPU skinning them every
++// frame cost ~45 ms); the palette is rebuilt only when the clip / time changes. The CPU skin draws when the renderer cannot.
+ void World::cpDrawSkeletal(render::IRenderer& r) const {
+     const std::string root = "F:/Transformers Rebuild/ExtractedAssets/";
+     for (auto& kv : cpSkel_) {
+         CampaignSkel& k = kv.second;
+         if (!k.active || k.clip.empty()) continue;
+-        if (!k.tried) {
+-            k.tried = true;
+-            k.ok = assets::loadSkinnedGlb(root + k.mesh, k.model);
+-            if (k.ok) for (const std::string& f : k.animFiles) assets::loadAnimationsByName(root + f, k.model);
+-            if (!k.ok) LOG_WARN("campaign: skeletal actor %s: no mesh %s", kv.first.c_str(), k.mesh.c_str());
++        {   // (300 fps, RE CAMPAIGN_CULLING_LOD_RE.md 5-6) not in the original's world: its unit not Visible, or hidden / destroyed
++            auto uv = cp_.unitVisible.find(k.unit);
++            if (uv != cp_.unitVisible.end() && !uv->second) continue;
++            auto h = cp_.actorHidden.find(k.object.empty() ? kv.first : k.object);
++            if (h == cp_.actorHidden.end()) h = cp_.actorHidden.find(kv.first);
++            if (h != cp_.actorHidden.end() && h->second) continue;
+         }
+-        if (!k.ok) continue;
+-        const int clip = k.model.clipByName(k.clip);
++        if (!k.ok || !k.model) continue;   // (loaded at chapter load: cpLoadSkeletal)
++        const assets::SkinnedModel& model = *k.model;
++        const int clip = model.clipByName(k.clip);
+         if (clip < 0) continue;
+-        assets::evaluatePose(k.model, clip, k.time, k.scratch, k.skinned, k.loop);
+-        r.drawDynamicMesh(k.skinned, core::Mat4::translate(k.pos) * core::Mat4::rotateY(-k.yawDeg * 3.14159265f / 180.0f), core::Vec3{1, 1, 1});
++        const core::Mat4 world = core::Mat4::translate(k.pos) * core::Mat4::rotateY(-k.yawDeg * 3.14159265f / 180.0f);
++        if (!model.joints.empty()) {
++            if (clip != k.posedClip || k.time != k.posedT || k.palette.empty()) {
++                assets::LocalPose lp;
++                assets::samplePose(model, clip, k.time, k.loop, lp);
++                assets::poseGlobals(model, lp, k.scratch);
++                buildPalette(model, k.scratch, k.palette);
++                k.posedClip = clip; k.posedT = k.time; ++k.serial;
++            }
++            render::MeshData& bind = bindMeshOf(model);
++            syncMats(bind.mats, model.mats);
++            if (drawSkinnedGpu(r, bind, model.joints, model.weights, k.palette, nullptr, 1.0f, world, core::Vec3{1, 1, 1}, &k, k.serial, 0))
++                continue;
++        }
++        assets::evaluatePose(model, clip, k.time, k.scratch, k.skinned, k.loop);
++        r.drawDynamicMesh(k.skinned, world, core::Vec3{1, 1, 1});
+     }
+ }
+ 
