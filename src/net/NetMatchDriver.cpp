@@ -91,6 +91,7 @@ struct NetMatchDriver::Impl {
 NetMatchDriver::NetMatchDriver(game::World& world, INetTransport& transport, audio::IAudio* audio, const Config& cfg)
     : impl_(std::make_unique<Impl>(world, transport, cfg)) {
     Lockstep::Config lc;
+    lc.owner = cfg.seatOwner;   // split screen online: a second local player's commands ride its owner's packets
     lc.seats = cfg.seats; lc.self = cfg.self; lc.delay = cfg.delay; lc.hashEvery = cfg.hashEvery;
     lc.peerTimeoutS = cfg.peerTimeoutS; lc.launchHash = cfg.launchHash; lc.logPath = cfg.logPath;
     lc.activeFrom = cfg.activeFrom; lc.lateJoin = cfg.lateJoin; lc.keepHistory = cfg.keepHistory;
@@ -192,6 +193,11 @@ int NetMatchDriver::frame(double dtSeconds) {
         const uint32_t n = (uint32_t)m.world.simTick() + 1;
         if (ls.endTick() > 0 && n > ls.endTick()) { m.ended = true; break; }
         while (m.nextLocal <= n + (uint32_t)ls.delay()) {   // this seat's commands up to N + D (the local controller's input now)
+            if (ls.ownedSeat() >= 0 && m.cfg.encodeOwned) {   // the second local player's first (submitLocal's send carries both)
+                game::RemoteCommand c2 = m.cfg.encodeOwned();
+                c2.tick = m.nextLocal;
+                ls.submitOwned(m.nextLocal, c2);
+            }
             game::RemoteCommand c = m.world.encodeLocalCommand();
             c.tick = m.nextLocal;
             ls.submitLocal(m.nextLocal, c);

@@ -943,7 +943,10 @@ public:
     // Online: this machine's command for tick simTick() + 1 from the local controller (the wire encoding; see the contract).
     RemoteCommand encodeLocalCommand();
     // Split screen: a second local human seat (a Remote participant fed by its own local controller; GAMEPLAY_SPLITSCREEN_PLAN.md).
-    int addLocalSeat(int pad, const CharacterSelection& sel, bool selected);   // the seat's match player (-1: none)
+    // matchSeat >= 0 (online, Systems' two-locals wire patch): bind seat 2 to that match player - already a Remote participant from the
+    // launch's seat order (no bot-slot swap, no new participant); its commands then travel through the lockstep (encodeSeat2Command).
+    int addLocalSeat(int pad, const CharacterSelection& sel, bool selected, int matchSeat = -1);   // the seat's match player (-1: none)
+    RemoteCommand encodeSeat2Command();   // online: seat 2's command for tick simTick() + 1 (encoded, not applied; the driver submits it)
     void removeLocalSeat();
     void setSeat2Input(const platform::InputFrame& in);   // pad 2's frame, before handleInput
     int localSeatCount() const;

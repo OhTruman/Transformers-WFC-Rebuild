@@ -156,7 +156,14 @@ public:
     }
     ~UdpTransport() override { if (sock_ != kBad) closeSock(sock_); }
     int self() const override { return self_; }
-    void sendUnreliable(int peer, const uint8_t* p, size_t n) override { raw(peer, ch_.wrap(peer, false, p, n)); }
+    void sendUnreliable(int peer, const uint8_t* p, size_t n) override {
+        // TEST ONLY: WFC_NET_LOSS=<0..1> drops that share of unreliable datagrams (the lockstep's resend / redundancy under loss)
+        static const double loss = std::getenv("WFC_NET_LOSS") ? std::atof(std::getenv("WFC_NET_LOSS")) : 0.0;
+        static uint32_t rng = 0x9e3779b9u;
+        if (loss > 0.0) { rng = rng * 1664525u + 1013904223u; if ((double)(rng >> 8) / 16777216.0 < loss) { ++lossDropped_; return; } }
+        raw(peer, ch_.wrap(peer, false, p, n));
+    }
+    long lossDropped_ = 0;
     void sendReliable(int peer, const uint8_t* p, size_t n) override { raw(peer, ch_.wrap(peer, true, p, n)); }
     bool poll(NetPacket& out) override {
         drainSocket();

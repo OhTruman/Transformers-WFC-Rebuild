@@ -3270,7 +3270,7 @@ bool World::launchMatch(const MatchLaunch& l) {
     LOG_INFO("match: launched %s %s (goal %d, time %d s, bots %d: friendly %d enemy %d %s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore,
              l.settings.timeLimit, nb, l.bots.friendly, l.bots.enemy, botDifficultyName(l.bots.difficulty));
     seat2_ = -1; seat2Pad_ = -1;   // a new match: no second local seat until a pad joins
-    if (std::getenv("WFC_SEAT2BOT") && localPlayer_ >= 0)   // test only: seat 2 joins with the first player's pick
+    if (std::getenv("WFC_SEAT2BOT") && localPlayer_ >= 0 && !onlineSeats_)   // test only: seat 2 joins with the first player's pick (offline; online the launch has it)
         addLocalSeat(1, match_.players()[(size_t)localPlayer_].selection, match_.players()[(size_t)localPlayer_].hasSelectedCharacter);
     {   // [integration 09b] Systems M09b / M09c glue: every other participant's (bots') weapon cues and character cue set are
         // decoded at match load, not on a bot's first shot / spawn (PC ADAPTATION, load scheduling).

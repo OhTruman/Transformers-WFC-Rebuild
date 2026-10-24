@@ -57,6 +57,9 @@ public:
     void leave() override;
     void publishLobby(const frontend::SessionLobby& lobby) override;
     void setMemberInfo(const frontend::SessionMemberInfo& info) override;
+    // Split screen online: this peer's second local player (its id = secondLocalId(our fingerprint)); the host reports it as a member.
+    bool supportsSecondLocal() const override { return true; }
+    void setSecondLocal(const frontend::SessionMemberInfo* info) override;
     void requestStart() override;
     void setLaunch(const std::string& matchUrl, uint32_t seed, const frontend::SessionLobby& roster) override;
     void reportLoaded(uint64_t simId, uint64_t loadHash) override;
@@ -83,6 +86,8 @@ public:
     int matchSelf() const { return matchSelf_; }
     INetTransport* matchTransport();                       // lockstep packets in match seats (null before the roster)
     const frontend::SessionMemberId& matchMember(int matchSeat) const;
+    // Per match seat, the match seat whose peer sends its commands (a second local player's: its owner's); identity without any.
+    std::vector<int> matchOwners() const;
     std::string matchMemberName(int matchSeat) const;   // the display name ("" unknown)
     void matchEnded();                                     // back to the lobby (host: LobbyState with matchRunning false)
     // The driver's lockstep failed (phase 1 codes): 3 desync -> Desync{tick}, 5 host lost -> HostLost, 4 / 6 -> ConnectionLost.
@@ -220,7 +225,12 @@ private:
     std::string launchUrl_;
     uint32_t launchSeed_ = 0;
     frontend::SessionLobby launchRoster_;
-    std::vector<int> matchToSession_;      // match seat -> session seat
+    std::vector<int> matchToSession_;      // match seat -> session seat (a second local player's = its owner's session seat)
+    std::vector<int> matchOwner_;          // match seat -> its owner match seat (split screen online; empty = each its own)
+    mutable std::map<int, frontend::SessionMemberId> matchOwnedIds_;   // a second local's member id (matchMember)
+    std::map<int, frontend::SessionMemberInfo> second_;   // the host: session seat -> that peer's second local player (0 = the host's)
+    void setSecond(int seat, const frontend::SessionMemberInfo* info, bool inMatch);   // the host: MemberJoined / MemberLeft for it
+    int slotSessionSeat(const frontend::SessionMemberId& m, bool& owned) const;   // a roster slot's member -> session seat
     int matchSelf_ = -1;
     std::vector<char> matchReserved_;      // per match seat: a Reserved slot of the launch roster
     std::vector<int> droppedMatchSeats_;

@@ -21,7 +21,7 @@
 #include "net/VoiceSession.h"
 
 namespace audio { class IAudio; }
-namespace game { class World; struct CharacterSelection; }
+namespace game { class World; struct CharacterSelection; struct RemoteCommand; }
 
 namespace net {
 
@@ -62,6 +62,10 @@ public:
         std::function<void(int seat, int team, bool local, uint32_t atTick)> onSeatJoin;
         // Seat -> match player for commands / voice (-1 = no participant yet). Unset: player == seat (the launch's seat order).
         std::function<int(int seat)> seatPlayer;
+        // Split screen online: per seat, the seat whose peer sends its commands (empty: each its own; Lockstep::Config::owner). This
+        // peer's owned seat (its second local player) is fed by encodeOwned once per tick, before the local seat's command.
+        std::vector<int> seatOwner;
+        std::function<game::RemoteCommand()> encodeOwned;
         // Leaving mid-match (Lockstep.h LEAVEQ): the host decides bot or empty; every peer, on the SeatLeave event: the seat's
         // participant goes to a bot / leaves at untilTick (Gameplay: applySlotSwap toBot / World::queueLeave), the same tick everywhere.
         std::function<bool(int seat)> leaveToBot;

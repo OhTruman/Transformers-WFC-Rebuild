@@ -42,6 +42,11 @@
 // clamped 2..15, from PING / PONG every 250 ms to each peer (the worst peer counts); it rises at once and falls at most 1 tick a second.
 // Wire command (23 bytes): i8 forward, i8 right, u32 buttons, u32 pressed, u16 yaw, i16 pitch (rotator units, 65536 = 360 deg),
 //   i24 x / y / z aim point (cm; valid with kRemoteBitAimPoint).
+// Split screen online (two local players on one peer): a seat may be OWNED by another seat's peer (Config::owner) - it has no
+// transport endpoint, no HELLO / PING / timeout of its own; its commands ride on the owner's CMDS packet as a trailer after the u16
+// event announcement (always written then):  u8 0xA2, u32 ack of the RECEIVER's owned seat, u8 the sender's owned seat (0xFF none),
+// u32 first, u8 count, count x 23. Every peer stores and applies it like any seat; the owner's leave (BYE / dropSeat) also runs the
+// leave protocol for its owned seat. A late joiner cannot bring a second local seat.
 #include "net/NetTransport.h"
 
 #include <array>
@@ -78,6 +83,9 @@ public:
         std::vector<uint32_t> activeFrom;
         bool lateJoin = false;
         bool keepHistory = false;   // the host: keep every command / event / hash for late joiners
+        // Split screen online: per seat, the seat whose peer sends its commands (empty, or owner[s] == s: its own peer). At most one
+        // owned seat per peer.
+        std::vector<int> owner;
     };
     static constexpr uint8_t kEventSeatJoin = 2;     // event kind (1 = Choose Character, NetMatchDriver)
     static constexpr uint8_t kEventSeatLeave = 3;    // {u8 seat, u32 the first tick without it, u8 to a bot}
@@ -89,6 +97,10 @@ public:
     void pump();                                  // transport service + receive; periodic command resend; call every loop iteration
     bool everyoneHere() const;                    // every peer's HELLO arrived (and matched)
     void submitLocal(uint32_t tick, const game::RemoteCommand& c);   // this seat's command for `tick` (encoded, stored, sent)
+    // This peer's owned seat (split screen: its second local player), -1 none; its command for `tick` - call BEFORE submitLocal for the
+    // same tick (submitLocal's send carries both streams).
+    int ownedSeat() const { return owned_; }
+    void submitOwned(uint32_t tick, const game::RemoteCommand& c);
     bool haveAll(uint32_t tick) const;
     void command(int seat, uint32_t tick, game::RemoteCommand& out) const;   // decoded (also for this seat)
     bool wire(int seat, uint32_t tick, WireCommand& out) const;              // the raw 23 bytes (WFC_NET_RECORD)
@@ -137,6 +149,15 @@ public:
 
 private:
     void handle(const NetPacket& p);
+    bool isPeer(int s) const { return s >= 0 && s < cfg_.seats && owner_[(size_t)s] == s; }
+    bool peer(int s) const { return s != cfg_.self && isPeer(s) && joined(s); }   // a joined remote peer (a transport endpoint)
+    int ownedBy(int s) const;                 // the seat peer s owns (-1 none)
+    int peerCount() const;                    // peers in the launch (owned seats excluded)
+    std::vector<int> owner_;                  // per seat (Config::owner, identity filled)
+    int owned_ = -1;                          // this peer's owned seat
+    uint32_t ownedHigh_ = 0;                  // its newest submitted tick
+    std::vector<uint32_t> peerAck2_;          // per peer: their ack of my owned seat's commands
+    void appendOwned(std::vector<uint8_t>& b, int peer, bool full) const;
     void sendCommands(int peer, bool full);   // full = from the peer's ack; else the newest kRedundancy ticks
     std::vector<double> lastFullMs_;          // per peer: the last full-window send
     std::map<uint32_t, double> producedMs_;   // this seat's ticks -> when first sent (ack-overdue test)

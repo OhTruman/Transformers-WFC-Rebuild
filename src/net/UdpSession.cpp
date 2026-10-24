@@ -11,6 +11,8 @@
 //     0x47 LEAVE     (member -> host: it left; host -> members: the host ended the session)
 //     0x48 KICK      u8 SessionKickReason (host -> member)  0x49 DROPPED str fingerprint, u8 SessionLeaveReason, u8 inMatch
 //     0x4A VERSION   (host -> member: its load hash differs; JoinFailed{Version})
+//     0x57 SECOND    u8 present, [member info] (member -> host: its second local player joins / leaves; MemberJoined / MemberLeft
+//                    on the host for <fingerprint>/2). LAUNCH and LATELAUNCH end with u8 n, n x u8 owner match seat (split screen).
 //     0x4B RETURN    (host -> members: the match ended; a LOBBY follows)
 //   unreliable: 0x4F KEEPALIVE (every 1 s to every peer; also a LEAVE / KICK copy goes unreliable twice before a socket closes)
 #include "net/UdpSession.h"
@@ -41,6 +43,7 @@ enum : uint8_t {
     kLeave = 0x47, kKick = 0x48, kDropped = 0x49, kVersion = 0x4A, kReturn = 0x4B, kKeepalive = 0x4F,
     kLateJoin = 0x4C, kLateLaunch = 0x4D, kSeatMap = 0x4E,   // join in progress: ask / the launch record + seat (or refusal) / a seat filled
     kDiscover = 0x53, kAnnounce = 0x54, kPing = 0x55, kPong = 0x56,   // out of band: LAN discovery, candidate pings
+    kSecondLocal = 0x57,   // seated: a member's second local player (split screen online)
 };
 constexpr double kSearchCollectS = 1.0, kPingRoundS = 0.3;
 constexpr double kRelayAfterS = 3.0;   // a joiner falls back to the relay after this long without a direct answer
@@ -53,7 +56,7 @@ std::string jsonEsc(const std::string& s) {
     for (char c : s) { if (c == '"' || c == '\\') o += '\\'; if ((unsigned char)c >= 0x20) o += c; }
     return o;
 }
-bool isSessionType(uint8_t t) { return t >= 0x40 && t <= 0x4F; }
+bool isSessionType(uint8_t t) { return (t >= 0x40 && t <= 0x4F) || t == kSecondLocal; }
 
 struct W {
     std::vector<uint8_t> b;
@@ -399,6 +402,54 @@ void UdpSession::setMemberInfo(const SessionMemberInfo& info) {
     if (role_ == Role::Member && peers_.count(0)) { W w(kInfo); w.info(self_); sendSeat(0, w.b); }
 }
 
+void UdpSession::setSecondLocal(const SessionMemberInfo* info) {
+    SessionMemberInfo i;
+    if (info) i = *info;
+    i.id.fingerprint = frontend::ISession::secondLocalId(self_.id.fingerprint);
+    if (role_ == Role::Member) {
+        W w(kSecondLocal); w.u8(info ? 1 : 0); if (info) w.info(i);
+        if (peers_.count(0)) sendSeat(0, w.b);
+        LOG_INFO("session: second local player %s (%s)", info ? "joins" : "leaves", i.id.fingerprint.c_str());
+    } else if (role_ == Role::Host) {
+        setSecond(0, info ? &i : nullptr, false);
+    }
+}
+
+void UdpSession::setSecond(int seat, const SessionMemberInfo* info, bool inMatch) {
+    auto it = second_.find(seat);
+    SessionEvent e;
+    if (!info) {
+        if (it == second_.end()) return;
+        e.type = inMatch ? SessionEvent::Type::PeerDropped : SessionEvent::Type::MemberLeft;
+        e.member = it->second.id; e.leaveReason = SessionLeaveReason::Left;
+        second_.erase(it);
+    } else {
+        second_[seat] = *info;
+        e.type = SessionEvent::Type::MemberJoined; e.member = info->id; e.info = *info;
+    }
+    LOG_INFO("session: seat %d's second local player %s", seat, info ? "joined" : "left");
+    emit(e);
+}
+
+int UdpSession::slotSessionSeat(const SessionMemberId& m, bool& owned) const {
+    const std::string& fp = m.fingerprint;
+    owned = fp.size() >= 2 && fp.compare(fp.size() - 2, 2, "/2") == 0;
+    if (!owned) return fp.empty() ? 0 : seatOf(m);   // "" = the host itself (the flow's MatchLaunch.self convention)
+    const std::string base = fp.substr(0, fp.size() - 2);
+    for (const auto& kv : second_) {
+        const int s = kv.first;
+        const std::string sfp = s == 0 ? self_.id.fingerprint : (peers_.count(s) ? peers_.at(s).info.id.fingerprint : std::string());
+        if (base == sfp || (s == 0 && base.empty())) return s;
+    }
+    return -1;
+}
+
+std::vector<int> UdpSession::matchOwners() const {
+    std::vector<int> o(matchToSession_.size());
+    for (size_t i = 0; i < o.size(); ++i) o[i] = matchOwner_.size() == o.size() ? matchOwner_[i] : (int)i;
+    return o;
+}
+
 void UdpSession::sendSeat(int seat, const std::vector<uint8_t>& msg) { if (t_) t_->sendReliable(seat, msg.data(), msg.size()); }
 void UdpSession::sendAllMembers(const std::vector<uint8_t>& msg) { for (const auto& kv : peers_) sendSeat(kv.first, msg); }
 
@@ -452,6 +503,7 @@ void UdpSession::dropPeer(int seat, SessionLeaveReason why, bool notify) {
     e.type = inMatch ? SessionEvent::Type::PeerDropped : SessionEvent::Type::MemberLeft;
     e.member = id; e.leaveReason = why; e.value = 0;
     if (role_ == Role::Host || inMatch) emit(e);
+    if (role_ == Role::Host) setSecond(seat, nullptr, inMatch);   // its second local player goes with it
     if (inMatch) checkAllLoaded();
 }
 
@@ -465,20 +517,34 @@ void UdpSession::requestStart() {
     // The match seats: the roster's humans in slot order (the launch record's humans); the host is among them.
     matchToSession_.clear(); matchReserved_.clear(); lateJoin_ = false;
     const SessionLobby& r = launchRoster_.slots.empty() ? lobby_ : launchRoster_;
+    std::vector<char> owned;   // per match seat: a second local player (split screen online)
     for (const SessionSlot& s : r.slots) {
-        if (s.kind == SessionSlot::Kind::Reserved) { matchToSession_.push_back(kNoSession); matchReserved_.push_back(1); continue; }   // join in progress
+        if (s.kind == SessionSlot::Kind::Reserved) { matchToSession_.push_back(kNoSession); matchReserved_.push_back(1); owned.push_back(0); continue; }   // join in progress
         if (s.kind != SessionSlot::Kind::Human) continue;
-        const int seat = s.member.fingerprint.empty() ? 0 : seatOf(s.member);   // "" = the host itself (the flow's MatchLaunch.self convention)
-        if (seat >= 0) { matchToSession_.push_back(seat); matchReserved_.push_back(0); }
+        bool second = false;
+        const int seat = slotSessionSeat(s.member, second);
+        if (seat >= 0) { matchToSession_.push_back(seat); matchReserved_.push_back(0); owned.push_back(second ? 1 : 0); }
         else LOG_WARN("session: roster member %s is not in the session - left out of the match", s.member.fingerprint.c_str());
     }
-    if (std::find(matchToSession_.begin(), matchToSession_.end(), 0) == matchToSession_.end()) {
-        matchToSession_.insert(matchToSession_.begin(), 0); matchReserved_.insert(matchReserved_.begin(), 0);
+    bool hostIn = false;
+    for (size_t i = 0; i < matchToSession_.size(); ++i) hostIn = hostIn || (matchToSession_[i] == 0 && !owned[i]);
+    if (!hostIn) {
+        matchToSession_.insert(matchToSession_.begin(), 0); matchReserved_.insert(matchReserved_.begin(), 0); owned.insert(owned.begin(), 0);
     }
-    matchSelf_ = (int)(std::find(matchToSession_.begin(), matchToSession_.end(), 0) - matchToSession_.begin());
+    matchOwner_.assign(matchToSession_.size(), 0); matchOwnedIds_.clear();
+    for (size_t i = 0; i < matchToSession_.size(); ++i) {   // a second local's owner: the match seat of the peer it rides on
+        matchOwner_[i] = (int)i;
+        if (!owned[i]) continue;
+        for (size_t j = 0; j < matchToSession_.size(); ++j)
+            if (!owned[j] && matchToSession_[j] == matchToSession_[i]) { matchOwner_[i] = (int)j; break; }
+        if (matchOwner_[i] == (int)i) LOG_WARN("session: match seat %zu (a second local player) has no owner seat in the launch", i);
+    }
+    matchSelf_ = -1;
+    for (size_t i = 0; i < matchToSession_.size() && matchSelf_ < 0; ++i) if (matchToSession_[i] == 0 && matchOwner_[i] == (int)i) matchSelf_ = (int)i;
     view_ = std::make_unique<MatchView>(*this);
     W w(kLaunch); w.str(launchUrl_); w.u32(launchSeed_); w.lobby(r);
     w.u8((int)matchToSession_.size()); for (int s : matchToSession_) w.u8(s);
+    w.u8((int)matchOwner_.size()); for (int o : matchOwner_) w.u8(o);   // split screen: each match seat's owner
     sendAllMembers(w.b);
     for (auto& kv : peers_) kv.second.loaded = false;
     loadedSelf_ = false; loadStart_ = now_;
@@ -591,6 +657,12 @@ void UdpSession::matchFailed(int status, int64_t tick) {
 const SessionMemberId& UdpSession::matchMember(int matchSeat) const {
     static const SessionMemberId none;
     if (matchSeat < 0 || (size_t)matchSeat >= matchToSession_.size()) return none;
+    if (matchOwner_.size() == matchToSession_.size() && matchOwner_[(size_t)matchSeat] != matchSeat) {   // a second local player
+        SessionMemberId& id = matchOwnedIds_[matchSeat];
+        id = matchMember(matchOwner_[(size_t)matchSeat]);
+        id.fingerprint = frontend::ISession::secondLocalId(id.fingerprint);
+        return id;
+    }
     const int s = matchToSession_[(size_t)matchSeat];
     if (t_ && s == t_->self()) return self_.id;
     auto it = peers_.find(s);
@@ -600,6 +672,11 @@ const SessionMemberId& UdpSession::matchMember(int matchSeat) const {
 // ---- receive ----
 std::string UdpSession::matchMemberName(int matchSeat) const {
     if (matchSeat < 0 || (size_t)matchSeat >= matchToSession_.size()) return "";
+    if (matchOwner_.size() == matchToSession_.size() && matchOwner_[(size_t)matchSeat] != matchSeat) {   // a second local: the roster's name
+        const SessionMemberId& id = matchMember(matchSeat);
+        for (const SessionMemberInfo& m : launchRoster_.members) if (m.id == id) return m.displayName;
+        return "Player 2";
+    }
     const int s = matchToSession_[(size_t)matchSeat];
     if (t_ && s == t_->self()) return self_.displayName;
     auto it = peers_.find(s);
@@ -756,8 +833,16 @@ void UdpSession::handleSeated(int seat, const std::vector<uint8_t>& d) {
         matchToSession_.clear();
         for (int k = r.u8(); k > 0 && r.ok; --k) matchToSession_.push_back(r.u8());
         if (!r.ok) break;
-        auto me = std::find(matchToSession_.begin(), matchToSession_.end(), t_ ? t_->self() : -1);
-        matchSelf_ = me == matchToSession_.end() ? -1 : (int)(me - matchToSession_.begin());
+        matchOwner_.clear(); matchOwnedIds_.clear();
+        {   // split screen: the owners (absent from older hosts)
+            R o = r;
+            std::vector<int> ow;
+            for (int k = o.u8(); k > 0 && o.ok; --k) ow.push_back(o.u8());
+            if (o.ok && ow.size() == matchToSession_.size()) matchOwner_ = ow;
+        }
+        matchSelf_ = -1;
+        for (size_t i = 0; i < matchToSession_.size() && matchSelf_ < 0; ++i)   // this peer's own seat (not its second local's)
+            if (t_ && matchToSession_[i] == t_->self() && (matchOwner_.empty() || matchOwner_[i] == (int)i)) matchSelf_ = (int)i;
         matchReserved_.clear(); lateJoin_ = false;
         for (int ms : matchToSession_) matchReserved_.push_back(ms == kNoSession ? 1 : 0);
         if (matchSelf_ < 0) { LOG_WARN("session: the launch roster does not include this member"); break; }
@@ -765,6 +850,17 @@ void UdpSession::handleSeated(int seat, const std::vector<uint8_t>& d) {
         SessionEvent e; e.type = SessionEvent::Type::CountdownStarted;
         e.launchUrl = launchUrl_; e.seed = launchSeed_; e.lobby = launchRoster_;
         emit(e);
+        break;
+    }
+    case kSecondLocal: {   // the host: a member's second local player joins (info) / leaves
+        if (role_ != Role::Host || !peers_.count(seat)) break;
+        const int present = r.u8();
+        if (!r.ok) break;
+        if (!present) { setSecond(seat, nullptr, matchReady()); break; }
+        SessionMemberInfo info = r.info();
+        if (!r.ok) break;
+        info.id.fingerprint = frontend::ISession::secondLocalId(peers_[seat].info.id.fingerprint);   // derived from the joined id
+        setSecond(seat, &info, false);
         break;
     }
     case kLoaded: {
@@ -801,6 +897,7 @@ void UdpSession::handleSeated(int seat, const std::vector<uint8_t>& d) {
         w.u8((int)matchToSession_.size());
         for (size_t i = 0; i < matchToSession_.size(); ++i) { w.u8(matchToSession_[i]); w.u8(matchReserved_[i]); }   // live seat + Reserved at launch
         w.u8(ms);
+        { const std::vector<int> ow = matchOwners(); w.u8((int)ow.size()); for (int o : ow) w.u8(o); }   // split screen: the owners
         sendSeat(seat, w.b);
         peers_[seat].loaded = false; peers_[seat].lateLoadSince = now_;
         LOG_INFO("session: late join - seat %d takes match seat %d (match tick %u); its load window %.0f s", seat, ms, matchTick_, kLateLoadS);
@@ -815,6 +912,13 @@ void UdpSession::handleSeated(int seat, const std::vector<uint8_t>& d) {
         for (int k = r.u8(); k > 0 && r.ok; --k) { matchToSession_.push_back(r.u8()); matchReserved_.push_back((char)r.u8()); }
         const int mine = r.u8();
         if (!r.ok || mine < 0 || (size_t)mine >= matchToSession_.size()) break;
+        matchOwner_.clear(); matchOwnedIds_.clear();
+        {   // split screen: the owners (absent from older hosts)
+            R o = r;
+            std::vector<int> ow;
+            for (int k = o.u8(); k > 0 && o.ok; --k) ow.push_back(o.u8());
+            if (o.ok && ow.size() == matchToSession_.size()) matchOwner_ = ow;
+        }
         matchToSession_[(size_t)mine] = t_ ? t_->self() : kNoSession;
         matchSelf_ = mine; lateJoin_ = true; matchRunning_ = false; catchUpDone_ = false; catchUpSentAt_ = -1.0;
         view_ = std::make_unique<MatchView>(*this);
@@ -895,9 +999,11 @@ void UdpSession::pump() {
             continue;
         }
         if (view_) {   // a lockstep packet: to the match view in match seats
-            auto m = std::find(matchToSession_.begin(), matchToSession_.end(), p.from);
-            if (m == matchToSession_.end()) continue;
-            p.from = (int)(m - matchToSession_.begin());
+            int ms = -1;   // the peer's own match seat (a second local player's shares its session seat but sends nothing itself)
+            for (size_t i = 0; i < matchToSession_.size() && ms < 0; ++i)
+                if (matchToSession_[i] == p.from && (matchOwner_.size() != matchToSession_.size() || matchOwner_[i] == (int)i)) ms = (int)i;
+            if (ms < 0) continue;
+            p.from = ms;
             view_->inbox.push_back(std::move(p));
         }
     }

@@ -18,6 +18,7 @@
 //                             mic = the default microphone, open while the match runs (only with the user's OK). Headless runs have
 //                             no audio device: frames are received, buffered and decoded, the stats logged at the end.
 #include "core/Application.h"
+#include "platform/Window.h"
 #include "core/Log.h"
 #include "game/World.h"
 #include "net/Lockstep.h"
@@ -184,11 +185,23 @@ void Application::runNetMatch() {
         cfg.keepHistory = self == 0;
         cfg.lateJoin = std::getenv("WFC_NET_LATEJOIN") != nullptr;
     }
+    // Split screen online (harness): WFC_NET_OWNER=<owner of seat 0>,<of seat 1>,... e.g. 0,1,1 = seat 2 is seat 1's second local player
+    // (no transport address of its own); the owner feeds it with the scripted seat-2 input (WFC_SEAT2BOT=1).
+    if (const char* ow = std::getenv("WFC_NET_OWNER")) {
+        for (const char* q = ow; *q;) {
+            cfg.owner.push_back(std::atoi(q));
+            while (*q && *q != ',') ++q;
+            if (*q == ',') ++q;
+        }
+        cfg.owner.resize((size_t)seats, -1);
+        for (int s = 0; s < seats; ++s) if (cfg.owner[(size_t)s] < 0) cfg.owner[(size_t)s] = s;
+    }
     cfg.seats = seats; cfg.self = self; cfg.delay = (int)env("WFC_NET_DELAY", 0); cfg.hashEvery = (int)env("WFC_NET_HASH_EVERY", 60);   // delay 0 = auto from the RTT
     cfg.peerTimeoutS = (double)env("WFC_NET_TIMEOUT_S", 10); cfg.launchHash = lh;
     if (const char* lp = std::getenv("WFC_NET_LOG")) cfg.logPath = lp;
     net::Lockstep ls(*t, cfg);
     if (cfg.keepHistory) ls.setJoinReady([&ls](int seat) { ls.activateSeat(seat, seat % 2); });   // the harness: the launch's team
+    if (ls.ownedSeat() >= 0) world_.addLocalSeat(1, game::CharacterSelection{}, true, seatMp[(size_t)ls.ownedSeat()]);   // pad 2 -> its seat
     const long desyncAt = env("WFC_NET_DESYNC_AT", -1);
     std::unique_ptr<net::VoiceSession> voice;
     if (const char* vm = std::getenv("WFC_NET_VOICE")) {
@@ -259,6 +272,7 @@ void Application::runNetMatch() {
             platform::InputFrame input;
             world_.playerBotInput(input, step);
             world_.handleInput(input, step);
+            if (ls.ownedSeat() >= 0) ls.submitOwned(nextLocal, world_.encodeSeat2Command());   // before submitLocal (one send carries both)
             ls.submitLocal(nextLocal, world_.encodeLocalCommand());
             ++nextLocal;
         }
@@ -480,8 +494,16 @@ void Application::startNetDriver(const std::string& launchUrl, uint32_t seed, in
         LOG_INFO("online: seat %d (%s) wakes at tick %u on team %d%s", seat, r.name.c_str(), atTick, team, local ? " - this peer" : "");
         queueLateSeat(world_, seat, r, atTick);
     };
+    c.seatOwner = udpSession_->matchOwners();   // split screen online: the second local players' owners
+    c.encodeOwned = [this] { return world_.encodeSeat2Command(); };
     netDriver_ = std::make_unique<net::NetMatchDriver>(world_, *udpSession_->matchTransport(), audio_, c);
     LOG_INFO("online: the lockstep driver runs the match (seat %d of %d, launch hash %016llx)", localSeat, seats, (unsigned long long)lh);
+    for (int s = 0; s < (int)c.seatOwner.size(); ++s)   // this peer's second local player: pad 2 feeds its match seat
+        if (s != localSeat && c.seatOwner[(size_t)s] == localSeat) {
+            const int pad = window_ ? window_->seatPad(1) : -1;
+            const int mp = world_.addLocalSeat(pad >= 0 ? pad : 1, game::CharacterSelection{}, true, seatPlayerOf(world_, s));
+            LOG_INFO("online: seat %d is this peer's second local player (pad %d, match player %d)", s, pad, mp);
+        }
 }
 
 // The Audio rows -> the voice lane: the voice / proximity volumes, who hears this player (TeamRadio: the team by radio; AllRadio:
@@ -657,6 +679,12 @@ void Application::runUdpSessionMatch() {
             }
             s.joinRunningMatch();
         }
+        if (std::getenv("WFC_UDPSECOND")) {   // split screen online (harness): this member brings a second local player
+            if (!pump(30.0, [&] { return has(T::Joined) || has(T::JoinFailed); }) || !has(T::Joined)) { LOG_ERROR("UDPMATCH: not joined"); exitCode_ = 4; return; }
+            frontend::SessionMemberInfo p2; p2.displayName = "Player 2"; p2.hasCharacter = true;
+            s.setSecondLocal(&p2);
+            LOG_INFO("UDPMATCH: a second local player joins with this member");
+        }
         if (!pump(60.0, [&] { return has(T::CountdownStarted) || has(T::JoinFailed) || has(T::HostLost); }) || !has(T::CountdownStarted)) {
             if (has(T::JoinFailed)) for (const SessionEvent& e : ev) if (e.type == T::JoinFailed) LOG_INFO("UDPMATCH: JoinFailed reason %d", (int)e.joinFailure);
             LOG_ERROR("UDPMATCH: no launch from the host (joined %d)", has(T::Joined) ? 1 : 0); exitCode_ = 4; return;
@@ -718,6 +746,14 @@ void Application::runUdpSessionMatch() {
         queueLateSeat(world_, seat, r, atTick);
         if (local) pickAfterWake = true;   // the woken joiner goes through Choose Character (an event, as in the game)
     };
+    c.seatOwner = s.matchOwners();   // split screen online: a second local player rides its owner's packets
+    c.encodeOwned = [this] { return world_.encodeSeat2Command(); };
+    int ownedHere = -1;
+    for (int i = 0; i < (int)c.seatOwner.size(); ++i)
+        if (i != self && c.seatOwner[(size_t)i] == self) ownedHere = world_.addLocalSeat(1, cs, true, seatPlayerOf(world_, i));
+    for (int i = 0; i < (int)c.seatOwner.size(); ++i)
+        if (c.seatOwner[(size_t)i] != i) LOG_INFO("UDPMATCH seat %d (%s) is seat %d's second local player%s", i, s.matchMemberName(i).c_str(), c.seatOwner[(size_t)i],
+                                                 ownedHere >= 0 && c.seatOwner[(size_t)i] == self ? " - this peer" : "");
     net::NetMatchDriver drv(world_, *s.matchTransport(), nullptr, c);
     // WFC_UDPPICK_EARLY=1 (a late joiner): pick at once, while still catching up, as the frontend does (pt9); the driver holds it
     const bool pickEarly = std::getenv("WFC_UDPPICK_EARLY") != nullptr;
@@ -732,6 +768,7 @@ void Application::runUdpSessionMatch() {
         const auto t = std::chrono::steady_clock::now();
         const double dt = std::chrono::duration<double>(t - last).count();
         last = t;
+        if (ownedHere >= 0) { platform::InputFrame none; world_.handleInput(none, (float)dt); }   // seat 2's controller (WFC_SEAT2BOT input)
         steps += drv.frame(dt);
         if (pickAfterWake && pickEarly) pickAfterWake = false;
         if (pickAfterWake && !drv.catchingUp()) { pickAfterWake = false; drv.chooseCharacter(cs); LOG_INFO("UDPMATCH: the joiner picks its character"); }

@@ -11,8 +11,22 @@
 
 namespace game {
 
-int World::addLocalSeat(int pad, const CharacterSelection& sel, bool selected) {
+int World::addLocalSeat(int pad, const CharacterSelection& sel, bool selected, int matchSeat) {
     if (seat2_ >= 0 || !matchActive_) return seat2_;
+    if (matchSeat >= 0) {   // online: the launch made the match seat a Remote participant; this peer feeds it from pad 2
+        if ((size_t)matchSeat >= match_.players().size() || match_.players()[(size_t)matchSeat].kind != ParticipantKind::Remote) {
+            LOG_WARN("local seat 2: match seat %d is not a Remote participant - not bound", matchSeat);
+            return -1;
+        }
+        (void)sel; (void)selected;   // the launch record carries its selection (every peer applies it)
+        seat2_ = matchSeat;
+        seat2Pad_ = pad;
+        seat2Ctl_ = PlayerController{};
+        seat2Ctl_.setWireSeat(true);
+        seat2In_ = platform::InputFrame{};
+        LOG_INFO("local seat 2: pad %d bound to match player p%d (online: its commands go through the lockstep)", pad, seat2_);
+        return seat2_;
+    }
     RemoteSeat r;
     r.name = "Player 2";
     const int me = localPlayer_;
@@ -75,8 +89,16 @@ void World::seat2HandleInput(float dt) {
 }
 
 // Per step (tickPrefix, before the queued remote commands apply): seat 2's command for the step about to run.
+RemoteCommand World::encodeSeat2Command() {
+    Character* pc = seat2_ >= 0 ? participantPawnMutable(seat2_) : nullptr;
+    if (!pc) { RemoteCommand c; c.tick = (uint32_t)(simTick_ + 1); return c; }   // no pawn (yet): an empty command, as encodeLocalCommand's dead path
+    const bool dead = !match_.players()[(size_t)seat2_].alive;
+    return encodeSeatCommand(seat2Ctl_, pc, seat2_, dead);
+}
+
 void World::seat2QueueCommand() {
     if (seat2_ < 0) return;
+    if (onlineSeats_) return;   // online: the driver submits encodeSeat2Command() and every peer applies it from the lockstep
     Character* pc = participantPawnMutable(seat2_);
     if (!pc) return;
     const bool dead = !match_.players()[(size_t)seat2_].alive;
