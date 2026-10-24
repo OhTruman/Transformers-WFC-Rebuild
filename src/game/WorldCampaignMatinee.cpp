@@ -3,6 +3,7 @@
 // collision, the renderer's actor transform, pawns standing on them carried along: the A1 intro lift), and the director (camera cuts to
 // the CameraActor groups, FOVAngle, the fade) into the local view + Rendering's CinematicView. See Campaign.h.
 #include "game/World.h"
+#include "core/DataRoots.h"
 #include "assets/Json.h"
 #include "assets/SkinnedModel.h"
 #include "game/GpuSkin.h"
@@ -437,7 +438,7 @@ void World::cpLoadSkeletal() {
         if (!k.mesh.empty()) cpSkel_[shortName(r["actor"].asString())] = k;
     }
     // (300 fps: a first-draw load stalled D1 4.5 s in play) every distinct mesh + anim set loads here, under the loading screen
-    const std::string root = "F:/Transformers Rebuild/ExtractedAssets/";
+    const std::string root = core::extractedRoot();
     std::map<std::string, std::shared_ptr<assets::SkinnedModel>> models;
     size_t failed = 0;
     for (auto& kv : cpSkel_) {
@@ -462,7 +463,7 @@ void World::cpLoadSkeletal() {
 // Draw the active ones: the clip sampled at its matinee time. GPU-skinned (D1 Crash runs 244 at once: CPU skinning them every
 // frame cost ~45 ms); the palette is rebuilt only when the clip / time changes. The CPU skin draws when the renderer cannot.
 void World::cpDrawSkeletal(render::IRenderer& r) const {
-    const std::string root = "F:/Transformers Rebuild/ExtractedAssets/";
+    const std::string root = core::extractedRoot();
     for (auto& kv : cpSkel_) {
         CampaignSkel& k = kv.second;
         if (!k.active || k.clip.empty()) continue;
@@ -535,7 +536,7 @@ void World::cpLoadPawnGroups() {
         for (const auto& kv : cpPawnGroups_) {
             if (std::find(kv.second.chassis.begin(), kv.second.chassis.end(), ch) == kv.second.chassis.end()) continue;
             for (const auto& cf : kv.second.clipFile)
-                if (model.clipByName(cf.first) < 0) { assets::loadAnimationsByName("F:/Transformers Rebuild/ExtractedAssets/" + cf.second, model); ++preloaded; }
+                if (model.clipByName(cf.first) < 0) { assets::loadAnimationsByName(core::extractedRoot() + cf.second, model); ++preloaded; }
         }
     }
     if (preloaded) LOG_INFO("campaign: %d matinee pawn clip files preloaded", preloaded);
@@ -554,7 +555,7 @@ void World::cpPlayPawnClip(CampaignState::Interp& in, const CampaignPawnGroup& g
         int ci = model.clipByName(clip);
         if (ci < 0) {
             auto f = g.clipFile.find(clip);
-            if (f != g.clipFile.end()) assets::loadAnimationsByName("F:/Transformers Rebuild/ExtractedAssets/" + f->second, model);
+            if (f != g.clipFile.end()) assets::loadAnimationsByName(core::extractedRoot() + f->second, model);
             ci = model.clipByName(clip);
             LOG_INFO("campaign: matinee clip %s on %s (p%zu): %s", clip.c_str(), ch.c_str(), q, ci >= 0 ? "loaded" : "NOT FOUND");
             if (ci < 0) continue;

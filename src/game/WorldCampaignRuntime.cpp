@@ -2,6 +2,7 @@
 // the spawned AI's alert-to-player awareness, and the in-map character pick (the human takes a trio member, the squad is the rest).
 // See Campaign.h.
 #include "game/World.h"
+#include "core/DataRoots.h"
 #include "assets/Json.h"
 #include "core/Log.h"
 
@@ -34,10 +35,10 @@ std::string bodyForAicd(const std::string& archetype, std::string& note) {
     std::string id = afterDot(archetype);
     const std::string pkg = archetype.substr(0, archetype.find('.'));
     if (id.size() > 5 && id.compare(id.size() - 5, 5, "_AICD") == 0) id.resize(id.size() - 5);
-    const std::string cmp = "F:/Transformers Rebuild/AssetTools/out/campaign_characters/";
+    const std::string cmp = core::assetToolsOut() + "campaign_characters/";
     if (fileExists(cmp + id + "/character.json")) return "CMP_" + id;   // the campaign template
     if (fileExists(cmp + id + "__" + pkg + "/character.json")) return "CMP_" + id + "__" + pkg;   // a name in two packages: id__<package>
-    const std::string root = "F:/Transformers Rebuild/AssetTools/out/escalation_characters/";
+    const std::string root = core::assetToolsOut() + "escalation_characters/";
     if (fileExists(root + id + "/character.json")) return "ESC_" + id;
     for (const auto& sw : {std::make_pair(std::string("_Autobot"), std::string("_Decepticon")), std::make_pair(std::string("_Decepticon"), std::string("_Autobot"))}) {
         const size_t k = id.find(sw.first);
@@ -779,7 +780,7 @@ std::string tailS(const std::string& s) { const size_t k = s.find_last_of('.'); 
 void World::cpLoadSentryDefs() {
     cp_.sentryFactories.clear(); cp_.sentryDefs.clear(); cp_.sentries.clear();
     assets::Json j;
-    if (!readJsonFile("F:/Transformers Rebuild/AssetTools/out/campaign_characters/spawnables.json", j)) return;
+    if (!readJsonFile(core::assetToolsOut() + "campaign_characters/spawnables.json", j)) return;
     const assets::Json& ss = j["sentries"];
     for (size_t i = 0; i < ss.size(); ++i) {
         const assets::Json& v = ss[i]["values"];
@@ -952,7 +953,7 @@ namespace game {
 void World::cpLoadMineDefs() {
     cp_.mineFactories.clear(); cp_.mines.clear();
     assets::Json j;
-    if (!readJsonFile("F:/Transformers Rebuild/AssetTools/out/campaign_characters/spawnables.json", j)) return;
+    if (!readJsonFile(core::assetToolsOut() + "campaign_characters/spawnables.json", j)) return;
     const assets::Json& r = j["roller_mine"];
     const assets::Json& cd = r["class_defaults"];
     const assets::Json& fs = r["factories"];

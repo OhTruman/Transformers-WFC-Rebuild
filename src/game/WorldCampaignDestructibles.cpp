@@ -3,6 +3,7 @@
 // batteries, out/campaign_characters/destructibles/<blueprint>.json) and the placed ones (<chapter>/destructibles.json when delivered).
 // Damage (hitscan + radius), timers, notification links, Kismet SeqEvent_HmDestructibleStateNotification, the state meshes drawn.
 #include "game/World.h"
+#include "core/DataRoots.h"
 #include "assets/Gltf.h"
 #include "assets/Json.h"
 #include "core/Log.h"
@@ -88,7 +89,7 @@ CampaignDestructible::State* CampaignDestructible::Piece::state() {
 
 int World::cpSpawnDestructible(const std::string& blueprint, const std::string& name, const core::Vec3& at, float yawDeg) {
     assets::Json bp;
-    const std::string root = "F:/Transformers Rebuild/AssetTools/out/campaign_characters/destructibles/";
+    const std::string root = core::assetToolsOut() + "campaign_characters/destructibles/";
     if (!readJ2(root + tail(blueprint) + ".json", bp)) { LOG_WARN("campaign: no destructible blueprint %s", blueprint.c_str()); return -1; }
     CampaignDestructible d;
     d.name = name; d.pos = at; d.yawDeg = yawDeg;
@@ -113,7 +114,7 @@ void World::cpDesBounds(int i) {
         auto it = cpDesMeshes_.find(s->mesh);
         if (it == cpDesMeshes_.end()) {
             CampaignMeshAsset a;
-            const std::string contentRoot = "F:/Transformers Rebuild/ExtractedAssets/";
+            const std::string contentRoot = core::extractedRoot();
             a.ok = assets::loadGlb(contentRoot + s->mesh, a.mesh) || assets::loadGlb(contentRoot + "VerticalSlice/../" + s->mesh, a.mesh);
             if (a.ok && renderer_) a.handle = renderer_->uploadMesh(a.mesh);
             it = cpDesMeshes_.emplace(s->mesh, std::move(a)).first;
