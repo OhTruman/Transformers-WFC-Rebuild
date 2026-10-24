@@ -1,0 +1,151 @@
+--- a/tools/package/build_slim.py	2026-10-24 15:52:28.196217800 -0500
++++ b/tools/package/build_slim.py	2026-10-24 15:52:36.728236600 -0500
+@@ -33,7 +33,7 @@
+ package to (no file missing, none extra). Run outside any PERF_HOLD (IO + CPU heavy). Verify afterwards with
+ tools/package/verify_slim.ps1 -Strict.
+ """
+-import csv, json, os, shutil, sys, time
++import csv, json, os, re, shutil, sys, time
+ from concurrent.futures import ThreadPoolExecutor
+ 
+ ROOT = 'F:/Transformers Rebuild'
+@@ -56,7 +56,7 @@
+ RENDER_EXTRA = ['materials_pbr.json']
+ # ... and shipped when the map has one (newer than slim_files.tsv; the UI dirs have none): verify_slim 2026-10-13 found the
+ # game opening every MP map's fog_volumes.json, missing from the package
+-RENDER_IF_PRESENT = ['fog_volumes.json', 'render_index_extra.json', 'lens_flares.json'] +     ['tex/FluidRed_Cubemap_f%d.png' % k for k in range(6)]   # (verify_slim 48e42af6: every map opens the fluid cubemap's faces)   # + lens flares (verify on d5bb6863: Gorge / Debris read it)
++RENDER_IF_PRESENT = ['fog_volumes.json', 'render_index_extra.json', 'lens_flares.json', 'cull_distance.json'] +     ['tex/FluidRed_Cubemap_f%d.png' % k for k in range(6)]   # (verify_slim 48e42af6: every map opens the fluid cubemap's faces)   # + lens flares (verify on d5bb6863: Gorge / Debris read it)
+ #   # + the Escalation maps' weapon factory visuals (7f218986)
+ # AssetTools map manifests newer than slim_files.tsv, shipped into every packaged manifests/maps/<map>/ that has them in AssetTools:
+ # the Escalation nav (WorldSurvival.cpp svManifest: the original NavigationCell mesh + its generator gating; without them a packaged
+@@ -135,8 +135,32 @@
+         for r in csv.DictReader(f, delimiter='\t'):
+             xpr_dest[r['source']] = r['dest_xpr']
+     rows, tsv_bin, drop, tsv_hd = [], [], 0, set()
++    # (verify 277d6e33, Remnant / Broken Hope) a render lightmap PNG dropped as a png_dds_twin is kept when the texture index has no
++    # block for it and the map's render data names it: a lightmap only the rebuild made has no original DDS, the game reads the PNG
++    tex_index = set()
++    tfp = os.path.join(ROOT, 'Rebuild/work/render/texture_formats.json')
++    if os.path.isfile(tfp):
++        tex_index = {k.lower() for k in json.load(open(tfp, encoding='utf-8')).get('textures', {})}
++    map_lm_refs = {}
++    def lm_named(m, stem):
++        if m not in map_lm_refs:
++            txt = ''
++            for fn in ('lighting.json', 'render_index.json', 'materials_glsl.json'):
++                p = os.path.join(ROOT, 'Rebuild/work/render', m, fn)
++                if os.path.isfile(p):
++                    txt += open(p, encoding='utf-8', errors='replace').read()
++            map_lm_refs[m] = {x.lower() for x in re.findall(r'LightMapTexture2D_\d+', txt)}
++        return stem.lower() in map_lm_refs[m]
++    kept_twins = 0
+     with open(TSV, encoding='utf-8') as f:
+         for r in csv.DictReader(f, delimiter='\t'):
++            src = r['source']
++            if (r['action'] == 'drop' and 'png_dds_twin' in r['reason'] and src.startswith('Rebuild/work/render/') and '/lightmaps/' in src
++                    and os.path.isfile(os.path.join(ROOT, src))):
++                m, rest = src[len('Rebuild/work/render/'):].split('/', 1)
++                if ('verticalslice/maps/%s/%s' % (m, rest)).lower() not in tex_index and lm_named(m, os.path.splitext(os.path.basename(rest))[0]):
++                    rows.append(dict(r, action='keep', reason='lightmap without an original block')); kept_twins += 1
++                    continue
+             if r['action'] == 'drop':
+                 drop += 1
+             elif r['dest'].startswith(HD_DEST + '/'):
+@@ -205,8 +229,17 @@
+                 rows.append(dict(dest=dst, source=src, bytes=str(os.path.getsize(os.path.join(ROOT, src))), action='keep', reason='manifest extra'))
+                 have_dest.add(dst)
+                 manifest_extra.append(dst[len(MANIFEST_MAPS):])
++    mtop = os.path.join(ROOT, 'AssetTools/manifests/maps')
++    for m in sorted(os.listdir(mtop)) if os.path.isdir(mtop) else []:
++        src = 'AssetTools/manifests/maps/%s/hazard_volumes.json' % m   # (verify 277d6e33: D1, Horizon, Pulse had none)
++        dst = 'Transformers Rebuild/' + src
++        if dst not in have_dest and os.path.isfile(os.path.join(ROOT, src)):
++            rows.append(dict(dest=dst, source=src, bytes=str(os.path.getsize(os.path.join(ROOT, src))), action='keep', reason='manifest extra'))
++            have_dest.add(dst)
++            manifest_extra.append(m + '/hazard_volumes.json')
+     if manifest_extra:
+         print('manifest extras: %d (%s)' % (len(manifest_extra), ', '.join(manifest_extra)))
++    print('render lightmaps without an original block, kept: %d' % kept_twins)
+     at_extra = 0
+     for rel in ASSETTOOLS_IF_PRESENT:
+         if 'Transformers Rebuild/' + rel not in have_dest and os.path.isfile(os.path.join(ROOT, rel)):
+@@ -249,10 +282,12 @@
+         camp_chapters.append(ch + (' (chapter lightmaps)' if chapter_lm else ''))
+         for dp, _, fs in os.walk(cdir):
+             rel = os.path.relpath(dp, cdir).replace(os.sep, '/')
+-            if chapter_lm and rel.count('/') == 1 and rel.endswith('/lightmaps'):   # <unit>/lightmaps: the duplicates
+-                camp_skipped_lm += len(fs)
+-                continue
++            dup_lm = chapter_lm and rel.count('/') == 1 and rel.endswith('/lightmaps')   # <unit>/lightmaps: the duplicates
+             for f in fs:
++                # (verify 277d6e33, D1) only the ones the chapter store has: 1-44 per chapter exist in their unit alone
++                if dup_lm and os.path.isfile(os.path.join(cdir, 'lightmaps', f)):
++                    camp_skipped_lm += 1
++                    continue
+                 src = os.path.relpath(os.path.join(dp, f), ROOT).replace(os.sep, '/')
+                 dst = 'Transformers Rebuild/' + src
+                 if dst in have_dest:
+@@ -311,10 +346,26 @@
+                 continue
+             if kind == 'maps':
+                 dlc_maps.append(m)
++            shared = kind == 'render' and m.startswith('_')
+             for dp, _, fs in os.walk(os.path.join(top, m)):
+                 for f in fs:
+                     src = os.path.relpath(os.path.join(dp, f), ROOT).replace(os.sep, '/')
+-                    dlc_add(kind, src, dest + '/' + src[len(tree) + 1:])
++                    dlc_add(kind, src, 'Transformers Rebuild/' + src if shared else dest + '/' + src[len(tree) + 1:])
++    dlc_man = 0
++    for m in dlc_maps:
++        srcs = []
++        mdir = os.path.join(ROOT, 'AssetTools/manifests/maps', m)
++        if os.path.isdir(mdir):
++            srcs += ['AssetTools/manifests/maps/%s/%s' % (m, f) for f in sorted(os.listdir(mdir)) if os.path.isfile(os.path.join(mdir, f))]
++        ndir = os.path.join(ROOT, 'AssetTools/manifests/next_map')
++        if os.path.isdir(ndir):
++            srcs += ['AssetTools/manifests/next_map/' + f for f in sorted(os.listdir(ndir)) if f.startswith(m + '_') and f.endswith('.json')]
++        for src in srcs:
++            dst = 'Transformers Rebuild/' + src
++            if dst not in have_dest:
++                rows.append(dict(dest=dst, source=src, bytes=str(os.path.getsize(os.path.join(ROOT, src))), action='keep', reason='dlc manifest'))
++                have_dest.add(dst); dlc_man += 1
++    print('dlc manifests: %d files (manifests/maps/<map>/ + next_map/<map>_*.json)' % dlc_man)
+     print('dlc: maps %s; content %d files %.3f GB, map data %d files %.2f GB, render %d files %.2f GB'
+           % (', '.join(dlc_maps) or 'none', dlc['content'][0], dlc['content'][1] / 1e9, dlc['maps'][0], dlc['maps'][1] / 1e9,
+              dlc['render'][0], dlc['render'][1] / 1e9))
+--- a/src/game/ChassisDef.cpp	2026-10-24 15:52:28.280004700 -0500
++++ b/src/game/ChassisDef.cpp	2026-10-24 15:52:36.763357200 -0500
+@@ -206,8 +206,9 @@
+     if (arm.isObject()) {
+         d.armGltf = contentPath(arm["Mesh"].asString(), ".gltf");
+         d.armAnimGltf = contentPath(arm["Animations"].asString(), ".anim.gltf");
+-        if (!fileExists(extRoot + d.armGltf)) d.armGltf.clear();
+-        if (!fileExists(extRoot + d.armAnimGltf)) d.armAnimGltf.clear();
++        // (an empty path is no file: probing it opened the asset folder itself - verify 277d6e33's "ExtractedAssets\" opens)
++        if (!d.armGltf.empty() && !fileExists(extRoot + d.armGltf)) d.armGltf.clear();
++        if (!d.armAnimGltf.empty() && !fileExists(extRoot + d.armAnimGltf)) d.armAnimGltf.clear();
+     }
+     socketFrom(c["robot"]["sockets"], "WeaponSocket_Primary", d.weaponPrimary);
+     socketFrom(c["robot"]["sockets"], "WeaponSocket_Secondary", d.weaponSecondary);
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-24 15:52:28.359778300 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-24 15:52:36.799481000 -0500
+@@ -1260,6 +1260,19 @@
+     k = low.rfind(kRender);
+     const size_t sl = dataDir_.find_last_of("/\\");
+     if (k != std::string::npos && sl != std::string::npos) return dataDir_.substr(0, sl + 1) + path.substr(k + kRender.size());
++    // [Systems, verify 277d6e33] the DLC maps' render data names AssetTools' DLC trees by their build-machine path; a package ships
++    // them in the render root (dlc_render/<map>/ -> <render data>/<map>/) and the content root. The relocated file is used when it
++    // exists (a package), else the path as written (the development tree, where only AssetTools has the DLC files).
++    static const std::string kDlcRender = "/assettools/out/dlc_render/", kDlcContent = "/assettools/out/dlc_content/content/";
++    std::string moved;
++    if ((k = low.rfind(kDlcRender)) != std::string::npos && sl != std::string::npos)
++        moved = dataDir_.substr(0, sl + 1) + path.substr(k + kDlcRender.size());
++    else if ((k = low.rfind(kDlcContent)) != std::string::npos)
++        moved = contentRoot() + path.substr(k + kDlcContent.size());
++    if (!moved.empty()) {
++        std::error_code ec;
++        if (std::filesystem::exists(platform::longPath(moved), ec)) return moved;
++    }
+     // (campaign units: AssetTools' .../campaign_render/<chapter>/<unit>[_m]/<file> -> <render root>/<unit>/<file> - the
+     // sublevel's own textures, e.g. its cubemap faces, written before the per-unit layout dropped the _m)
+     static const std::string kCampaign = "/campaign_render/";
