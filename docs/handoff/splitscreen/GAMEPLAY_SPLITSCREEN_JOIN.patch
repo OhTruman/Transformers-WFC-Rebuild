@@ -1,0 +1,55 @@
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 0e18d765..9aa0cb1a 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -4797,7 +4797,13 @@ void World::draw(render::IRenderer& r) const {
+         if (owner) r.setDrawOwner(0);
+     }
+     if (drawProf) dpActors += profNowMs() - dp0;
+-    if (!localPlayerDead()) { sysprof::Scope sp(sysprof::DrawPlayer); player_.draw(r); }
++    if (!localPlayerDead()) {
++        sysprof::Scope sp(sysprof::DrawPlayer);
++        const bool split = seat2_ >= 0;   // split screen: every pawn draws with its absolute owner (the views pick theirs)
++        if (split) r.setDrawOwner(100 + localPlayer_);
++        player_.draw(r);
++        if (split) r.setDrawOwner(0);
++    }
+     drawCorpses(r);   // [Gameplay] death bodies (their pawn's draw owner and colours)
+     // Projectiles: the authored FlightEffect is the body (a renderer particle system, projectileFxStart); the thrown grenades
+     // also draw their class-default static mesh. The box marker remains only when nothing authored can be shown (renderer
+diff --git a/src/game/WorldLocalSeat.cpp b/src/game/WorldLocalSeat.cpp
+index 26b26288..622bf793 100644
+--- a/src/game/WorldLocalSeat.cpp
++++ b/src/game/WorldLocalSeat.cpp
+@@ -19,12 +19,29 @@ int World::addLocalSeat(int pad, const CharacterSelection& sel, bool selected) {
+     r.team = me >= 0 && (size_t)me < match_.players().size() ? match_.players()[(size_t)me].team : 0;   // the first player's side
+     r.member = "local:pad" + std::to_string(pad);
+     r.selection = sel; r.selected = selected;
+-    seat2_ = addRemoteParticipant(r, true);
++    // Seat 2 takes a bot slot on its team (campaign: the last squad AI, as co-op; versus / Escalation: the team's last bot) through
++    // the late-join handover (Bot -> Remote at the next tick); with no bot on the team it joins as an extra participant.
++    // Campaign: it stays in cp_.squad, so it respawns beside its buddy and counts as a squad member.
++    int slot = -1;
++    if (cp_.active) {
++        for (size_t k = cp_.squad.size(); k-- > 0;)
++            if (match_.players()[(size_t)cp_.squad[k]].kind == ParticipantKind::Bot) { slot = cp_.squad[k]; break; }
++    } else for (size_t i = match_.players().size(); i-- > 0;)
++        if ((int)i != me && match_.players()[i].kind == ParticipantKind::Bot && match_.players()[i].team == r.team) { slot = (int)i; break; }
++    if (slot >= 0) {
++        SlotSwap q; q.matchPlayer = slot; q.toBot = false; q.member = r.member;
++        if (!applySlotSwap(q)) slot = -1;
++        else {
++            match_.playerMutable(slot).name = r.name;
++            if (selected && !cp_.active) match_.selectCharacter(slot, sel);   // campaign keeps the slot's character (co-op chapters)
++        }
++    }
++    seat2_ = slot >= 0 ? slot : addRemoteParticipant(r, true);
+     seat2Pad_ = pad;
+     seat2Ctl_ = PlayerController{};
+     seat2Ctl_.setWireSeat(true);
+     seat2In_ = platform::InputFrame{};
+-    LOG_INFO("local seat 2: pad %d joined as p%d (team %d)", pad, seat2_, r.team);
++    LOG_INFO("local seat 2: pad %d joined as p%d (team %d, %s)", pad, seat2_, r.team, slot >= 0 ? "took a bot slot" : "an extra participant");
+     return seat2_;
+ }
+ 

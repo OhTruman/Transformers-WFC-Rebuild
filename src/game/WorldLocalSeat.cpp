@@ -19,12 +19,29 @@ int World::addLocalSeat(int pad, const CharacterSelection& sel, bool selected) {
     r.team = me >= 0 && (size_t)me < match_.players().size() ? match_.players()[(size_t)me].team : 0;   // the first player's side
     r.member = "local:pad" + std::to_string(pad);
     r.selection = sel; r.selected = selected;
-    seat2_ = addRemoteParticipant(r, true);
+    // Seat 2 takes a bot slot on its team (campaign: the last squad AI, as co-op; versus / Escalation: the team's last bot) through
+    // the late-join handover (Bot -> Remote at the next tick); with no bot on the team it joins as an extra participant.
+    // Campaign: it stays in cp_.squad, so it respawns beside its buddy and counts as a squad member.
+    int slot = -1;
+    if (cp_.active) {
+        for (size_t k = cp_.squad.size(); k-- > 0;)
+            if (match_.players()[(size_t)cp_.squad[k]].kind == ParticipantKind::Bot) { slot = cp_.squad[k]; break; }
+    } else for (size_t i = match_.players().size(); i-- > 0;)
+        if ((int)i != me && match_.players()[i].kind == ParticipantKind::Bot && match_.players()[i].team == r.team) { slot = (int)i; break; }
+    if (slot >= 0) {
+        SlotSwap q; q.matchPlayer = slot; q.toBot = false; q.member = r.member;
+        if (!applySlotSwap(q)) slot = -1;
+        else {
+            match_.playerMutable(slot).name = r.name;
+            if (selected && !cp_.active) match_.selectCharacter(slot, sel);   // campaign keeps the slot's character (co-op chapters)
+        }
+    }
+    seat2_ = slot >= 0 ? slot : addRemoteParticipant(r, true);
     seat2Pad_ = pad;
     seat2Ctl_ = PlayerController{};
     seat2Ctl_.setWireSeat(true);
     seat2In_ = platform::InputFrame{};
-    LOG_INFO("local seat 2: pad %d joined as p%d (team %d)", pad, seat2_, r.team);
+    LOG_INFO("local seat 2: pad %d joined as p%d (team %d, %s)", pad, seat2_, r.team, slot >= 0 ? "took a bot slot" : "an extra participant");
     return seat2_;
 }
 

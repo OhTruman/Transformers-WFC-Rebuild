@@ -4797,7 +4797,13 @@ void World::draw(render::IRenderer& r) const {
         if (owner) r.setDrawOwner(0);
     }
     if (drawProf) dpActors += profNowMs() - dp0;
-    if (!localPlayerDead()) { sysprof::Scope sp(sysprof::DrawPlayer); player_.draw(r); }
+    if (!localPlayerDead()) {
+        sysprof::Scope sp(sysprof::DrawPlayer);
+        const bool split = seat2_ >= 0;   // split screen: every pawn draws with its absolute owner (the views pick theirs)
+        if (split) r.setDrawOwner(100 + localPlayer_);
+        player_.draw(r);
+        if (split) r.setDrawOwner(0);
+    }
     drawCorpses(r);   // [Gameplay] death bodies (their pawn's draw owner and colours)
     // Projectiles: the authored FlightEffect is the body (a renderer particle system, projectileFxStart); the thrown grenades
     // also draw their class-default static mesh. The box marker remains only when nothing authored can be shown (renderer
