@@ -4575,3 +4575,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   = the user's case). Crater = ENV_CraterUpNoRing_STAT's authored convex hull (27.7 m lens, knife-edge rim 0.4-0.8 m
   up that our horizontal knee probe hits): decision (b) per-mesh per-poly collision for that mesh (a walkable-slope
   movement model = post-build). Item 31 = ammo crate + crater.
+2026-10-24 13:39 MERGED 7a81ef5c Streets crater per-polygon collision (PC adaptation, one mesh; knee rays blocked outside the rim 12 -> 1),
+  078b108a the preview image set (Upscaling 0-6, HD, RT, Volumetric, LensFlares). AIM CLOSED: Rendering's pixel proof
+  on 5239fc0f = mean 0.02 px / worst 0.8 px over 30 shots (the old build traced camYaw while drawing viewYaw + shake).
+  Card: Frontend (bots scoreboard + ESC lobby dump) -> batch 2b -> item 31 -> package cut.
