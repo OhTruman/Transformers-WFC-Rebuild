@@ -4503,3 +4503,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 11:40 MERGED 8c670e2f asset root default from the package (kAssetRootDefault -> assetRootDefault()), feaf20bd roster table at
   chapter load + Kismet latent list (fix F; identical on all ten chapters) + verify_slim env roots + the package env
   checklist. REPACK 48e42af6 done (+90 files); re-verify running (expected: the reticle only, accepted for this PC).
+2026-10-24 11:46 SIM after fixes (Gameplay SOAK_TABLE_AFTER_FIXES): every row p99 <= 1.39 ms; worst steps A1 38 -> 1.0 ms, A3 10 -> 1.05,
+  D5 38 -> 3.4, D3B 64 -> 5.3. Left: the first measured step (3.4-6.2 ms, Gameplay), D3B 4310, D1 bot.steer; Systems:
+  shotFx 2.4-3.1 ms per shot + Tranquillity's first-melee-death cue-set load (6 ms). Baseline exe -> fast_feaf20bd.
