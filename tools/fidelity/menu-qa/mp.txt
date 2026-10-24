@@ -6,7 +6,6 @@
 # PENDING: team switch (X, only with Team Balancing = Manual) (#23)
 # PENDING: countdown cancel - not implemented (the base game cannot cancel; the user asked for it, #25)
 # PENDING: Choose Character clip paths to pick Scout (the #16 / #28 class); the default pick is accepted meanwhile
-# PENDING: fire (RT) and transform (LThumb) - the window maps pad buttons to UI actions only (Frontend adding the QA mapping)
 # PENDING: Pause > Change Character > back (#17 / #29) - the clip paths follow from the Frontend
 #expect mode TDM
 #expect chassis-kept
@@ -14,6 +13,8 @@
 #expect state ingame.spawned InGame
 #expect moved ingame.spawned ingame.moved 2
 #expect still ingame.spawned 2
+#expect shots ingame.moved ingame.shot
+#expect form ingame.shot ingame.transformed
 #expect state resumed InGame
 #expect level lobby.returned PartyLobby
 wait:ui=FrontEnd
@@ -47,12 +48,19 @@ pressuntil:Accept,InGame
 wait:t=3
 navcheck:ingame.spawned
 shot:06_spawned.bmp
-padhold:LStickUp,2
+buttonhold:Forward,2
 wait:t=2.5
 padhold:LStickRight,1
 wait:t=1.5
 navcheck:ingame.moved
 shot:07_moved.bmp
+buttonhold:Fire,1
+wait:t=1.5
+navcheck:ingame.shot
+buttonhold:Transform,0.2
+wait:t=2.5
+navcheck:ingame.transformed
+shot:07b_transformed.bmp
 showmenu
 wait:t=1
 navcheck:pause
