@@ -1886,6 +1886,21 @@ void GfxPresenter::syncGameSettings(gfx::Player& p, frontend::GameFlow& flow) {
     // the row (host only)
     gfx::MovieClip* cc = findClipNamed(p.root(), "customCharacters_mc");
     gfx::MovieClip* sm = findClipNamed(p.root(), "selectMap_mc");
+    {   // #25 (the user's countdown cancel): the lobby menu's updateMenu hides Start and Select Map and raises the menu 50 px while
+        // both are disabled (the countdown), with no branch that undoes it - the original countdown could not be cancelled. After a
+        // cancel Start is enabled again but stayed hidden under the raised menu, so Start did nothing (Experimental's a2e9fbd9 gate).
+        // The countdown ending in the lobby (the cancel; a launch leaves the lobby) restores what updateMenu hid.
+        const bool counting = flow.level() == frontend::LevelKind::GameLobby && flow.lobby().countingDown;
+        if (lobbyCountingSeen_ && !counting && flow.level() == frontend::LevelKind::GameLobby && sm && sm->parent && sm->parent->script) {
+            gfx::avm1::Object* menu = sm->parent->script;
+            for (const char* n : {"startGame_mc", "selectMap_mc"})
+                if (const V b = vm.get(menu, n); b.isObject()) { vm.set(b.o, "visible", V(true)); vm.set(b.o, "_visible", V(true)); }
+            if (const V s1 = vm.get(menu, "sep1_mc"); s1.isObject()) vm.set(s1.o, "_alpha", V(100.0));
+            vm.set(menu, "_y", V(0.0));
+            frontend::FlowTrace::emit("lobby.countdownCancelMenu", {{"restored", "true"}});
+        }
+        lobbyCountingSeen_ = counting;
+    }
     if (host && cc && sm && cc->script && sm->script && cc->parent && cc->parent->script &&
         !vm.get(cc->parent->script, "gameSettings_mc").isObject()) {
         gfx::avm1::Object* menu = cc->parent->script;
