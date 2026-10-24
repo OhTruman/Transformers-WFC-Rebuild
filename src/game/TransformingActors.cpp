@@ -176,18 +176,39 @@ void TransformingActors::boxBounds(const Actor& a, const Box& b, float t, core::
 int TransformingActors::applyNavBlocks(BotNav& nav) const {
     if (!nav.valid()) return 0;
     std::vector<uint8_t> blocked(nav.cells().size(), 0);
+    struct BB { core::Vec3 lo, hi; };
+    std::vector<BB> boxes;
     for (const Actor& a : actors_) {
         if (!a.collide || a.bridge) continue;   // a bridge deck is a walkable surface, not a wall
         const float rest = a.desired ? a.length : 0.0f;
-        for (const Box& b : a.boxes) {
-            core::Vec3 lo, hi;
-            boxBounds(a, b, rest, lo, hi);
-            for (size_t c = 0; c < nav.cells().size(); ++c) {
-                const BotNav::Cell& cell = nav.cells()[c];
-                // A floor cell under the box: overlapping by > 0.5 m on both horizontal axes, its floor within the box's height span.
-                const float ox = std::min(hi.x, cell.bmax.x) - std::max(lo.x, cell.bmin.x), oz = std::min(hi.z, cell.bmax.z) - std::max(lo.z, cell.bmin.z);
-                if (ox > 0.5f && oz > 0.5f && cell.centroid.y > lo.y - 1.0f && cell.centroid.y < hi.y) blocked[c] = 1;
-            }
+        for (const Box& b : a.boxes) { BB bb; boxBounds(a, b, rest, bb.lo, bb.hi); boxes.push_back(bb); }
+    }
+    if (!boxes.empty()) {
+        // A coarse xz grid of the boxes (8 m buckets, at most 256 a side) over their union.
+        float gx0 = boxes[0].lo.x, gz0 = boxes[0].lo.z, gx1 = boxes[0].hi.x, gz1 = boxes[0].hi.z;
+        for (const BB& b : boxes) { gx0 = std::min(gx0, b.lo.x); gz0 = std::min(gz0, b.lo.z); gx1 = std::max(gx1, b.hi.x); gz1 = std::max(gz1, b.hi.z); }
+        const float gs = std::max(8.0f, std::max(gx1 - gx0, gz1 - gz0) / 256.0f);
+        const int nx = std::max(1, (int)std::ceil((gx1 - gx0) / gs) + 1), nz = std::max(1, (int)std::ceil((gz1 - gz0) / gs) + 1);
+        auto bx = [&](float x) { return std::clamp((int)std::floor((x - gx0) / gs), 0, nx - 1); };
+        auto bz = [&](float z) { return std::clamp((int)std::floor((z - gz0) / gs), 0, nz - 1); };
+        std::vector<std::vector<int>> grid((size_t)nx * (size_t)nz);
+        for (size_t k = 0; k < boxes.size(); ++k)
+            for (int z = bz(boxes[k].lo.z); z <= bz(boxes[k].hi.z); ++z)
+                for (int x = bx(boxes[k].lo.x); x <= bx(boxes[k].hi.x); ++x) grid[(size_t)z * (size_t)nx + (size_t)x].push_back((int)k);
+        std::vector<size_t> seen(boxes.size(), (size_t)-1);
+        for (size_t c = 0; c < nav.cells().size(); ++c) {
+            const BotNav::Cell& cell = nav.cells()[c];
+            if (cell.bmax.x < gx0 || cell.bmin.x > gx1 || cell.bmax.z < gz0 || cell.bmin.z > gz1) continue;   // no box can overlap it
+            for (int z = bz(cell.bmin.z); z <= bz(cell.bmax.z) && !blocked[c]; ++z)
+                for (int x = bx(cell.bmin.x); x <= bx(cell.bmax.x) && !blocked[c]; ++x)
+                    for (int k : grid[(size_t)z * (size_t)nx + (size_t)x]) {
+                        if (seen[(size_t)k] == c) continue;
+                        seen[(size_t)k] = c;
+                        const core::Vec3& lo = boxes[(size_t)k].lo; const core::Vec3& hi = boxes[(size_t)k].hi;
+                        // A floor cell under the box: overlapping by > 0.5 m on both horizontal axes, its floor within the box's height span.
+                        const float ox = std::min(hi.x, cell.bmax.x) - std::max(lo.x, cell.bmin.x), oz = std::min(hi.z, cell.bmax.z) - std::max(lo.z, cell.bmin.z);
+                        if (ox > 0.5f && oz > 0.5f && cell.centroid.y > lo.y - 1.0f && cell.centroid.y < hi.y) { blocked[c] = 1; break; }
+                    }
         }
     }
     int n = 0;

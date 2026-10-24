@@ -85,6 +85,7 @@ private:
     std::vector<int> piece_;     // connected piece id per cell (portals + links, undirected)
     std::vector<uint8_t> blocked_;   // setBlocked (empty / another mesh's size: none)
     void computePieces();
+    std::vector<int> adjStart_, adjList_, adjFill_, pieceStack_;   // computePieces scratch (CSR adjacency), reused
     // A* scratch, reused between searches (generation-stamped instead of cleared).
     mutable std::vector<float> gs_;
     mutable std::vector<int> came_, viaLink_;

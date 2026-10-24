@@ -300,14 +300,24 @@ void BotNav::computePieces() {
     const bool blk = blocked_.size() == cells_.size();
     auto open = [&](size_t c) { return !blk || !blocked_[c]; };
     piece_.assign(cells_.size(), -1);
-    std::vector<std::vector<int>> adj(cells_.size());
-    for (size_t i = 0; i < cells_.size(); ++i) for (const Portal& p : cells_[i].portals) { adj[i].push_back(p.to); adj[(size_t)p.to].push_back((int)i); }
-    for (const Link& l : links_) { adj[(size_t)l.from].push_back(l.to); adj[(size_t)l.to].push_back(l.from); }
+    // The undirected adjacency (portals + links) as one flat array: degrees, prefix sums, then the neighbours.
+    const size_t N = cells_.size();
+    adjStart_.assign(N + 1, 0);
+    for (size_t i = 0; i < N; ++i) for (const Portal& p : cells_[i].portals) { ++adjStart_[i + 1]; ++adjStart_[(size_t)p.to + 1]; }
+    for (const Link& l : links_) { ++adjStart_[(size_t)l.from + 1]; ++adjStart_[(size_t)l.to + 1]; }
+    for (size_t i = 0; i < N; ++i) adjStart_[i + 1] += adjStart_[i];
+    adjList_.resize((size_t)adjStart_[N]);
+    adjFill_.assign(adjStart_.begin(), adjStart_.end() - 1);
+    for (size_t i = 0; i < N; ++i) for (const Portal& p : cells_[i].portals) { adjList_[(size_t)adjFill_[i]++] = p.to; adjList_[(size_t)adjFill_[(size_t)p.to]++] = (int)i; }
+    for (const Link& l : links_) { adjList_[(size_t)adjFill_[(size_t)l.from]++] = l.to; adjList_[(size_t)adjFill_[(size_t)l.to]++] = l.from; }
     int pid = 0, best = 0;
     for (size_t i = 0; i < cells_.size(); ++i) {
         if (piece_[i] >= 0 || !open(i)) continue;
-        int n = 0; std::vector<int> st{(int)i}; piece_[i] = pid;
-        while (!st.empty()) { int c = st.back(); st.pop_back(); ++n; for (int q : adj[(size_t)c]) if (piece_[(size_t)q] < 0 && open((size_t)q)) { piece_[(size_t)q] = pid; st.push_back(q); } }
+        int n = 0; std::vector<int>& st = pieceStack_; st.clear(); st.push_back((int)i); piece_[i] = pid;
+        while (!st.empty()) {
+            const int c = st.back(); st.pop_back(); ++n;
+            for (int k = adjStart_[(size_t)c]; k < adjStart_[(size_t)c + 1]; ++k) { const int q = adjList_[(size_t)k]; if (piece_[(size_t)q] < 0 && open((size_t)q)) { piece_[(size_t)q] = pid; st.push_back(q); } }
+        }
         if (n > best) { best = n; mainPieceId_ = pid; }
         ++pid;
     }
