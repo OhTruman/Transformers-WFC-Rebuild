@@ -1,0 +1,63 @@
+diff --git a/src/game/Collision.cpp b/src/game/Collision.cpp
+index f0cb96b6..bf062c2a 100644
+--- a/src/game/Collision.cpp
++++ b/src/game/Collision.cpp
+@@ -165,6 +165,31 @@ bool CollisionWorld::walk(const core::Vec3& a, const core::Vec3& b, float& outT)
+ bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const { return walk<false>(a, b, outT); }
+ bool CollisionWorld::segmentAnyHit(const core::Vec3& a, const core::Vec3& b) const { float t; return walk<true>(a, b, t); }
+ 
++// The moving sets' test of the 4-argument segmentHit (same filters, same triangle test, any t in [0, 1]), then the static any-hit.
++bool CollisionWorld::segmentBlocked(const core::Vec3& a, const core::Vec3& b) const {
++    const core::Vec3 d = b - a;
++    const core::Vec3 smin{std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)};
++    const core::Vec3 smax{std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)};
++    for (size_t si = 0; si < dyn_.size(); ++si) {
++        const DynamicSet& s = dyn_[si];
++        if (isIgnored(si)) continue;
++        if (!s.enabled || smax.x < s.bmin.x || smin.x > s.bmax.x || smax.y < s.bmin.y || smin.y > s.bmax.y ||
++            smax.z < s.bmin.z || smin.z > s.bmax.z) continue;
++        for (const Tri& t : s.world) {
++            core::Vec3 e1 = t.b - t.a, e2 = t.c - t.a, pv = core::cross(d, e2);
++            float det = core::dot(e1, pv);
++            if (std::fabs(det) < 1e-8f) continue;
++            float inv = 1.0f / det; core::Vec3 tv = a - t.a;
++            float u = core::dot(tv, pv) * inv; if (u < 0 || u > 1) continue;
++            core::Vec3 q = core::cross(tv, e1);
++            float v = core::dot(d, q) * inv; if (v < 0 || u + v > 1) continue;
++            float tt = core::dot(e2, q) * inv;
++            if (tt >= 0 && tt <= 1) return true;
++        }
++    }
++    return segmentAnyHit(a, b);
++}
++
+ bool CollisionWorld::segmentHitReference(const core::Vec3& a, const core::Vec3& b, float& outT) const {
+     // Moller-Trumbore against the triangles of the grid cells the segment's XZ projection passes
+     // through, walked front to back with a 2D DDA (Amanatides-Woo) and stopped as soon as the
+diff --git a/src/game/Collision.h b/src/game/Collision.h
+index 47e2c498..dfb8c54e 100644
+--- a/src/game/Collision.h
++++ b/src/game/Collision.h
+@@ -26,6 +26,8 @@ public:
+     bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const;
+     // Any hit on a-b (no nearest t): the renderer's light-visibility queries. Same boolean as segmentHit, stops at the first hit.
+     bool segmentAnyHit(const core::Vec3& a, const core::Vec3& b) const;
++    // The boolean of the 4-argument segmentHit (moving sets + static geometry), stopping at the first hit: line-of-sight checks.
++    bool segmentBlocked(const core::Vec3& a, const core::Vec3& b) const;
+     // The previous segmentHit (no height rejection), kept for WFC_RAYBENCH's equality check.
+     bool segmentHitReference(const core::Vec3& a, const core::Vec3& b, float& outT) const;
+     // Same query, also returning the hit triangle's unit normal (orientation as authored). Also tests the
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index 0f9cd72e..b0422ca5 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -59,8 +59,7 @@ bool World::botLineOfSight(const core::Vec3& from, const core::Vec3& to) const {
+     tickCount(0);   // WFC_TICKLOG LOS rays
+     const CollisionWorld& lw = weaponCollision_.valid() ? weaponCollision_ : collision_;
+     if (!lw.valid()) return true;
+-    float t; core::Vec3 n;
+-    return !lw.segmentHit(from, to, t, n);
++    return !lw.segmentBlocked(from, to);   // the boolean of segmentHit(from, to, t, n), first hit only
+ }
+ 
+ // One instant-hit trace for a participant shooter: the same targets, falloff, damage rules and destructibles as the local

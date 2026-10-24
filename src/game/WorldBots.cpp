@@ -59,8 +59,7 @@ bool World::botLineOfSight(const core::Vec3& from, const core::Vec3& to) const {
     tickCount(0);   // WFC_TICKLOG LOS rays
     const CollisionWorld& lw = weaponCollision_.valid() ? weaponCollision_ : collision_;
     if (!lw.valid()) return true;
-    float t; core::Vec3 n;
-    return !lw.segmentHit(from, to, t, n);
+    return !lw.segmentBlocked(from, to);   // the boolean of segmentHit(from, to, t, n), first hit only
 }
 
 // One instant-hit trace for a participant shooter: the same targets, falloff, damage rules and destructibles as the local

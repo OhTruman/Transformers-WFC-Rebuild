@@ -165,6 +165,31 @@ bool CollisionWorld::walk(const core::Vec3& a, const core::Vec3& b, float& outT)
 bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const { return walk<false>(a, b, outT); }
 bool CollisionWorld::segmentAnyHit(const core::Vec3& a, const core::Vec3& b) const { float t; return walk<true>(a, b, t); }
 
+// The moving sets' test of the 4-argument segmentHit (same filters, same triangle test, any t in [0, 1]), then the static any-hit.
+bool CollisionWorld::segmentBlocked(const core::Vec3& a, const core::Vec3& b) const {
+    const core::Vec3 d = b - a;
+    const core::Vec3 smin{std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)};
+    const core::Vec3 smax{std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)};
+    for (size_t si = 0; si < dyn_.size(); ++si) {
+        const DynamicSet& s = dyn_[si];
+        if (isIgnored(si)) continue;
+        if (!s.enabled || smax.x < s.bmin.x || smin.x > s.bmax.x || smax.y < s.bmin.y || smin.y > s.bmax.y ||
+            smax.z < s.bmin.z || smin.z > s.bmax.z) continue;
+        for (const Tri& t : s.world) {
+            core::Vec3 e1 = t.b - t.a, e2 = t.c - t.a, pv = core::cross(d, e2);
+            float det = core::dot(e1, pv);
+            if (std::fabs(det) < 1e-8f) continue;
+            float inv = 1.0f / det; core::Vec3 tv = a - t.a;
+            float u = core::dot(tv, pv) * inv; if (u < 0 || u > 1) continue;
+            core::Vec3 q = core::cross(tv, e1);
+            float v = core::dot(d, q) * inv; if (v < 0 || u + v > 1) continue;
+            float tt = core::dot(e2, q) * inv;
+            if (tt >= 0 && tt <= 1) return true;
+        }
+    }
+    return segmentAnyHit(a, b);
+}
+
 bool CollisionWorld::segmentHitReference(const core::Vec3& a, const core::Vec3& b, float& outT) const {
     // Moller-Trumbore against the triangles of the grid cells the segment's XZ projection passes
     // through, walked front to back with a 2D DDA (Amanatides-Woo) and stopped as soon as the

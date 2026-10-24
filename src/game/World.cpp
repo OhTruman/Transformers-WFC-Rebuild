@@ -3312,6 +3312,7 @@ bool World::launchMatch(const MatchLaunch& l) {
     const int nb = addBots(l.bots);
     setupSurvival();   // Escalation: the horde slots (no-op otherwise)
     setupCampaign(l);   // campaign: the human's pick, the AI squad, the level Kismet (no-op otherwise)
+    ensureHullMeshes();   // every participant chassis' vehicle-death gib hull (gibCorpse loaded it at the first vehicle death)
     if (nb > 0) awards_.setXpScale(BotXpPolicy::scale(botDifficulty_));   // XP in bot matches by bot difficulty (user decision)
     evictUnusedAssets();
     LOG_INFO("match: launched %s %s (goal %d, time %d s, bots %d: friendly %d enemy %d %s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore,
@@ -9041,6 +9042,19 @@ core::Vec3 World::Corpse::playAt(const char* so) const {
 }
 
 // The gib meshes: the static chunks and the two skeletal gib templates (once; at the match load and at the first gib).
+// The vehicle-death gib hull of every participant chassis (the cache gibCorpse fills; same load, textures and prewarm).
+void World::ensureHullMeshes() {
+    if (!renderer_) return;
+    for (size_t q = 0; q < match_.players().size(); ++q) {
+        const ChassisDeathDef* cd = chassisDeath(resolveChassis(match_.players()[q].selection, match_.faction((int)q)));
+        if (!cd || !*cd->hull || hullMeshes_.count(cd->hull)) continue;
+        std::unique_ptr<render::MeshData> md = std::make_unique<render::MeshData>();
+        if (assets::loadGlb(assetRoot() + "/../" + cd->hull, *md)) { for (render::Material& M : md->mats) { M.tex = resolveTexture(M.baseColorUri); M.emissiveTexHandle = resolveTexture(M.emissiveUri); } fxPrewarm(*renderer_, *md, 0); }
+        else md.reset();
+        hullMeshes_.emplace(cd->hull, std::move(md));
+    }
+}
+
 void World::ensureGibModels() {
     if (!gibMeshesTried_ && renderer_) {
         gibMeshesTried_ = true;

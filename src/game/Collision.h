@@ -26,6 +26,8 @@ public:
     bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const;
     // Any hit on a-b (no nearest t): the renderer's light-visibility queries. Same boolean as segmentHit, stops at the first hit.
     bool segmentAnyHit(const core::Vec3& a, const core::Vec3& b) const;
+    // The boolean of the 4-argument segmentHit (moving sets + static geometry), stopping at the first hit: line-of-sight checks.
+    bool segmentBlocked(const core::Vec3& a, const core::Vec3& b) const;
     // The previous segmentHit (no height rejection), kept for WFC_RAYBENCH's equality check.
     bool segmentHitReference(const core::Vec3& a, const core::Vec3& b, float& outT) const;
     // Same query, also returning the hit triangle's unit normal (orientation as authored). Also tests the

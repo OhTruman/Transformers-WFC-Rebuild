@@ -889,15 +889,21 @@ void World::cpTickSentries(float dt) {
         const int team = cp_.factories[(size_t)S.factory].team;
         const core::Vec3 eye = S.pos + core::Vec3{0.0f, 0.5f, 0.0f};
         int tgt = -1; float best = D.sight;
-        for (size_t q = 0; q < match_.players().size(); ++q) {
-            const MatchPlayer& mp = match_.players()[q];
-            if (!mp.alive || mp.team == team) continue;
-            const Character* c = participantPawn((int)q);
-            if (!c) continue;
-            const float L = core::length(c->actorLocation() - eye);
-            if ((S.forced >= 0 && (int)q != S.forced) || L > best) continue;
-            if (!botLineOfSight(eye, c->actorLocation())) continue;
-            best = L; tgt = (int)q;
+        {   // the nearest visible candidate: nearest first, equal distances the higher player first (the old in-order scan kept the last)
+            static std::vector<std::pair<float, int>> cand;
+            cand.clear();
+            for (size_t q = 0; q < match_.players().size(); ++q) {
+                const MatchPlayer& mp = match_.players()[q];
+                if (!mp.alive || mp.team == team) continue;
+                const Character* c = participantPawn((int)q);
+                if (!c) continue;
+                const float L = core::length(c->actorLocation() - eye);
+                if ((S.forced >= 0 && (int)q != S.forced) || L > D.sight) continue;
+                cand.push_back({L, (int)q});
+            }
+            std::sort(cand.begin(), cand.end(), [](const std::pair<float, int>& a, const std::pair<float, int>& b) { return a.first != b.first ? a.first < b.first : a.second > b.second; });
+            for (const auto& cq : cand)
+                if (botLineOfSight(eye, participantPawn(cq.second)->actorLocation())) { best = cq.first; tgt = cq.second; break; }
         }
         if (tgt < 0) continue;
         const core::Vec3 aim = participantPawn(tgt)->actorLocation() - eye;
