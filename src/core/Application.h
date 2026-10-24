@@ -40,6 +40,7 @@ private:
     void runCampaignAudioTest();   // [Systems] WFC_CAMPAIGNAUDIOTEST=<chapter audio JSON>: the campaign Kismet audio ops, headless
     void runUdpSessionMatch();  // [Systems] WFC_UDPHOST / WFC_UDPJOIN: a headless lockstep match through UdpSession + NetMatchDriver (identity rows)
     void runOnlineFlowTest();   // [Frontend] WFC_ONLINEFLOWTEST: two frontend flows, each on a real UdpSession, over loopback UDP
+    void runFlowSimTest();     // WFC_FLOWSIMTEST=<MP|ESC|CP>: the playtest section 43 flows' sim half (solo launch -> play -> QA)
     void runSoloLaunchTest();   // [Systems] WFC_SOLOLAUNCHTEST: a private match hosted alone takes the local loop (no driver); same seed = same hash
     void runVoiceTest();        // [Systems] WFC_VOICETEST: the voice lane end to end over loopback (SNR, loss, mute, indicator)
     int exitCode_ = -1;        // [Systems] set by the headless / net runs (main returns it when init stops); -1 = the default

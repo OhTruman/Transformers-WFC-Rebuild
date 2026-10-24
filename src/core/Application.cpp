@@ -251,6 +251,7 @@ bool Application::init() {
     if (std::getenv("WFC_UDPSESSIONTEST")) { runUdpSessionTest(); return false; }   // [Systems] the real online session on loopback UDP
     if (std::getenv("WFC_CAMPAIGNAUDIOTEST")) { runCampaignAudioTest(); return false; }   // [Systems] campaign Kismet audio ops, headless
     if (std::getenv("WFC_ONLINEFLOWTEST")) { runOnlineFlowTest(); return false; }   // [Frontend] two frontend flows on real UdpSessions
+    if (std::getenv("WFC_FLOWSIMTEST")) { runFlowSimTest(); return false; }   // the section 43 flows' sim half, headless
     if (std::getenv("WFC_SOLOLAUNCHTEST")) { runSoloLaunchTest(); return false; }   // [Systems] a solo private launch: local loop, deterministic
     if (std::getenv("WFC_VOICETEST")) { runVoiceTest(); return false; }   // [Systems] voice end to end, headless
     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record

@@ -2359,3 +2359,82 @@ void core::Application::runSoloLaunchTest() {
     LOG_INFO("SOLOLAUNCHTEST SUMMARY: %s (%d failed)", fails ? "FAIL" : "PASS", fails);
     exitCode_ = fails ? 1 : 0;
 }
+
+// WFC_FLOWSIMTEST=<MP|ESC|CP> (headless, WFC_NULLRENDER; WFC_MAP the map): the sim half of the playtest 2026-10-23b section 43
+// end-to-end flows. The launch is built the way the frontend builds it (fillOnlineLaunch from a session hosted alone: our own slot),
+// then the human, driven through its normal input by the player bot, must spawn, move, shoot and transform; the QA panel's kill /
+// respawn and character change must take effect; a relaunch (the QA Restart's sim side) must spawn again. One SUMMARY line.
+
+
+
+void core::Application::runFlowSimTest() {
+    const std::string mode = std::getenv("WFC_FLOWSIMTEST");
+    const float dt = (float)clock_.stepSeconds();
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("FLOWSIMTEST %s %s: %s", ok ? "PASS" : "FAIL", mode.c_str(), what.c_str()); };
+    std::string url;
+    if (mode == "MP") url = world_.mapName() + "?GameModeTag=TDM?BotsAutobot=4?BotsDecepticon=5";
+    else if (mode == "ESC") url = world_.mapName() + "?GameModeTag=ESC";
+    else url = world_.mapName() + "_Base_m?GameModeTag=SOLO?Character=0";
+    // the frontend's launch: a session hosted alone (our own Human slot only)
+    frontend::MatchLaunch m;
+    m.seed = 0x5eed0710u; m.teamIndex = 0;
+    m.self.fingerprint = "WFC-FLOW-HOST";
+    frontend::SessionSlot me; me.kind = frontend::SessionSlot::Kind::Human; me.member = m.self; me.team = 0;
+    m.onlineSlots = {me};
+    game::MatchLaunch L;
+    game::MatchLaunch::fromURL(url, L);
+    L.map = world_.mapName(); L.localTeam = 0;
+    if (mode != "CP") fillOnlineLaunch(L, m);
+    check(!L.online && L.remotes.empty() && L.humans.empty(), "the solo launch is offline (local loop, no wire seat)");
+    check(world_.launchMatch(L), "launchMatch(" + url + ")");
+    const int me_ = world_.localMatchPlayer();
+    if (mode == "MP") {   // the pre-match pick (Scout: the playtest's class)
+        for (const auto& c : world_.qaCharacterChoicesAlways()) if (c.customSlot == "Scout") world_.match().selectCharacter(me_, c);
+    }
+    auto step = [&] { platform::InputFrame in; world_.playerBotInput(in, dt); world_.handleInput(in, dt); world_.tick(dt); };
+    auto alive = [&] { return !world_.localPlayerDead() && world_.match().players()[(size_t)me_].alive; };
+    float t = 0.0f;
+    while (t < 60.0f && !alive()) { step(); t += dt; }
+    check(alive(), "the human spawns (" + std::to_string((int)t) + " s)");
+    // play 45 s: movement, shots (ammo spent or a reload), a transform
+    const core::Vec3 p0 = world_.player().pawn().position();
+    float maxD = 0.0f; int shots = 0, transforms = 0;
+    int lastAmmo = world_.player().pawn().weapon().ammo;
+    game::Form lastForm = world_.player().pawn().form();
+    for (t = 0.0f; t < 45.0f; t += dt) {
+        step();
+        if (!alive()) continue;
+        const game::Character& pc = world_.player().pawn();
+        maxD = std::max(maxD, core::length(pc.position() - p0));
+        if (pc.weapon().ammo < lastAmmo) ++shots;
+        lastAmmo = pc.weapon().ammo;
+        if (pc.form() != lastForm) ++transforms;
+        lastForm = pc.form();
+    }
+    LOG_INFO("FLOWSIMTEST %s: moved up to %.1f m, %d shots, %d form changes, online %d", mode.c_str(), maxD, shots, transforms, (int)world_.onlineSeats());
+    check(maxD > 5.0f, "the human moves (" + std::to_string((int)maxD) + " m)");
+    check(shots > 0 || mode == "CP", "the human shoots (" + std::to_string(shots) + ")");   // CP: the chapter start may have no enemy in view
+    check(transforms > 0 || mode == "CP", "the human transforms (" + std::to_string(transforms) + ")");
+    if (mode == "MP") {
+        // the QA panel's character change (Soldier), then its kill / respawn: the next spawn is the new character
+        const std::string before = world_.match().players()[(size_t)me_].chassis;
+        for (const auto& c : world_.qaCharacterChoicesAlways()) if (c.customSlot == "Soldier") world_.qaSetCharacter(c);
+        bool died = false;
+        for (t = 0.0f; t < 30.0f; t += dt) { step(); died = died || !alive(); if (died && alive()) break; }
+        const std::string after = world_.match().players()[(size_t)me_].chassis;
+        LOG_INFO("FLOWSIMTEST MP: character change %s -> %s, respawned %d after %.1f s", before.c_str(), after.c_str(), (int)alive(), t);
+        check(died && alive() && after != before, "QA character change: killed, respawned as the new character");
+        for (t = 0.0f; t < 2.0f; t += dt) step();
+        world_.qaRespawn();
+        died = false;
+        for (t = 0.0f; t < 30.0f; t += dt) { step(); died = died || !alive(); if (died && alive()) break; }
+        check(died && alive(), "QA kill / respawn: dead, then respawned (" + std::to_string((int)t) + " s)");
+        // the QA Restart's sim side: the same launch again
+        check(world_.launchMatch(L), "relaunch (the QA Restart's launch)");
+        for (t = 0.0f; t < 60.0f && !alive(); t += dt) step();
+        check(alive(), "spawned after the relaunch");
+    }
+    LOG_INFO("FLOWSIMTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+    exitCode_ = fails ? 1 : 0;
+}
