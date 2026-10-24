@@ -4527,3 +4527,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the distributable refresh staged (bash work/everything.sh <sha>: build + build_slim + HD split + verify_everything with
   the D1 / Remnant / Horizon / Pulse rows; guards for every clean-machine piece). Binary anim cache rejected (measured).
   Waiting for the user to finish playing 48e42af6.
+2026-10-24 12:20 MERGED b8963b8e hull preload + any-hit bot line of sight + nearest-first sentry scan (D1 step p99 1.21 -> 1.01 ms; all
+  identical). Sim status: on D1 / D3A / Remnant / Streets the only steps over 1.5 ms are the level-start steps (the
+  original's synchronous level start, 1.7-3.6 ms; excluded from the PASS rule). Gameplay cuts the perf-phase
+  FINAL_BASE_ITEMS entries, then idle until phase 0 names sim targets.
