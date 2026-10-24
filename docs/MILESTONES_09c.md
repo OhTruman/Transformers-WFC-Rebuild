@@ -4264,3 +4264,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 22:32 MERGED 0378fca6 DLC audio 2 (wave / twin lookup: level root -> DLC-only root -> base root; the 'missing' twins were base
   lines the DLC reuses). Open: Gameplay's District door loader + Zone_Manager generator flattening (base item 15); RE's
   Tranquillity_AUDIO reader answer; AssetTools Pack 2; Systems online two-locals; card checks after the playtest.
+2026-10-23 22:34 RE: Tranquillity_AUDIO_m has one short LZO block in the shipped file; AssetTools' reader misplaced later blocks (fix
+  sent: 82 of 125 exports recovered incl. every touch / sound / reverb op); 43 exports are damaged in the shipped cook
+  itself (brush Models, Package objects, 14 Kismet ops): treated as missing. Systems regenerates after the DB re-export.
