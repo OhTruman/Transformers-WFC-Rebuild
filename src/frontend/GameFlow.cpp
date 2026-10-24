@@ -1364,6 +1364,15 @@ void GameFlow::gameLobbyTick(float dt) {
         startLevel();
         return;
     }
+    // TnGameLobbyGameSolo.PendingMatch: Tick / NotifyCharacterSelected -> TryToStartLevel: AreGameAutoStartConditionsMet
+    // (LobbyGRI.AllPlayersHaveCharacter) -> StartLevel() at once - no countdown, no Start item (GameLobby_GFX hides the whole
+    // SOLO lobby: sprite 99 _alpha 0) [CONFIRMED UI_Lobby_m script]. Without it a Solo pick sat behind the invisible lobby
+    // forever: the blank screen of playtest 2026-10-23b #38 / #39.
+    if (lobby_.gameModeTag == "SOLO" && selected_.valid && !lobby_.countingDown && !travelPending_ && !loading_.active) {
+        FlowTrace::emit("gamelobby.soloStart", {{"mapId", std::to_string(lobby_.mapId)}, {"checkpoint", lobby_.checkpoint}, {"character", selected_.name}});
+        startLevel();
+        return;
+    }
     if (!lobby_.countingDown) return;
     // GRI.ResetCountdown: a 1 s repeating DecrementCountdown timer.
     lobby_.countdownTimer += dt;
