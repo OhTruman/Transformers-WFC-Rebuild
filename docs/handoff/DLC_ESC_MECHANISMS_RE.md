@@ -135,3 +135,92 @@
 
 All of this is at PreGameplaySetup or flows from the generators. The nav, zone and trigger initial states are the PreGameplaySetup
 toggles in the export.
+
+## 7. Spawn-point placement rules, all ESC maps (C, TnSurvivalSpawnFinder / TnSurvivalZoneVolume)
+- **Spawn points are `TnSurvivalSpawnPoint` actors.**
+  - A zone's `PossibleSpawnPoints` = every TnSurvivalSpawnPoint **in the same level whose Location lies inside the zone's brush**
+    (`PopulateStartLocations`, run at editor save).
+  - The shipped arrays are authoritative, and **many zones have none.** These are "presence" zones that only change other zones'
+    scores while a player is inside (`ZoneChanges`).
+- **Finding a spawn spot** (`FindSpawnLocation(type)`):
+  1. **Candidate zones:** only zones that are **Active**. They're re-sorted by score for the spawn type (MSVC qsort,
+     escalation_zone_order.json).
+  2. **Pick a zone:** a random one among the **top NumTopZonesToConsider**, weighted by |score|.
+  3. **Pick a point:** the zone's next point, round-robin (SpawnPointIndex++).
+     - A zone with no points → "Null spawn point on zone", and it retries.
+     - **Up to 5 tries per spawn.**
+  4. **Spawn location** = **point Location + (0, 0, |pawn half-height − point cylinder half-height|)**. **There's no navmesh
+     projection.**
+  5. **Validation:** `IsSafeSpawnLocation(location − half-height, radius, 2·half-height)` (capsule clear).
+- **Score:** each zone's score per type = its own SelfModifier + the ZoneChanges of zones that currently hold players. An occupied
+  zone itself gets OccupiedZoneScore −999.
+- **Nav (C for script, H for runtime):** the original never needs a spawn point to be on the navmesh. The pawn appears at the point
+  and the AI re-anchors to the nearest nav from there.
+  - **For the rebuild:** if a point is off our navmesh, project it to the nearest nav polygon within about the capsule radius **for
+    pathing only**. Keep the authored spawn location.
+
+## 8. Pulse (Pack 2): zones, generators and Power_Generator_Action (C)
+**Zones:**
+- 33 total, **27 Active at start**, but **only 14 zones have spawn points** (2 each, 28 points). 8 of those are Active at start:
+  10037, 11669, 12652, 14467, 2523, 2683, 3036, 6091.
+- **No zone has a non-zero SelfModifier.** All spawning is steered by **presence zones'** ZoneChanges. For example, the centre
+  presence zone 5389 ("CenterAreaNothingUnlocked") gives +100 Standard / +1000 Air to 12652 and 2523, +100 LongRange to 11669 and
+  3036, and +100 Boss to 6091 and 14467.
+- **The initial sort's top entries are 0-point presence zones**, so at a score tie the finder retries (expected). With a player
+  inside, the boosted zones lead.
+
+**Power_Generator_Action** (one prefab `Zone_Manager` reused 10×; each instance is bound to its own zone, nav and volumes):
+- **Inputs:** `Generator Used`.
+- **Zone_Manager (template):**
+  - TransformWorldProp ("Open Doors"; its target is unbound in the template);
+  - **"Disable Generator Volumes" off**;
+  - **"Enable Survival Zones" on**;
+  - **NavMeshCells on** (they're **off at PreGameplaySetup**);
+  - then FinishSequence → output **"Open Matinee Door"**.
+
+| Instance | Fired by | Enables zone | Volumes off | Matinee / extras |
+|---|---|---|---|---|
+| Zone_Manager | **LowerRampGenerator** 2403 (1500, drain 500) | – | TV 16245 | Lower Windows (Interp_4544) + **Lower Ramp** (Interp_54) + **FinalRoomUnlocked** |
+| _1 | Door 15987 (500) | 14658 | TV 12943 | Interp_5622: spikes; at "BlowUpGenerator" destroys generator 15987 + emitter; at "OpenSideDoors" removes the force field; after 0.3 s destroys the spikes |
+| _2 | Door 7312 (500); also remote **OpenInitial3LeftSideDoors** | 13164 | TV 1506 | door Interp_7549 |
+| _3 | remote **LeftSideBackwardProgression** | 2452 | – | door Interp_12776 |
+| _4 | **Gate_8203** (first of Door 7876 (750) / Door 2441 (300); the gate closes itself) | 1577 | TV 3883, 12021 | door Interp_11165 |
+| _5 | **Gate_13329** (first of Door 7554 (750) / Door 11205 (300)) | 1577 | TV 8362, 1001 | door Interp_11287 |
+| _6 | remote **RightSideBackwardProgression** | 5643 | – | door Interp_14950 |
+| _8 | Door 1963 (500); remote OpenInitial3LeftSideDoors | 2452 | TV 7603, 6698 | doors Interp_12613 + TransformWorldProp 10778 (then destroyed) |
+| _9 | Door 15272 (500); remote OpenInitial3RightSideDoors | 5643 | TV 6212, 14773 | doors Interp_7793 + TransformWorldProp 7288 (then destroyed) |
+| _10 | Door 7636 (500); remote OpenInitial3RightSideDoors | 7345 | TV 2438 | door Interp_542 |
+
+**Senders:**
+- Door **1460 (150)** → **OpenInitial3LeftSideDoors** (_2 + _8) + TV 6698 off.
+- Door **7911 (150)** → **OpenInitial3RightSideDoors** (_9 + _10) + TV 14773 off.
+- Door 2441 → LeftSideBackwardProgression (_3).
+- Door 11205 → RightSideBackwardProgression (_6).
+- Console "opendoors" opens all of them (debug).
+
+**Other Pulse Kismet:**
+- Healing_Platform, Nexus_Attack, repair / rocket / eye sentries, Tank_AI_Helper_Logic, SpaceVignettes, Trypticon_Dialog. See
+  `MP_ESC_Pulse_kismet_extra.json`.
+
+**Waves:** 30 rows (MP_ESC_Pulse.json). Soldier_Tank EST_Boss in waves 0–1, 13–19 and 20+ (×2). The buffs reach
+DecreaseDamageTaken 11 / IncreaseDamage 11.
+
+## 9. Static (Pack 2): zones and generators (C)
+**Zones:**
+- 34 total, **9 Active at start**: 11652 (no points), 12636 (6), 14072 (1), 2233 (1), 3053 (2), 4423 (2), 6232 (4), 948 (3),
+  9809 (2).
+- 26 zones have points (80 points in all); 8 presence zones have none.
+
+**Generators:**
+- **Every zone change is a DoorGenerator chain** (root level, ~40 generators at 225 / 300 / 550 power). Each one turns **On** a set
+  of zones (Toggle "Turn On"), and many share zones.
+- **Turn On is idempotent:** a zone stays on once any generator has opened it. There's no Turn Off.
+- The **starting cluster** (11652, 12636, 14072, 2233, 3053, 4423, 6232, 948, 9809) is re-enabled by generators 8564, 6094 and 453.
+  Those chains are redundant at start.
+- The full per-generator zone lists are in MP_ESC_Static.json `events[].downstream` (Toggle ops with their zone vars).
+
+**Other Static Kismet:**
+- FIREJETS01–16 / FIREEXP01–10 hazards (Interp + remote events), FIREJET_DMG (damage toggle), TOGGLE_FIREJETS_OFF, Cameras. See
+  `MP_ESC_Static_kismet_extra.json`.
+
+**Waves:** 21 rows; Autobot horde.

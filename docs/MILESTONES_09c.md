@@ -4380,3 +4380,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   BrokenHope / Tranquillity / District all pass; versus DLC Fortress / Havoc / Horizon / Metropolis / Sector 60 s TDM
   clean; Pulse ESC BLOCKED data-side (spawn points off the nav; Kismet not built) -> AssetTools; Static pending.
   assets_dlc now has junctions for all 9 DLC maps.
+2026-10-24 01:28 MERGED 658fb346 non-convex hazard volumes (A4 start death) + FINAL_BASE_ITEMS 18 + HANDOVER_MENUS_2026-10-24.md.
+  Pulse ESC reclassified (RE §7): the original spawns at the authored point + capsule check, no nav requirement; our
+  director's nav rule starved Pulse: Gameplay GO (base game; affects BrokenHope / Remnant spawning; re-baseline).
+  QC FREEZE LIFTED for DLC completion (P0s + audits closed, gate PASS): Pulse §8 Power_Generator_Action + Static §9
+  DoorGenerators GO (Gameplay sim, Rendering visuals). Experimental final gate PREPARED (base fast_af4d073_final9,
+  FINAL_ASSETS + final_render with 8 DLC maps; mp flow carries the #20 / #27 shots).
