@@ -23,6 +23,8 @@ MAPS=${FINAL_MAPS:-"501 502 503 504 505 506 507 508 509 510"}; RES=${FINAL_RES:-
 # takes either; MP_ESC_ maps boot in Escalation). FINAL_MAPS set = exactly those maps.
 DLC_MAPS="511:MP_ORB_Havoc 512:MP_KON_Fortress MP_ESC_Tranquillity MP_ESC_District MP_IAC_Horizon MP_IAC_Metropolis MP_KON_Sector MP_ESC_Pulse MP_ESC_Static"
 RENDER_ROOT=${FINAL_RENDER_ROOT:-"F:/Transformers Rebuild/Rebuild/work/render"}; SM_DLC=""
+# FINAL_RENDER_SRC=<render root> (e.g. work/final_render: Rebuild/work/render + the shipped DLC maps): the frozen snapshot's source;
+# set FINAL_RENDER_ROOT to the same root so the DLC maps join the rows.
 # FINAL_ASSETS=<VerticalSlice root holding the DLC maps> (e.g. Rebuild/work/assets_dlc/VerticalSlice): passed as WFC_ASSETS to every arm
 ASX=""; [ -n "$FINAL_ASSETS" ] && ASX=";WFC_ASSETS=$FINAL_ASSETS"
 for e in $DLC_MAPS; do id=${e%%:*}; nm=${e##*:}; [ -d "$RENDER_ROOT/$nm" ] || continue; SM_DLC="$SM_DLC $id"; [ -z "$FINAL_MAPS" ] && MAPS="$MAPS $id"; done
@@ -61,7 +63,7 @@ elif [ "$PH" = gate ]; then
   st "FINAL GATE timed: head $H vs base $BASE; maps $MAPS; res $RES$( [ $WHATIF = 1 ] && echo ' (WHATIF)')"
   RD0=""
   if [ "${GATE_RENDER_SNAPSHOT:-1}" != 0 ]; then
-    run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/matb_root.ps1 -Name final_$h -NoCandidate >> $L 2>&1" || { st "render snapshot failed"; exit 1; }
+    run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/matb_root.ps1 -Name final_$h -NoCandidate ${FINAL_RENDER_SRC:+-Src \"$(cygpath -w "$FINAL_RENDER_SRC")\"} >> $L 2>&1" || { st "render snapshot failed"; exit 1; }
     RD0="WFC_RENDER_DATA=$(cygpath -w "$PWD/work/matb/final_${h}_root")"; st "render data frozen: $RD0"
   fi
   st "hold set; waiting for a clear card"; run "touch work/PERF_HOLD; sleep 60; until [ \"\$(busy)\" = 0 ]; do sleep 15; done"

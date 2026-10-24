@@ -75,6 +75,8 @@ navcheck:charselect
 shot:10_charselect.bmp
 ui:Accept
 wait:t=2
+navcheck:pregame.countdown
+shot:10b_pregame_countdown_playerlist.bmp
 wait:ui=InGame
 wait:t=3
 navcheck:ingame.spawned
