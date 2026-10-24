@@ -210,3 +210,49 @@ build's line for line.
 - everything merged since 20 on these paths (STATIC_PREP, two locals online, the WIC texture decoder, previews, level audio ...).
 District's data regenerates byte-identical after its art-package fix. Apply it after 20. Verified: a fresh full af4d0731 + 01-21
 applies and builds with 0 errors; its Static ESCTEST log equals the head build's line for line.
+
+## 22-28: the 300 FPS sim phase (21 tree -> b8963b8e), one chain
+
+Items 22 and up are exact tree steps. The chain tree after 21 had its base paths replaced by each merge commit's, and the staged
+diff (`git diff --binary`) is the item. So after item N, the base paths equal commit N's exactly, and each item also carries
+everything else merged on those paths in between (as 17-21 did).
+
+The base paths: src/assets, src/audio, src/core, src/frontend, src/game, src/net, src/platform, src/main.cpp, src/render/Renderer.h,
+Camera.h, Mesh.h, SplitScreen.h, CMakeLists.txt, data.
+
+Apply in order, after 21, in a git-init'ed tree (see the note above).
+
+- `22_sim_ticklog_esc_harness.patch`: 21 tree -> a25edf62 (24 files, binary). It carries:
+  - GAMEPLAY_TICKLOG (WFC_TICKLOG per-step CSV, sub-slots, WFC_SOAK_GOD / WFC_SOAK_KILLEVERY);
+  - GAMEPLAY_ESC_HARNESS (WFC_ESC_STARTWAVE / WFC_ESC_INVULN, test only);
+  - everything merged on the base paths since 21: the settings preview PNGs, Rendering's campaign skeletal set dressing game half
+    (Campaign.h, WorldCampaignMatinee.cpp: D1_GPUSKIN game half, SKEL_VIS, SKEL_PRELOAD), the DLC mechanism presentation game half
+    (WorldSurvivalMechPresent.cpp, the World hooks, Renderer.h setMatineePosition).
+- `23_first_use_preload.patch`: -> bcd70a61. Melee weapon models, gib meshes and matinee pawn-group clips at map / chapter load.
+- `24_nav_blocks.patch`: -> 5975369b. The applyNavBlocks xz grid prefilter and the CSR computePieces. It also carries Rendering's
+  DATA_ROOTS (core/DataRoots.h) and the frontend package paths.
+- `25_roster_kismet_latent_asset_root.patch`: -> feaf20bd. It carries:
+  - the ROBODEF roster table at chapter load and the Kismet latent list (fix F);
+  - Rendering's ASSET_ROOT_DEFAULT (8c670e2f): config::kAssetRootDefault becomes config::assetRootDefault().
+  - Plus the compatibility hunks outside the base paths, so this step builds: package 6's src/render/gl/GLRenderer.cpp and
+    WfcPipeline.cpp, tests/FrontendTests.cpp and tools/fidelity/Rig.cpp call assetRootDefault() (the head's own spelling).
+  - This takes the place of Rendering's separate a / b / c / d entries: their game halves are already in 22, 24 and 25 (exact
+    head states), and c's renames outside the base paths are these hunks.
+- `26_hitch_loads.patch` (Systems): feaf20bd -> 6ddb0abe. SYSTEMS_HITCH_LOADS: a mid-match first-time body load on a worker, and
+  the body's cue set / energon colour load with it. It also carries the frontend data resolver (19bc0841).
+- `27_hitch_threads.patch` (Systems): 6ddb0abe -> 4098c267. SYSTEMS_HITCH_THREADS: rosterPackage's thread-safe first init, and GPU
+  work only on the main thread.
+- `28_hull_los_sentry.patch`: 4098c267 -> b8963b8e. The vehicle-death gib hull preload, the any-hit line of sight
+  (CollisionWorld::segmentBlocked) and the nearest-first sentry scan.
+
+Verified (2026-10-24):
+- A fresh af4d0731 + 01-28 (git apply, git-init'ed tree) applies clean.
+- Every base path equals b8963b8e (ignoring CR).
+- A fresh full configure + build of wfc_rebuild.exe has 0 errors. The gate launches only the game exe, so wfc_fidelity is not
+  part of the check.
+- The headless SIMHASH streams are identical to the b8963b8e head build:
+  - MP_IAC_Streets TDM, 4 + 5 bots, 60 s: 4,201 steps;
+  - MP_ESC_Remnant ESC 120 s: 8,101 steps;
+  - MP_ESC_BrokenHope ESC 120 s: 2,484 steps;
+  - A1_IAC campaign 120 s: 7,261 steps;
+  - D1_ORB campaign 120 s: 7,261 steps.

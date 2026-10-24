@@ -1,0 +1,142 @@
+diff --git a/src/game/Collision.cpp b/src/game/Collision.cpp
+index 51c0ae9..bf062c2 100644
+--- a/src/game/Collision.cpp
++++ b/src/game/Collision.cpp
+@@ -165,6 +165,31 @@ bool CollisionWorld::walk(const core::Vec3& a, const core::Vec3& b, float& outT)
+ bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const { return walk<false>(a, b, outT); }
+ bool CollisionWorld::segmentAnyHit(const core::Vec3& a, const core::Vec3& b) const { float t; return walk<true>(a, b, t); }
+ 
++// The moving sets' test of the 4-argument segmentHit (same filters, same triangle test, any t in [0, 1]), then the static any-hit.
++bool CollisionWorld::segmentBlocked(const core::Vec3& a, const core::Vec3& b) const {
++    const core::Vec3 d = b - a;
++    const core::Vec3 smin{std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)};
++    const core::Vec3 smax{std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)};
++    for (size_t si = 0; si < dyn_.size(); ++si) {
++        const DynamicSet& s = dyn_[si];
++        if (isIgnored(si)) continue;
++        if (!s.enabled || smax.x < s.bmin.x || smin.x > s.bmax.x || smax.y < s.bmin.y || smin.y > s.bmax.y ||
++            smax.z < s.bmin.z || smin.z > s.bmax.z) continue;
++        for (const Tri& t : s.world) {
++            core::Vec3 e1 = t.b - t.a, e2 = t.c - t.a, pv = core::cross(d, e2);
++            float det = core::dot(e1, pv);
++            if (std::fabs(det) < 1e-8f) continue;
++            float inv = 1.0f / det; core::Vec3 tv = a - t.a;
++            float u = core::dot(tv, pv) * inv; if (u < 0 || u > 1) continue;
++            core::Vec3 q = core::cross(tv, e1);
++            float v = core::dot(d, q) * inv; if (v < 0 || u + v > 1) continue;
++            float tt = core::dot(e2, q) * inv;
++            if (tt >= 0 && tt <= 1) return true;
++        }
++    }
++    return segmentAnyHit(a, b);
++}
++
+ bool CollisionWorld::segmentHitReference(const core::Vec3& a, const core::Vec3& b, float& outT) const {
+     // Moller-Trumbore against the triangles of the grid cells the segment's XZ projection passes
+     // through, walked front to back with a 2D DDA (Amanatides-Woo) and stopped as soon as the
+diff --git a/src/game/Collision.h b/src/game/Collision.h
+index b5ac43e..dfb8c54 100644
+--- a/src/game/Collision.h
++++ b/src/game/Collision.h
+@@ -26,6 +26,8 @@ public:
+     bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const;
+     // Any hit on a-b (no nearest t): the renderer's light-visibility queries. Same boolean as segmentHit, stops at the first hit.
+     bool segmentAnyHit(const core::Vec3& a, const core::Vec3& b) const;
++    // The boolean of the 4-argument segmentHit (moving sets + static geometry), stopping at the first hit: line-of-sight checks.
++    bool segmentBlocked(const core::Vec3& a, const core::Vec3& b) const;
+     // The previous segmentHit (no height rejection), kept for WFC_RAYBENCH's equality check.
+     bool segmentHitReference(const core::Vec3& a, const core::Vec3& b, float& outT) const;
+     // Same query, also returning the hit triangle's unit normal (orientation as authored). Also tests the
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 0ce60e3..7579b07 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -3312,6 +3312,7 @@ bool World::launchMatch(const MatchLaunch& l) {
+     const int nb = addBots(l.bots);
+     setupSurvival();   // Escalation: the horde slots (no-op otherwise)
+     setupCampaign(l);   // campaign: the human's pick, the AI squad, the level Kismet (no-op otherwise)
++    ensureHullMeshes();   // every participant chassis' vehicle-death gib hull (gibCorpse loaded it at the first vehicle death)
+     if (nb > 0) awards_.setXpScale(BotXpPolicy::scale(botDifficulty_));   // XP in bot matches by bot difficulty (user decision)
+     evictUnusedAssets();
+     LOG_INFO("match: launched %s %s (goal %d, time %d s, bots %d: friendly %d enemy %d %s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore,
+@@ -9041,6 +9042,19 @@ core::Vec3 World::Corpse::playAt(const char* so) const {
+ }
+ 
+ // The gib meshes: the static chunks and the two skeletal gib templates (once; at the match load and at the first gib).
++// The vehicle-death gib hull of every participant chassis (the cache gibCorpse fills; same load, textures and prewarm).
++void World::ensureHullMeshes() {
++    if (!renderer_) return;
++    for (size_t q = 0; q < match_.players().size(); ++q) {
++        const ChassisDeathDef* cd = chassisDeath(resolveChassis(match_.players()[q].selection, match_.faction((int)q)));
++        if (!cd || !*cd->hull || hullMeshes_.count(cd->hull)) continue;
++        std::unique_ptr<render::MeshData> md = std::make_unique<render::MeshData>();
++        if (assets::loadGlb(assetRoot() + "/../" + cd->hull, *md)) { for (render::Material& M : md->mats) { M.tex = resolveTexture(M.baseColorUri); M.emissiveTexHandle = resolveTexture(M.emissiveUri); } fxPrewarm(*renderer_, *md, 0); }
++        else md.reset();
++        hullMeshes_.emplace(cd->hull, std::move(md));
++    }
++}
++
+ void World::ensureGibModels() {
+     if (!gibMeshesTried_ && renderer_) {
+         gibMeshesTried_ = true;
+diff --git a/src/game/World.h b/src/game/World.h
+index db9f9db..76cea0c 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1215,6 +1215,7 @@ public:
+     std::vector<const WeaponDef*> preloadedDefs_;   // weapon defs whose model is cached (sorted; a pointer search, not the string map)
+     void ensureAbilityModels();
+     void ensureGibModels();
++    void ensureHullMeshes();
+     // (Escalation DLC mechanisms) the presentation, WorldSurvivalMechPresent.cpp [Rendering]
+     void svMechPresent(render::IRenderer& r) const;
+     void svMechDrawSentries(render::IRenderer& r) const;
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index a7e58b6..b0422ca 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -59,8 +59,7 @@ bool World::botLineOfSight(const core::Vec3& from, const core::Vec3& to) const {
+     tickCount(0);   // WFC_TICKLOG LOS rays
+     const CollisionWorld& lw = weaponCollision_.valid() ? weaponCollision_ : collision_;
+     if (!lw.valid()) return true;
+-    float t; core::Vec3 n;
+-    return !lw.segmentHit(from, to, t, n);
++    return !lw.segmentBlocked(from, to);   // the boolean of segmentHit(from, to, t, n), first hit only
+ }
+ 
+ // One instant-hit trace for a participant shooter: the same targets, falloff, damage rules and destructibles as the local
+diff --git a/src/game/WorldCampaignRuntime.cpp b/src/game/WorldCampaignRuntime.cpp
+index 4026f7e..21e4520 100644
+--- a/src/game/WorldCampaignRuntime.cpp
++++ b/src/game/WorldCampaignRuntime.cpp
+@@ -889,15 +889,21 @@ void World::cpTickSentries(float dt) {
+         const int team = cp_.factories[(size_t)S.factory].team;
+         const core::Vec3 eye = S.pos + core::Vec3{0.0f, 0.5f, 0.0f};
+         int tgt = -1; float best = D.sight;
+-        for (size_t q = 0; q < match_.players().size(); ++q) {
+-            const MatchPlayer& mp = match_.players()[q];
+-            if (!mp.alive || mp.team == team) continue;
+-            const Character* c = participantPawn((int)q);
+-            if (!c) continue;
+-            const float L = core::length(c->actorLocation() - eye);
+-            if ((S.forced >= 0 && (int)q != S.forced) || L > best) continue;
+-            if (!botLineOfSight(eye, c->actorLocation())) continue;
+-            best = L; tgt = (int)q;
++        {   // the nearest visible candidate: nearest first, equal distances the higher player first (the old in-order scan kept the last)
++            static std::vector<std::pair<float, int>> cand;
++            cand.clear();
++            for (size_t q = 0; q < match_.players().size(); ++q) {
++                const MatchPlayer& mp = match_.players()[q];
++                if (!mp.alive || mp.team == team) continue;
++                const Character* c = participantPawn((int)q);
++                if (!c) continue;
++                const float L = core::length(c->actorLocation() - eye);
++                if ((S.forced >= 0 && (int)q != S.forced) || L > D.sight) continue;
++                cand.push_back({L, (int)q});
++            }
++            std::sort(cand.begin(), cand.end(), [](const std::pair<float, int>& a, const std::pair<float, int>& b) { return a.first != b.first ? a.first < b.first : a.second > b.second; });
++            for (const auto& cq : cand)
++                if (botLineOfSight(eye, participantPawn(cq.second)->actorLocation())) { best = cq.first; tgt = cq.second; break; }
+         }
+         if (tgt < 0) continue;
+         const core::Vec3 aim = participantPawn(tgt)->actorLocation() - eye;

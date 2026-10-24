@@ -1,0 +1,463 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 3a5f5d5..989d9cf 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -246,7 +246,7 @@ endif()
+ # Headless frontend / game-flow tests (docs/FRONTEND.md): catalog, URLs, UI controller, boot -> match -> return.
+ file(GLOB FRONTEND_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/frontend/*.cpp")
+ add_executable(wfc_frontend_tests ${CMAKE_SOURCE_DIR}/tests/FrontendTests.cpp ${FRONTEND_SOURCES} ${PLATFORM_COMMON_SOURCES} ${CMAKE_SOURCE_DIR}/src/platform/win32/LongPath.cpp
+-    ${CMAKE_SOURCE_DIR}/src/core/Log.cpp)
++    ${CMAKE_SOURCE_DIR}/src/core/Log.cpp ${CMAKE_SOURCE_DIR}/src/core/AssetRootDefault.cpp)
+ target_include_directories(wfc_frontend_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+ target_compile_options(wfc_frontend_tests PRIVATE -Wall -Wextra -Wno-unused-parameter)
+ if(WIN32)
+@@ -266,7 +266,8 @@ endif()
+ # GFx runtime headless dump (tools/frontend/GfxDump.cpp).
+ file(GLOB GFX_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/ui/gfx/*.cpp")
+ add_executable(wfc_gfxdump ${CMAKE_SOURCE_DIR}/tools/frontend/GfxDump.cpp ${GFX_SOURCES} ${FRONTEND_SOURCES} ${PLATFORM_COMMON_SOURCES} ${CMAKE_SOURCE_DIR}/src/platform/win32/LongPath.cpp
+-    ${CMAKE_SOURCE_DIR}/src/ui/GfxHost.cpp ${CMAKE_SOURCE_DIR}/src/core/Log.cpp)
++    ${CMAKE_SOURCE_DIR}/src/ui/GfxHost.cpp ${CMAKE_SOURCE_DIR}/src/core/Log.cpp
++    ${CMAKE_SOURCE_DIR}/src/core/AssetRootDefault.cpp)
+ target_include_directories(wfc_gfxdump PRIVATE "${CMAKE_SOURCE_DIR}/src")
+ target_compile_options(wfc_gfxdump PRIVATE -Wall -Wextra -Wno-unused-parameter)
+ if(WIN32)
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index 8673672..b2432ec 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -68,7 +68,7 @@ bool Application::init() {
+     LOG_INFO("%s", platform::applyCachePreference().c_str());
+     if (std::getenv("WFC_VEHTEST")) { game::runVehicleTests(); return false; }   // measurements only
+     if (std::getenv("WFC_CHASSISTEST")) {
+-        game::runChassisTests(std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault);
++        game::runChassisTests(std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault());
+         return false;
+     }
+     if (std::getenv("WFC_MODETEST")) {   // Streets per-mode objective state (no rendering)
+@@ -1595,7 +1595,7 @@ void Application::runMapTraverse() {
+     auto& ctl = world_.player().controller();
+     const game::CollisionWorld* col = world_.collision();
+     if (!col) { LOG_WARN("MAPTRAVERSE: no collision"); return; }
+-    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
++    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
+     std::ifstream f(world_.mapDir() + "navigation.json", std::ios::binary);
+     std::stringstream ss; ss << f.rdbuf();
+     assets::Json nav;
+@@ -1961,7 +1961,7 @@ void Application::runTransformStress() {
+     auto& ctl = world_.player().controller();
+     const game::CollisionWorld* col = world_.collision();
+     if (!col) return;
+-    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
++    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
+     std::ifstream f(world_.mapDir() + "navigation.json", std::ios::binary);
+     std::stringstream ss; ss << f.rdbuf();
+     assets::Json nav;
+@@ -2149,7 +2149,7 @@ void Application::runMatchTest() {
+     // B: time limit tie (harness override of TimeLimit to 125 s; authored 900).
+     {
+         game::Match m;
+-        std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
++        std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
+         m.loadSpawnData(world_.mapDir() + "gameplay.json");
+         game::MatchSettings s = game::MatchSettings::forMode("TDM");
+         s.timeLimit = 125;
+@@ -2166,7 +2166,7 @@ void Application::runMatchTest() {
+     // C: DM.
+     {
+         game::Match m;
+-        std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
++        std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
+         m.loadSpawnData(world_.mapDir() + "gameplay.json");
+         m.begin(game::MatchSettings::forMode("DM"));
+         int p0 = m.addPlayer("P0"), p1 = m.addPlayer("P1");
+@@ -2198,7 +2198,7 @@ void Application::runCameraTest() {
+     auto& ctl = world_.player().controller();
+     const game::CollisionWorld* col = world_.collision();
+     if (!col) return;
+-    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
++    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
+     game::CollisionWorld renderCol;
+     {
+         render::MeshData rm, rs;
+@@ -2282,7 +2282,7 @@ void Application::runChaosTest() {
+     auto& ctl = world_.player().controller();
+     const game::CollisionWorld* col = world_.collision();
+     if (!col) return;
+-    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
++    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
+     std::ifstream f(world_.mapDir() + "navigation.json", std::ios::binary);
+     std::stringstream ss; ss << f.rdbuf();
+     assets::Json nav;
+@@ -4192,7 +4192,7 @@ void Application::runTipTest() {
+     const float dt = 1.0f / 60.0f;
+     const char* root = std::getenv("WFC_ASSETS");
+     static game::ChassisDef car;
+-    if (!game::loadChassisDef(root ? root : core::config::kAssetRootDefault, "Car2", car) || !world_.collision()) {
++    if (!game::loadChassisDef(root ? root : core::config::assetRootDefault(), "Car2", car) || !world_.collision()) {
+         LOG_INFO("TIPTEST SKIP: chassis or collision missing"); return;
+     }
+     const core::Vec3 tip{-181.4f, 11.9f, -12.3f};
+@@ -7199,7 +7199,7 @@ void Application::runVehicleAudit() {
+     assets::Json j;
+     if (!f || !assets::Json::parse(ss.str(), j)) { LOG_INFO("VEHICLEAUDIT FAIL cannot read %s", path.c_str()); return; }
+     const assets::Json& V = j["vehicles"];
+-    const std::string vsRoot = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
++    const std::string vsRoot = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
+     int compared = 0, mismatches = 0, bodiesBad = 0, loadFail = 0, fields = 0;
+     for (const auto& kv : V.obj) {
+         const std::string id = kv.first;
+diff --git a/src/core/Application_CampaignAudio.cpp b/src/core/Application_CampaignAudio.cpp
+index c4d3ca8..6a1922c 100644
+--- a/src/core/Application_CampaignAudio.cpp
++++ b/src/core/Application_CampaignAudio.cpp
+@@ -31,7 +31,7 @@ void Application::runCampaignAudioTest() {
+     if (text.empty() || !assets::Json::parse(text.data(), text.size(), doc)) { LOG_ERROR("CAMPAIGNAUDIO: cannot read %s", path); std::exit(2); }
+     if (!audio_) { LOG_ERROR("CAMPAIGNAUDIO: no audio device (WFC_NULLRENDER_AUDIO=1)"); std::exit(2); }
+     const char* ar = std::getenv("WFC_ASSETS");
+-    const std::string content = std::string(ar ? ar : config::kAssetRootDefault) + "/../content/";
++    const std::string content = std::string(ar ? ar : config::assetRootDefault()) + "/../content/";
+     game::SoundCues cues;
+     cues.load(audio_, content);
+     const int nCues = cues.addCues(doc["cues"], content);
+diff --git a/src/core/AssetRootDefault.cpp b/src/core/AssetRootDefault.cpp
+new file mode 100644
+index 0000000..8a7b64d
+--- /dev/null
++++ b/src/core/AssetRootDefault.cpp
+@@ -0,0 +1,60 @@
++// core::config::assetRootDefault (Config.h): the asset root when WFC_ASSETS is unset. A package keeps the dev tree's layout
++// (tools/package/build_slim.py: <root>/Rebuild/build/release/bin/wfc_rebuild.exe beside <root>/ExtractedAssets/VerticalSlice) under
++// any folder or drive letter, so the root is derived from the exe's folder when that layout is there; otherwise (a scratch build
++// elsewhere, tests) this PC's tree - the value this constant always had.
++#include "core/Config.h"
++
++#include <string>
++#include <sys/stat.h>
++
++#if defined(_WIN32)
++#include <windows.h>
++#endif
++
++namespace core::config {
++
++namespace {
++std::string exeDir() {
++#if defined(_WIN32)
++    wchar_t buf[32768];
++    const DWORD n = GetModuleFileNameW(nullptr, buf, (DWORD)(sizeof(buf) / sizeof(buf[0])));
++    if (n == 0 || n >= sizeof(buf) / sizeof(buf[0])) return {};
++    const int len = WideCharToMultiByte(CP_UTF8, 0, buf, (int)n, nullptr, 0, nullptr, nullptr);
++    std::string p((size_t)len, '\0');
++    WideCharToMultiByte(CP_UTF8, 0, buf, (int)n, &p[0], len, nullptr, nullptr);
++    for (char& c : p) if (c == '\\') c = '/';
++    const size_t s = p.rfind('/');
++    return s == std::string::npos ? std::string() : p.substr(0, s);
++#else
++    return {};
++#endif
++}
++bool isDir(const std::string& p) {
++#if defined(_WIN32)
++    const int wl = MultiByteToWideChar(CP_UTF8, 0, p.c_str(), -1, nullptr, 0);
++    std::wstring w((size_t)wl, L'\0');
++    MultiByteToWideChar(CP_UTF8, 0, p.c_str(), -1, &w[0], wl);
++    const DWORD a = GetFileAttributesW(w.c_str());
++    return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY);
++#else
++    struct stat st;
++    return stat(p.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
++#endif
++}
++} // namespace
++
++const char* assetRootDefault() {
++    static const std::string root = [] {
++        std::string d = exeDir();   // <root>/Rebuild/build/release/bin
++        const char* tail = "/Rebuild/build/release/bin";
++        const size_t tl = std::char_traits<char>::length(tail);
++        if (d.size() > tl && d.compare(d.size() - tl, tl, tail) == 0) {
++            const std::string vs = d.substr(0, d.size() - tl) + "/ExtractedAssets/VerticalSlice";
++            if (isDir(vs)) return vs;
++        }
++        return std::string("F:/Transformers Rebuild/ExtractedAssets/VerticalSlice");
++    }();
++    return root.c_str();
++}
++
++} // namespace core::config
+diff --git a/src/core/Config.h b/src/core/Config.h
+index 6488ba0..a8544b0 100644
+--- a/src/core/Config.h
++++ b/src/core/Config.h
+@@ -256,7 +256,9 @@ constexpr float kAimPawnHMin = -1.0f,  kAimPawnHMax = 0.85f;
+ constexpr float kAimPawnVMin = -0.7f,  kAimPawnVMax = 1.0f;
+ 
+ // Asset source: local, legally-owned extracted vertical slice (never committed).
+-// Override at runtime with the WFC_ASSETS environment variable.
+-constexpr const char* kAssetRootDefault = "F:/Transformers Rebuild/ExtractedAssets/VerticalSlice";
++// Override at runtime with the WFC_ASSETS environment variable. The default (core/AssetRootDefault.cpp): the package
++// root derived from the exe folder (<root>/Rebuild/build/release/bin -> <root>/ExtractedAssets/VerticalSlice when it
++// exists), else this PC's tree "F:/Transformers Rebuild/ExtractedAssets/VerticalSlice". Computed once; never null.
++const char* assetRootDefault();
+ 
+ } // namespace core::config
+diff --git a/src/core/DataRoots.h b/src/core/DataRoots.h
+index 8127172..efac7cb 100644
+--- a/src/core/DataRoots.h
++++ b/src/core/DataRoots.h
+@@ -15,7 +15,7 @@ inline const std::string& projectRoot() {
+     static const std::string r = [] {
+         if (const char* e = std::getenv("WFC_PROJECT_ROOT")) if (*e) return std::string(e);
+         const char* ae = std::getenv("WFC_ASSETS");
+-        std::string a = ae && *ae ? ae : config::kAssetRootDefault;
++        std::string a = ae && *ae ? ae : config::assetRootDefault();
+         for (char& c : a) if (c == '\\') c = '/';
+         while (!a.empty() && a.back() == '/') a.pop_back();
+         const std::string tail = "/ExtractedAssets/VerticalSlice";
+diff --git a/src/core/FrontendSceneGL.cpp b/src/core/FrontendSceneGL.cpp
+index 4a9a297..e13b7a5 100644
+--- a/src/core/FrontendSceneGL.cpp
++++ b/src/core/FrontendSceneGL.cpp
+@@ -120,7 +120,7 @@ template <class R> void nativeUnload(R* r) {
+ 
+ std::string assetRoot() {
+     if (const char* e = std::getenv("WFC_ASSETS")) return e;
+-    return config::kAssetRootDefault;
++    return config::assetRootDefault();
+ }
+ }
+ 
+diff --git a/src/frontend/Catalog.cpp b/src/frontend/Catalog.cpp
+index 0634ade..f397e00 100644
+--- a/src/frontend/Catalog.cpp
++++ b/src/frontend/Catalog.cpp
+@@ -68,7 +68,7 @@ std::string Catalog::defaultManifestRoot() {
+ 
+ std::string Catalog::defaultExtractedRoot() {
+     if (const char* e = std::getenv("WFC_EXTRACTED")) return e;
+-    std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
++    std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
+     size_t s = vs.find_last_of("/\\");
+     return s == std::string::npos ? vs : vs.substr(0, s);   // ExtractedAssets (parent of VerticalSlice)
+ }
+diff --git a/src/frontend/FrontendRuntime.cpp b/src/frontend/FrontendRuntime.cpp
+index 645cbb6..639bf94 100644
+--- a/src/frontend/FrontendRuntime.cpp
++++ b/src/frontend/FrontendRuntime.cpp
+@@ -294,7 +294,7 @@ bool FrontendRuntime::init() {
+     if (const char* p = std::getenv("WFC_PLATFORM")) platform_ = p;
+     if (platform_ != "WIN" && platform_ != "XBOX360" && platform_ != "PS3") platform_ = "WIN";
+     FlowTrace::emit("platform", {{"sku", platform_}});
+-    std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
++    std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
+     if (!catalog_.load(Catalog::defaultManifestRoot(), Catalog::defaultExtractedRoot(), vs + "/Maps")) return false;
+     if (!prompts_.load(Catalog::defaultExtractedRoot())) LOG_WARN("frontend: TnInputCommandToBindingMapper tables not found");
+     hud_.setPromptTranslator([this](const std::string& t) { return prompts_.translate(t, device_.pad()); });
+diff --git a/src/game/CharacterAudio.cpp b/src/game/CharacterAudio.cpp
+index 1983599..91f4ec4 100644
+--- a/src/game/CharacterAudio.cpp
++++ b/src/game/CharacterAudio.cpp
+@@ -188,7 +188,7 @@ const std::string* g_warmTag = nullptr;
+ int commit(SoundCues& cues, const assets::Json& sub) {
+     if (sub.obj.empty()) return 0;
+     const char* root = std::getenv("WFC_ASSETS");
+-    const std::string content = std::string(root ? root : core::config::kAssetRootDefault) + "/../content/";
++    const std::string content = std::string(root ? root : core::config::assetRootDefault()) + "/../content/";
+     return g_warmTag ? cues.warmCueWaves(sub, content, *g_warmTag) : cues.addCues(sub, content);
+ }
+ 
+diff --git a/src/game/FrontendAudioRuntime.cpp b/src/game/FrontendAudioRuntime.cpp
+index b39bc7f..df3c976 100644
+--- a/src/game/FrontendAudioRuntime.cpp
++++ b/src/game/FrontendAudioRuntime.cpp
+@@ -8,7 +8,7 @@ namespace game {
+ 
+ FrontendAudioRuntime::FrontendAudioRuntime(audio::IAudio* a, const std::string& assetRoot) : audio_(a) {
+     std::string root = assetRoot;
+-    if (root.empty()) root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
++    if (root.empty()) root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
+     cues_.reset(new SoundCues());
+     host_.reset(new LevelAudioHost(*cues_));
+     if (!a) return;
+diff --git a/src/game/Kismet.cpp b/src/game/Kismet.cpp
+index f0a01fc..d3fc2d9 100644
+--- a/src/game/Kismet.cpp
++++ b/src/game/Kismet.cpp
+@@ -16,6 +16,7 @@ static bool endsWith(const std::string& s, const std::string& t) { return s.size
+ 
+ bool KismetVM::load(const assets::Json& root) {
+     ops_.clear(); vars_.clear(); byPath_.clear(); varByPath_.clear(); stacks_.clear(); seqChildren_.clear(); seqRoots_.clear(); pending_.clear(); time_ = 0.0f; tickNo_ = 0;
++    touched_.clear(); latentList_.clear(); inLatent_.clear();
+     const assets::Json& levels = root["levels"];
+     if (!levels.isObject()) return false;
+     // Pass 1: variables and ops by path.
+@@ -301,6 +302,7 @@ void KismetVM::drain(int seq) {
+     while (!stacks_[(size_t)seq].empty()) {
+         if (++steps > 1000) { ++queueCapHits; if (log) LOG_INFO("KISMET: 1000-step cap at t %.2f (%zu carried over)", time_, stacks_[(size_t)seq].size()); break; }
+         const Link l = stacks_[(size_t)seq].back(); stacks_[(size_t)seq].pop_back();
++        touched_.push_back(l.op);   // (its activation may make it latent: the latent pass picks it up)
+         Op& o = ops_[(size_t)l.op];
+         ++activations[o.cls];
+         if (log) LOG_INFO("KISMET t %.2f %s [%d] %s", time_, o.cls.c_str(), l.input, o.path.c_str());
+@@ -320,7 +322,16 @@ void KismetVM::drain(int seq) {
+ void KismetVM::tick(float dt) {
+     time_ += dt; dt_ = dt; ++tickNo_;
+     run();   // this tick's new work (with the carried-over steps); new latent ops take their first update in it
+-    for (size_t i = 0; i < ops_.size(); ++i) {   // then every older latent op once [C: re-queued after the drain]
++    if (inLatent_.size() != ops_.size()) {   // first pass after a load: every op already latent
++        inLatent_.assign(ops_.size(), 0); latentList_.clear(); touched_.clear();
++        for (size_t i = 0; i < ops_.size(); ++i) if (ops_[i].latent) { inLatent_[i] = 1; latentList_.push_back((int)i); }
++    }
++    bool added = false;
++    for (int t : touched_) if (ops_[(size_t)t].latent && !inLatent_[(size_t)t]) { inLatent_[(size_t)t] = 1; latentList_.push_back(t); added = true; }
++    touched_.clear();
++    if (added) std::sort(latentList_.begin(), latentList_.end());
++    for (size_t k = 0; k < latentList_.size(); ++k) {   // then every older latent op once, in index order [C: re-queued after the drain]
++        const size_t i = (size_t)latentList_[k];
+         Op& o = ops_[i];
+         if (!o.latent || o.startTick == tickNo_) continue;
+         if (o.cls == "SeqAct_Delay") {
+@@ -328,6 +339,11 @@ void KismetVM::tick(float dt) {
+         } else if (host_) host_->updateLatent(*this, (int)i, dt);
+         flush();
+     }
++    {   // the ops that left latent leave the list (re-noted at their next activation)
++        size_t w = 0;
++        for (int i : latentList_) { if (ops_[(size_t)i].latent) latentList_[w++] = i; else inLatent_[(size_t)i] = 0; }
++        latentList_.resize(w);
++    }
+     run();
+ }
+ 
+diff --git a/src/game/Kismet.h b/src/game/Kismet.h
+index 7349f0a..5d0a85a 100644
+--- a/src/game/Kismet.h
++++ b/src/game/Kismet.h
+@@ -105,6 +105,10 @@ private:
+     std::vector<int> seqRoots_;
+     std::vector<Link> pending_;   // the current op's impulsed targets in link order (pushed reversed when it finishes)
+     int tickNo_ = 0; float dt_ = 0.0f;
++    // The latent pass (tick): every op drain() popped since the last pass (latent is only set in an activation), and the latent ops
++    // in index order with a membership flag.
++    std::vector<int> touched_, latentList_;
++    std::vector<uint8_t> inLatent_;
+     void flush() { for (size_t k = pending_.size(); k-- > 0;) stacks_[(size_t)ops_[(size_t)pending_[k].op].seqId].push_back(pending_[k]); pending_.clear(); }
+     void drain(int seq);
+     Host* host_ = nullptr;
+diff --git a/src/game/VehicleTests.cpp b/src/game/VehicleTests.cpp
+index 81ed186..4c316cf 100644
+--- a/src/game/VehicleTests.cpp
++++ b/src/game/VehicleTests.cpp
+@@ -375,7 +375,7 @@ void runVehicleTests() {
+     // ---- Pass 22: car / tank / jet vehicle forms (RE TARGETED_PASS3 C, script bytecode) ----
+     {
+         const char* root = std::getenv("WFC_ASSETS");
+-        const std::string vs = root ? root : core::config::kAssetRootDefault;
++        const std::string vs = root ? root : core::config::assetRootDefault();
+         static ChassisDef car, tank, jet, truck;
+         bool ok = loadChassisDef(vs, "Car2", car) && loadChassisDef(vs, "Tank3", tank) && loadChassisDef(vs, "Jet", jet) &&
+                   loadChassisDef(vs, "Truck", truck);
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index ae4ccea..4df0dae 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -104,7 +104,7 @@ void frame(size_t particles, size_t meshes) {
+ 
+ static std::string assetRoot() {
+     if (const char* e = std::getenv("WFC_ASSETS")) return std::string(e);
+-    return core::config::kAssetRootDefault;
++    return core::config::assetRootDefault();
+ }
+ 
+ static bool readTextFile(const std::string& path, std::string& out) {
+diff --git a/src/game/WorldCampaignMatinee.cpp b/src/game/WorldCampaignMatinee.cpp
+index 3c7adb0..a9070c5 100644
+--- a/src/game/WorldCampaignMatinee.cpp
++++ b/src/game/WorldCampaignMatinee.cpp
+@@ -164,7 +164,7 @@ void World::cpLoadMatinees() {
+     cp_.matinees.clear(); cp_.interps.clear();
+     const char* mr = std::getenv("WFC_MANIFESTS");
+     assets::Json j;
+-    if (!readJ(std::string(mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests") + "/next_map/" + cpChapter_.chapter + "_matinee.json", j)) {
++    if (!readJ((mr ? std::string(mr) : core::projectRoot() + "/AssetTools/manifests") + "/next_map/" + cpChapter_.chapter + "_matinee.json", j)) {
+         LOG_WARN("campaign: no matinee data for %s", cpChapter_.chapter.c_str());
+         return;
+     }
+@@ -511,7 +511,7 @@ void World::cpLoadPawnGroups() {
+     if (robodefChassis.empty()) {
+         assets::Json r;
+         const char* mr = std::getenv("WFC_MANIFESTS");
+-        if (readJ(std::string(mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests") + "/mp_content/roster_package.json", r))
++        if (readJ((mr ? std::string(mr) : core::projectRoot() + "/AssetTools/manifests") + "/mp_content/roster_package.json", r))
+             for (const auto& kv : r["chassis"].obj) robodefChassis[kv.second["robot"]["definition"].asString()] = kv.first;
+     }
+     const assets::Json& gs = j["pawn_groups"];
+@@ -540,6 +540,7 @@ void World::cpLoadPawnGroups() {
+         }
+     }
+     if (preloaded) LOG_INFO("campaign: %d matinee pawn clip files preloaded", preloaded);
++    cpCharacterTargets("");   // its ROBODEF -> chassis table (roster_package.json) builds now, not in the first Character-targeted op
+ }
+ 
+ // Play `clip` at `time` on every participant of the group's characters (the human or the squad holding that chassis): the clip is
+diff --git a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
+index 0e0de7b..27201a0 100644
+--- a/src/render/gl/GLRenderer.cpp
++++ b/src/render/gl/GLRenderer.cpp
+@@ -640,7 +640,7 @@ public:
+         if (reticleTex_ == 0 && !reticleTried_) {
+             reticleTried_ = true;
+             ImageData img;
+-            std::string path = std::string(core::config::kAssetRootDefault) + "/../content/UI_GFxHud_p/Hud_GFX_I190.png";
++            std::string path = std::string(core::config::assetRootDefault()) + "/../content/UI_GFxHud_p/Hud_GFX_I190.png";
+             if (platform::decodeImage(path, img)) {
+                 glGenTextures(1, &reticleTex_);
+                 glBindTexture(GL_TEXTURE_2D, reticleTex_);
+diff --git a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+index 62c3186..90ee9bf 100644
+--- a/src/render/gl/WfcPipeline.cpp
++++ b/src/render/gl/WfcPipeline.cpp
+@@ -979,7 +979,7 @@ GLuint linkProgram(GLuint vs, GLuint fs, const std::string& tag) { return link(v
+ 
+ std::string Pipeline::assetRoot() {
+     if (const char* e = std::getenv("WFC_ASSETS")) return e;
+-    return core::config::kAssetRootDefault;
++    return core::config::assetRootDefault();
+ }
+ 
+ // The worktree's work/render above the executable, whatever the build layout (build/bin, build/release/bin, a
+diff --git a/tests/FrontendTests.cpp b/tests/FrontendTests.cpp
+index 02690b2..401d261 100644
+--- a/tests/FrontendTests.cpp
++++ b/tests/FrontendTests.cpp
+@@ -420,7 +420,7 @@ static void testCatalog(const Catalog& c) {
+     // Selectable = cooked + rebuild runtime world + render export on disk (grows as AssetTools exports maps).
+     auto tdmMaps = c.compatibleMaps("TDM", true);
+     size_t onDisk = 0;
+-    const std::string mapsRoot = (std::getenv("WFC_ASSETS") ? std::string(std::getenv("WFC_ASSETS")) : std::string(core::config::kAssetRootDefault)) + "/Maps/";
++    const std::string mapsRoot = (std::getenv("WFC_ASSETS") ? std::string(std::getenv("WFC_ASSETS")) : std::string(core::config::assetRootDefault())) + "/Maps/";
+     for (const MapInfo& m : c.maps()) onDisk += m.cooked && m.compatibleWith("TDM") && std::ifstream(mapsRoot + m.runtimeDir + "/world.glb").good()
+                                                 && (std::ifstream(mapsRoot + m.runtimeDir + "/render_index.json").good()
+                                                     || std::ifstream(Catalog::defaultManifestRoot() + "/maps/" + m.runtimeDir + "/render_index_generic.json").good());
+@@ -700,7 +700,7 @@ static void testSceneCamera() {
+ }
+ 
+ int main() {
+-    std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
++    std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
+     Catalog c;
+     bool ok = c.load(Catalog::defaultManifestRoot(), Catalog::defaultExtractedRoot(), vs + "/Maps");
+     check(ok, "catalog.load");
+diff --git a/tools/fidelity/Rig.cpp b/tools/fidelity/Rig.cpp
+index 067349c..b5a9de8 100644
+--- a/tools/fidelity/Rig.cpp
++++ b/tools/fidelity/Rig.cpp
+@@ -34,7 +34,7 @@ template <class C, class M> bool giveArm(C&, const M*, long) { return false; }
+ 
+ std::string Models::assetRoot() {
+     if (const char* e = std::getenv("WFC_ASSETS")) return e;
+-    return core::config::kAssetRootDefault;
++    return core::config::assetRootDefault();
+ }
+ 
+ void Models::disable() { gModelsDisabled = true; }
