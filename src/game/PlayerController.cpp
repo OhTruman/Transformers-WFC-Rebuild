@@ -198,7 +198,8 @@ void PlayerController::handleInput(const platform::InputFrame& inRaw, float dt) 
     // Reload: activates on RELEASE of a tap shorter than 0.3 s [CONF RE]; latched until consumed.
     bool reloadDown = in.isDown(Button::Reload);
     if (reloadDown) reloadHeld_ += dt;
-    if (!reloadDown && prevReloadDown_ && reloadHeld_ < cfg::kReloadTapTime) wantReload_ = true;
+    if (in.wasPressed(Button::Reload)) xInteracted_ = in.wasPressed(Button::Interact) && interactAvailable_;   // pad X: TryInteract first
+    if (!reloadDown && prevReloadDown_ && reloadHeld_ < cfg::kReloadTapTime && !xInteracted_) wantReload_ = true;
     if (!vehicleForm && in.wasPressed(Button::Dash)) wantAbility_ = 0;      // Ability0
     if (!vehicleForm && in.wasPressed(Button::Ability1)) wantAbility_ = 1;  // Ability1
     abilityStickFwd_ = intent_.moveForward; abilityStickRight_ = intent_.moveRight;

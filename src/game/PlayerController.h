@@ -189,6 +189,8 @@ private:
     float quickTurnRemain_ = 0.0f, quickTurnFrom_ = 0.0f, quickTurnTo_ = 0.0f;   // tank 180 quick turn (TnQuickTurnCameraBehavior)
     float sinceStep_ = 0.0f, stepFaceYaw_ = 0.0f, stepBodyYaw_ = 0.0f, stepYawRate_ = 0.0f;   // presentation yaw (per render frame)   // Fire pressed since the last simulation step
     bool wantReload_ = false;     // latched on release of a tap < kReloadTapTime
+    bool interactAvailable_ = false;   // the World: an interactable is offered this frame (TryInteract would succeed)
+    bool xInteracted_ = false;         // the current Reload press came with Interact (pad X) while one was offered: no reload
     bool wantDashLatched_ = false;
     bool prevReloadDown_ = false;
     float reloadHeld_ = 0.0f;
@@ -259,6 +261,7 @@ public:
     bool fireHeld() const { return wantFire_ || fireLatch_; }
     bool consumeGrenadeRequest() { bool b = wantGrenade_; wantGrenade_ = false; return b; }
     bool consumePickupRequest() { bool b = wantPickup_; wantPickup_ = false; return b; }
+    void setInteractAvailable(bool a) { interactAvailable_ = a; }   // World, each frame before handleInput (pad X: TryInteract else reload)
     bool interactHeld() const { return interactHeld_; }   // Interact held this frame (Escalation generators: _AllowDraining)
 private:
     int wantAbility_ = -1, abilityTriggers_ = 0;

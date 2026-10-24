@@ -1585,6 +1585,7 @@ private:
     bool svKillingBrute_ = false;  // TnKillAttachedPawn in progress (bypasses the backpack test)
     void svSetZoneActive(int zone, bool on);
     bool svInteractHeld(int player) const;
+    bool localInteractAvailable() const;   // an interactable offered to the local player (pad X: TryInteract else reload)
     void svFireGenerator(int generator, bool levelDrop = false);
     void svTickKismet();   // Wall_Crashers (map Kismet as data)
     // The DLC maps' mechanisms (WorldSurvivalMech.cpp / SurvivalMech.h)

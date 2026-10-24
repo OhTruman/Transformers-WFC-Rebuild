@@ -1,0 +1,80 @@
+diff --git a/src/game/PlayerController.cpp b/src/game/PlayerController.cpp
+index d31978db..0d32975a 100644
+--- a/src/game/PlayerController.cpp
++++ b/src/game/PlayerController.cpp
+@@ -198,7 +198,8 @@ void PlayerController::handleInput(const platform::InputFrame& inRaw, float dt)
+     // Reload: activates on RELEASE of a tap shorter than 0.3 s [CONF RE]; latched until consumed.
+     bool reloadDown = in.isDown(Button::Reload);
+     if (reloadDown) reloadHeld_ += dt;
+-    if (!reloadDown && prevReloadDown_ && reloadHeld_ < cfg::kReloadTapTime) wantReload_ = true;
++    if (in.wasPressed(Button::Reload)) xInteracted_ = in.wasPressed(Button::Interact) && interactAvailable_;   // pad X: TryInteract first
++    if (!reloadDown && prevReloadDown_ && reloadHeld_ < cfg::kReloadTapTime && !xInteracted_) wantReload_ = true;
+     if (!vehicleForm && in.wasPressed(Button::Dash)) wantAbility_ = 0;      // Ability0
+     if (!vehicleForm && in.wasPressed(Button::Ability1)) wantAbility_ = 1;  // Ability1
+     abilityStickFwd_ = intent_.moveForward; abilityStickRight_ = intent_.moveRight;
+diff --git a/src/game/PlayerController.h b/src/game/PlayerController.h
+index 125e6a21..23ec0a9e 100644
+--- a/src/game/PlayerController.h
++++ b/src/game/PlayerController.h
+@@ -189,6 +189,8 @@ private:
+     float quickTurnRemain_ = 0.0f, quickTurnFrom_ = 0.0f, quickTurnTo_ = 0.0f;   // tank 180 quick turn (TnQuickTurnCameraBehavior)
+     float sinceStep_ = 0.0f, stepFaceYaw_ = 0.0f, stepBodyYaw_ = 0.0f, stepYawRate_ = 0.0f;   // presentation yaw (per render frame)   // Fire pressed since the last simulation step
+     bool wantReload_ = false;     // latched on release of a tap < kReloadTapTime
++    bool interactAvailable_ = false;   // the World: an interactable is offered this frame (TryInteract would succeed)
++    bool xInteracted_ = false;         // the current Reload press came with Interact (pad X) while one was offered: no reload
+     bool wantDashLatched_ = false;
+     bool prevReloadDown_ = false;
+     float reloadHeld_ = 0.0f;
+@@ -259,6 +261,7 @@ public:
+     bool fireHeld() const { return wantFire_ || fireLatch_; }
+     bool consumeGrenadeRequest() { bool b = wantGrenade_; wantGrenade_ = false; return b; }
+     bool consumePickupRequest() { bool b = wantPickup_; wantPickup_ = false; return b; }
++    void setInteractAvailable(bool a) { interactAvailable_ = a; }   // World, each frame before handleInput (pad X: TryInteract else reload)
+     bool interactHeld() const { return interactHeld_; }   // Interact held this frame (Escalation generators: _AllowDraining)
+ private:
+     int wantAbility_ = -1, abilityTriggers_ = 0;
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 4edcbed1..cb6f2d50 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -787,7 +787,28 @@ void World::buildGraybox() {
+     LOG_INFO("Graybox arena built: %zu blocks, %zu actors", blocks_.size(), actors_.size());
+ }
+ 
++// Pad X is TryInteract, else reload: what TryInteract would find for the local player right now.
++bool World::localInteractAvailable() const {
++    if (!matchActive_ || localDead_ || localPlayer_ < 0 || (size_t)localPlayer_ >= match_.players().size()) return false;
++    const Character& pc = player_.pawn();
++    MapState::ObjPawn op{localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true,
++                         pc.form() == Form::Robot && !pc.isTransforming() && !pc.isMeleeing()};
++    if (mapState_.pickupCandidate(op) >= 0) return true;                  // the Code of Power / bomb
++    if (cp_.active && !cp_.interactPrompt.empty()) return true;          // a campaign interact
++    if (sv_.phase != SurvivalState::Phase::Off) {
++        if ((size_t)localPlayer_ < sv_.nearGenerator.size() && sv_.nearGenerator[(size_t)localPlayer_] >= 0) return true;   // a generator
++        const SvMech& M = svData_.mech;
++        const core::Vec3 p = pc.position();
++        for (size_t k = 0; k < M.lasers.size() && k < sv_.mech.lasers.size(); ++k)
++            if (sv_.mech.lasers[k].active && sv_.mech.lasers[k].t >= M.lasers[k].armDelay && core::length(p - M.lasers[k].button) <= M.lasers[k].buttonRange) return true;
++        for (size_t k = 0; k < M.detpacks.size() && k < sv_.mech.detpacks.size(); ++k)
++            if (!sv_.mech.detpacks[k].used && core::length(p - M.detpacks[k].pos) <= M.detpacks[k].range) return true;
++    }
++    return false;
++}
++
+ void World::handleInput(const platform::InputFrame& in, float dt) {
++    player_.controller().setInteractAvailable(localInteractAvailable());
+     struct ProfScope { double t0 = profNowMs(); ~ProfScope() { const double ms = profNowMs() - t0; if (spawnProf() && ms > 8.0) LOG_INFO("SPAWNPROF World::handleInput %.1f ms", ms); } } profScope;
+     player_.controller().handleInput(cp_.active && cp_.cinematicMode ? platform::InputFrame{} : in, dt);
+     seat2HandleInput(dt);   // split screen: the second local seat's controller   // Dash (Shift) is latched by PlayerController; campaign cinematic mode: no input
+diff --git a/src/game/World.h b/src/game/World.h
+index 9732823e..886c637d 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1585,6 +1585,7 @@ private:
+     bool svKillingBrute_ = false;  // TnKillAttachedPawn in progress (bypasses the backpack test)
+     void svSetZoneActive(int zone, bool on);
+     bool svInteractHeld(int player) const;
++    bool localInteractAvailable() const;   // an interactable offered to the local player (pad X: TryInteract else reload)
+     void svFireGenerator(int generator, bool levelDrop = false);
+     void svTickKismet();   // Wall_Crashers (map Kismet as data)
+     // The DLC maps' mechanisms (WorldSurvivalMech.cpp / SurvivalMech.h)

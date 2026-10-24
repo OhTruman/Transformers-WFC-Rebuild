@@ -157,3 +157,14 @@ errors, and its District ESCTEST log equals the head build's line for line.
 - the Systems audio changes merged since 15 on these paths (LevelAudio.inc, SoundCues.cpp).
 Apply it after 15. Verified: a fresh full af4d0731 + 01-16 applies (`git apply --check`), builds wfc_rebuild with 0 errors, and its
 District and Tranquillity ESCTEST logs equal the head build's line for line.
+
+## 17: pad X = TryInteract else reload (16 tree -> 7ebb7680 + GAMEPLAY_X_INTERACT_OR_RELOAD)
+
+`17_x_interact_or_reload.patch`: the same paths, from the 16 tree to 7ebb7680 + X_INTERACT_OR_RELOAD. It covers:
+- the controller drops the reload tap of an X press (Interact + Reload down on the same frame) when an interactable is offered
+  (World::localInteractAvailable: a carried object, a campaign interact prompt, an Escalation generator, a DLC mechanism button /
+  detpack); keyboard E / R stay independent;
+- everything merged between the 16 tree and 7ebb7680 on these paths (the solo-host P0 fix, pad actions, subtitles, voice, seat
+  routing, QA gate hooks ...).
+Apply it after 16. Verified: a fresh full af4d0731 + 01-17 applies (`git apply --check`), builds wfc_rebuild with 0 errors, and a
+headless Streets CTF 120 s gives identical MATCH events to the head build (18 / 18).

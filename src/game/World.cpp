@@ -787,7 +787,28 @@ void World::buildGraybox() {
     LOG_INFO("Graybox arena built: %zu blocks, %zu actors", blocks_.size(), actors_.size());
 }
 
+// Pad X is TryInteract, else reload: what TryInteract would find for the local player right now.
+bool World::localInteractAvailable() const {
+    if (!matchActive_ || localDead_ || localPlayer_ < 0 || (size_t)localPlayer_ >= match_.players().size()) return false;
+    const Character& pc = player_.pawn();
+    MapState::ObjPawn op{localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true,
+                         pc.form() == Form::Robot && !pc.isTransforming() && !pc.isMeleeing()};
+    if (mapState_.pickupCandidate(op) >= 0) return true;                  // the Code of Power / bomb
+    if (cp_.active && !cp_.interactPrompt.empty()) return true;          // a campaign interact
+    if (sv_.phase != SurvivalState::Phase::Off) {
+        if ((size_t)localPlayer_ < sv_.nearGenerator.size() && sv_.nearGenerator[(size_t)localPlayer_] >= 0) return true;   // a generator
+        const SvMech& M = svData_.mech;
+        const core::Vec3 p = pc.position();
+        for (size_t k = 0; k < M.lasers.size() && k < sv_.mech.lasers.size(); ++k)
+            if (sv_.mech.lasers[k].active && sv_.mech.lasers[k].t >= M.lasers[k].armDelay && core::length(p - M.lasers[k].button) <= M.lasers[k].buttonRange) return true;
+        for (size_t k = 0; k < M.detpacks.size() && k < sv_.mech.detpacks.size(); ++k)
+            if (!sv_.mech.detpacks[k].used && core::length(p - M.detpacks[k].pos) <= M.detpacks[k].range) return true;
+    }
+    return false;
+}
+
 void World::handleInput(const platform::InputFrame& in, float dt) {
+    player_.controller().setInteractAvailable(localInteractAvailable());
     struct ProfScope { double t0 = profNowMs(); ~ProfScope() { const double ms = profNowMs() - t0; if (spawnProf() && ms > 8.0) LOG_INFO("SPAWNPROF World::handleInput %.1f ms", ms); } } profScope;
     player_.controller().handleInput(cp_.active && cp_.cinematicMode ? platform::InputFrame{} : in, dt);
     seat2HandleInput(dt);   // split screen: the second local seat's controller   // Dash (Shift) is latched by PlayerController; campaign cinematic mode: no input
