@@ -4395,3 +4395,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 01:48 MERGED 35be2b30 Graphics setting previews (#5; panel right of the Graphics window; RayTracing_0 / _2 images, Rendering's
   same-view set to follow) + Create a Character colour picking by mouse / controller (#21; startDrag / stopDrag were
   stubs). Card: Rendering perf rows + preview captures -> Frontend 5-min check -> Experimental final gate on the sha.
+2026-10-24 01:54 MERGED 8593650c Pulse Power_Generator_Action (10 managers, doors / gates / remotes / ramp / spikes; 14 per-name door
+  collision sets) + DLC mechanism presentation data (Rendering draws next) + FINAL_BASE_ITEMS 20; ESCTEST all 5 ESC
+  maps pass (Pulse 9 / 9). Open for this build: Pulse healing platform / Nexus / sentries / Trypticon, FinalRoomUnlocked,
+  Static §9 (export blocked: AssetTools 'waiting' on a prompt since ~23:41).
