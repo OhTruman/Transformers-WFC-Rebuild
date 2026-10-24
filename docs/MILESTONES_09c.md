@@ -4408,3 +4408,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the recursive data walk in build_slim (previews would not have shipped). Systems: refresh STAGED (W: base, X: HD;
   Static empty -> refresh stops unless ALLOW_EMPTY_DLC=1). Remaining before the cut: Rendering's perf rows + preview
   captures + mechanism visuals; Frontend's 5-min check.
+2026-10-24 02:20 STATIC EXPORT ROOT CAUSE (Integration, user: 'do it for me'): the DLC STFS extractor mapped data blocks 170 / 28900 one
+  hash table early ('>' vs '>=' at the 0xAA / 0x70E4 boundaries): 4 DLC files spanned block 28900 / 170 and each had one
+  wrong 4 KB block (MP_ESC_Static_ART_m: the main BSP's surfs 316+ garbage -> vs_map IndexError; MP_ESC_District_Art_m;
+  MP_ESC_Tranquillity_AUDIO_m: RE's 43 lost exports; ENV_Pulse_Custom_p). Fixed work/dlc/stfs_extract.py, re-extracted
+  the 4 files (one differing block each, 0 short LZO blocks, Static Model_7832 1983 surfs 0 bad), replaced them in
+  work/dlc/cooked (old copies in Rebuild/work/stfs_fix/old). Static chain running; District chain + Pulse content
+  re-extract + Tranquillity audio regen follow. Merged 2400c037 Static ESC prep + FG capture + perf report (D1 12.5 fps
+  CPU-bound = the one perf problem; split A/B after the chains).
