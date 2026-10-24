@@ -3,7 +3,7 @@
 #   phase pre  (CPU, no hold): build the head; build the regress base = af4d0731 + every sim-only diff (FINAL_BASE_ITEMS: the four
 #              gatebase patches + Gameplay's sim-only diffs for spread / dodge / bot skill / leave / Escalation / campaign ...);
 #              headless same-match base vs head on Streets (TDM) and Remnant (ESC) + the negative control (hover-only base must differ);
-#              then the stability set on the head exe (work/udp/batch.ps1 -SkipBuild: 10 maps x 300 s TDM, both ESC maps, D5 + A1,
+#              then the stability set on the head exe (tools/fidelity/broad-pass.ps1 -SkipBuild: 10 maps x 300 s TDM, both ESC maps, D5 + A1,
 #              CAMPAIGNTEST / KISMETTEST / VOICETEST, the net rows).
 #   phase gate (timed; only after Integration's GO + the acks; PERF_HOLD + a clear card): the render data frozen (one snapshot for all
 #              arms), then 10 MP maps (501-510; 505 / 506 in ESC) x {2560x1440, 1920x1080} x {base, head}, lockstep 600-9600, seed 1234,
@@ -18,6 +18,12 @@ GB=tools/fidelity/gatebase
 ITEMS=${FINAL_BASE_ITEMS:-"$GB/hover_cfca1717_srcgame.patch $GB/headless_runner_be54be6d_af4d.patch $GB/TRANSACT_sim_only_af4d.patch $GB/WEAPON_sim_only_af4d.patch"}
 BN=final_$h; BASE=${FINAL_BASE:-work/ab/fast_af4d073_$BN}; HEAD=work/ab/fast_$h
 MAPS=${FINAL_MAPS:-"501 502 503 504 505 506 507 508 509 510"}; RES=${FINAL_RES:-"2560x1440 1920x1080"}
+# DLC (docs/DLC_PLAN.md, Integration 2026-10-23): each DLC map joins the timed rows + the same-match list once its render data exists
+# (Rebuild/work/render/<map>, AssetTools ships Pack 1 first). <id>:<name> where the MapId is known, else the bare name (lockstep-ab
+# takes either; MP_ESC_ maps boot in Escalation). FINAL_MAPS set = exactly those maps.
+DLC_MAPS="511:MP_ORB_Havoc 512:MP_KON_Fortress MP_ESC_Tranquillity MP_ESC_District MP_IAC_Horizon MP_IAC_Metropolis MP_KON_Sector MP_ESC_Pulse MP_ESC_Static"
+RENDER_ROOT=${FINAL_RENDER_ROOT:-"F:/Transformers Rebuild/Rebuild/work/render"}; SM_DLC=""
+for e in $DLC_MAPS; do id=${e%%:*}; nm=${e##*:}; [ -d "$RENDER_ROOT/$nm" ] || continue; SM_DLC="$SM_DLC $id"; [ -z "$FINAL_MAPS" ] && MAPS="$MAPS $id"; done
 st() { echo "$(date +%T) $*" | tee -a $L; pool_guard; }
 pool_guard() { [ $WHATIF = 1 ] && return; local gb; gb=$(powershell -NoProfile -Command "[math]::Round((Get-Counter '\Memory\Pool Nonpaged Bytes').CounterSamples[0].CookedValue/1GB,2)" | tr -d '[:space:]')
   echo "  (pool $gb GB)" >> $L; if awk "BEGIN{exit !($gb > ${GATE_POOL_MAX_GB:-9.5})}"; then rm -f work/PERF_HOLD; echo "$(date +%T) POOL GUARD: $gb GB - stopped (hold removed)" | tee -a $L; exit 3; fi; }
@@ -31,19 +37,23 @@ if [ "$PH" = pre ]; then
   [ -f $HEAD/build-release/bin/wfc_rebuild.exe ] || run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/m05/build-target.ps1 -Ref $H -Name fast_$h -Jobs 4 -NoDebug -ThirdParty work/ab/_third_party > $O/build_head.log 2>&1; powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/link-render.ps1 -Target $HEAD >> $O/build_head.log 2>&1"
   [ $WHATIF = 1 ] || [ -f $HEAD/build-release/bin/wfc_rebuild.exe ] || { st "head build failed ($O/build_head.log)"; exit 1; }
   [ $WHATIF = 1 ] || grep -q "WFC_OPUS=1" $HEAD/build-release/build.ninja || { st "head built without Opus (third_party/opus missing)"; exit 1; }
-  [ -f $BASE/build-release/bin/wfc_rebuild.exe ] || run "BASE_REF=af4d0731 bash tools/fidelity/gate-base.sh $BN $ITEMS > $O/build_base.out 2>&1"
-  [ $WHATIF = 1 ] || [ -f $BASE/build-release/bin/wfc_rebuild.exe ] || { st "base build failed ($O/build_base.out)"; exit 1; }
-  st "same match (headless): Streets TDM + Remnant ESC, base vs head; negative control = the hover-only base"
   NEG=${FINAL_NEG:-work/ab/fast_af4d073_neg_hover}   # the negative control: af4d0731 + hover + the headless runner only (no sim diffs)
   [ -f $NEG/build-release/bin/wfc_rebuild.exe ] || run "BASE_REF=af4d0731 bash tools/fidelity/gate-base.sh neg_hover $GB/hover_cfca1717_srcgame.patch $GB/headless_runner_be54be6d_af4d.patch > $O/build_neg.out 2>&1"
-  for m in 508 506; do run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/samematch-$m -Map $m -Arms 'base|$BASE|WFC_NULLRENDER=1;;head|$HEAD|WFC_NULLRENDER=1;;neg|$NEG|WFC_NULLRENDER=1' -Steps 9600 -From 600 -PlayerBot 1 -Reps 1 -Seed 1234 > $O/samematch-$m.out 2>&1"
+  if [ -z "$FINAL_SKIP_BASE" ]; then   # FINAL_SKIP_BASE=1: no base yet (FINAL_BASE_ITEMS pending) - head, control and stability only
+  [ -f $BASE/build-release/bin/wfc_rebuild.exe ] || run "BASE_REF=af4d0731 bash tools/fidelity/gate-base.sh $BN $ITEMS > $O/build_base.out 2>&1"
+  [ $WHATIF = 1 ] || [ -f $BASE/build-release/bin/wfc_rebuild.exe ] || { st "base build failed ($O/build_base.out)"; exit 1; }
+  st "same match (headless): Streets TDM + Remnant ESC + BrokenHope ESC, base vs head; negative control = the hover-only base"
+  for m in 508 506 505 $SM_DLC; do run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/samematch-$m -Map $m -Arms 'base|$BASE|WFC_NULLRENDER=1;;head|$HEAD|WFC_NULLRENDER=1;;neg|$NEG|WFC_NULLRENDER=1' -Steps 9600 -From 600 -PlayerBot 1 -Reps 1 -Seed 1234 > $O/samematch-$m.out 2>&1"
     sm=$(grep -oE "lockstep\.head\.r1: head: steps [0-9]+ \([0-9-]+\), same match as 'base' [A-Za-z]+" $O/samematch-$m.out 2>/dev/null); ng=$(grep -oE "lockstep\.neg\.r1: neg: steps [0-9]+ \([0-9-]+\), same match as 'base' [A-Za-z]+" $O/samematch-$m.out 2>/dev/null)
     st "map $m same match: ${sm:-?}; negative control: ${ng:-?}"
     [ $WHATIF = 1 ] || case "$sm" in *True) ;; *) st "STOP: the base does not play the head's match on $m - not gating (a sim-only diff is missing)"; exit 2;; esac
   done
-  st "stability set on the head exe (work/udp/batch.ps1 -SkipBuild)"
-  run "powershell -NoProfile -ExecutionPolicy Bypass -File work/udp/batch.ps1 -Ref $H -Tag $h -SkipBuild > $O/stability.out 2>&1; cp work/udp/batch_$h.log $O/stability.log"
-  st "FINAL GATE pre DONE: base $BASE verified; stability $O/stability.log - ready for Integration's GO"
+  fi
+  if [ -z "$FINAL_SKIP_STABILITY" ]; then
+  st "stability set on the head exe (tools/fidelity/broad-pass.ps1 -SkipBuild)"
+  run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/broad-pass.ps1 -Ref $H -Tag $h -SkipBuild > $O/stability.out 2>&1; cp work/udp/batch_$h.log $O/stability.log"
+  fi
+  st "FINAL GATE pre DONE: base $( [ -n "$FINAL_SKIP_BASE" ] && echo "NOT built yet (FINAL_SKIP_BASE)" || echo "$BASE verified"); stability $O/stability.log - ready for Integration's GO"
 elif [ "$PH" = gate ]; then
   [ $WHATIF = 1 ] || [ -f $BASE/build-release/bin/wfc_rebuild.exe ] || { st "run 'pre' first"; exit 1; }
   st "FINAL GATE timed: head $H vs base $BASE; maps $MAPS; res $RES$( [ $WHATIF = 1 ] && echo ' (WHATIF)')"
