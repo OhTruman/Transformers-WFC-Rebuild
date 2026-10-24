@@ -1,6 +1,6 @@
 diff -ruN a/src/render/Renderer.h b/src/render/Renderer.h
---- a/src/render/Renderer.h	2026-10-23 20:44:12.168303500 -0500
-+++ b/src/render/Renderer.h	2026-10-23 20:44:12.195396400 -0500
+--- a/src/render/Renderer.h	2026-10-23 20:48:47.190445400 -0500
++++ b/src/render/Renderer.h	2026-10-23 20:48:47.226569500 -0500
 @@ -1,6 +1,7 @@
  // Clean-room reconstruction — rendering abstraction.
  // Gameplay/presentation code issues draw calls through this; no GL types leak out.
@@ -9,7 +9,7 @@ diff -ruN a/src/render/Renderer.h b/src/render/Renderer.h
  #include <cstdint>
  #include <utility>
  #include <array>
-@@ -71,6 +72,19 @@
+@@ -71,6 +72,23 @@
      virtual void beginFrame(const Camera& cam, int viewportW, int viewportH) = 0;
      virtual void endFrame() = 0;
  
@@ -25,13 +25,17 @@ diff -ruN a/src/render/Renderer.h b/src/render/Renderer.h
 +    virtual void beginView(int view, const Camera& cam) { (void)view; (void)cam; }
 +    // the view currently receiving draw calls (0 outside a split frame)
 +    virtual int currentView() const { return 0; }
++    // the draw owner that is "me" in the current view (the local seat's pawn: first-person / own-pawn rules), set inside each
++    // view block after beginView. Split frames submit absolute owners (100 + participant) so per-owner state (light
++    // environments, skin caches) never mixes two seats' pawns; one view keeps today's convention (owner 0 = me, the default)
++    virtual void setLocalOwner(int drawOwner) { (void)drawOwner; }
 +
      // Oriented box centred at `center`, full extents `size`, rotated `yaw` about Y.
      virtual void drawBox(const core::Vec3& center, const core::Vec3& size,
                           const core::Vec3& color, float yaw = 0.0f) = 0;
 diff -ruN a/src/render/SplitScreen.h b/src/render/SplitScreen.h
 --- a/src/render/SplitScreen.h	1969-12-31 18:00:00.000000000 -0600
-+++ b/src/render/SplitScreen.h	2026-10-23 20:44:12.208942900 -0500
++++ b/src/render/SplitScreen.h	2026-10-23 20:48:47.240617200 -0500
 @@ -0,0 +1,74 @@
 +// Clean-room reconstruction — split screen views (PC EXTENSION: the original has one local player and no split screen,
 +// docs/handoff/SPLITSCREEN_RE.md; layouts and title-safe numbers from the stock Engine.Default__GameViewportClient CDO).
