@@ -4480,3 +4480,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 10:53 PACKAGE 48e42af6 cut (Systems): Rebuild-Systems/work/playtest_slim_48e42af6 (19 GB) + _HDpack (22 GB), 0 PROBLEMs;
   verify_everything running 10:53 (W: base, X: HD; ~45 min). Phase-0 perf slot (Experimental drives, Rendering parses)
   after the verify; work/render has junctions for all 9 DLC maps.
+2026-10-24 11:00 MERGED a25edf62 sim tick log + ESC harness switches (test only) + SOAK_TABLE: the steady-state sim already meets the sim
+  target (p99 < 1.7 ms); the sim spikes are first-use loads (ability / chassis / melee / matinee clips) and a few Kismet
+  steps (D5 1781 up to 38 ms). Gameplay: preload patch next. Phase-0 slot (Experimental drives, fast_bd543d9, 1440p then
+  4K) GO after Systems' verify ends.
