@@ -1216,6 +1216,9 @@ public:
     void ensureAbilityModels();
     void ensureGibModels();
     void ensureHullMeshes();
+    void applyPerPolyCollision(render::MeshData& m, const std::string& mapDir, bool recordProbe, bool apply);   // PC ADAPTATION (playtest 3 crater)
+    void perPolyProbe() const;   // WFC_CRATERPROBE
+    std::vector<std::array<float, 16>> perPolyProbe_; std::vector<core::Vec3> perPolyTris_;
     // (Escalation DLC mechanisms) the presentation, WorldSurvivalMechPresent.cpp [Rendering]
     void svMechPresent(render::IRenderer& r) const;
     void svMechDrawSentries(render::IRenderer& r) const;
