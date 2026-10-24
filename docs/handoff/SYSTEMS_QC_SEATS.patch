@@ -1,6 +1,6 @@
 diff -ruN a/src/platform/SeatRouting.h b/src/platform/SeatRouting.h
 --- a/src/platform/SeatRouting.h	1969-12-31 18:00:00.000000000 -0600
-+++ b/src/platform/SeatRouting.h	2026-10-23 23:53:26.610622300 -0500
++++ b/src/platform/SeatRouting.h	2026-10-24 00:08:15.571000600 -0500
 @@ -0,0 +1,41 @@
 +// [Systems] Which controller drives which local seat - the platform window's pad routing as a pure function (testable without
 +// controllers). Seat 1 = the keyboard / mouse + ONE pad; seat 2 (split screen) = one other pad, joined by its Start press.
@@ -44,8 +44,8 @@ diff -ruN a/src/platform/SeatRouting.h b/src/platform/SeatRouting.h
 +
 +}  // namespace platform
 diff -ruN a/src/platform/win32/Win32Window.cpp b/src/platform/win32/Win32Window.cpp
---- a/src/platform/win32/Win32Window.cpp	2026-10-23 23:53:26.555432300 -0500
-+++ b/src/platform/win32/Win32Window.cpp	2026-10-23 23:53:26.568978900 -0500
+--- a/src/platform/win32/Win32Window.cpp	2026-10-24 00:08:15.499254800 -0500
++++ b/src/platform/win32/Win32Window.cpp	2026-10-24 00:08:15.517818400 -0500
 @@ -12,6 +12,7 @@
  #include "platform/PresentHook.h"
  #include "platform/DisplayMode.h"
@@ -54,7 +54,7 @@ diff -ruN a/src/platform/win32/Win32Window.cpp b/src/platform/win32/Win32Window.
  
  #include <cmath>
  #include <cstdio>
-@@ -803,11 +804,11 @@
+@@ -802,11 +803,11 @@
          if (input.padLX < -0.5f) bits |= kPadLStickLeft;
          if (input.padLX > 0.5f) bits |= kPadLStickRight;
      }
@@ -69,7 +69,7 @@ diff -ruN a/src/platform/win32/Win32Window.cpp b/src/platform/win32/Win32Window.
          for (int i = 0; i < 4; ++i) {
              PadState& p = pads_[i];
              const bool wasStart = p.startDown;
-@@ -817,17 +818,21 @@
+@@ -816,17 +817,21 @@
              p.startDown = p.connected && (p.st.Gamepad.wButtons & XINPUT_GAMEPAD_START) != 0;
              if (p.connected && (p.st.Gamepad.wButtons != 0 || p.st.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD ||
                                  p.st.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)) lastActivePad_ = i;
@@ -89,7 +89,7 @@ diff -ruN a/src/platform/win32/Win32Window.cpp b/src/platform/win32/Win32Window.
      }
      void pollGamepad(InputFrame& input) {
          static const bool noPad = std::getenv("WFC_NOPAD") != nullptr;   // scripted runs: ignore a real controller
-         if (noPad || noInteract()) { padBits_ = fakePad_; return; }   // (NOINTERACT: the user's controller is theirs)
+         if (noPad || noInteract()) { padBits_ = fakePad_; fakeAxes(input); return; }   // (NOINTERACT: the user's controller is theirs)
          pollAllPads();
 -        const int seat1Pad = split_ ? seatPad_[0] : 0;   // split screen: seat 1's own pad (or none: the keyboard only)
 +        const int seat1Pad = seatPad_[0];   // routeSeatPads: split - seat 1's own pad (-1: the keyboard only); else the pad in use
@@ -97,8 +97,8 @@ diff -ruN a/src/platform/win32/Win32Window.cpp b/src/platform/win32/Win32Window.
          if (seat1Pad >= 0 && pads_[seat1Pad].connected && (st = pads_[seat1Pad].st, true)) {
              static bool logged = false;
 diff -ruN a/tests/FrontendTests.cpp b/tests/FrontendTests.cpp
---- a/tests/FrontendTests.cpp	2026-10-23 23:53:26.583026900 -0500
-+++ b/tests/FrontendTests.cpp	2026-10-23 23:53:26.597075300 -0500
+--- a/tests/FrontendTests.cpp	2026-10-24 00:08:15.537887400 -0500
++++ b/tests/FrontendTests.cpp	2026-10-24 00:08:15.557454300 -0500
 @@ -19,6 +19,7 @@
  #include "frontend/UIController.h"
  #include "frontend/Url.h"
