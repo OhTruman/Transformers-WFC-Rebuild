@@ -4567,3 +4567,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   view-vs-shot at every bot shot, so the steady 'left' offset is still open: Rendering's windowed pixel proof on 5239fc0f
   decides (projection / FOV mismatch or reticle art). Scatter Blaster = authored. Streets cylinder = the authored collision
   box (faithful; a tighter hull is a user decision). Item 30 being cut.
+2026-10-24 13:19 FINAL_BASE_ITEMS 30 taken (chain = af4d0731 + 01-30 = 5239fc0f; Experimental rebuilds the base arm final14). User
+  follow-up: the 'cube' = the Energon cubes (touch pickup check -> Gameplay); the hitbox = the central Energon POOL on
+  Streets (photo docs/handoff/playtest3/streets_hitbox_pool.jpg), not the cylinder -> actor / volume query (Gameplay; RE
+  asked). Pending: Rendering pixel proof + previews + headlight + vignette; Frontend batch 2b + bots dump.
