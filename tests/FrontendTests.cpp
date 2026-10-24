@@ -511,7 +511,7 @@ static void testCatalog(const Catalog& c) {
     // Selectable = cooked + rebuild runtime world + render export on disk (grows as AssetTools exports maps).
     auto tdmMaps = c.compatibleMaps("TDM", true);
     size_t onDisk = 0;
-    const std::string mapsRoot = (std::getenv("WFC_ASSETS") ? std::string(std::getenv("WFC_ASSETS")) : std::string(core::config::kAssetRootDefault)) + "/Maps/";
+    const std::string mapsRoot = (std::getenv("WFC_ASSETS") ? std::string(std::getenv("WFC_ASSETS")) : std::string(core::config::assetRootDefault())) + "/Maps/";
     for (const MapInfo& m : c.maps()) onDisk += m.cooked && m.compatibleWith("TDM") && std::ifstream(mapsRoot + m.runtimeDir + "/world.glb").good()
                                                 && (std::ifstream(mapsRoot + m.runtimeDir + "/render_index.json").good()
                                                     || std::ifstream(Catalog::defaultManifestRoot() + "/maps/" + m.runtimeDir + "/render_index_generic.json").good());
@@ -2549,7 +2549,7 @@ static void testLaunchRecordAndIdleKick() {
 
 int main() {
     setEnv("WFC_NOCLIPBOARD", "1");   // invite tests must not overwrite the desktop clipboard
-    std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+    std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
     Catalog c;
     bool ok = c.load(Catalog::defaultManifestRoot(), Catalog::defaultExtractedRoot(), vs + "/Maps");
     check(ok, "catalog.load");

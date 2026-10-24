@@ -1103,7 +1103,7 @@ GLuint linkProgram(GLuint vs, GLuint fs, const std::string& tag) { return link(v
 
 std::string Pipeline::assetRoot() {
     if (const char* e = std::getenv("WFC_ASSETS")) return e;
-    return core::config::kAssetRootDefault;
+    return core::config::assetRootDefault();
 }
 
 // The worktree's work/render above the executable, whatever the build layout (build/bin, build/release/bin, a

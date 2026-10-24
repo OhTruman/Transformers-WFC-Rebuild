@@ -375,7 +375,7 @@ void runVehicleTests() {
     // ---- Pass 22: car / tank / jet vehicle forms (RE TARGETED_PASS3 C, script bytecode) ----
     {
         const char* root = std::getenv("WFC_ASSETS");
-        const std::string vs = root ? root : core::config::kAssetRootDefault;
+        const std::string vs = root ? root : core::config::assetRootDefault();
         static ChassisDef car, tank, jet, truck;
         bool ok = loadChassisDef(vs, "Car2", car) && loadChassisDef(vs, "Tank3", tank) && loadChassisDef(vs, "Jet", jet) &&
                   loadChassisDef(vs, "Truck", truck);

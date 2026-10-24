@@ -68,7 +68,7 @@ bool Application::init() {
     LOG_INFO("%s", platform::applyCachePreference().c_str());
     if (std::getenv("WFC_VEHTEST")) { game::runVehicleTests(); return false; }   // measurements only
     if (std::getenv("WFC_CHASSISTEST")) {
-        game::runChassisTests(std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault);
+        game::runChassisTests(std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault());
         return false;
     }
     if (std::getenv("WFC_MODETEST")) {   // Streets per-mode objective state (no rendering)
@@ -1595,7 +1595,7 @@ void Application::runMapTraverse() {
     auto& ctl = world_.player().controller();
     const game::CollisionWorld* col = world_.collision();
     if (!col) { LOG_WARN("MAPTRAVERSE: no collision"); return; }
-    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
     std::ifstream f(world_.mapDir() + "navigation.json", std::ios::binary);
     std::stringstream ss; ss << f.rdbuf();
     assets::Json nav;
@@ -1961,7 +1961,7 @@ void Application::runTransformStress() {
     auto& ctl = world_.player().controller();
     const game::CollisionWorld* col = world_.collision();
     if (!col) return;
-    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
     std::ifstream f(world_.mapDir() + "navigation.json", std::ios::binary);
     std::stringstream ss; ss << f.rdbuf();
     assets::Json nav;
@@ -2149,7 +2149,7 @@ void Application::runMatchTest() {
     // B: time limit tie (harness override of TimeLimit to 125 s; authored 900).
     {
         game::Match m;
-        std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+        std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
         m.loadSpawnData(world_.mapDir() + "gameplay.json");
         game::MatchSettings s = game::MatchSettings::forMode("TDM");
         s.timeLimit = 125;
@@ -2166,7 +2166,7 @@ void Application::runMatchTest() {
     // C: DM.
     {
         game::Match m;
-        std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+        std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
         m.loadSpawnData(world_.mapDir() + "gameplay.json");
         m.begin(game::MatchSettings::forMode("DM"));
         int p0 = m.addPlayer("P0"), p1 = m.addPlayer("P1");
@@ -2198,7 +2198,7 @@ void Application::runCameraTest() {
     auto& ctl = world_.player().controller();
     const game::CollisionWorld* col = world_.collision();
     if (!col) return;
-    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
     game::CollisionWorld renderCol;
     {
         render::MeshData rm, rs;
@@ -2282,7 +2282,7 @@ void Application::runChaosTest() {
     auto& ctl = world_.player().controller();
     const game::CollisionWorld* col = world_.collision();
     if (!col) return;
-    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
     std::ifstream f(world_.mapDir() + "navigation.json", std::ios::binary);
     std::stringstream ss; ss << f.rdbuf();
     assets::Json nav;
@@ -4192,7 +4192,7 @@ void Application::runTipTest() {
     const float dt = 1.0f / 60.0f;
     const char* root = std::getenv("WFC_ASSETS");
     static game::ChassisDef car;
-    if (!game::loadChassisDef(root ? root : core::config::kAssetRootDefault, "Car2", car) || !world_.collision()) {
+    if (!game::loadChassisDef(root ? root : core::config::assetRootDefault(), "Car2", car) || !world_.collision()) {
         LOG_INFO("TIPTEST SKIP: chassis or collision missing"); return;
     }
     const core::Vec3 tip{-181.4f, 11.9f, -12.3f};
@@ -7199,7 +7199,7 @@ void Application::runVehicleAudit() {
     assets::Json j;
     if (!f || !assets::Json::parse(ss.str(), j)) { LOG_INFO("VEHICLEAUDIT FAIL cannot read %s", path.c_str()); return; }
     const assets::Json& V = j["vehicles"];
-    const std::string vsRoot = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+    const std::string vsRoot = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
     int compared = 0, mismatches = 0, bodiesBad = 0, loadFail = 0, fields = 0;
     for (const auto& kv : V.obj) {
         const std::string id = kv.first;

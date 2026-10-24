@@ -68,7 +68,7 @@ std::string Catalog::defaultManifestRoot() {
 
 std::string Catalog::defaultExtractedRoot() {
     if (const char* e = std::getenv("WFC_EXTRACTED")) return e;
-    std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+    std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
     size_t s = vs.find_last_of("/\\");
     return s == std::string::npos ? vs : vs.substr(0, s);   // ExtractedAssets (parent of VerticalSlice)
 }

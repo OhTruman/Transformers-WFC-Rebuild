@@ -256,7 +256,9 @@ constexpr float kAimPawnHMin = -1.0f,  kAimPawnHMax = 0.85f;
 constexpr float kAimPawnVMin = -0.7f,  kAimPawnVMax = 1.0f;
 
 // Asset source: local, legally-owned extracted vertical slice (never committed).
-// Override at runtime with the WFC_ASSETS environment variable.
-constexpr const char* kAssetRootDefault = "F:/Transformers Rebuild/ExtractedAssets/VerticalSlice";
+// Override at runtime with the WFC_ASSETS environment variable. The default (core/AssetRootDefault.cpp): the package
+// root derived from the exe folder (<root>/Rebuild/build/release/bin -> <root>/ExtractedAssets/VerticalSlice when it
+// exists), else this PC's tree "F:/Transformers Rebuild/ExtractedAssets/VerticalSlice". Computed once; never null.
+const char* assetRootDefault();
 
 } // namespace core::config

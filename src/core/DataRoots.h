@@ -15,7 +15,7 @@ inline const std::string& projectRoot() {
     static const std::string r = [] {
         if (const char* e = std::getenv("WFC_PROJECT_ROOT")) if (*e) return std::string(e);
         const char* ae = std::getenv("WFC_ASSETS");
-        std::string a = ae && *ae ? ae : config::kAssetRootDefault;
+        std::string a = ae && *ae ? ae : config::assetRootDefault();
         for (char& c : a) if (c == '\\') c = '/';
         while (!a.empty() && a.back() == '/') a.pop_back();
         const std::string tail = "/ExtractedAssets/VerticalSlice";

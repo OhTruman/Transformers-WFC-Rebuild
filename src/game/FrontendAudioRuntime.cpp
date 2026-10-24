@@ -8,7 +8,7 @@ namespace game {
 
 FrontendAudioRuntime::FrontendAudioRuntime(audio::IAudio* a, const std::string& assetRoot) : audio_(a) {
     std::string root = assetRoot;
-    if (root.empty()) root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+    if (root.empty()) root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
     cues_.reset(new SoundCues());
     host_.reset(new LevelAudioHost(*cues_));
     if (!a) return;

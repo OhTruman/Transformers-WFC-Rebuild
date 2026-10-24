@@ -188,7 +188,7 @@ const std::string* g_warmTag = nullptr;
 int commit(SoundCues& cues, const assets::Json& sub) {
     if (sub.obj.empty()) return 0;
     const char* root = std::getenv("WFC_ASSETS");
-    const std::string content = std::string(root ? root : core::config::kAssetRootDefault) + "/../content/";
+    const std::string content = std::string(root ? root : core::config::assetRootDefault()) + "/../content/";
     return g_warmTag ? cues.warmCueWaves(sub, content, *g_warmTag) : cues.addCues(sub, content);
 }
 

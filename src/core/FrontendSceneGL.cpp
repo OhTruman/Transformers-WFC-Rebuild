@@ -120,7 +120,7 @@ template <class R> void nativeUnload(R* r) {
 
 std::string assetRoot() {
     if (const char* e = std::getenv("WFC_ASSETS")) return e;
-    return config::kAssetRootDefault;
+    return config::assetRootDefault();
 }
 }
 

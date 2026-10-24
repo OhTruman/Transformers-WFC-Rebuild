@@ -104,7 +104,7 @@ void frame(size_t particles, size_t meshes) {
 
 static std::string assetRoot() {
     if (const char* e = std::getenv("WFC_ASSETS")) return std::string(e);
-    return core::config::kAssetRootDefault;
+    return core::config::assetRootDefault();
 }
 
 static bool readTextFile(const std::string& path, std::string& out) {

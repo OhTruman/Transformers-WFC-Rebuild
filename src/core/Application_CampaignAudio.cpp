@@ -31,7 +31,7 @@ void Application::runCampaignAudioTest() {
     if (text.empty() || !assets::Json::parse(text.data(), text.size(), doc)) { LOG_ERROR("CAMPAIGNAUDIO: cannot read %s", path); std::exit(2); }
     if (!audio_) { LOG_ERROR("CAMPAIGNAUDIO: no audio device (WFC_NULLRENDER_AUDIO=1)"); std::exit(2); }
     const char* ar = std::getenv("WFC_ASSETS");
-    const std::string content = std::string(ar ? ar : config::kAssetRootDefault) + "/../content/";
+    const std::string content = std::string(ar ? ar : config::assetRootDefault()) + "/../content/";
     game::SoundCues cues;
     cues.load(audio_, content);
     const int nCues = cues.addCues(doc["cues"], content);

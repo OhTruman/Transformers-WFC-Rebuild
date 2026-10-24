@@ -294,7 +294,7 @@ bool FrontendRuntime::init() {
     if (const char* p = std::getenv("WFC_PLATFORM")) platform_ = p;
     if (platform_ != "WIN" && platform_ != "XBOX360" && platform_ != "PS3") platform_ = "WIN";
     FlowTrace::emit("platform", {{"sku", platform_}});
-    std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+    std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::assetRootDefault();
     if (!catalog_.load(Catalog::defaultManifestRoot(), Catalog::defaultExtractedRoot(), vs + "/Maps")) return false;
     if (!prompts_.load(Catalog::defaultExtractedRoot())) LOG_WARN("frontend: TnInputCommandToBindingMapper tables not found");
     hud_.setPromptTranslator([this](const std::string& t) { return prompts_.translate(t, device_.pad()); });

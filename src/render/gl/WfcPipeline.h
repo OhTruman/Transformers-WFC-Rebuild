@@ -166,7 +166,7 @@ public:
     bool loadSublevel(const std::string& dir);   // (a chapter unit's directory: <chapter dir>/<unit>)
     size_t sublevelCount() const { return sublevels_.size(); }
     bool isWorldMesh(int id) const { return id >= 0 && (size_t)id < meshes_.size() && meshes_[(size_t)id].world; }
-    // Shared read-only asset roots: WFC_ASSETS (default core::config::kAssetRootDefault, the VerticalSlice export)
+    // Shared read-only asset roots: WFC_ASSETS (default core::config::assetRootDefault(), the VerticalSlice export)
     // and the content directory beside it (WFC_CONTENT overrides). Map render data stays in WFC_RENDER_DATA.
     static std::string assetRoot();
     static std::string renderDataRoot();              // WFC_RENDER_DATA, else the first work/render above the exe holding data
