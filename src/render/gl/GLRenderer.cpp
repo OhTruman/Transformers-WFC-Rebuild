@@ -712,7 +712,9 @@ public:
         if (reticleTex_ == 0 && !reticleTried_) {
             reticleTried_ = true;
             ImageData img;
-            std::string path = std::string(core::config::kAssetRootDefault) + "/../content/UI_GFxHud_p/Hud_GFX_I190.png";
+            // the content root beside the asset root the rest of the renderer uses (WFC_ASSETS / WFC_CONTENT): the build-time default
+            // missed the reticle in a package installed anywhere else (Systems verify 2026-10-24)
+            std::string path = wfc::Pipeline::contentRoot() + "UI_GFxHud_p/Hud_GFX_I190.png";
             if (platform::decodeImage(path, img)) {
                 glGenTextures(1, &reticleTex_);
                 glBindTexture(GL_TEXTURE_2D, reticleTex_);
