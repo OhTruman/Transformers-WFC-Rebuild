@@ -30,6 +30,7 @@ def parse(log):
             for tok in line.split('FLOW nav.check ', 1)[1].split(' '):
                 if '=' in tok:
                     k, v = tok.split('=', 1)
+                    kv.setdefault('_all_' + k, []).append(v)   # (nav.check repeats inputOwner: the GFx clip, then the state owner)
                     kv[k] = v
             kv['_line'] = n
             nav.append(kv)
@@ -153,7 +154,7 @@ def check_flow(out, flow):
             rows.append((name, 'PASS' if got in a[0].split('|') else 'FAIL', f"first pick chassis {got}"))
         elif k == 'owner':
             c = by.get(a[0])
-            rows.append((name, 'UNKNOWN' if not c else ('PASS' if a[1] in (c.get('inputOwner') or '') else 'FAIL'), f"inputOwner={c.get('inputOwner') if c else '-'}"))
+            rows.append((name, 'UNKNOWN' if not c else ('PASS' if any(a[1] in v for v in c.get('_all_inputOwner', [])) else 'FAIL'), f"inputOwner={' | '.join(c.get('_all_inputOwner', [])) if c else '-'}"))
         elif k == 'log':
             rx = re.compile(' '.join(a))
             hit = next((n for n, x in enumerate(log) if rx.search(x)), None)
