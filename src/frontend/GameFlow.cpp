@@ -522,7 +522,8 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     }
     if (fn == "Online.SwitchTeam") {
         if (level_ == LevelKind::GameLobby && lobby_.localTeam >= 0) lobby_.localTeam = 1 - lobby_.localTeam;
-        FlowTrace::emit("lobby.team", {{"team", std::to_string(lobby_.localTeam)}});
+        else if (level_ == LevelKind::GameLobby && lobby_.preferredTeam >= 0 && onlineMembers_.empty()) lobby_.preferredTeam = 1 - lobby_.preferredTeam;
+        FlowTrace::emit("lobby.team", {{"team", std::to_string(lobby_.shownTeam(onlineMembers_.empty()))}});
         return {};
     }
     FlowTrace::emit("bridge.unhandled", {{"fn", fn}});
@@ -1154,7 +1155,7 @@ void GameFlow::gameLobbyBegin() {
     // PC ADAPTATION (the user, playtest 2026-10-23b #23): in a Private Match team lobby the host is on a side from the start
     // (shown under AUTOBOTS / DECEPTICONS, switched with the lobby's Team row; that side is the match team). The original keeps
     // everyone unassigned until the final countdown under Autobalanced [RE BASE_GAME_FLOWS_RE 3].
-    if (isPrivate && lobby_.gameTeamStatus == 3 && role_ == SessionRole::Offline) lobby_.localTeam = pickTeam();   // online: the host's balancing (S10 / S11)
+    lobby_.preferredTeam = isPrivate && lobby_.gameTeamStatus == 3 && role_ != SessionRole::Member ? pickTeam() : -1;
     launchLobby_ = SessionLobby{};
     FlowTrace::emit("gamelobby.game", {{"gameClass", levelUrl_.option("Game")}, {"tag", tag}, {"settings", gs ? gs->className : "?"},
                                        {"private", FlowTrace::boolean(isPrivate)}, {"mapSelectionMethod", std::to_string(lobby_.mapSelectionMethod)}});
@@ -1281,6 +1282,8 @@ void GameFlow::sendOnlineLaunch() {
     // random (pickTeam) while the members already hold a record with the host's slot on team 0 - the two worlds then
     // disagree on the host's team and desync at the first spawn (two-window test 2026-10-23 01:30, status 3 at tick 660).
     // TnTeamHandlerTwoTeams.PickTeam: the smaller team of the members, random on a tie.
+    if (lobby_.localTeam < 0 && lobby_.gameTeamStatus == 3 && onlineMembers_.empty() && lobby_.preferredTeam >= 0)
+        lobby_.localTeam = lobby_.preferredTeam;   // the Team row's side (no one joined)
     if (lobby_.localTeam < 0 && lobby_.gameTeamStatus == 3) {
         int n[2] = {0, 0};
         for (const OnlineMember& m : onlineMembers_) if (m.team == 0 || m.team == 1) n[m.team]++;
@@ -1423,7 +1426,8 @@ void GameFlow::gameLobbyTick(float dt) {
             // none offline) else ForceToTeam() -> PickTeam(255) for every human without a team.
             lobby_.finalCountdown = true;
             // Teams exist only for GTS_TeamGame lobbies (TnTeamHandlerTwoTeams); FFA has none.
-            if (lobby_.localTeam < 0 && lobby_.gameTeamStatus == 3) lobby_.localTeam = pickTeam();
+            if (lobby_.localTeam < 0 && lobby_.gameTeamStatus == 3)
+                lobby_.localTeam = onlineMembers_.empty() && lobby_.preferredTeam >= 0 ? lobby_.preferredTeam : pickTeam();
             FlowTrace::emit("gamelobby.finalCountdown", {{"team", std::to_string(lobby_.localTeam)},
                                                          {"teamName", lobby_.localTeam == 0 ? "Autobots" : lobby_.localTeam == 1 ? "Decepticons" : "none (FFA)"}});
         }

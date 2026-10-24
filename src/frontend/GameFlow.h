@@ -124,6 +124,11 @@ struct LobbyState {
     int countdown = 0;                       // <CurrentGame:CurrentCountdown> (integer seconds)
     float countdownTimer = 0.0f;
     int localTeam = -1;
+    // PC ADAPTATION (the user, playtest 2026-10-23b #23): a Private Match team lobby's side for the host while nobody has joined -
+    // shown under its team header and switched by the Team row; it becomes the team at the final countdown / in the launch
+    // record only if still nobody joined (online lobbies with members keep the host's balancing).
+    int preferredTeam = -1;
+    int shownTeam(bool noMembers) const { return localTeam >= 0 ? localTeam : noMembers ? preferredTeam : -1; }
     std::string prestreamMap;                // GameEngine.UpdateMapPrestreaming target
 };
 

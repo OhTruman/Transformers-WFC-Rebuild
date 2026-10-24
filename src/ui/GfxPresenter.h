@@ -145,6 +145,7 @@ private:
     bool firstBrightnessShown_ = false;   // Commit Changes' confirmation (requestSettingsCommit) -> the original commit + apply + the result
     gfx::Player* commitPlayer_ = nullptr;
     gfx::avm1::Value commitFn_, commitSelf_;   // the original writeGraphicsSettings and the button it ran on
+    frontend::LocalProfile::Display graphicsOpened_;   // the display settings when the Graphics page opened (the PC rows save live)
     struct QueuedKey { int frames; int code; bool down; };
     std::vector<QueuedKey> keyQueue_;                 // [PCSettings] FrameLimit for the graphics menu's Frame Rate Limit entry
     float scoreScroll_ = 0.0f;   // in-match scoreboard scroll (stage units), PC EXTENSION for extended matches
