@@ -4233,3 +4233,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   maps 2 / 9: Fortress re-emitted + Havoc shipped at the final root AssetTools/out/dlc_content (base-style URIs); dev
   junctions re-pointed; both boot headless (exit 0, 0 errors, 0 texture failures). Campaign air nav final (D3A failed at
   8 m, later). Gameplay / Experimental run Havoc; Rendering checks the render data headless.
+2026-10-23 21:26 MERGED f190b8af seat 2 joins a bot slot (campaign: the last squad AI; versus: the team's last bot; A1 / Streets / Remnant
+  seat-2 bot checks clean) + df2f95c4 audio language (setLanguage INT / FRA, INT fallback). Havoc: all six modes play
+  headless (Gameplay), no data issues. Rendering's headless render-data check of Fortress / Havoc: JSON / atlases /
+  references OK; two data items with AssetTools: 30 'no master material' per map (the DLC chain's parent lookup needs the
+  base packages: build_materials rerun) and no LightsVisibilitiesVolume (renderer fallback if the levels lack it).
