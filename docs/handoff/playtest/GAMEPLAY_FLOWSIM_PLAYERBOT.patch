@@ -1,0 +1,21 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 9fa7d339..d164df30 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -2369,6 +2369,8 @@ void core::Application::runSoloLaunchTest() {
+ 
+ void core::Application::runFlowSimTest() {
+     const std::string mode = std::getenv("WFC_FLOWSIMTEST");
++    // the human is driven by the player bot through its normal input: WFC_PLAYERBOT (default difficulty 1 when unset)
++    if (!std::getenv("WFC_PLAYERBOT")) { _putenv("WFC_PLAYERBOT=1"); LOG_INFO("FLOWSIMTEST: WFC_PLAYERBOT unset - set to 1 (the bot-driven human)"); }
+     const float dt = (float)clock_.stepSeconds();
+     int checks = 0, fails = 0;
+     auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("FLOWSIMTEST %s %s: %s", ok ? "PASS" : "FAIL", mode.c_str(), what.c_str()); };
+@@ -2386,6 +2388,7 @@ void core::Application::runFlowSimTest() {
+     game::MatchLaunch::fromURL(url, L);
+     L.map = world_.mapName(); L.localTeam = 0;
+     if (mode != "CP") fillOnlineLaunch(L, m);
++    check(game::World::playerBotDifficulty() >= 0, "the player bot drives the human (WFC_PLAYERBOT)");
+     check(!L.online && L.remotes.empty() && L.humans.empty(), "the solo launch is offline (local loop, no wire seat)");
+     check(world_.launchMatch(L), "launchMatch(" + url + ")");
+     const int me_ = world_.localMatchPlayer();
