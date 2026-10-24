@@ -4286,3 +4286,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   render backups, hang dumps: 2 GB). Lanes sweep their own work/ (Systems: 5 old packages ~121 GB; AssetTools: dlc_maps +
   the 11,154 shadow texture copies after Pack 2; Experimental: old ab arms; others: old builds / shots / logs).
   MERGED 5285ea0a build_movers per-group binding (tool).
+2026-10-23 23:34 Disk: Experimental freed 174 GB; the user deleted Systems' 5 old packages + scratch trees; F: free 201 -> 516 GB; the kept
+  package d5bb6863 + HDpack intact (hd junction resolves). RE BASE_GAME_FLOWS_RE.md (1d6e642) is the QC reference:
+  Escalation host = SVPrivate / SVPublic settings (UI_CampaignLobby, single team, iconic only; NO Game Settings row), a
+  wrapping 3D wheel with AVAILABLE / SELECTED on the next line, 13 CampaignCharacters (our duplicate = chassis Truck7
+  'Optimus'; Silverbolt's portrait is lower-case), lobby pick persists; party lobby has NO teams at the root; Private
+  Match settings are picked BEFORE hosting (Host Options), no Game Settings row in the lobby, X = Switch Teams only with
+  Manual balancing, 10 s countdown not cancellable (cancel = a user addition); fresh profile has D1 (I) + A1 (VI) unlocked
+  by design; brightness = first Campaign entry + Settings (first-launch = a user change), logos respond to real gamma;
+  pause: Escalation has NO Choose Character.
