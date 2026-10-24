@@ -4521,3 +4521,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   measured no-op (files ship inert; campaign sidecars skipped). Gameplay: step 61 explained (energon default parse) and
   covered by Systems' merged HITCH_LOADS (Gameplay's duplicate dropped); Systems follow-up: rosterPackage lazy static
   thread safety + the job's thread contract. The user is playing 48e42af6; phase 0 GO after.
+2026-10-24 12:06 MERGED 4098c267 chassis async thread contract (GPU work only at the join; rosterPackage magic static). BASELINE SHA FROZEN
+  at 4098c267 (fast_4098c26): the phase-0 rows run on it after the user's play; later merges wait for phase 1.
