@@ -40,3 +40,4 @@ Output: work/finalgate/<head>/ (finalgate.log with the per-row 'same match' + p5
   the same-match row says so before any timed minute.
 - The stability set (tools/fidelity/broad-pass.ps1 -> tools/fidelity/stab-soak.sh) picks the DLC maps up the same way: versus in the
   10-map x 300 s soak, the DLC ESC maps in the Escalation rows.
+- FINAL_ASSETS=<VerticalSlice root with the DLC maps> (today Rebuild/work/assets_dlc/VerticalSlice) is passed as WFC_ASSETS to every arm (same match and timed rows); Fortress (512) already joins the map list automatically.
