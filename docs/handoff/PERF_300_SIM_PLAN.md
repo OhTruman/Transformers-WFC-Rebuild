@@ -93,6 +93,32 @@ step cost.
 - **H. Allocation-free steps.** Reuse the per-step vectors: pending bots, eligible lists, the presented frame's players / markers
   copies; publishPresented already swaps. Measure with an allocation counter in the TICKLOG row.
 
+- **I. Whole-step overlap (sim step k + 1 on a worker while frame N draws), SIMHASH identical.** Rendering's phase 1 decides
+  whether the heavy chapters need it; designed now so it is ready.
+  - **Today (variant B of docs/ASYNC_SIM_STEP.md):** `tickPrefix` runs on the main thread (commands, the local controller apply,
+    abilities, match), and only the remainder runs on the sim thread, overlapping the draw. The prefix stays on the main thread
+    because it reads the live `PlayerController`, which the main thread mutates every frame (camera look, latched edges).
+  - **The design:** at the step boundary the main thread captures a **LocalStepInput** snapshot: everything `applyToPawn` /
+    `tickPrefix` read from the controller for that step.
+    - The MoveIntent, the latched presses (fire latch, dash / jump / transform / melee / grenade / pickup / reload / ability edges,
+      the X-press interact flag), camYaw / camPitch, the fine-aim / guiding state, and the crosshair aim point.
+    - **Exact floats, not the wire's quantized RemoteCommand** (rotator grid, 1 cm aim point), which would change SIMHASH.
+    - The snapshot and the submitted `commands_` move into the step job; the worker runs `tickPrefix` + the remainder against them;
+      the controller only feeds the camera on the main thread.
+  - **Why identical:** the synchronous step reads exactly these values at exactly this boundary, so the sim consumes the same inputs
+    at the same steps.
+  - **Proof:** WFC_ASYNCSTEP=2 (whole step) against WFC_ASYNCSTEP=0 on the same seed, scripted input (WFC_AUTOWALK / AUTOFIRE /
+    the player bot), with SIMHASH equal at every step. Plus WFC_ASYNCJITTER on top: no interleaving may change it.
+  - **Cost:** one step of extra presentation latency for the local pawn's own movement / firing results (16.7 ms; the camera stays
+    per frame). Measure it with Experimental's input-latency probe before choosing it as the default.
+  - **Main-thread-only work the prefix does today, to audit and move or keep at the boundary:**
+    - frontend / QA command lambdas: they enter as submitted commands;
+    - the local guided missile's steering (from the controller): goes into the snapshot;
+    - audio cue emission: already queued, played by the main thread;
+    - campaign movie / cinematic flags read by the app: presented frame only.
+  - **Join rule:** the main thread joins step k + 1 before it launches k + 2, or earlier only when a frame needs k + 1's snapshot
+    (a step faster than the frame budget never stalls the draw). Catch-up steps keep today's inline order.
+
 **Not allowed** (changes behaviour or SIMHASH): staggering think timers, think-rate changes, capping searches per step differently,
 skipping LOS for distant bots, dropping horde slots.
 
