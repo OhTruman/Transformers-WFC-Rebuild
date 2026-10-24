@@ -69,6 +69,9 @@ def check_flow(out, flow):
     rj = os.path.join(run, 'run.json')
     info = json.load(open(rj, encoding='utf-8-sig')) if os.path.exists(rj) else {}
     todo = sum(1 for x in lines if 'TODO(' in x)
+    pending = [x[len('# PENDING:'):].strip() for x in lines if x.startswith('# PENDING:')]
+    for x in pending:
+        rows.append(('pending step', 'UNKNOWN', x))
     if todo:   # menu steps not filled in yet: the checkpoints after them were reached without the real clicks
         rows.append(('flow script complete', 'UNKNOWN', f"{todo} TODO steps pending (the Frontend's canonical menu steps) - not a gate result"))
     rows.append(('exit', 'PASS' if str(info.get('exit')) == '0' else 'FAIL', f"exit {info.get('exit')}, {info.get('wall_s')} s wall"))
@@ -141,6 +144,15 @@ def check_flow(out, flow):
         elif k == 'form':
             f1, f2 = by.get(a[0], {}).get('form'), by.get(a[1], {}).get('form')
             rows.append((name, 'UNKNOWN' if f1 is None or f2 is None else ('PASS' if f1 != f2 else 'FAIL'), f"form {f1} -> {f2}"))
+        elif k == 'log':
+            rx = re.compile(' '.join(a))
+            hit = next((n for n, x in enumerate(log) if rx.search(x)), None)
+            rows.append((name, 'PASS' if hit is not None else 'FAIL', f"log line {hit}" if hit is not None else 'not in the log'))
+        elif k == 'nolog-after':
+            anchor, rx = re.compile(a[0]), re.compile(' '.join(a[1:]))
+            start = next((n for n, x in enumerate(log) if anchor.search(x)), None)
+            hits = [n for n, x in enumerate(log) if start is not None and n > start and rx.search(x)]
+            rows.append((name, 'UNKNOWN' if start is None else ('FAIL' if hits else 'PASS'), 'anchor not found' if start is None else (f"{len(hits)} hits after line {start}: " + (log[hits[0]].strip()[:120] if hits else '-'))))
         else:
             rows.append((name, 'UNKNOWN', 'unknown expectation'))
     return rows
