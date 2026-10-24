@@ -164,6 +164,13 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
             return;
         }
         if (st == "showmenu") { flow.showMenu(); return; }
+        // seat2:join,<pad> / seat2:leave (TEST: split screen without a second real pad; the seat plays no input)
+        if (st.rfind("seat2:", 0) == 0) {
+            const std::vector<std::string> p = split(st.substr(6), ',');
+            if (!p.empty() && p[0] == "leave") flow.leaveSeat2();
+            else flow.joinSeat2(p.size() > 1 ? std::atoi(p[1].c_str()) : 1);
+            return;
+        }
         if (st.rfind("key:", 0) == 0) {
             int code = std::atoi(st.c_str() + 4);
             FlowTrace::emit("script.key", {{"code", std::to_string(code)}});
