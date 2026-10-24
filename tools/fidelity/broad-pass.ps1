@@ -1,6 +1,8 @@
 # Per-merge headless set (Experimental): build the ref, then ESC soak, CAMPAIGNTEST + D5 soak, KISMET, VOICE, five profiles, late join
 # (+ pick early), relay, leave switch. Native Windows paths throughout. Usage: powershell -File tools/fidelity/broad-pass.ps1 -Ref <sha> -Tag <short> [-SkipBuild]
-param([Parameter(Mandatory)][string]$Ref, [Parameter(Mandatory)][string]$Tag, [switch]$SkipBuild)
+param([Parameter(Mandatory)][string]$Ref, [Parameter(Mandatory)][string]$Tag, [switch]$SkipBuild,
+      # (2026-10-24) the DLC maps' world.glb live only in the DLC asset root: without WFC_ASSETS their rows failed 'glb: cannot read'
+      [string]$Assets = 'F:\Transformers Rebuild\Rebuild\work\assets_dlc\VerticalSlice')
 $r = 'F:\Transformers Rebuild\Rebuild-Experimental'; Set-Location $r
 $L = "$r\work\udp\batch_$Tag.log"; function T($m) { $s = "$(Get-Date -Format HH:mm:ss) $m"; Add-Content -LiteralPath $L $s; $s }
 $bash = 'C:\Program Files\Git\bin\bash.exe'; $py = 'F:\Transformers Rebuild\AssetTools\bin\py\python.exe'
@@ -12,7 +14,7 @@ foreach ($f in 'tools/systems/net_udp_profiles.ps1', 'tools/net/netshim.py', 'to
 function Run-Headless($dir, $envs, $secs) {
     New-Item -ItemType Directory -Force $dir | Out-Null
     $saved = @{}; Get-ChildItem env: | ? { $_.Name -like 'WFC_*' } | % { $saved[$_.Name] = $_.Value; Remove-Item -LiteralPath "env:$($_.Name)" }
-    $base = @{ WFC_NULLRENDER = '1'; WFC_MUTE = '1'; WFC_NOINTERACT = '1'; WFC_AUTODETECT = '0' }; foreach ($k in $envs.Keys) { $base[$k] = $envs[$k] }
+    $base = @{ WFC_NULLRENDER = '1'; WFC_MUTE = '1'; WFC_NOINTERACT = '1'; WFC_AUTODETECT = '0'; WFC_ASSETS = $Assets; WFC_FRONTEND_DATA = (Join-Path (Split-Path (Split-Path $b -Parent) -Parent) 'data\frontend') }; foreach ($k in $envs.Keys) { $base[$k] = $envs[$k] }
     foreach ($k in $base.Keys) { Set-Item "env:$k" $base[$k] }
     $p = Start-Process -FilePath $E -WorkingDirectory $dir -WindowStyle Hidden -PassThru -RedirectStandardOutput "$dir\run.log"; $null = $p.Handle
     if (-not $p.WaitForExit($secs * 1000)) { Stop-Process -Id $p.Id -Force; T "  TIMEOUT $dir" }

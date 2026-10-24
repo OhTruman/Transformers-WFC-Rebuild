@@ -5,6 +5,7 @@
 #   bash work/stabsoak/run.sh <exe> <outdir> "<seeds>" "<modes>"
 cd "F:/Transformers Rebuild/Rebuild-Experimental" || exit 1
 EXE=${1:?exe}; O=${2:?out}; SEEDS=${3:-"7 1234"}; MODES=${4:-"TDM CTF KOTH DOM"}; mkdir -p $O
+# SOAK_ASSETS: WFC_ASSETS for every run (default the DLC dev root: the DLC maps world.glb live only there; 2026-10-24)
 MAPS=${SOAK_MAPS:-"MP_IAC_Rust MP_IAC_Streets MP_IAC_Berth MP_IAC_Seed MP_KON_Molten MP_ORB_Debris MP_UND_Complex MP_UND_Gorge MP_ESC_Remnant MP_ESC_BrokenHope"}
 # DLC maps (docs/DLC_PLAN.md) join the default list once their render data exists (SOAK_MAPS set = exactly those maps)
 [ -z "$SOAK_MAPS" ] && for nm in MP_ORB_Havoc MP_KON_Fortress MP_ESC_Tranquillity MP_ESC_District MP_IAC_Horizon MP_IAC_Metropolis MP_KON_Sector MP_ESC_Pulse MP_ESC_Static; do
@@ -13,7 +14,7 @@ W=$(cygpath -w "$EXE")
 echo "seed,map,mode,rc,wall_s,end,errors,warns,asserts,last_step" > $O/runs.csv
 for s in $SEEDS; do for md in $MODES; do for m in $MAPS; do
   d=$O/s$s-$md-$m; mkdir -p $d; t0=$(date +%s)
-  ( cd $d && exec env WFC_MUTE=1 WFC_NOINTERACT=1 WFC_AUTODETECT=0 WFC_BOOT=match WFC_NULLRENDER=1 WFC_LOCKSTEP=1 WFC_SEED=$s WFC_FLOWSEED=$s \
+  ( cd $d && exec env WFC_ASSETS="${SOAK_ASSETS:-F:/Transformers Rebuild/Rebuild/work/assets_dlc/VerticalSlice}" WFC_MUTE=1 WFC_NOINTERACT=1 WFC_AUTODETECT=0 WFC_BOOT=match WFC_NULLRENDER=1 WFC_LOCKSTEP=1 WFC_SEED=$s WFC_FLOWSEED=$s \
       WFC_MATCH_SECONDS=300 WFC_MAP=$m WFC_MATCH_URL="$m?GameModeTag=$md?BotsFriendly=4?BotsEnemy=5" "$EXE" > run.log 2>&1 ) &
   pid=$!; t=0
   while kill -0 $pid 2>/dev/null; do sleep 1; t=$((t+1))
