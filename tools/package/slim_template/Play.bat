@@ -22,6 +22,9 @@ set "WFC_ASSETTOOLS_MANIFESTS=%R%/AssetTools/manifests"
 set "WFC_DDS_ROOT=%R%/AssetTools/out/dds"
 set "WFC_FRONTEND_DATA=%R%/Rebuild/data/frontend"
 set "WFC_CAMPAIGN_ROOT=%R%/AssetTools/out/campaign_render"
+set "WFC_DLC_TEXT=%R%/AssetTools/work/dlc"
+set "WFC_DLC_CONTENT=%R%/ExtractedAssets/content"
+set "WFC_BASE_CONTENT=%R%/ExtractedAssets/content"
 pushd "%L%:\Transformers Rebuild\Rebuild\build\release\bin"
 start "" /wait wfc_rebuild.exe
 popd

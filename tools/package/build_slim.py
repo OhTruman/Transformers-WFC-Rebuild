@@ -56,7 +56,7 @@ AGILITY_LICENSE_DEST = 'licenses/microsoft_d3d12_agility/LICENSE.txt'
 RENDER_EXTRA = ['materials_pbr.json']
 # ... and shipped when the map has one (newer than slim_files.tsv; the UI dirs have none): verify_slim 2026-10-13 found the
 # game opening every MP map's fog_volumes.json, missing from the package
-RENDER_IF_PRESENT = ['fog_volumes.json', 'render_index_extra.json', 'lens_flares.json']   # + lens flares (verify on d5bb6863: Gorge / Debris read it)
+RENDER_IF_PRESENT = ['fog_volumes.json', 'render_index_extra.json', 'lens_flares.json'] +     ['tex/FluidRed_Cubemap_f%d.png' % k for k in range(6)]   # (verify_slim 48e42af6: every map opens the fluid cubemap's faces)   # + lens flares (verify on d5bb6863: Gorge / Debris read it)
 #   # + the Escalation maps' weapon factory visuals (7f218986)
 # AssetTools map manifests newer than slim_files.tsv, shipped into every packaged manifests/maps/<map>/ that has them in AssetTools:
 # the Escalation nav (WorldSurvival.cpp svManifest: the original NavigationCell mesh + its generator gating; without them a packaged
@@ -65,7 +65,11 @@ MANIFEST_IF_PRESENT = ['bot_nav_escalation.json', 'bot_nav_air_escalation.json',
 MANIFEST_MAPS = 'Transformers Rebuild/AssetTools/manifests/maps/'
 # single AssetTools files newer than slim_files.tsv the game reads (ROOT-relative; shipped when present): the versus maps' transforming
 # actors (verify_slim 2026-10-23 on be5b7cdc: a failing open on Streets)
-ASSETTOOLS_IF_PRESENT = ['AssetTools/manifests/maps/mp_transforming_actors.json']
+ASSETTOOLS_IF_PRESENT = ['AssetTools/manifests/maps/mp_transforming_actors.json',
+                         # verify_slim 48e42af6, opens the package lacked: the DLC catalogue (Catalog: <manifests>/dlc/dlc_inventory.json);
+                         # the HUD reticle bitmap (GLRenderer drawReticle)
+                         'AssetTools/manifests/dlc/dlc_inventory.json',
+                         'ExtractedAssets/content/UI_GFxHud_p/Hud_GFX_I190.png']
 # whole AssetTools folders newer than slim_files.tsv (ROOT-relative; every file shipped): the Escalation horde bodies, read by
 # ChassisDef as <ExtractedAssets/VerticalSlice>/../../AssetTools/out/escalation_characters/<id>/ (character.json, robot.glb, textures,
 # weapons; 2026-10-23: every ESC_* chassis was UNAVAILABLE in the package)
@@ -73,7 +77,12 @@ ASSETTOOLS_TREES = ['AssetTools/out/escalation_characters',   # + the campaign c
                     # (the campaign chapters: CAMPAIGN_RENDER below, every chapter AssetTools has exported)
                     'AssetTools/manifests/maps/transforming_actors',   # the skeletal doors / bridges mp_transforming_actors.json names
                     'AssetTools/out/campaign_anims',   # animation sets character.json files point at (ESC_Soldier_Tank_Decepticon's Shared_ROBO_ANIM)
-                    'Rebuild/work/render/_ui/fonts']   # the HUD's bitmap fonts, whole (SubtitleFont 2026-10-24 is newer than slim_files.tsv; MarkerFont is in it)
+                    'Rebuild/work/render/_ui/fonts',
+                    # verify_slim 48e42af6: the map thumbnails (Catalog ImagePath UI_LevelThumbnails_p.<map>) and the DLC packs' text
+                    # (DLCMaps / DLCMaps2 __TransGame.<lang>, 42 + 50 KB; Play.bat points WFC_DLC_TEXT at it)
+                    'ExtractedAssets/content/UI_LevelThumbnails_p',
+                    'AssetTools/work/dlc/MapPack1/files/DLCMaps',
+                    'AssetTools/work/dlc/MapPack2/files/DLCMaps2']   # the HUD's bitmap fonts, whole (SubtitleFont 2026-10-24 is newer than slim_files.tsv; MarkerFont is in it)
 # The campaign (Integration 2026-10-23): every chapter under AssetTools/out/campaign_render, shipped at its AssetTools path (one campaign
 # root, <WFC_CAMPAIGN_ROOT>/<chapter>/<unit>/, Play.bat sets it). A chapter with its own <chapter>/lightmaps/ (AssetTools' dedup: one
 # copy per chapter, Rendering reads it) skips the per-unit <unit>/lightmaps/ copies. Plus the campaign's assets outside the render
