@@ -1,0 +1,210 @@
+diff -ruN a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+--- a/src/core/Application_Frontend.cpp	2026-10-24 00:23:28.943326600 -0500
++++ b/src/core/Application_Frontend.cpp	2026-10-24 00:23:28.955869600 -0500
+@@ -731,6 +731,8 @@
+     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
+     // and reported here so the owners can consume LocalProfile when they add the entry points.
+     applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));
++    window_->setPadScheme(frontend_->flow().profile().getBool("UseAlternateControlScheme"),   // [Systems QC] the pad's match actions
++                          frontend_->flow().profile().getBool("SwitchRightThumbstickAndB"));
+ #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
+     // [Systems M08g] HmPlayerController.UpdateLocalCacheOfProfileSettings: SetAudioGroupVolume('Dialog' | 'SFX' |
+     // 'MUSIC', slider / 100). Device-global and immediate: frontend, match and movie audio all follow.
+@@ -749,6 +751,7 @@
+     }
+     frontend_->flow().profile().onApplied = [this](const frontend::LocalProfile& p) {
+         applyGamma(renderer_, p.getInt("GammaSetting"));
++        window_->setPadScheme(p.getBool("UseAlternateControlScheme"), p.getBool("SwitchRightThumbstickAndB"));
+ #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
+         game::LevelAudioHost::applyProfileVolumes(p.getInt("Music Volume"), p.getInt("FX Volume"), p.getInt("Dialogue Volume"));
+ #endif
+diff -ruN a/src/platform/PadActions.h b/src/platform/PadActions.h
+--- a/src/platform/PadActions.h	1969-12-31 18:00:00.000000000 -0600
++++ b/src/platform/PadActions.h	2026-10-24 00:23:29.042165500 -0500
+@@ -0,0 +1,59 @@
++// [Systems] A controller's buttons -> the match actions (platform::Button), the original's multiplayer pad layout as a pure
++// function (testable without a controller). Source: the authored Engine.PlayerInput bindings (XboxTypeS_*), with the profile's
++// per-pad remaps (TnGameViewportClient.MapInputKeyForController, in game only - RE SPLITSCREEN_RE section 1):
++//   SwitchRightThumbstickAndB: B <-> RightThumbstick;
++//   UseAlternateControlScheme: Y -> LeftThumbstick, LeftThumbstick -> none, DPad_Up -> Y.
++// The sticks, the left trigger's analog FineAim / Boost and Start / Back stay where they are read today (InputFrame pad fields, UiKey).
++#pragma once
++#include <cstdint>
++
++#include "platform/Input.h"
++
++namespace platform {
++
++// XInput wButtons bit values (InputFrame::padButtons).
++constexpr uint32_t kPadStart = 0x0010, kPadBack = 0x0020, kPadLThumb = 0x0040, kPadRThumb = 0x0080, kPadLB = 0x0100, kPadRB = 0x0200,
++                   kPadA = 0x1000, kPadB = 0x2000, kPadX = 0x4000, kPadY = 0x8000;
++
++// The profile's remaps: physical buttons -> the logical keys the bindings name.
++inline uint32_t remapPad(uint32_t phys, bool alternateScheme, bool swapRightStickAndB) {
++    uint32_t out = phys & ~(kPadB | kPadRThumb | kPadY | kPadLThumb | kPadDPadUp);
++    auto key = [&](uint32_t physBit) {
++        if (!(phys & physBit)) return;
++        uint32_t k = physBit;
++        if (swapRightStickAndB && k == kPadB) k = kPadRThumb;
++        else if (swapRightStickAndB && k == kPadRThumb) k = kPadB;
++        if (alternateScheme) {
++            if (k == kPadY) k = kPadLThumb;
++            else if (k == kPadLThumb) k = 0;
++            else if (k == kPadDPadUp) k = kPadY;
++        }
++        out |= k;
++    };
++    for (uint32_t b : {kPadB, kPadRThumb, kPadY, kPadLThumb, kPadDPadUp}) key(b);
++    return out;
++}
++
++// Logical keys (+ the right trigger) -> the actions held, bit (1 << Button). The authored commands:
++//   A PressJump | Ascend; B TossGrenade | InteractCommand1 | Descend; X XButton (Interact + Reload, below);
++//   Y NextWeapon; LeftThumbstick Transform; RightThumbstick Melee; RightTrigger Fire | WeaponMelee;
++//   LeftShoulder Ability1 | SwitchSpectatorTarget 1; RightShoulder Ability0 | VehicleSpecialMove | SwitchSpectatorTarget -1;
++//   DPad_Left TriggerKillstreak. (DPad_Down Focus has no action of its own yet; DPad_Right is the Voice Channel key.)
++inline uint32_t padActions(uint32_t keys, bool rightTrigger) {
++    uint32_t a = 0;
++    auto on = [&a](Button b) { a |= 1u << (int)b; };
++    if (keys & kPadA) { on(Button::Jump); on(Button::Ascend); }
++    if (keys & kPadB) { on(Button::Grenade); on(Button::Descend); }
++    if (keys & kPadX) { on(Button::Interact); on(Button::Reload); }   // XButton: tap = TryInteract, else ReloadWeapon (the Reload tap fires on
++                                                                    // release < 0.3 s); hold 0.3 s = TryRevive / TryPickup (RE, C)
++    if (keys & kPadY) on(Button::NextWeapon);
++    if (keys & kPadLThumb) on(Button::Transform);
++    if (keys & kPadRThumb) on(Button::Melee);
++    if (rightTrigger) on(Button::Fire);
++    if (keys & kPadLB) { on(Button::Ability1); on(Button::SpectateNext); }
++    if (keys & kPadRB) { on(Button::Dash); on(Button::SpectatePrev); }
++    if (keys & kPadDPadLeft) on(Button::Killstreak);
++    return a;
++}
++
++}  // namespace platform
+diff -ruN a/src/platform/Window.h b/src/platform/Window.h
+--- a/src/platform/Window.h	2026-10-24 00:23:28.822412400 -0500
++++ b/src/platform/Window.h	2026-10-24 00:23:28.834453500 -0500
+@@ -57,6 +57,9 @@
+     // nobody holds seat 2. seatPad(): the XInput index a seat uses (-1 = none). swapSeatPads(): the seats exchange pads.
+     // releaseSeat2(): seat 2 leaves (its pad is free again). seat2JoinedSerial(): changes each time a pad takes seat 2.
+     virtual void setSplitScreen(bool on) { (void)on; }
++    // [Systems QC] The profile's controller remaps for the match actions (PadActions.h): UseAlternateControlScheme,
++    // SwitchRightThumbstickAndB. Applied on boot and on every Settings Apply.
++    virtual void setPadScheme(bool alternateScheme, bool swapRightStickAndB) { (void)alternateScheme; (void)swapRightStickAndB; }
+     virtual bool splitScreen() const { return false; }
+     virtual bool pumpSeat2(InputFrame& input) { (void)input; return false; }
+     virtual int seatPad(int seat) const { return seat == 0 ? 0 : -1; }
+diff -ruN a/src/platform/win32/Win32Window.cpp b/src/platform/win32/Win32Window.cpp
+--- a/src/platform/win32/Win32Window.cpp	2026-10-24 00:23:28.882618500 -0500
++++ b/src/platform/win32/Win32Window.cpp	2026-10-24 00:23:28.894660100 -0500
+@@ -12,6 +12,7 @@
+ #include "platform/PresentHook.h"
+ #include "platform/DisplayMode.h"
+ #include "core/Log.h"
++#include "platform/PadActions.h"
+ #include "platform/SeatRouting.h"
+ 
+ #include <cmath>
+@@ -213,8 +214,7 @@
+             // Melee is also the middle mouse button (shipped PC bindings: Q / MiddleMouseButton) [CONF Controls card].
+             if ((Button)i == Button::Melee && (GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0) nowDown = true;
+             if (!focused_) nowDown = false;
+-            input.pressed[i] = nowDown && !input.down[i];
+-            input.down[i] = nowDown;
++            kbDown_[i] = nowDown;   // the pad's actions join below, after the pad poll (pressed = the combined edge)
+         }
+ 
+         // Mouse-look via cursor recentering while captured + focused.
+@@ -241,7 +241,15 @@
+         input.uiDown = ui;
+         input.padActive = padBits_ != 0 || std::fabs(input.padRX) > 0.5f || std::fabs(input.padRY) > 0.5f;
+         input.keyActive = keyUi;
+-        for (int i = 0; i < (int)Button::Count && !input.keyActive; ++i) input.keyActive = input.down[i];
++        for (int i = 0; i < (int)Button::Count && !input.keyActive; ++i) input.keyActive = kbDown_[i];
++        {   // the match actions: keyboard / mouse OR seat 1's pad (the original's MP pad layout + the profile's remaps, PadActions.h)
++            const uint32_t pad = focused_ ? padActions(remapPad(padBits_ & 0xFFFFu, padAlt_, padSwapBRS_), (padBits_ & kPadRT) != 0) : 0u;
++            for (int i = 0; i < (int)Button::Count; ++i) {
++                const bool nowDown = kbDown_[i] || ((pad >> i) & 1u) != 0;
++                input.pressed[i] = nowDown && !input.down[i];
++                input.down[i] = nowDown;
++            }
++        }
+         // Absolute pointer for the UI.
+         input.mouseX = input.mouseY = -1;
+         input.mouseLeft = focused_ && (GetAsyncKeyState(VK_LBUTTON) & 0x8000);
+@@ -590,6 +598,8 @@
+     int lastActivePad_ = -1;
+     int seat2Serial_ = 0;
+     uint32_t seat2Prev_ = 0;
++    bool kbDown_[(int)Button::Count] = {};   // this pump's keyboard / mouse part of the match actions
++    bool padAlt_ = false, padSwapBRS_ = false;   // the profile's controller remaps (setPadScheme)
+     std::vector<int> uiVk_[(int)UiKey::Count];
+     std::vector<uint32_t> uiPad_[(int)UiKey::Count];
+     int wheel_ = 0;
+@@ -748,6 +758,11 @@
+     }
+ 
+ public:
++    void setPadScheme(bool alternateScheme, bool swapRightStickAndB) override {
++        if (alternateScheme == padAlt_ && swapRightStickAndB == padSwapBRS_) return;
++        padAlt_ = alternateScheme; padSwapBRS_ = swapRightStickAndB;
++        LOG_INFO("input: controller scheme %s, B / right stick %s", padAlt_ ? "alternate" : "default", padSwapBRS_ ? "swapped" : "default");
++    }
+     void setSplitScreen(bool on) override {
+         if (on == split_) return;
+         split_ = on;
+@@ -775,7 +790,11 @@
+         input.uiDown = ui;
+         input.padActive = bits != 0 || std::fabs(input.padRX) > 0.5f || std::fabs(input.padRY) > 0.5f;
+         input.keyActive = false;
+-        for (int i = 0; i < (int)Button::Count; ++i) { input.pressed[i] = false; input.down[i] = false; }   // keys are seat 1's
++        {   // keys are seat 1's; seat 2's pad drives its match actions (the same layout and remaps), edges against its last poll
++            const uint32_t now = padActions(remapPad(bits & 0xFFFFu, padAlt_, padSwapBRS_), (bits & kPadRT) != 0);
++            const uint32_t was = padActions(remapPad(seat2Prev_ & 0xFFFFu, padAlt_, padSwapBRS_), (seat2Prev_ & kPadRT) != 0);
++            for (int i = 0; i < (int)Button::Count; ++i) { input.down[i] = ((now >> i) & 1u) != 0; input.pressed[i] = input.down[i] && !((was >> i) & 1u); }
++        }
+         input.mouseDX = input.mouseDY = 0.0f; input.mouseX = input.mouseY = -1; input.mouseLeft = input.mouseRight = false;
+         input.mouseWheel = 0.0f; input.text.clear(); input.keyPresses.clear();
+         seat2Prev_ = bits;
+diff -ruN a/tests/FrontendTests.cpp b/tests/FrontendTests.cpp
+--- a/tests/FrontendTests.cpp	2026-10-24 00:23:29.006041600 -0500
++++ b/tests/FrontendTests.cpp	2026-10-24 00:23:29.018082900 -0500
+@@ -19,6 +19,7 @@
+ #include "frontend/UIController.h"
+ #include "frontend/Url.h"
+ #include "core/Config.h"
++#include "platform/PadActions.h"
+ #include "platform/SeatRouting.h"
+ 
+ #include <algorithm>
+@@ -2366,6 +2367,22 @@
+           "catalog.localize_key_case_insensitive");
+ }
+ 
++static void testPadActions() {   // [Systems QC] a controller drives the match actions (the original's MP layout + remaps)
++    using platform::Button;
++    auto has = [](uint32_t a, Button b) { return ((a >> (int)b) & 1u) != 0; };
++    auto act = [](uint32_t phys, bool alt, bool swap, bool rt = false) { return platform::padActions(platform::remapPad(phys, alt, swap), rt); };
++    const uint32_t d = act(platform::kPadA | platform::kPadX | platform::kPadLThumb | platform::kPadRThumb | platform::kPadY, false, false, true);
++    check(has(d, Button::Jump) && has(d, Button::Interact) && has(d, Button::Transform) && has(d, Button::Melee) &&
++          has(d, Button::NextWeapon) && has(d, Button::Fire) && has(d, Button::Reload) && !has(d, Button::Grenade), "input.pad_default_scheme");
++    check(has(act(platform::kPadB, false, false), Button::Grenade) && has(act(platform::kPadLB, false, false), Button::Ability1) &&
++          has(act(platform::kPadRB, false, false), Button::Dash) && has(act(platform::kPadDPadLeft, false, false), Button::Killstreak) &&
++          act(0, false, false) == 0u, "input.pad_buttons_bound");
++    const uint32_t sw = act(platform::kPadB, false, true), sr = act(platform::kPadRThumb, false, true);
++    check(has(sw, Button::Melee) && !has(sw, Button::Grenade) && has(sr, Button::Grenade) && !has(sr, Button::Melee), "input.pad_swap_b_right_stick");
++    const uint32_t ay = act(platform::kPadY, true, false), al = act(platform::kPadLThumb, true, false), au = act(platform::kPadDPadUp, true, false);
++    check(has(ay, Button::Transform) && !has(ay, Button::NextWeapon) && al == 0u && has(au, Button::NextWeapon), "input.pad_alternate_scheme");
++}
++
+ static void testSeatRouting() {   // [Systems QC] controller ownership: seat 1 never loses its only pad to seat 2
+     using platform::PadPoll; using platform::SeatPads;
+     {   // a lone controller on XInput slot 1 (Steam Input / DS4Windows): the menus read it (outside split screen)
+@@ -2512,6 +2529,7 @@
+     testOnlineSessionEnd();
+     testOnlineVoice();
+     testSeatRouting();
++    testPadActions();
+     testOnlineMatchSide();
+     testIconicMode();
+     testVoiceUi();
