@@ -1,0 +1,1 @@
+- 2026-10-11: "Classic identical 5/5" (b37/b39/b41) held only because the 7faf62b T4 jet-landing path did not fire in the gate configs. Experimental's regress lockstep 504/507/508 fire it (p17 t 23.85, p9 t 65.47, p29 t 156.29) and SIMHASH diverges there. Integration accepted this as the intended Classic change.
