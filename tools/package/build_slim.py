@@ -72,7 +72,8 @@ ASSETTOOLS_IF_PRESENT = ['AssetTools/manifests/maps/mp_transforming_actors.json'
 ASSETTOOLS_TREES = ['AssetTools/out/escalation_characters',   # + the campaign chapters, shipped whole at their AssetTools path: one
                     # (the campaign chapters: CAMPAIGN_RENDER below, every chapter AssetTools has exported)
                     'AssetTools/manifests/maps/transforming_actors',   # the skeletal doors / bridges mp_transforming_actors.json names
-                    'AssetTools/out/campaign_anims']   # animation sets character.json files point at (ESC_Soldier_Tank_Decepticon's Shared_ROBO_ANIM)
+                    'AssetTools/out/campaign_anims',   # animation sets character.json files point at (ESC_Soldier_Tank_Decepticon's Shared_ROBO_ANIM)
+                    'Rebuild/work/render/_ui/fonts']   # the HUD's bitmap fonts, whole (SubtitleFont 2026-10-24 is newer than slim_files.tsv; MarkerFont is in it)
 # The campaign (Integration 2026-10-23): every chapter under AssetTools/out/campaign_render, shipped at its AssetTools path (one campaign
 # root, <WFC_CAMPAIGN_ROOT>/<chapter>/<unit>/, Play.bat sets it). A chapter with its own <chapter>/lightmaps/ (AssetTools' dedup: one
 # copy per chapter, Rendering reads it) skips the per-unit <unit>/lightmaps/ copies. Plus the campaign's assets outside the render
