@@ -278,3 +278,18 @@ GetBaseAimRotation -> GetPlayerViewPoint); SIMHASH changes by design for local s
 (2026-10-24): a fresh af4d0731 + 01-30 applies, every base path equals 5239fc0f, a fresh full build of wfc_rebuild.exe has 0
 errors, and the headless SIMHASH streams are identical to the 5239fc0f head build (Streets TDM 4,201, Remnant 8,101,
 BrokenHope 2,484, A1 7,261, D1 7,261 steps).
+
+## 31: the ammo crate covers every weapon + the Streets crater collides per-poly (5239fc0f -> 7a81ef5c)
+
+`31_ammo_crate_crater.patch`: the exact tree step 5239fc0f -> 7a81ef5c over the base paths (PickupFactory.cpp, World.cpp,
+World.h). It covers:
+- GAMEPLAY_AMMO_CRATE_ALL_WEAPONS: the crate refills every primary / secondary / vehicle weapon;
+- GAMEPLAY_CRATER_PER_POLY: Streets' ENV_CraterUpNoRing_STAT collides with its render triangles (a PC ADAPTATION;
+  WFC_NOPERPOLY=1 for A/B).
+SIMHASH changes by design where these apply. Apply it after 30.
+
+Verified (2026-10-24):
+- A fresh af4d0731 + 01-31 applies, and every base path equals 7a81ef5c.
+- A fresh full build of wfc_rebuild.exe has 0 errors.
+- The headless SIMHASH streams are identical to the 7a81ef5c head build: Streets TDM 4,201, Remnant 8,101, BrokenHope 2,484,
+  A1 7,261, D1 7,261 steps.
