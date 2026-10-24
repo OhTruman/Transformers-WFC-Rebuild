@@ -4469,3 +4469,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   streaming leak; D1 drew 244 active rows) + the cull-distance sidecar tool (data: ~0 lever on D1 per RE). RE §7a: the
   active state holds 10-25 % of a chapter's primitives (statics already follow it); no skeletal LODs in the cook.
   Waiting: Systems refresh #2 + verify on 48e42af6; Experimental mp rerun; then the phase-0 baseline slot.
+2026-10-24 10:46 MENU GATE 48e42af6: MULTIPLAYER PASS every row (Create a Character, bots 4 + 4, map, Team, countdown, Back cancel, Start
+  again -> match, Scout, PlayerList shot, 20.1 m jitter 0, shots, transform, pause -> Change Character -> back -> InGame,
+  quit -> lobby); ESC / CAMP PASS stand from a2e9fbd9 (GfxPresenter-only delta). Section 43: all three flows PASS on the
+  final build.
