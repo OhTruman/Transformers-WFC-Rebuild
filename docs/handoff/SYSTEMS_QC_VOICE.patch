@@ -1,0 +1,479 @@
+diff -ruN a/src/core/Application.h b/src/core/Application.h
+--- a/src/core/Application.h	2026-10-23 23:37:58.598766700 -0500
++++ b/src/core/Application.h	2026-10-23 23:37:58.611309500 -0500
+@@ -60,6 +60,8 @@
+     std::unique_ptr<net::NetMatchDriver> netDriver_;
+     std::unique_ptr<net::VoiceSession> lobbyVoice_;   // [Systems] the lobby voice lane (the match lane is the driver's)
+     void tickLobbyVoice();
++    void bindMicMeter();                       // [Systems] the Mic Test meter <- the running voice lane's microphone level
++    const void* micMeterFor_ = nullptr;        // the session the meter source was bound to
+     void startNetDriver(const std::string& launchUrl, uint32_t seed, int seats, int localSeat);
+     void tickNetDriver(double realDt);
+     bool escWasDown_ = false;
+diff -ruN a/src/core/Application_Net.cpp b/src/core/Application_Net.cpp
+--- a/src/core/Application_Net.cpp	2026-10-23 23:37:58.663488300 -0500
++++ b/src/core/Application_Net.cpp	2026-10-23 23:37:58.677034500 -0500
+@@ -212,6 +212,7 @@
+         const int a = seatMp[(size_t)talker], b = seatMp[(size_t)listener];
+         if (a < 0 || b < 0 || (size_t)a >= ps.size() || (size_t)b >= ps.size()) return false;
+         if (net::voiceChannelOpen(world_)) return true;   // FFA / after EndGame: everyone (the original's channels)
++        if ((flags & 1) && (flags & 4)) return true;   // All Radio
+         if ((flags & 1) && ps[(size_t)a].team == ps[(size_t)b].team && ps[(size_t)a].team != 255) return true;   // radio
+         if (!(flags & 2)) return false;
+         const game::Character* x = world_.participantPawn(a);
+@@ -451,7 +452,7 @@
+     c.seats = seats; c.self = localSeat; c.launchHash = lh; c.delay = 0; c.hashEvery = 60;
+     if (const char* rp = std::getenv("WFC_NET_RECORD")) c.recordPath = rp;
+     c.voice = true;   // everyone hears; the mode decides whether this player talks (Off = listen only)
+-    c.voiceMic = udpSession_->voiceSettings().mode != frontend::SessionVoiceMode::Off;
++    c.voiceMic = false;   // the microphone comes with voiceCfg.mic (VoiceSession owns it; Off never talks, so voice can be turned on mid-match)
+     c.voiceCfg = voiceConfigFrom(udpSession_->voiceSettings());
+     c.voiceMuted = [this](int seat) { return udpSession_ && udpSession_->isMuted(udpSession_->matchMember(seat)); };
+     c.step = [this](float dt) {
+@@ -483,23 +484,40 @@
+     LOG_INFO("online: the lockstep driver runs the match (seat %d of %d, launch hash %016llx)", localSeat, seats, (unsigned long long)lh);
+ }
+ 
+-// The Audio rows -> the voice lane: volume, who hears this player (TeamRadio: the team by radio; AllRadio: everyone by radio - the
+-// host's fan-out treats radio as team only today, so AllRadio maps to radio + proximity until the relay knows it; Proximity; Radio +
+-// Proximity), open mic.
++// The Audio rows -> the voice lane: the voice / proximity volumes, who hears this player (TeamRadio: the team by radio; AllRadio:
++// everyone by radio - the All Radio packet flag; Proximity: anyone in earshot; Radio + Proximity), open mic, the input device. The
++// microphone is attached whenever the player is not a lane / harness run (WFC_NOINTERACT) and opens only while talking (Off never
++// talks) or while the Mic Test meter shows; the caller sets micTest.
+ net::VoiceSession::Config voiceConfigFrom(const frontend::SessionVoiceSettings& v) {
++    static const bool noInteract = [] { const char* e = std::getenv("WFC_NOINTERACT"); return e && *e && e[0] != '0'; }();
+     net::VoiceSession::Config c;
+     c.volume = std::max(0, std::min(100, v.volume)) / 100.0f;
++    c.proximityVolume = std::max(0, std::min(100, v.proximityVolume)) / 100.0f;
+     using A = frontend::SessionVoiceAudience;
+     c.radio = v.audience != A::Proximity;
+-    c.proximity = v.audience != A::TeamRadio;
++    c.allRadio = v.audience == A::AllRadio;
++    c.proximity = v.audience == A::Proximity || v.audience == A::RadioPlusProximity;
+     c.openMic = v.mode == frontend::SessionVoiceMode::OpenMic;
++    c.mic = !noInteract;
++    c.device = v.device;
+     return c;
+ }
+ 
++// The Mic Test meter's level: whichever voice lane runs (the match driver's, else the lobby's).
++void Application::bindMicMeter() {
++    if (!udpSession_ || micMeterFor_ == udpSession_) return;
++    micMeterFor_ = udpSession_;
++    udpSession_->setMicLevelSource([this] {
++        if (netDriver_ && netDriver_->voice()) return netDriver_->voice()->micLevel();
++        return lobbyVoice_ ? lobbyVoice_->micLevel() : 0.0f;
++    });
++}
++
+ // [Systems] The lobby voice lane: in a session with no match driver (the game lobby, between matches), everyone hears everyone
+ // (2D radio at the voice volume), push to talk / open mic as in the match, local mute, the talking indicators for the lobby list.
+ // Created on entering a session, dropped when the match driver takes over or the session ends.
+ void Application::tickLobbyVoice() {
++    bindMicMeter();
+     const bool want = udpSession_ && !netDriver_ && udpSession_->inLobby() && net::voiceCodecAvailable();
+     if (!want) {
+         if (lobbyVoice_) { lobbyVoice_.reset(); LOG_INFO("voice: the lobby lane closed"); }
+@@ -508,13 +526,12 @@
+     net::UdpSession* s = udpSession_;
+     const frontend::SessionVoiceSettings& v = s->voiceSettings();
+     net::VoiceSession::Config c = voiceConfigFrom(v);
+-    c.radio = true; c.proximity = false;   // the lobby: everyone, 2D
++    c.radio = true; c.proximity = false; c.allRadio = false;   // the lobby: everyone, 2D
++    c.micTest = s->micMeterShown();
+     if (!lobbyVoice_) {
+         net::VoiceSession::Link link{[s] { return s->sessionSeat(); }, [s](const uint8_t* p, size_t n) { s->sendLobbyVoice(p, n); },
+                                      [s](std::function<void(int, const uint8_t*, size_t)> f) { s->setLobbyVoiceSink(std::move(f)); }};
+-        lobbyVoice_ = std::make_unique<net::VoiceSession>(link, audio_, c);
+-        static const bool noInteract = [] { const char* e = std::getenv("WFC_NOINTERACT"); return e && *e && e[0] != '0'; }();
+-        if (v.mode != frontend::SessionVoiceMode::Off && !noInteract) lobbyVoice_->setSource(net::createVoiceCapture());
++        lobbyVoice_ = std::make_unique<net::VoiceSession>(link, audio_, c);   // the microphone: Config::mic (voiceConfigFrom)
+         lobbyVoice_->setMuted([s](int seat) { return s->isMuted(s->memberOfSeat(seat)); });
+         LOG_INFO("voice: the lobby lane opened (seat %d)", s->sessionSeat());
+     }
+@@ -531,8 +548,11 @@
+         const frontend::SessionVoiceSettings& v = udpSession_->voiceSettings();
+         d.setTalking(v.mode == frontend::SessionVoiceMode::OpenMic || (v.mode == frontend::SessionVoiceMode::PushToTalk && udpSession_->pushToTalk()));
+     }
+-    if (udpSession_ && d.voice()) {   // the Audio rows stay live (volume / audience / open mic changed in the pause menu)
+-        d.voice()->setConfig(voiceConfigFrom(udpSession_->voiceSettings()));
++    bindMicMeter();
++    if (udpSession_ && d.voice()) {   // the Audio rows stay live (volume / audience / open mic / device changed in the pause menu)
++        net::VoiceSession::Config vc = voiceConfigFrom(udpSession_->voiceSettings());
++        vc.micTest = udpSession_->micMeterShown();
++        d.voice()->setConfig(vc);
+     }
+     d.frame(realDt);
+     if (udpSession_ && d.voice()) {   // the talking indicators: every match seat with a member (this player too)
+@@ -1042,6 +1062,43 @@
+     check(clean.state == 2, "the talking indicator: speaking (2) while the tone plays");
+     check(muted.frames == 0 && muted.muted > 0 && muted.state == 2, "muted talker: nothing played, its indicator still shows");
+ 
++    {   // The audience rows: an ENEMY listener (sameTeam false) hears Team Radio as nothing and All Radio as radio (the packet flag).
++        auto heardAsRadio = [&](bool allRadio, long& unheard) {
++            auto group = net::createLoopbackGroup(2);
++            net::Lockstep::Config ca; ca.seats = 2; ca.self = 0; ca.delay = 2;
++            net::Lockstep::Config cb = ca; cb.self = 1;
++            net::Lockstep la(*group[0], ca), lb(*group[1], cb);
++            net::VoiceSession::Config tc; tc.radio = true; tc.proximity = false; tc.allRadio = allRadio;
++            net::VoiceSession va(la, nullptr, tc), vb(lb, nullptr, net::VoiceSession::Config{});
++            va.setSyntheticTone(440.0f);
++            auto enemy = [](int) { return false; };
++            const auto t0 = std::chrono::steady_clock::now();
++            auto secs = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
++            while (secs() < 1.4) {
++                la.pump(); lb.pump();
++                va.update(secs() < 1.0, nullptr, enemy, nullptr, nullptr, core::Vec3{0, 0, 0}, core::Vec3{1, 0, 0});
++                vb.update(false, nullptr, enemy, nullptr, nullptr, core::Vec3{0, 0, 0}, core::Vec3{1, 0, 0});
++                std::this_thread::sleep_for(std::chrono::milliseconds(2));
++            }
++            unheard = vb.stats().unheard;
++            return vb.stats().radio;
++        };
++        long uTeam = 0, uAll = 0;
++        const long rTeam = heardAsRadio(false, uTeam), rAll = heardAsRadio(true, uAll);
++        LOG_INFO("VOICETEST audience: enemy listener - Team Radio %ld radio / %ld unheard, All Radio %ld radio / %ld unheard", rTeam, uTeam, rAll, uAll);
++        check(rTeam == 0 && uTeam > 0 && rAll >= 30 && uAll == 0, "audience: Team Radio never reaches an enemy; All Radio reaches every player");
++    }
++    {   // The Mic Test meter: a micLevel() read (the presenter, every frame while the row shows) opens the meter window for 0.5 s.
++        net::UdpSession::Options o; o.bindIp = "127.0.0.1"; o.hostPort = 24171; o.internet = false;
++        net::UdpSession u(o);
++        const bool before = u.micMeterShown();
++        u.setMicLevelSource([] { return 0.5f; });
++        const float lvl = u.micLevel();
++        const bool during = u.micMeterShown();
++        std::this_thread::sleep_for(std::chrono::milliseconds(650));
++        const bool after = u.micMeterShown();
++        check(!before && lvl == 0.5f && during && !after, "Mic Test: the meter reads the lane's level and holds the microphone open only while it shows");
++    }
+     {   // The lobby lane: real UdpSessions on loopback (a host + 2 members); member 1 talks; the host hears it directly, member 2 through
+         // the host's relay (everyone in the lobby hears everyone).
+         using T = frontend::SessionEvent::Type;
+diff -ruN a/src/frontend/GameFlow_Online.cpp b/src/frontend/GameFlow_Online.cpp
+--- a/src/frontend/GameFlow_Online.cpp	2026-10-23 23:37:58.797448000 -0500
++++ b/src/frontend/GameFlow_Online.cpp	2026-10-23 23:37:58.809990700 -0500
+@@ -273,7 +273,8 @@
+ 
+ void GameFlow::syncVoiceSettings() {   // the Audio rows to the session, whenever they change (and when the session starts)
+     const LocalProfile::Voice& v = profile_.voice;
+-    const std::string key = std::to_string(v.mode) + "|" + std::to_string(v.audience) + "|" + v.device + "|" + std::to_string(v.volume);
++    const std::string key = std::to_string(v.mode) + "|" + std::to_string(v.audience) + "|" + v.device + "|" + std::to_string(v.volume) +
++                            "|" + std::to_string(v.proximityVolume);
+     if (key == voiceSent_) return;
+     voiceSent_ = key;
+     SessionVoiceSettings s;
+@@ -281,6 +282,7 @@
+     s.audience = (SessionVoiceAudience)std::clamp(v.audience, 0, 3);
+     s.device = v.device;
+     s.volume = v.volume;
++    s.proximityVolume = v.proximityVolume;
+     session_->setVoiceSettings(s);
+     FlowTrace::emit("online.voiceSettings", {{"mode", std::to_string(v.mode)}, {"audience", std::to_string(v.audience)}});
+ }
+diff -ruN a/src/frontend/Session.h b/src/frontend/Session.h
+--- a/src/frontend/Session.h	2026-10-23 23:37:58.862671200 -0500
++++ b/src/frontend/Session.h	2026-10-23 23:37:58.875214000 -0500
+@@ -119,6 +119,7 @@
+     SessionVoiceAudience audience = SessionVoiceAudience::TeamRadio;   // the original: team-only voice (RE TnVoiceMuteHandler); proximity opt-in
+     std::string device;                     // capture device name; "" = the system default
+     int volume = 70;                        // playback 0-100
++    int proximityVolume = 70;               // proximity voice playback 0-100 (the Proximity Volume row)
+ };
+ enum class SessionLeaveReason { Left, Timeout, Kicked, LoadTimeout };
+ enum class SessionKickReason { Idle, Host };                             // D5: the original 180 s idle kick
+diff -ruN a/src/net/NetMatchDriver.cpp b/src/net/NetMatchDriver.cpp
+--- a/src/net/NetMatchDriver.cpp	2026-10-23 23:37:58.927895000 -0500
++++ b/src/net/NetMatchDriver.cpp	2026-10-23 23:37:58.940437700 -0500
+@@ -123,6 +123,7 @@
+             const auto& ps = w->match().players();
+             if (talker < 0 || listener < 0 || (size_t)talker >= ps.size() || (size_t)listener >= ps.size()) return false;
+             if (voiceChannelOpen(*w)) return true;
++            if ((flags & 1) && (flags & 4)) return true;   // All Radio
+             if ((flags & 1) && ps[(size_t)talker].team == ps[(size_t)listener].team && ps[(size_t)talker].team != 255) return true;
+             if (!(flags & 2)) return false;
+             const game::Character* x = w->participantPawn(talker);
+diff -ruN a/src/net/UdpSession.h b/src/net/UdpSession.h
+--- a/src/net/UdpSession.h	2026-10-23 23:37:58.993118600 -0500
++++ b/src/net/UdpSession.h	2026-10-23 23:37:59.005159800 -0500
+@@ -21,6 +21,7 @@
+ #include "frontend/Session.h"
+ #include "net/NatPortMap.h"
+ 
++#include <chrono>
+ #include <functional>
+ #include <map>
+ #include <memory>
+@@ -111,6 +112,11 @@
+     std::vector<int> lobbySeats() const;
+     frontend::SessionMemberId memberOfSeat(int seat) const;
+     bool inLobby() const { return role_ != Role::Offline && !view_; }   // in a session, no match running here
++    // The Settings > Audio Mic Test meter: the presenter reads micLevel() every frame while the row is on screen, so a read in the
++    // last 0.5 s = the meter is showing (the voice lane then opens the microphone without sending). The level comes from the lane.
++    float micLevel() const override { micAskedMs_ = steadyMs(); return micLevelFn_ ? micLevelFn_() : 0.0f; }
++    void setMicLevelSource(std::function<float()> f) { micLevelFn_ = std::move(f); }
++    bool micMeterShown() const { return micAskedMs_ > 0.0 && steadyMs() - micAskedMs_ < 500.0; }
+     uint32_t launchSeed() const { return launchSeed_; }
+     const frontend::SessionVoiceSettings& voiceSettings() const { return voice_; }
+     bool pushToTalk() const { return pushToTalk_; }
+@@ -226,6 +232,9 @@
+     double catchUpSentAt_ = -1.0;
+     bool catchUpDone_ = false;
+     frontend::SessionVoiceSettings voice_;
++    static double steadyMs() { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
++    mutable double micAskedMs_ = 0.0;
++    std::function<float()> micLevelFn_;
+     bool pushToTalk_ = false;
+     std::map<std::string, bool> muted_;
+     std::vector<frontend::SessionEvent> out_;
+diff -ruN a/src/net/VoiceFrames.cpp b/src/net/VoiceFrames.cpp
+--- a/src/net/VoiceFrames.cpp	2026-10-23 23:37:59.056334700 -0500
++++ b/src/net/VoiceFrames.cpp	2026-10-23 23:37:59.069881500 -0500
+@@ -67,7 +67,8 @@
+     float level() const override { return 0.0f; }
+ };
+ }  // namespace
+-std::unique_ptr<IVoiceCapture> createVoiceCapture() { return std::make_unique<NullVoiceCapture>(); }
++std::unique_ptr<IVoiceCapture> createVoiceCapture(const std::string&) { return std::make_unique<NullVoiceCapture>(); }
++std::vector<std::string> voiceCaptureDevices() { return {}; }
+ #endif
+ 
+ }  // namespace net
+diff -ruN a/src/net/VoiceFrames.h b/src/net/VoiceFrames.h
+--- a/src/net/VoiceFrames.h	2026-10-23 23:37:59.121558400 -0500
++++ b/src/net/VoiceFrames.h	2026-10-23 23:37:59.134603300 -0500
+@@ -10,6 +10,8 @@
+ #include <deque>
+ #include <memory>
+ #include <mutex>
++#include <string>
++#include <vector>
+ 
+ namespace net {
+ 
+@@ -48,6 +50,8 @@
+     virtual bool pop(VoiceFrame& out) = 0;
+     virtual float level() const = 0;
+ };
+-std::unique_ptr<IVoiceCapture> createVoiceCapture();
++// device = a capture endpoint's friendly name (voiceCaptureDevices); "" or a name no longer present = the system default.
++std::unique_ptr<IVoiceCapture> createVoiceCapture(const std::string& device = std::string());
++std::vector<std::string> voiceCaptureDevices();   // the active capture endpoints' friendly names (the Input Device row)
+ 
+ }  // namespace net
+diff -ruN a/src/net/VoiceSession.cpp b/src/net/VoiceSession.cpp
+--- a/src/net/VoiceSession.cpp	2026-10-23 23:37:59.186280400 -0500
++++ b/src/net/VoiceSession.cpp	2026-10-23 23:37:59.199827200 -0500
+@@ -16,7 +16,7 @@
+ double nowMs() {
+     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
+ }
+-constexpr uint8_t kVoicePacket = 7, kFlagRadio = 1, kFlagProximity = 2;
++constexpr uint8_t kVoicePacket = 7, kFlagRadio = 1, kFlagProximity = 2, kFlagAllRadio = 4;   // 4: radio for every player (All Radio)
+ constexpr double kFrameMs = 20.0;
+ // The original's dialog cue (BL_HUD_INTERFACE.DX_SLIDER_VOLUME, DX_DRY): DistanceMin 400 UU, DistanceMax 6400 UU, the FMOD inverse
+ // (log) rolloff: full within 4 m, -6 dB per doubling, silent beyond 64 m.
+@@ -64,6 +64,12 @@
+ void VoiceSession::update(bool talking, const SeatPos& seatPos, const SameTeam& sameTeam, const Occluded& occluded, const Room& room,
+                           const core::Vec3& listener, const core::Vec3& listenerRight) {
+     const double now = nowMs();
++    if (cfg_.mic && (!mic_ || !ownMic_ || micDevice_ != cfg_.device)) {   // the owned microphone (Config::mic), on the chosen device
++        mic_ = createVoiceCapture(cfg_.device);
++        ownMic_ = true; micDevice_ = cfg_.device; micRetryMs_ = 0.0;
++    } else if (!cfg_.mic && ownMic_) {
++        mic_.reset(); ownMic_ = false;
++    }
+     // ---- send: this seat's 20 ms frames while talking ----
+     if (voiceCodecAvailable() && (cfg_.radio || cfg_.proximity)) {
+         std::vector<VoiceFrame> frames;
+@@ -82,8 +88,9 @@
+                 }
+             }
+         } else if (mic_) {
+-            if (talking && !mic_->running()) mic_->start();
+-            if (!talking && mic_->running()) mic_->stop();
++            const bool open = talking || cfg_.micTest;   // the Mic Test meter reads the live level without sending
++            if (open && !mic_->running() && now >= micRetryMs_ && !mic_->start()) micRetryMs_ = now + 2000.0;
++            if (!open && mic_->running()) mic_->stop();
+             VoiceFrame f;
+             while (mic_->pop(f)) {
+                 if (!talking) continue;
+@@ -102,7 +109,8 @@
+             std::vector<uint8_t> opus;
+             if (!enc_.encode(f, opus)) continue;
+             std::vector<uint8_t> pkt = {kVoicePacket, (uint8_t)link_.self(), (uint8_t)seq_, (uint8_t)(seq_ >> 8),
+-                                        (uint8_t)((cfg_.radio ? kFlagRadio : 0) | (cfg_.proximity ? kFlagProximity : 0))};
++                                        (uint8_t)((cfg_.radio ? kFlagRadio : 0) | (cfg_.proximity ? kFlagProximity : 0) |
++                                                  (cfg_.radio && cfg_.allRadio ? kFlagAllRadio : 0))};
+             pkt.insert(pkt.end(), opus.begin(), opus.end());
+             link_.send(pkt.data(), pkt.size());   // to the host (a client) or fanned out (the host)
+             ++seq_; ++stats_.sent;
+@@ -163,7 +171,7 @@
+     // Who hears it: radio = the talker's team, 2D at the voice volume; proximity (opt-in: the audience row) = anyone in earshot, as a
+     // 3D voice in the cue mix (falloff, pan, the listener's room reverb, occlusion); radio wins for teammates. An open channel (FFA,
+     // after EndGame: setOpenChannel) = everyone, 2D.
+-    const bool radio = open_ || ((t.lastFlags & kFlagRadio) && sameTeam && sameTeam(seat));
++    const bool radio = open_ || ((t.lastFlags & kFlagRadio) && ((t.lastFlags & kFlagAllRadio) || (sameTeam && sameTeam(seat))));
+     if (!radio) {
+         core::Vec3 at;
+         if (!(t.lastFlags & kFlagProximity) || !seatPos || !seatPos(seat, at)) { ++stats_.unheard; return; }   // not for this listener
+@@ -192,7 +200,7 @@
+         if (!audio_) return;
+         if (t.pstream < 0) t.pstream = audio_->openPositionalStream(kVoiceRate);
+         if (t.pstream < 0) return;
+-        audio_->setPositionalStream(t.pstream, at, cfg_.volume * t.occGain, kProxMin, maxD, true);
++        audio_->setPositionalStream(t.pstream, at, cfg_.proximityVolume * t.occGain, kProxMin, maxD, true);
+         float mono[kVoiceFrameSamples];
+         for (int i = 0; i < kVoiceFrameSamples; ++i) mono[i] = (float)pcm[(size_t)i] / 32768.0f;
+         audio_->pushPositionalStream(t.pstream, mono, kVoiceFrameSamples);
+diff -ruN a/src/net/VoiceSession.h b/src/net/VoiceSession.h
+--- a/src/net/VoiceSession.h	2026-10-23 23:37:59.252507700 -0500
++++ b/src/net/VoiceSession.h	2026-10-23 23:37:59.265050400 -0500
+@@ -33,7 +33,14 @@
+ public:
+     struct Config {
+         bool radio = true, proximity = true;   // this seat's audience flags (Radio + Proximity default)
+-        float volume = 1.0f;                   // the voice slider
++        float volume = 1.0f;                   // the voice slider (radio)
++        float proximityVolume = 1.0f;          // the Proximity Volume slider (3D voices in earshot)
++        bool allRadio = false;                 // All Radio: this seat's radio reaches every player, not only its team
++        // The microphone the session owns (the Audio rows): attached whenever this player may talk and opened only while talking or
++        // while the Mic Test meter is on screen (micTest); device = the Input Device row's capture endpoint ("" = the system default).
++        // Off never talks, so switching voice on mid-match works without a new lane. setSource() (the harness) is used when mic is false.
++        bool mic = false, micTest = false;
++        std::string device;
+         int jitterFrames = 3;                  // frames buffered before a talker starts playing (60 ms)
+         // Open mic: frames go out only while the voice gate is open - a frame above gateDb (dBFS RMS) opens it for hangMs (breathing
+         // and room noise do not stream). Push to talk: the key is the gate.
+@@ -99,6 +106,9 @@
+     audio::IAudio* audio_;
+     Config cfg_;
+     std::unique_ptr<IVoiceCapture> mic_;
++    bool ownMic_ = false;            // mic_ came from cfg_.mic (replaced on a device change, dropped when mic goes false)
++    std::string micDevice_;
++    double micRetryMs_ = 0.0;        // a device that failed to open is retried after 2 s, not every frame
+     float toneHz_ = 0.0f;
+     double tonePhase_ = 0.0, toneStartMs_ = -1.0, toneSent_ = 0.0;
+     VoiceEncoder enc_;
+diff -ruN a/src/platform/win32/Win32VoiceCapture.cpp b/src/platform/win32/Win32VoiceCapture.cpp
+--- a/src/platform/win32/Win32VoiceCapture.cpp	2026-10-23 23:37:59.316727400 -0500
++++ b/src/platform/win32/Win32VoiceCapture.cpp	2026-10-23 23:37:59.329772300 -0500
+@@ -11,6 +11,7 @@
+ #include <mmdeviceapi.h>
+ 
+ #include <atomic>
++#include <string>
+ #include <thread>
+ #include <vector>
+ 
+@@ -21,8 +22,46 @@
+ 
+ template <class T> void release(T*& p) { if (p) { p->Release(); p = nullptr; } }
+ 
++// PKEY_Device_FriendlyName {a45c254e-df1c-4efd-8020-67d146a850e0}, 14 (defined here: no INITGUID / extra import library)
++const PROPERTYKEY kFriendlyName = {{0xa45c254e, 0xdf1c, 0x4efd, {0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0}}, 14};
++
++std::string utf8(const wchar_t* w) {
++    if (!w) return std::string();
++    const int n = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
++    std::string s(n > 0 ? (size_t)n - 1 : 0, '\0');
++    if (n > 1) WideCharToMultiByte(CP_UTF8, 0, w, -1, &s[0], n, nullptr, nullptr);
++    return s;
++}
++
++// Every active capture endpoint: (friendly name, device). The caller releases the devices.
++std::vector<std::pair<std::string, IMMDevice*>> captureEndpoints(IMMDeviceEnumerator* en) {
++    std::vector<std::pair<std::string, IMMDevice*>> out;
++    IMMDeviceCollection* col = nullptr;
++    if (!en || FAILED(en->EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE, &col))) return out;
++    UINT n = 0;
++    col->GetCount(&n);
++    for (UINT i = 0; i < n; ++i) {
++        IMMDevice* d = nullptr;
++        if (FAILED(col->Item(i, &d))) continue;
++        IPropertyStore* ps = nullptr;
++        std::string name;
++        if (SUCCEEDED(d->OpenPropertyStore(STGM_READ, &ps))) {
++            PROPVARIANT v;
++            PropVariantInit(&v);
++            if (SUCCEEDED(ps->GetValue(kFriendlyName, &v)) && v.vt == VT_LPWSTR) name = utf8(v.pwszVal);
++            PropVariantClear(&v);
++            release(ps);
++        }
++        if (name.empty()) { release(d); continue; }
++        out.emplace_back(name, d);
++    }
++    release(col);
++    return out;
++}
++
+ class Win32VoiceCapture final : public IVoiceCapture {
+ public:
++    explicit Win32VoiceCapture(std::string device) : device_(std::move(device)) {}
+     ~Win32VoiceCapture() override { stop(); }
+     bool start() override {
+         if (running_) return true;
+@@ -50,7 +89,14 @@
+         WAVEFORMATEX* wf = nullptr;
+         HANDLE ev = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+         bool ok = SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&en));
+-        if (ok && FAILED(en->GetDefaultAudioEndpoint(eCapture, eCommunications, &dev))) ok = SUCCEEDED(en->GetDefaultAudioEndpoint(eCapture, eConsole, &dev));
++        if (ok && !device_.empty()) {   // the Input Device row's endpoint by name; gone (unplugged) -> the default below
++            for (auto& e : captureEndpoints(en)) {
++                if (!dev && e.first == device_) dev = e.second;
++                else release(e.second);
++            }
++            if (!dev) LOG_WARN("voice capture: input device '%s' not found - using the default", device_.c_str());
++        }
++        if (ok && !dev && FAILED(en->GetDefaultAudioEndpoint(eCapture, eCommunications, &dev))) ok = SUCCEEDED(en->GetDefaultAudioEndpoint(eCapture, eConsole, &dev));
+         ok = ok && dev && SUCCEEDED(dev->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, (void**)&ac));
+         ok = ok && SUCCEEDED(ac->GetMixFormat(&wf));
+         ok = ok && SUCCEEDED(ac->Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, 200000 /* 20 ms */, 0, wf, nullptr));
+@@ -98,6 +144,7 @@
+         if (com) CoUninitialize();
+         if (ok) LOG_INFO("voice capture: stopped");
+     }
++    std::string device_;
+     VoiceFramer framer_;
+     std::thread thread_;
+     std::atomic<bool> stopFlag_{false};
+@@ -107,6 +154,17 @@
+ 
+ }  // namespace
+ 
+-std::unique_ptr<IVoiceCapture> createVoiceCapture() { return std::make_unique<Win32VoiceCapture>(); }
++std::unique_ptr<IVoiceCapture> createVoiceCapture(const std::string& device) { return std::make_unique<Win32VoiceCapture>(device); }
++
++std::vector<std::string> voiceCaptureDevices() {
++    const bool com = SUCCEEDED(CoInitializeEx(nullptr, COINIT_MULTITHREADED));   // S_FALSE / RPC_E_CHANGED_MODE: already initialised
++    std::vector<std::string> names;
++    IMMDeviceEnumerator* en = nullptr;
++    if (SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&en)))
++        for (auto& e : captureEndpoints(en)) { names.push_back(e.first); release(e.second); }
++    release(en);
++    if (com) CoUninitialize();
++    return names;
++}
+ 
+ }  // namespace net
+diff -ruN a/src/ui/GfxPresenter.cpp b/src/ui/GfxPresenter.cpp
+--- a/src/ui/GfxPresenter.cpp	2026-10-23 23:37:59.382954700 -0500
++++ b/src/ui/GfxPresenter.cpp	2026-10-23 23:37:59.396501100 -0500
+@@ -6,6 +6,7 @@
+ #include "frontend/DataPaths.h"
+ #include "render/SplitScreen.h"
+ #include "frontend/FlowTrace.h"
++#include "net/VoiceFrames.h"
+ 
+ #include <algorithm>
+ #include <chrono>
+@@ -1291,7 +1292,8 @@
+     choice(mode, V(0.0), "$WfcPC.Voice.VoiceOff"); choice(mode, V(1.0), "$WfcPC.Voice.VoicePushToTalk"); choice(mode, V(2.0), "$WfcPC.Voice.VoiceOpenMic");
+     choice(aud, V(0.0), "$WfcPC.Voice.VoiceTeamRadio"); choice(aud, V(1.0), "$WfcPC.Voice.VoiceAllRadio");
+     choice(aud, V(2.0), "$WfcPC.Voice.VoiceProximity"); choice(aud, V(3.0), "$WfcPC.Voice.VoiceRadioProximity");
+-    choice(dev, V(std::string()), "$WfcPC.Voice.InputDeviceDefault");   // the capture devices by name come from Systems' audio layer
++    choice(dev, V(std::string()), "$WfcPC.Voice.InputDeviceDefault");
++    for (const std::string& d : net::voiceCaptureDevices()) choice(dev, V(d), d);   // Systems: the active capture endpoints by name
+     pttChoices(vm, ptt, pttKey);
+     choice(mic, V(0.0), frontend::GameFlow::micMeterText(0.0f));
+     for (int t = 0; t <= 100; t += 10) { choice(vol, V((double)t), std::to_string(t)); choice(pvol, V((double)t), std::to_string(t)); }
