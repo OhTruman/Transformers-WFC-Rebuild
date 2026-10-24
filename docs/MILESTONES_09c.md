@@ -4271,3 +4271,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   District 8 / 8 with a bought door generator) + base item 15; 8f65b92c level audio (+ Horizon; props-less exports =
   missing). Gameplay next: the DLC Kismet extras (laser doors, sentries, power outage, vending, flood gates). AssetTools:
   LZO short-block fix in 3 DLC packages (Tranquillity_AUDIO, District_Art, Static_ART): District rebuilt, Pack 2 resumes.
+2026-10-23 23:09 AssetTools LZO fix done (blocks at their declared offset; base 0 of 918 packages affected = byte-identical; DLC authored.db
+  rebuilt: Tranquillity_AUDIO NULL rows 110 -> 28; District rebuilt, outputs unchanged; the laser generators scoped
+  936 -> 356 rows per RE's export). Pack 2 resumed: Horizon (structure audit at 2 m), then Metropolis, Sector, Pulse, Static.
