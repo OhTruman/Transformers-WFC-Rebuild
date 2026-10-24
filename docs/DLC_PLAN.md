@@ -33,3 +33,26 @@ Never modify / extract INTO this folder; extraction goes to AssetTools' own work
 ## Also in the next build (user 2026-10-23 ~20:35)
 - A Language option in Settings (Frontend): every language the dump / DLC packs ship (at least INT and FRA; RE / AssetTools
   list the rest), applied to the GFx text, the subtitles and the dialog banks where they exist; INT stays the default.
+
+## Inventory (AssetTools, 2026-10-23 ~21:00; manifests/dlc/dlc_inventory.json; files in AssetTools/work/dlc/MapPack{1,2}/files)
+- **Pack 1 (DLCMaps, 375 MB):** versus MP_KON_Fortress "Fortress" (MapId 512), MP_ORB_Havoc "Havoc" (511); Escalation
+  MP_ESC_Tranquillity "Forsaken", MP_ESC_District "District". Unlocks: Scattershot, Onslaught, Demolishor, Jazz, Shockwave.
+- **Pack 2 (DLCMaps2, 494 MB):** versus MP_IAC_Horizon "Horizon", MP_IAC_Metropolis "Metropolis", MP_KON_Sector "Sector";
+  Escalation MP_ESC_Pulse "Pulse", MP_ESC_Static "Static". Unlocks: Deadend, Zeta Prime.
+- **No new playable characters:** the "character packs" are TransCustomization.ini unlocks of base characters (all already
+  exported). One new ESC enemy: TR_District_p.AiEscalation_Soldier_Jet_Autobot_AICD. Two new set-dressing skeletal meshes.
+- **Languages:** the packs ship INT / FRA / DEU / ITA / ESN for DLC strings only; the base is INT + FRA, so the Settings
+  Language row offers INT + FRA.
+- **Other:** TransLevels.ini MapInfo deltas (MapId, PresenceId, game types, thumbnails), DLCMaps2.ini PackagesToFullyLoadForDLC,
+  BL_LVL_* / WL_LVL_DLC_* audio + dialogue, TR_* Escalation data, UI thumbnails, GuidCache.
+
+## Assignments (started 2026-10-23 ~21:00)
+- AssetTools: the 9-map MP chain (Pack 1 first; one heavy lane while Systems packages) + ESC data + outside-list rows.
+- RE: DLC_RE.md (DlcIds, playlists, map info, presence, ESC waves, unlock gating, Frontend short-circuits).
+- Gameplay: the 7 unlocks playable everywhere incl. bots; the District ESC enemy; per map nav / spawns / pickups /
+  transforming actors / ESC waves.
+- Frontend: unlocks owned everywhere; map + playlist + Quick Match + ESC list entries + thumbnails (after DLC_RE.md);
+  the Language option (INT + FRA).
+- Rendering: per map render check + lightmaps / RT / calibration + eye pass; the 2 new skeletal meshes.
+- Systems: DLC audio / dialogue banks per map; the Language audio setter; packaging (DLC in the base).
+- Experimental: final-gate map list 10 -> 19; identity rows per new map.

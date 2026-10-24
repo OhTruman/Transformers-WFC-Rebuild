@@ -4177,3 +4177,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   match vs the base (af4d0731 + 01-12) on 10 maps x 1440p / 1080p x 2 reps; head faster on average (2.52 -> 2.48 ms 1440p,
   2.53 -> 2.49 ms 1080p); worst median 3.85 ms (Gorge); no contamination; pool flat. Combined gate COMPLETE (pre + timed).
   CUT WORD sent to Systems (refresh.sh d5bb6863). RELEASE sent to every lane; the DLC phase starts (AssetTools extraction).
+2026-10-23 20:29 DLC INVENTORY (AssetTools): 9 maps (5 versus + 4 Escalation), no new characters (7 base unlocks), 1 new ESC enemy, 5
+  languages for DLC strings. Assignments sent to every lane (docs/DLC_PLAN.md). AssetTools' 9-map chain started (Pack 1).
