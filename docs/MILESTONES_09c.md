@@ -4496,3 +4496,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   characters, spawnables) -> one patch with an env-overridable helper; RE audits every runtime dev-path literal
   (DEV_PATH_AUDIT.md); Systems: PACKAGE_ENV_CHECKLIST.md + a clean-machine verify mode. The repacked 48e42af6 (this PC)
   verifies now; the laptop package = the next (perf) one.
+2026-10-24 11:26 MERGED 676f04fc DataRoots (11 campaign / ESC dev literals), c35e572a Frontend package paths (no F: literal left in
+  frontend / ui), 5975369b nav-block grid prefilter (A1 matinee ends 2.1-5.5 -> 0.6-1.7 ms, identical sets). Pending:
+  Gameplay PRELOAD delta (roster table at chapter load) + fix F; Rendering kAssetRootDefault; Systems repack 48e42af6 +
+  verify (the user's package), env checklist, clean-machine verify.
