@@ -128,9 +128,12 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None, campaig
     """The Kismet audio graph of a level (all `packages`: a UI level, or a map's sublevels).
     touch_geo: {SeqEvent_Touch name: trigger polygons (glTF)} from the AssetTools map manifest."""
     objs = {}
+    damaged = set()   # rows without props: exports damaged in the shipped cook (RE: Tranquillity_AUDIO) - missing, never defaulted
     for pkg in packages:
         for r in c.execute('select opath, class, props from objects where package=?', (pkg,)):
-            objs[r[0]] = (r[1], json.loads(r[2] or "{}"))   # (a DLC row may carry no props)
+            if r[2] is None:
+                damaged.add(r[0])
+            objs[r[0]] = (r[1], json.loads(r[2] or "{}"))
     def sid(o):
         s = o.split('Main_Sequence.', 1)[1] if 'Main_Sequence.' in o else o.split('.')[-1]
         return (o.split('.')[0] + '|' + s) if len(packages) > 1 else s     # unique across sublevels
@@ -229,6 +232,9 @@ def level(name, packages, touch_geo=None, bank=frozenset(), prefer=None, campaig
         return objs.get(ref, (None, {}))[1].get('PresetName') or row(ref or '')[1].get('PresetName')
     for o, (cl, p) in sorted(objs.items()):
         if cl not in SINK_OPS and cl != 'SeqEvent_Touch' and cl not in DIALOG_OPS: continue
+        if o in damaged:   # no authored values to build it from: left out (its links drop as unresolved; no invented values)
+            warnings.append('damaged export (no props) left out: ' + o)
+            continue
         op = {'id': sid(o)}
         n_inputs = 2
         if cl == 'SeqAct_RandomSwitch':
