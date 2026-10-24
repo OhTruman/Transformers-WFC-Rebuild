@@ -433,7 +433,7 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
     }
     // TnGameActionScriptBinding: language / region drive the localized logo (FrontEnd_GFX logo clip). The rebuild
     // runs the INT data; the region code of the dumped build is UNKNOWN - "NA" selects the TM logo variant [PARTIAL].
-    if (fn == "Game.GetLanguageCode") return BridgeValue("INT");
+    if (fn == "Game.GetLanguageCode") return BridgeValue(catalog_.language());   // the Settings Language row (INT default)
     if (fn == "Game.GetRegionCode") return BridgeValue("NA");
     if (fn == "Game.SetHasWatchedIntroMovie") { FlowTrace::emit("profile", {{"SetHasWatchedIntroMovie", "movie"}}); return {}; }
     // Hud_GFX: the AS wrapper DeactivatePostProcessChain(x) calls the native 'DeactivePostProcessChain' (sic) and drops x;
@@ -1165,9 +1165,9 @@ void FrontendRuntime::stopMovieAudio() {
 }
 
 namespace {
-// The extracted movies carry region / language suffixes: <name>_NA_INT, then <name>_INT, then <name>.
-std::string localizedMovie(const std::string& b) {
-    for (const std::string& c : {b + "_NA_INT", b + "_INT"})
+// The extracted movies carry region / language suffixes: <name>_NA_<lang>, <name>_<lang>, then the INT forms, then <name>.
+std::string localizedMovie(const std::string& b, const std::string& lang = "INT") {
+    for (const std::string& c : {b + "_NA_" + lang, b + "_" + lang, b + "_NA_INT", b + "_INT"})
         if (std::ifstream(openPath(Catalog::defaultExtractedRoot() + "/movies/" + c + ".mkv")).good()) return c;
     return b;
 }
@@ -1178,7 +1178,7 @@ void FrontendRuntime::prewarmLoadingUnderlay() {
     underlayPrewarmed_ = true;
     const std::string b = catalog_.loadingMovieDefault();
     if (b.empty() || !movieFactory_ || std::getenv("WFC_NO_VIDEO")) return;
-    const std::string name = localizedMovie(b);
+    const std::string name = localizedMovie(b, catalog_.language());
     if ((video_ && videoName_ == name) || (parkedUnderlay_ && parkedName_ == name)) return;
     std::unique_ptr<platform::IMoviePlayer> p(movieFactory_());
     if (!p || !p->open(Catalog::defaultExtractedRoot() + "/movies/" + name + ".mkv")) return;
@@ -1190,7 +1190,7 @@ void FrontendRuntime::prewarmLoadingUnderlay() {
 
 void FrontendRuntime::releaseVideo() {
     // Only the travel underlay is parked (the boot startup movie never plays again and must not replace it).
-    if (video_ && videoLoops_ && videoName_ == localizedMovie(catalog_.loadingMovieDefault())) {
+    if (video_ && videoLoops_ && videoName_ == localizedMovie(catalog_.loadingMovieDefault(), catalog_.language())) {
         parkedUnderlay_ = std::move(video_);
         parkedName_ = videoName_;
     }
@@ -1244,7 +1244,7 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
         const std::string& b = flow_.loading().binkMovie;
         if (b != underlayFor_) {
             underlayFor_ = b;
-            underlay_ = localizedMovie(b);
+            underlay_ = localizedMovie(b, catalog_.language());
         }
         want = underlay_;
         if (flow_.loading().kind == "InitialStartup" && !bootDone_) bootUnderlay_ = underlay_;
@@ -1374,6 +1374,10 @@ void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
     hideRealPointer(in);
     script_.applySynthetic(in);
     updateInputDevice(in, dt);
+    if (flow_.profile().display.language != catalog_.language()) {   // boot and the Settings Apply: the profile's text language
+        catalog_.setLanguage(flow_.profile().display.language);
+        if (catalog_.language() != flow_.profile().display.language) flow_.profile().display.language = catalog_.language();   // unavailable -> INT
+    }
     { core::prof::Scope prof("flow.tick"); flow_.tick(dt); }
     { core::prof::Scope prof("shims"); runNativeShims(); }
     { core::prof::Scope prof("movie.player"); updateMoviePlayer(dt, in); }

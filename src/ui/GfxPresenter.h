@@ -122,6 +122,7 @@ private:
     std::vector<std::string> deferredErase_;    // TnHUD.ScoreboardMovie (InGameStats_GFX), above the HUD, with focus
     bool shapesStale_ = false;                // a movie was destroyed since the last draw
     // Engine -> AS invokes made after the AS call that caused them returns (UnrealScript OwnerMovie.Invoke).
+    std::vector<std::string> languageNames() const;   // the Settings Language row's choices (Catalog::languages, own names)
     struct Deferred { std::string movie, fn; gfx::avm1::Args args; };
     std::vector<Deferred> deferred_;
     int viewW_ = 1280, viewH_ = 720;          // last drawn window size (pointer -> stage mapping)

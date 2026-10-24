@@ -1273,7 +1273,8 @@ bool addVoiceRows(gfx::Player& p, const std::string& linkage, gfx::avm1::Object*
 bool addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, int current,
                        const std::function<void()>& onRecommended, bool hdAvailable, bool fsr3Available, int upscalingCurrent,
                        bool frameGenAvailable, bool frameGenActive, bool rtAvailable, bool hdEnhancedAvailable, int vramMB, int hdCurrent,
-                       bool rtNextMap, int rtCurrent, bool volumetricCurrent, bool volumetricAvailable) {
+                       bool rtNextMap, int rtCurrent, bool volumetricCurrent, bool volumetricAvailable,
+                       const std::vector<std::string>& languageNames) {
     if (linkage != "mc_subMenu" || !init) return false;
     gfx::avm1::VM& vm = p.vm();
     gfx::avm1::Value a = vm.get(init, "buildArray");
@@ -1378,6 +1379,11 @@ bool addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         std::vector<gfx::avm1::Value> lf;
         add(lf, 0, "Off"); add(lf, 1, "$WfcPC.Settings.LensFlaresSubtle"); add(lf, 2, "$WfcPC.Settings.LensFlaresOriginal");
         row(lf, "<PCSettings:LensFlares>", "$WfcPC.Settings.LensFlaresDesc", "$WfcPC.Settings.LensFlares");
+    }
+    {   // PC EXTENSION (user 2026-10-23): Language - every text pack the data ships (INT + FRA in the base game), each in its own name
+        std::vector<gfx::avm1::Value> lg;
+        for (size_t i = 0; i < languageNames.size(); ++i) add(lg, (int)i, languageNames[i].c_str());
+        row(lg, "<PCSettings:Language>", "$WfcPC.Settings.LanguageDesc", "$WfcPC.Settings.Language");
     }
     {   // PC EXTENSION (user decisions; Rendering setSmokeMode / setWaterMode): Original = the shipped look (default)
         std::vector<gfx::avm1::Value> sm, wa;
@@ -1973,6 +1979,12 @@ void GfxPresenter::syncModeOptionBots(gfx::Player& p, frontend::GameFlow& flow) 
                                                            {"provenance", "PC ADAPTATION"}});
 }
 
+std::vector<std::string> GfxPresenter::languageNames() const {
+    std::vector<std::string> out;
+    for (const std::string& c : rt_.catalog().languages()) out.push_back(frontend::Catalog::languageName(c));
+    return out;
+}
+
 void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& in, float dt) {
     extendedMatch_ = flow.matchValues().players.size() > 10;
     core::prof::Scope prof("ui.update");
@@ -2101,7 +2113,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
                                       rt_.frameGenerationAvailable(), rt_.frameGenerationActive(), rt_.rayTracingAvailable(),
                                       rt_.hdTextureLevelAvailable(2), rt_.vramMB(), rt_.flow().profile().display.hdTextures,
                                       rt_.rayTracingOnAppliesNextMap(), rt_.flow().profile().display.rayTracing,
-                                      rt_.flow().profile().display.volumetricLighting, rt_.volumetricLightingAvailable()))
+                                      rt_.flow().profile().display.volumetricLighting, rt_.volumetricLightingAvailable(), languageNames()))
                     graphicsPagePlayer_ = &p;
                 else if (rt_.flow().online() && addVoiceRows(p, linkage, init, rt_.flow().profile().voice.pttKey))   // online only
                     audioPagePlayer_ = &p;

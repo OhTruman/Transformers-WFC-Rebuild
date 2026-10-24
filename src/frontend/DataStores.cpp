@@ -99,6 +99,11 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<PCSettings:FrameGeneration>") return flow_.profile().display.frameGeneration ? "1" : "0";   // PC EXTENSION
     if (markup == "<PCSettings:RayTracing>") return std::to_string(flow_.profile().display.rayTracing);        // PC EXTENSION
     if (markup == "<PCSettings:ShowFps>") return flow_.profile().display.showFps ? "1" : "0";                // PC EXTENSION
+    if (markup == "<PCSettings:Language>") {   // PC EXTENSION: the index in the catalog's languages (INT first)
+        const std::vector<std::string> l = cat_.languages();
+        const auto it = std::find(l.begin(), l.end(), flow_.profile().display.language);
+        return std::to_string(it == l.end() ? 0 : (int)(it - l.begin()));
+    }
     if (markup == "<PCSettings:LensFlares>") return std::to_string(flow_.profile().display.lensFlares);     // PC EXTENSION (user)
     if (markup == "<PCSettings:Smoke>") return std::to_string(flow_.profile().display.smoke);               // PC EXTENSION (user)
     if (markup == "<PCSettings:Water>") return std::to_string(flow_.profile().display.water);               // PC EXTENSION (user #14)
@@ -498,6 +503,13 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         const bool ok = flow_.changeLobbyMode(arg(1));
         FlowTrace::emit("lobby.gameModeRow", {{"mode", arg(1)}, {"applied", FlowTrace::boolean(ok)}});
         invalidate();
+        return {};
+    }
+    if (fn == "WriteValue" && m == "<PCSettings:Language>") {   // PC EXTENSION (user 2026-10-23): the text language
+        const std::vector<std::string> l = cat_.languages();
+        const int i = std::atoi(arg(1).c_str());
+        flow_.profile().display.language = i >= 0 && i < (int)l.size() ? l[(size_t)i] : "INT";
+        FlowTrace::emit("settings.language", {{"code", flow_.profile().display.language}, {"provenance", "PC EXTENSION"}});
         return {};
     }
     if (fn == "WriteValue" && (m == "<PCSettings:Smoke>" || m == "<PCSettings:Water>")) {   // PC EXTENSION: Original / Enhanced

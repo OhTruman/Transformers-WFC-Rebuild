@@ -57,6 +57,7 @@ public:
         int upscaling = 0; int hdTextures = 0; int anisotropy = 4; int frameGeneration = 0; int rayTracing = 0;
         bool hdTexturesUserSet = false, hdPackHintShown = false, showFps = false;
         bool volumetricLighting = true;   // [PCSettings] VolumetricLighting: Rendering's X3 froxel volumetrics, Realistic only
+        std::string language = "INT";     // [PCSettings] Language: INT (default) / FRA / ... (a Coalesced_<lang> text pack); only when not INT
         int lensFlares = 2;               // [PCSettings] LensFlares: 0 Off, 1 Subtle, 2 Original (default, the shipped look); only when not 2
         int smoke = 0;                    // [PCSettings] Smoke: 0 Original (default, the authored sprites), 1 Enhanced; only when not 0
         int water = 0;                    // [PCSettings] Water: 0 Original (default, the authored materials), 1 Enhanced; only when not 0
