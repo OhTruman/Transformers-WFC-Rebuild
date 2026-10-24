@@ -1390,6 +1390,7 @@ void Pipeline::release() {
     const float keepGamma = displayGamma_;              // caller settings survive a map change
     const float keepFsrScale = fsrScale_, keepFsrSharp = fsrSharpness_;
     const int keepAniso = anisotropy_;
+    const int keepTexQ = texQuality_;
     const bool keepHd = hdTextures_;
     const bool keepFsr3 = fsr3On_;                     // (the Upscaling row's FSR 3.1: lost here before, FSR 1 in matches)
     const bool keepModern = modern_;                   // (the HD row's Modern materials: lost here before - Original after the
@@ -1412,6 +1413,7 @@ void Pipeline::release() {
     displayGamma_ = keepGamma;
     fsrScale_ = keepFsrScale; fsrSharpness_ = keepFsrSharp;
     anisotropy_ = keepAniso;
+    texQuality_ = keepTexQ;
     hdTextures_ = keepHd;
     fsr3On_ = keepFsr3;
     modern_ = keepModern;
@@ -1424,14 +1426,14 @@ void Pipeline::release() {
 void Pipeline::runSettingsSelfTest() {
     int pass = 0, fail = 0;
     auto check = [&](bool ok, const char* what) { (ok ? pass : fail)++; LOG_INFO("settings-test %s: %s", ok ? "PASS" : "FAIL", what); };
-    const float g = displayGamma_; const float fs = fsrScale_, fsh = fsrSharpness_; const int an = anisotropy_;
+    const float g = displayGamma_; const float fs = fsrScale_, fsh = fsrSharpness_; const int an = anisotropy_; const int tq = texQuality_;
     const bool hd = hdTextures_, f3 = fsr3On_, mo = modern_;
     const int rm = rtMode_;
     const bool vo = volUser_;
     const int lf = lensFlareMode_;
     const int sm = smokeMode_;
     const int wm = waterMode_;
-    displayGamma_ = 2.0f; fsrScale_ = 0.5f; fsrSharpness_ = 0.3f; anisotropy_ = 8; hdTextures_ = true; fsr3On_ = true; modern_ = true;
+    displayGamma_ = 2.0f; fsrScale_ = 0.5f; fsrSharpness_ = 0.3f; anisotropy_ = 8; texQuality_ = 0; hdTextures_ = true; fsr3On_ = true; modern_ = true;
     rtMode_ = 2; volUser_ = false; lensFlareMode_ = 1; smokeMode_ = 1; waterMode_ = 1;
     release();
     check(rtMode_ == 2, "Ray Tracing mode");
@@ -1441,8 +1443,8 @@ void Pipeline::runSettingsSelfTest() {
     check(waterMode_ == 1, "Water");
     rtMode_ = rm; volUser_ = vo; lensFlareMode_ = lf; smokeMode_ = sm; waterMode_ = wm;
     check(displayGamma_ == 2.0f, "display gamma"); check(fsrScale_ == 0.5f && fsrSharpness_ == 0.3f, "FSR scale / sharpness");
-    check(anisotropy_ == 8, "anisotropy"); check(hdTextures_, "HD textures"); check(fsr3On_, "FSR 3.1"); check(modern_, "Modern materials");
-    displayGamma_ = g; fsrScale_ = fs; fsrSharpness_ = fsh; anisotropy_ = an; hdTextures_ = hd; fsr3On_ = f3; modern_ = mo;
+    check(anisotropy_ == 8, "anisotropy"); check(texQuality_ == 0, "texture quality"); check(hdTextures_, "HD textures"); check(fsr3On_, "FSR 3.1"); check(modern_, "Modern materials");
+    displayGamma_ = g; fsrScale_ = fs; fsrSharpness_ = fsh; anisotropy_ = an; texQuality_ = tq; hdTextures_ = hd; fsr3On_ = f3; modern_ = mo;
     LOG_INFO("settings-test: %d pass, %d fail", pass, fail);
 }
 
@@ -2386,6 +2388,7 @@ GLuint Pipeline::hdPbrTexture(const std::string& textureObject, const std::strin
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, lv.size() > 1 ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)anisotropy_);
+            glTexParameterf(GL_TEXTURE_2D, 0x8501 /*GL_TEXTURE_LOD_BIAS*/, texLodBias(""));   // (HD material maps)
             glBindTexture(GL_TEXTURE_2D, 0);
             glx::textureCacheInvalidate();
             ++gMemPbrMaps; gMemPbrBytes += bytes;
@@ -2618,6 +2621,7 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
             gTexPool.erase(pt);
             glBindTexture(GL_TEXTURE_2D, id);
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)anisotropy_);   // (the setting may have changed)
+            glTexParameterf(GL_TEXTURE_2D, 0x8501 /*GL_TEXTURE_LOD_BIAS*/, texLodBias(file));
             texCache_[key] = id;
             ++texPoolHits_;
             return id;
@@ -2641,6 +2645,7 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, clampU ? GL_CLAMP_TO_EDGE : GL_REPEAT);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, clampV ? GL_CLAMP_TO_EDGE : GL_REPEAT);
             glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)anisotropy_);
+            glTexParameterf(GL_TEXTURE_2D, 0x8501 /*GL_TEXTURE_LOD_BIAS*/, texLodBias(file));
             texCache_[key] = id;
             touchQueue_.push_back({id, false});
             yieldLoad();
@@ -2671,6 +2676,7 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, clampU ? GL_CLAMP_TO_EDGE : GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, clampV ? GL_CLAMP_TO_EDGE : GL_REPEAT);
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)anisotropy_);
+        glTexParameterf(GL_TEXTURE_2D, 0x8501 /*GL_TEXTURE_LOD_BIAS*/, texLodBias(file));
     } else if (!file.empty()) {
         LOG_WARN("wfc: texture decode failed: %s", file.c_str());
     }
@@ -7452,6 +7458,28 @@ void Pipeline::setAnisotropy(int level) {
     }
     glBindTexture(GL_TEXTURE_2D, 0);
     LOG_INFO("renderer: anisotropic filtering %dx%s (%zu textures)", a, a == 4 ? " (original)" : "", done.size());
+}
+
+// Texture Quality: the mip LOD bias of a material texture (lightmaps / cube maps: none)
+float Pipeline::texLodBias(const std::string& file) const {
+    if (file.find("/lightmaps/") != std::string::npos || file.compare(0, 5, "cube|") == 0) return 0.0f;
+    return (float)(2 - texQuality_);
+}
+
+void Pipeline::setTextureQuality(int level) {
+    const int q = level <= 0 ? 0 : level >= 2 ? 2 : 1;
+    if (q == texQuality_) return;
+    texQuality_ = q;
+    std::set<GLuint> done;
+    for (const auto& kv : texCache_) {
+        if (!kv.second || !done.insert(kv.second).second || kv.first.compare(0, 5, "cube|") == 0) continue;
+        glBindTexture(GL_TEXTURE_2D, kv.second);
+        glTexParameterf(GL_TEXTURE_2D, 0x8501 /*GL_TEXTURE_LOD_BIAS*/, texLodBias(kv.first));
+    }
+    for (auto& kv : hdPbrTex_)
+        if (kv.second && done.insert(kv.second).second) { glBindTexture(GL_TEXTURE_2D, kv.second); glTexParameterf(GL_TEXTURE_2D, 0x8501, texLodBias("")); }
+    glBindTexture(GL_TEXTURE_2D, 0);
+    LOG_INFO("renderer: texture quality %s (LOD bias %d, %zu textures)", q == 2 ? "High (original)" : q == 1 ? "Medium" : "Low", 2 - q, done.size());
 }
 
 void Pipeline::evictSkin(bool all) {

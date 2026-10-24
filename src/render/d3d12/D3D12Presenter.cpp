@@ -7,6 +7,7 @@
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <atomic>
 #include <d3d12.h>
 #include <dxgi1_5.h>
 #include <d3d11.h>
@@ -456,7 +457,8 @@ public:
         ID3D12CommandList* lists[] = {list_};
         queue_->ExecuteCommandLists(1, lists);
         const clk::time_point t4 = clk::now();
-        HRESULT hr = swap_->Present(vsync_ ? 1 : 0, !vsync_ && tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0);
+        const bool vs = vsync_ || userVsync_.load();     // (Settings > VSync: the window's swap interval, setUserVSync)
+        HRESULT hr = swap_->Present(vs ? 1 : 0, !vs && tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0);
         // (verification) WFC_D3D12_SIMLOST=<n>: the n-th present reports DXGI_ERROR_DEVICE_REMOVED (the GL fallback path)
         static const int simLost = [] { const char* e = std::getenv("WFC_D3D12_SIMLOST"); return e ? std::atoi(e) : -1; }();
         if (presented_ == simLost) hr = DXGI_ERROR_DEVICE_REMOVED;
@@ -928,6 +930,10 @@ private:
     double phSum_[5] = {}, phMax_[5] = {}, subSum_[4] = {}, subMax_[4] = {};
     int phN_ = 0;
     bool tearing_ = false, vsync_ = false;
+    std::atomic<bool> userVsync_{false};                 // (Settings > VSync on this present path; vsync_: WFC_D3D12_VSYNC)
+public:
+    void setUserVSync(bool on) { userVsync_.store(on); }
+private:
     static std::string shotFile_() { const char* e = std::getenv("WFC_D3D12SHOT"); std::string t = e ? e : ""; size_t c = t.find(','); return c == std::string::npos ? t : t.substr(c + 1); }
 };
 
@@ -960,6 +966,13 @@ bool startPresenter() {
 }
 bool presentHook() {
     if (!g_presenter) return false;
+    {   // Settings > VSync (Win32Window::setVSync sets the GL swap interval): on this present path it is the D3D12 sync
+        // interval - it was ignored here, the D3D12 path only read WFC_D3D12_VSYNC (QC audit). Main thread, GL current
+        typedef int(WINAPI * GetSwapInterval)();
+        static GetSwapInterval getSI = nullptr;
+        if (!getSI) getSI = reinterpret_cast<GetSwapInterval>(reinterpret_cast<void*>(wglGetProcAddress("wglGetSwapIntervalEXT")));
+        if (getSI) g_presenter->setUserVSync(getSI() > 0);
+    }
     if (!g_presenter->failed() && g_presenter->present() && !g_presenter->failed()) return true;
     // device lost / no swapchain. GL cannot take over: once a flip-model swapchain has owned the window, SwapBuffers no
     // longer reaches the screen (WFC_D3D12_SIMLOST captures: frozen). So: a new device + swapchain (the standard answer to a

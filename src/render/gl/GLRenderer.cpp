@@ -474,7 +474,7 @@ public:
         slowFrameEnd();
         glx::gpuTimerEnd();
         glx::gpuStamp("2D: marker, reticle, screen batches");
-        if (!slotWaited_) { watchdog::phase("frame limiter"); limiter_.wait(); }   // the loop did not call waitFrameSlot
+        if (!slotWaited_) { applyLimit(userLimit_); watchdog::phase("frame limiter"); limiter_.wait(); }   // the loop did not call waitFrameSlot (load frames: the player's limit)
         slotWaited_ = false;
         { static int frames = 0; watchdog::frameDone(++frames);
           if (frames == 60 && WFC_ENV("WFC_HANGTEST")) {   // diagnostics: a 7 s stall to exercise the watchdog
@@ -1417,22 +1417,33 @@ public:
     int liveParticleEffects() const override { return wfc_.liveFx(); }
     void setParticleEffectPooled(int handle) override { wfc_.markFxPooled(handle); }
     void setEmitterPoolCap(bool on) override { wfc_.setEmitterPoolCap(on); }
+    void setTextureQuality(int level) override { wfc_.setTextureQuality(level); }
     bool drawsAuthoredMapFx() const override { return wfc_.active(); }
     void setMapClock(float t) override { wfc_.setMapClock(t); }
     void setDestructibleState(const std::string& a, int s) override { wfc_.setDestructibleState(a, s); }
 
     FrameLimiter limiter_;
     bool limitFromEnv_ = false, slotWaited_ = false;
+    float userLimit_ = 0.0f;                         // the player's Frame Rate Limit (0 = uncapped): a match's limit
+    // (user playtest 2026-10-23b item 6) the menus are held at 60 FPS (they ran at 72); a match runs at the player's limit.
+    // Menu frames = the main loop's waitFrameSlot outside a match map; load-screen frames (endFrame's own wait) keep the
+    // player's limit so a load is never slowed by the menu cap
+    float menuLimit() const { return userLimit_ > 0.0f ? std::min(userLimit_, 60.0f) : 60.0f; }
+    void applyLimit(float hz) { if (!limitFromEnv_ && hz != limiter_.limit()) limiter_.setLimit(hz); }
     void setFrameLimit(float hz) override {
         if (limitFromEnv_) return;                 // a test override wins
-        if (hz != limiter_.limit()) LOG_INFO("renderer: frame limit %s", hz > 0 ? std::to_string((int)hz).c_str() : "off");
-        limiter_.setLimit(hz);
+        if (hz != userLimit_) LOG_INFO("renderer: frame limit %s (menus %d)", hz > 0 ? std::to_string((int)hz).c_str() : "off", (int)menuLimit());
+        userLimit_ = hz;
+        applyLimit(matchMap_ ? hz : menuLimit());
     }
-    float frameLimit() const override { return limiter_.limit(); }
+    float frameLimit() const override { return limitFromEnv_ ? limiter_.limit() : userLimit_; }
     void setHudScreenEffect(int chain) override { wfc_.setHudScreenEffect(chain); }
     float drawOwnerRenderAge(int owner) const override { return wfc_.drawOwnerRenderAge(owner); }
     void notePresentedFrame() override { watchdog::phase("presented outside the renderer (movie / frontend)"); }
-    void waitFrameSlot() override { watchdog::phase("frame limiter"); limiter_.wait(); slotWaited_ = true; }
+    void waitFrameSlot() override {
+        applyLimit(matchMap_ ? userLimit_ : menuLimit());
+        watchdog::phase("frame limiter"); limiter_.wait(); slotWaited_ = true;
+    }
     // M73 decal receivers: compact copy (positions + triangle indices) of the authored world geometry - the full CPU
     // world mesh is dropped after upload - with a ground-plane (x, z) grid of triangles for the box query
     struct DecalReceivers {

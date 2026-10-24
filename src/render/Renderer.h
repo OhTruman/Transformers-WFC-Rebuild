@@ -181,6 +181,9 @@ public:
     // (<chapter>/postprocess_volumes.json, tools/render/build_campaign_pp.py); Kismet toggles them by actor name
     // (SeqAct_Toggle on a (Dynamic)PostProcessVolume: "PostProcessVolume_15759").
     virtual void setPostProcessVolumeEnabled(const std::string& volume, bool on) { (void)volume; (void)on; }
+    // Settings > Texture Quality: 0 Low / 1 Medium / 2 High (the original's full textures): a mip LOD bias of 2 / 1 / 0 on
+    // material textures (lightmaps, cube maps and UI untouched); live, kept across map changes
+    virtual void setTextureQuality(int level) { (void)level; }
     // A matinee cutscene's per-frame view (Gameplay's SeqAct_Interp playback): the camera itself goes through the normal
     // camera and notifyCameraCut("matinee") on director cuts; this carries the rest. Unset fields keep the defaults.
     struct PostOverride {                 // the CameraActor's CamOverridePostProcess (UE3 FPostProcessSettings fields)

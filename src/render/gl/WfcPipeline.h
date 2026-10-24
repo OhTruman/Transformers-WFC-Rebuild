@@ -1351,7 +1351,10 @@ public:
     void setCinematicView(const IRenderer::CinematicView& v) { cin_ = v; }
     void setFsr3(bool on) { fsr3On_ = on; }            // with setUpscaling's scale: FSR 3.1 instead of FSR 1 (WfcFsr3.cpp)
     static bool fsr3RuntimeShipped();                  // the FFX loader + Agility runtime beside the exe (file checks)
-    void setAnisotropy(int level);              // 4 (original MaxAnisotropy, default) / 8 / 16
+    void setAnisotropy(int level);
+    void setTextureQuality(int level);   // 0 Low / 1 Medium / 2 High: mip LOD bias 2 / 1 / 0 on material textures
+    int texQuality_ = 2;
+    float texLodBias(const std::string& file) const;              // 4 (original MaxAnisotropy, default) / 8 / 16
     static bool hdTexturesAvailable();          // IRenderer::hdTexturesAvailable
     static bool hdEnhancedAvailable();          // HD level 2: the colour pack + the M6 modern material maps (hd_pbr_index)
     void setHdTextures(bool on);
