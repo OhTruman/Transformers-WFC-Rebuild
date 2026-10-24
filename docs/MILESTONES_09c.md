@@ -4389,3 +4389,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 01:33 MERGED ee98ab39 lossless texture decoder (WIC for the proven PNG classes, 60,458 / 60,458 byte-identical vs GDI+;
   worker-thread prefetch, main-thread uploads): headless Streets 2.21 -> ~1.9 s, Remnant 2.45 -> ~2.0 s. Next lossless
   load target: animation files (~0.4 s / map) after Systems' two-locals wire patch.
+2026-10-24 01:38 MERGED b6ddf3bc Escalation spawns at the authored points (RE §7; the PROV on-nav stand-in removed) + Pulse ESC data +
+  FINAL_BASE_ITEMS 19: ESCTEST Remnant 15 / 15, BrokenHope 36 / 36, Tranquillity 7 / 7, District 11 / 11, Pulse 7 / 7
+  (0 -> 134 spawns); ESC same-match deliberately re-baselined. Experimental rebuilds the gate base with 18 + 19.
