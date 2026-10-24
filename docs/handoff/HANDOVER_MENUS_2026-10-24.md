@@ -27,7 +27,7 @@ kept as the original authored it, **Open** = not done. "Seen" = checked in a win
 | 25 | Fixed 3d49f60d, seen | **Back during the start countdown cancels it** (the user's addition; the base game cannot cancel). |
 | 27 | Open | Probably the pre-match player list (PreGameCountdown); a shot with bots is in Experimental's final gate. The big mode banner at match start is the original's GameAnnouncement. |
 | 20 | Base game | Both chassis buttons are authored and nothing moves them; the scaling is uniform, so resolution cannot shift one. Aligned in our capture; the photo likely shows a hovered / focused button. |
-| 21 | Open | Create a Character colours with mouse / controller (low). |
+| 21 | Fixed 5757dc3c + d91b178a, seen | Create a Character colours: dragging the selector works (it never did in our Flash player), a click anywhere on the colour square moves it there, and the controller stick / D-pad and arrow keys move it too. |
 
 ## Settings
 
@@ -36,11 +36,16 @@ kept as the original authored it, **Open** = not done. "Seen" = checked in a win
 | 2 | Fixed (56166868), seen | Scroll arrows on the Graphics page: up when rows are above, down when below, both when both; clickable. |
 | 3 | Fixed (56166868, 824816f7) | After Apply: "Restart Required: This setting requires the game to be restarted before it takes effect." for Frame Generation; "Some changes take effect when the next map loads." for HD / Ray Tracing changes; else "Settings Applied". |
 | 4 | Fixed (56166868), seen | Commit Changes asks "Apply the changed graphics settings?" (Apply / Cancel). |
-| 5 | Open | Preview panel: needs Rendering's preview images. |
-| 34 | Fixed 41d04857, seen | Brightness calibration at the first main menu, once (the user's change; the original shows it on the first Campaign entry). |
+| 5 | Fixed bab80f23 + Rendering's 12 images, seen | A framed preview beside the Graphics window for Upscaling, HD Textures, Ray Tracing and Frame Generation, changing with the selected value (same-view captures by Rendering). |
+| 34 | Fixed 41d04857 + d91b178a, seen | Brightness calibration at the first main menu, once (the user's change; the original shows it on the first Campaign entry). |
 | 35 | Fixed 05767448 (+ Rendering), seen | The display gamma now covers the menus, so the calibration logos respond (left logo fades at 0). The near-white logos in the photo were the camera's exposure. |
 | — | Fixed 7f0efe32 | Texture Quality works (it did nothing); every graphics setting re-applies after a match; the hidden Water row no longer applies. |
 | — | Fixed 7f0efe32 | **Subtitles** row (Audio): campaign dialogue lines now draw at the bottom of the screen when On (default Off, as the original). |
+
+## Notes for the build
+
+- **Calibration screen stuck over gameplay (fixed d91b178a, seen):** the calibration picture is a separate screen that closed only on Accept / Cancel; a jump into a match while it showed (automated runs, or the Campaign-entry calibration) left it on top of the game. It now closes with the menu that opened it, and autoplay runs skip the first-launch calibration.
+- **Open, Rendering:** switching HD Textures from Off to Faithful on the Graphics page froze the menu about 9 seconds while the HD level applied.
 
 ## Campaign / loading
 
