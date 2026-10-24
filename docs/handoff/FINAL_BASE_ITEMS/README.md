@@ -256,3 +256,16 @@ Verified (2026-10-24):
   - MP_ESC_BrokenHope ESC 120 s: 2,484 steps;
   - A1_IAC campaign 120 s: 7,261 steps;
   - D1_ORB campaign 120 s: 7,261 steps.
+
+## 29: playtest 3 multiplayer (b8963b8e -> c39b7d29)
+
+`29_playtest3_mp.patch`: the same exact tree step, b8963b8e -> c39b7d29 over the base paths. It carries:
+- GAMEPLAY_PLAYTEST3_MP: the robot shot is built before the weapon's camera pitch step (SIMHASH changes by design for local
+  shots), the versus enemy marker setup EnemyMarkerSetup, and XP for a solo private host;
+- everything merged in between on these paths (frontend strings / catalog / data stores).
+
+Apply it after 28. Verified (2026-10-24):
+- A fresh af4d0731 + 01-29 applies, and every base path equals c39b7d29.
+- A fresh full build of wfc_rebuild.exe has 0 errors.
+- The headless SIMHASH streams are identical to the c39b7d29 head build: Streets TDM 4,201, Remnant 8,101, BrokenHope 2,484,
+  A1 7,261, D1 7,261 steps.

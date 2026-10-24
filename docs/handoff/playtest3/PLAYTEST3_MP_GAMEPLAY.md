@@ -43,3 +43,27 @@ Patch: `GAMEPLAY_PLAYTEST3_MP.patch` (glue `edit_playtest3_mp.js`).
    Frontend's.
 
 SIMHASH note: item 1 changes the local player's shot directions (deliberate); bot-only rows are unaffected.
+
+## Follow-ups (Integration / RE / Rendering, 2026-10-24)
+
+- **Aim, part 2: `GAMEPLAY_AIM_VIEW_ROTATION.patch` (on c39b7d29).**
+  - Robot and vehicle shots now use the camera POV the frame draws, strategy wiggle and per-shot shake included. This follows
+    the UE3 rule: Pawn.GetBaseAimRotation -> Controller.GetPlayerViewPoint = the PlayerCamera's POV after its behaviours
+    [UE3 engine script, HIGH].
+  - Rendering's audit: the crosshair is the projection centre. Ours traced the unshaken orbit rotation.
+  - Headless (WFC_AIMLOG, Streets 60 s): shot vs trigger 0.000 deg on 139 shots. View vs orbit at the trigger was also
+    0.000 deg in these runs: each weapon's ShakeFalloffDuration (Assault Rifle 0.06 s, Ion Blaster 0.06 s) ends before its
+    next shot. So the shake can't explain a steady left offset at the bot's fire cadence.
+  - The shake units (WeaponCameraTable Intensity x the strategy's 3 / 5 deg spectrum) still need RE to confirm degrees vs
+    rotator units. A units error would only change how big the shake looks, not where the shot goes, now that aim follows
+    the drawn view.
+  - Rendering's windowed proof shot comes next.
+- **Scatter Blaster.** RE confirms one reload timer for all TnWeapons (WeaponReloadAnimTime), the whole clip at its end, and a
+  cancel that loses it. Ours matches: one reloadTimer, finishReload fills the clip, canFire is false while reloading. So the
+  ~3 s (2.4 s to empty the clip at 0.4 s per shot, then the 2.5 s reload) is authored. RE's "a shot consumed during the reload
+  completes it instantly" is a hypothesis only, and with an empty clip nothing can be consumed, so it is not implemented.
+- **Streets cylinder.** It is not built from render sections: `TubeDecoCylinder_STAT` collides with its extracted simple
+  collision body (collision_pawn.glb kind prop_simple), a box of 32.2 x 30.6 x 41.0 units. The visible mesh is a radius ~15.2
+  blue cylinder over a radius ~13.9 glass section, and the box spans both, so its corners stand up to ~7 units outside the
+  visible cylinder. That is the original's authored collision, so the "skip glass sections" fix does not apply. Keeping the
+  original box is the faithful choice. A tighter hull would be a PC adaptation and is the user's decision.
