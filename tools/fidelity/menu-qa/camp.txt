@@ -1,31 +1,63 @@
 # FLOW 3 (USER_PLAYTEST_2026-10-23b section 43): MAIN MENU -> CAMPAIGN -> SOLO -> DIFFICULTY -> CHAPTER I -> CRASH SITE ->
-# SELECT CHARACTER -> LOAD LEVEL -> ACTUALLY PLAY. P0 #38 / #39: Chapter I > Crash Site > Megatron -> blank screen; Back misbehaves.
+# SELECT CHARACTER -> LOAD LEVEL -> ACTUALLY PLAY. Steps: the Frontend's, verified from the main menu on 7f0efe32 + d93b9a16 (the Solo
+# start fix - without it the flow stalls in the invisible SOLO lobby, the user's #38 / #39).
+# Fresh profile: the first Campaign entry shows the brightness calibration (base game) - the first ui:Accept accepts it.
+# Difficulty: Hard is focused under the mouse after the Solo click; ui:Left -> Medium. Chapter I -> Crash Site -> the trio wheel
+# (Barricade focused), ui:Up -> Megatron. Then the loading bar -> D1 (~40 s) -> the intro FMV (~80 s) -> InGame.
+# WFC_CHARSELECT=1 (the driver sets it): the pick must carry into the map - an in-map trio select asking again is the #15-style
+# duplicate (pending RE on whether the original carries it over); pressuntil passes it so the flow still reaches play.
 #expect mode SOLO
+#expect log gamelobby.soloStart
+#expect nolog-after FLOW.loading.match.world OpenUI.*(CustomTransformers_GFX|CharacterSelect_GFX)
 #expect state ingame.spawned InGame
 #expect moved ingame.spawned ingame.played 2
 #expect still ingame.spawned 2
+#expect shots ingame.played ingame.shot
 wait:ui=FrontEnd
 wait:t=2
 mouse:5,5
 navcheck:main
 shot:01_main.bmp
 clickclip:menuAnchor_mc.menuMain_mc.campaignBtn_mc
+wait:t=3
+navcheck:campaign.calibration
+shot:02_calibration.bmp
+ui:Accept
 wait:t=2
-# (first launch: brightness calibration may come up here, #34 / #35 - accept it)
 navcheck:campaign.root
-shot:02_campaign_root.bmp
-# TODO(frontend): Solo -> difficulty -> Chapter I "Dark Energon" -> mission Crash Site -> character (Megatron) -> load
-navcheck:campaign.solo
+shot:03_campaign_root.bmp
+clickclip:menuAnchor_mc.menuCampaign_mc.soloMatchBtn_mc
+wait:t=4
 navcheck:campaign.difficulty
-navcheck:campaign.chapter1
-shot:03_chapter1.bmp
+shot:04_difficulty.bmp
+ui:Left
+wait:t=1
+ui:Accept
+wait:t=5
+navcheck:campaign.chapters
+shot:05_chapters.bmp
+ui:Accept
+wait:t=4
+navcheck:campaign.chapter1.checkpoints
+shot:06_checkpoints.bmp
+ui:Accept
+wait:t=5
 navcheck:campaign.crashsite.charselect
-shot:04_charselect.bmp
+shot:07_trio.bmp
+ui:Up
+wait:t=1.5
+ui:Accept
+wait:level=Match
+navcheck:campaign.loading.done
 wait:fmv=0
-wait:ui=InGame
+pressuntil:Accept,InGame
 wait:t=3
 navcheck:ingame.spawned
-shot:05_spawned.bmp
-# TODO(frontend): keyhold W 3 s - play
+shot:08_spawned.bmp
+buttonhold:Forward,3
+wait:t=3.5
 navcheck:ingame.played
-shot:06_played.bmp
+shot:09_played.bmp
+buttonhold:Fire,2
+wait:t=2.5
+navcheck:ingame.shot

@@ -4350,3 +4350,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   never moved); 83df0335 HD 'applies on next map' hint + the multiplayer root shows no teams (#19; base game
   TnTeamHandlerNoTeams). The settings extras 13-15 (scroll arrows, commit confirm, restart / next-map popups) conflict
   in GfxPresenter.cpp: recut requested. Gate run on 7a7b8ba6 in progress.
+2026-10-24 00:54 MERGED 7f35fb82 section-43 sim-side flow harness (WFC_FLOWSIMTEST; Gameplay 10 / 10, 6 / 6, 6 / 6 on its tree; on the
+  head MP = 7 / 10: the bot-driven human does not move: harness-path only, Gameplay bisecting), 56166868 settings
+  extras 13-15 + Private Match Team row (#23) + countdown cancel (#25).
+2026-10-24 00:54 GATE (section 43, real menus, one exe, 7a7b8ba6): tools/fidelity/results/MENU_QA_7a7b8ba6.md: ESCALATION PASS (lobby
+  pick kept, no second select, 37.9 m, back to the party lobby), CAMPAIGN PASS (calibration -> Solo -> Chapter I ->
+  Crash Site -> load -> InGame, 6.4 m, 3 shots), MULTIPLAYER every measured check PASS (Game Settings row, Choose
+  Character, 34.9 m jitter 0 = the frozen-pawn P0 fixed on the real input path, shots, transform, pause / resume, quit
+  -> party lobby); 5 mp steps pending (filled from 56166868; final run on the final head). Card -> Rendering's audit.

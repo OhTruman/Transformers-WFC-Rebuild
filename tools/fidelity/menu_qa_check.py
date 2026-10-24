@@ -3,15 +3,15 @@
 Always checked: the flow reaches its end (else: the first missing checkpoint + the last script step = where it stuck), no modal
 popup left open outside a '*quitbox' / '*prompt' / '*popup' checkpoint, at most one focused overlay, an input owner on every menu
 screen. Flow-file lines '#expect <kind> <args>' add:
-  mode <TAG>                      the 'FLOW loading match world ... mode <TAG>' of the (first) match
+  mode <TAG>[|<TAG>]              the 'FLOW loading match world ... mode <TAG>' of the (first) match (Escalation = SV in the frontend)
   chassis-kept                    every match.selectCharacterResult ok=true, the same chassis until a 'changechar' checkpoint
   no-charselect-after-ingame      no 'uistate ... -> CharacterSelect' after the first InGame unless after a 'changechar' checkpoint
   state <checkpoint> <UiState>    the navcheck at <checkpoint> reports uiState=<UiState>
   level <checkpoint> <Level>      ... level=<Level>
-  moved <cpA> <cpB> <metres>      pawn position (navcheck field pawnPos=x,y,z) moved >= metres between the two checkpoints
-  still <checkpoint> <jitter>     navcheck pawnJitter <= jitter (frame-to-frame transform flips: the #16 / #28 flicker)
-  shots <cpA> <cpB>               navcheck shotsFired grew between the checkpoints
-  form <cpA> <cpB>                navcheck pawnForm differs between the checkpoints (a transform happened)
+  moved <cpA> <cpB> <metres>      pawn position (navcheck field pos=x,y,z) moved >= metres between the two checkpoints
+  still <checkpoint> <jitter>     navcheck jitter <= jitter (frame-to-frame transform flips: the #16 / #28 flicker)
+  shots <cpA> <cpB>               navcheck shots grew between the checkpoints
+  form <cpA> <cpB>                navcheck form differs between the checkpoints (a transform happened)
 The pawn checks read fields the Frontend adds to navcheck (requested 2026-10-23); missing fields -> UNKNOWN, never a guessed PASS."""
 import json
 import os
@@ -48,7 +48,7 @@ def parse(log):
 
 def pos(c):
     try:
-        return [float(x) for x in c['pawnPos'].split(',')]
+        return [float(x) for x in c['pos'].split(',')]
     except (KeyError, ValueError):
         return None
 
@@ -69,6 +69,9 @@ def check_flow(out, flow):
     rj = os.path.join(run, 'run.json')
     info = json.load(open(rj, encoding='utf-8-sig')) if os.path.exists(rj) else {}
     todo = sum(1 for x in lines if 'TODO(' in x)
+    pending = [x[len('# PENDING:'):].strip() for x in lines if x.startswith('# PENDING:')]
+    for x in pending:
+        rows.append(('pending step', 'UNKNOWN', x))
     if todo:   # menu steps not filled in yet: the checkpoints after them were reached without the real clicks
         rows.append(('flow script complete', 'UNKNOWN', f"{todo} TODO steps pending (the Frontend's canonical menu steps) - not a gate result"))
     rows.append(('exit', 'PASS' if str(info.get('exit')) == '0' else 'FAIL', f"exit {info.get('exit')}, {info.get('wall_s')} s wall"))
@@ -94,6 +97,8 @@ def check_flow(out, flow):
         except ValueError:
             pass
         in_match = c.get('level') == 'Match' and c.get('uiState') in ('InGame', 'Spectating')
+        if in_match and c.get('inputOwner') not in (None, 'game'):
+            bad.append(f"in play but input owned by {c.get('inputOwner')} (lost input / stale overlay)")
         if not in_match and not modal:
             if c.get('inputOwnerVisible') in ('false', '0'):
                 bad.append(f"input owner {c.get('inputOwner')} not visible (dimmed / trapped screen)")
@@ -108,7 +113,7 @@ def check_flow(out, flow):
         name = 'expect ' + ' '.join(ex)
         if k == 'mode':
             got = modes[0][1] if modes else None
-            rows.append((name, 'PASS' if got == a[0] else 'FAIL', f"match mode {got}"))
+            rows.append((name, 'PASS' if got in a[0].split('|') else 'FAIL', f"match mode {got}"))   # 'SV|ESC': the frontend's Escalation tag is SV (TnGameLobbyGameSurvival)
         elif k == 'chassis-kept':
             okp = [p for p in picks if p[1] == 'true']
             first = okp[0][2] if okp else None
@@ -126,19 +131,28 @@ def check_flow(out, flow):
         elif k == 'moved':
             p1, p2 = pos(by.get(a[0], {})), pos(by.get(a[1], {}))
             if p1 is None or p2 is None:
-                rows.append((name, 'UNKNOWN', 'no pawnPos field on navcheck (Frontend request pending)'))
+                rows.append((name, 'UNKNOWN', 'no pos field on navcheck (FRONTEND_QA_GATE_HOOKS not in this build)'))
             else:
                 d = sum((x - y) ** 2 for x, y in zip(p1, p2)) ** 0.5
                 rows.append((name, 'PASS' if d >= float(a[2]) else 'FAIL', f"moved {d:.2f} m"))
         elif k == 'still':
-            j = by.get(a[0], {}).get('pawnJitter')
-            rows.append((name, 'UNKNOWN' if j is None else ('PASS' if float(j) <= float(a[1]) else 'FAIL'), f"pawnJitter={j}"))
+            j = by.get(a[0], {}).get('jitter')
+            rows.append((name, 'UNKNOWN' if j is None else ('PASS' if float(j) <= float(a[1]) else 'FAIL'), f"jitter={j}"))
         elif k == 'shots':
-            s1, s2 = by.get(a[0], {}).get('shotsFired'), by.get(a[1], {}).get('shotsFired')
-            rows.append((name, 'UNKNOWN' if s1 is None or s2 is None else ('PASS' if int(s2) > int(s1) else 'FAIL'), f"shotsFired {s1} -> {s2}"))
+            s1, s2 = by.get(a[0], {}).get('shots'), by.get(a[1], {}).get('shots')
+            rows.append((name, 'UNKNOWN' if s1 is None or s2 is None else ('PASS' if int(s2) > int(s1) else 'FAIL'), f"shots {s1} -> {s2}"))
         elif k == 'form':
-            f1, f2 = by.get(a[0], {}).get('pawnForm'), by.get(a[1], {}).get('pawnForm')
-            rows.append((name, 'UNKNOWN' if f1 is None or f2 is None else ('PASS' if f1 != f2 else 'FAIL'), f"pawnForm {f1} -> {f2}"))
+            f1, f2 = by.get(a[0], {}).get('form'), by.get(a[1], {}).get('form')
+            rows.append((name, 'UNKNOWN' if f1 is None or f2 is None else ('PASS' if f1 != f2 else 'FAIL'), f"form {f1} -> {f2}"))
+        elif k == 'log':
+            rx = re.compile(' '.join(a))
+            hit = next((n for n, x in enumerate(log) if rx.search(x)), None)
+            rows.append((name, 'PASS' if hit is not None else 'FAIL', f"log line {hit}" if hit is not None else 'not in the log'))
+        elif k == 'nolog-after':
+            anchor, rx = re.compile(a[0]), re.compile(' '.join(a[1:]))
+            start = next((n for n, x in enumerate(log) if anchor.search(x)), None)
+            hits = [n for n, x in enumerate(log) if start is not None and n > start and rx.search(x)]
+            rows.append((name, 'UNKNOWN' if start is None else ('FAIL' if hits else 'PASS'), 'anchor not found' if start is None else (f"{len(hits)} hits after line {start}: " + (log[hits[0]].strip()[:120] if hits else '-'))))
         else:
             rows.append((name, 'UNKNOWN', 'unknown expectation'))
     return rows
