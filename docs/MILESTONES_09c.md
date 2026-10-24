@@ -4559,3 +4559,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   4098c267; the user's Enhanced + Realistic 123 fps); the user's 82 fps = 5v5 (ten RT-skinned characters). The ESC 30 s
   load = material program prewarm (414 / 467 in ~31 s + 9.9 s warm-up draw) -> Systems' program binary cache. Card:
   Frontend 5 min -> Systems 10 min -> Rendering (aim proof shot, preview set).
+2026-10-24 13:07 MERGED 7a88680e GL program binary cache (the ~30 s Escalation load = shader prewarm: warm launch 55 -> 11 s, screenshots
+  byte-identical; the first launch of a new build still compiles once). ESC 'only District' = the Escalation lobby's map
+  row (Frontend batch 2b), not the package. Scatter Blaster = the authored 2.5 s whole-clip reload. Card: Rendering (aim
+  proof, previews) -> Frontend (bots scoreboard + ESC lobby dump).
