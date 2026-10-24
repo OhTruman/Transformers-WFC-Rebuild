@@ -1,0 +1,29 @@
+diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-23 20:38:17.405444600 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 20:38:17.439059600 -0500
+@@ -1445,9 +1445,23 @@
+ void Pipeline::addMaterials(const assets::Json& M, const std::string& dir) {
+     // (texture paths: drive-absolute ones are relocated; unit-relative ones - the campaign layout, "tex/<file>" - are under
+     // the unit's own directory)
+-    auto texPath = [&](const std::string& p) {
++    auto texPath = [&](const std::string& p) -> std::string {
+         const bool rel = !p.empty() && p[0] != '/' && p[0] != '\\' && (p.size() < 2 || p[1] != ':');
+-        return rel ? dir + "/" + p : relocateDataPath(p);
++        if (!rel) return relocateDataPath(p);
++        const std::string own = dir + "/" + p;
++        // (campaign chapters) AssetTools' chapter-level texture store: byte-identical tex/ files kept once in <chapter>/tex/,
++        // as <chapter>/lightmaps/ - a unit's tex/<name> that is gone resolves there; the unit's own copy always wins
++        if (p.rfind("tex/", 0) == 0) {
++            std::error_code ec;
++            if (!std::filesystem::exists(platform::longPath(own), ec)) {
++                const size_t up = dir.find_last_of("/\\");
++                if (up != std::string::npos) {
++                    const std::string shared = dir.substr(0, up) + "/" + p;
++                    if (std::filesystem::exists(platform::longPath(shared), ec)) return shared;
++                }
++            }
++        }
++        return own;
+     };
+     for (const auto& kv : M.obj) {
+         const assets::Json& e = kv.second;
