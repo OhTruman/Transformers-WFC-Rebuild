@@ -901,6 +901,8 @@ void FrontendRuntime::updateHdPackHint() {
     if (!hdPackHintPending_ || flow_.level() != LevelKind::FrontEnd || !flow_.frontEndStarted() || flow_.ui().state() != UIState::FrontEnd ||
         flow_.popup().open || !flow_.kismetMovie().empty() || !flow_.scriptMovie().empty())
         return;
+    // first-boot modals queue (playtest 3): the first-launch brightness calibration first, this hint after it
+    if (!flow_.profile().getBool("HasAdjustedGamma")) return;
     hdPackHintPending_ = false;
     flow_.showMessage("HD Textures", "HD texture pack found. Turn it on in Settings > Graphics > HD Textures.");
     flow_.profile().display.hdPackHintShown = true;

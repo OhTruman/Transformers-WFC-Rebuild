@@ -994,6 +994,12 @@ void GameFlow::quitGame() {
     // lobbies and private matches) -> QuitToFrontEnd from the party lobby (TnPlayerControllerPartyLobby.IsInPartyLobby),
     // otherwise QuitToPartyLobby: TellClientsToReturnToPartyHost -> ClientReturnToParty -> BuildPartyLobbyURL.
     bool toFrontEnd = level_ == LevelKind::PartyLobby || level_ == LevelKind::FrontEnd || level_ == LevelKind::None;
+    // Playtest 3: backing out of Campaign landed in the Escalation party lobby - the party lobby kept the last party's
+    // GameTeamStatus. Solo Campaign never had a party lobby (main menu > Campaign > Solo): back to the main menu; a co-op campaign
+    // returns to the campaign party lobby.
+    const std::string modeTag = level_ == LevelKind::Match ? match_.modeTag : lobby_.gameModeTag;
+    if (modeTag == "SOLO") toFrontEnd = true;
+    else if (isCampaignTag(modeTag)) gameTeamStatus_ = 4;   // GTS_CampaignGame
     if (session_ && role_ != SessionRole::Offline && !toFrontEnd) {   // online: leave the game session (a host's leave ends it)
         session_->leave();
         FlowTrace::emit("online.leave", {{"role", sessionRoleName(role_)}, {"from", levelKindName(level_)}});

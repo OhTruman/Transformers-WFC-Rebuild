@@ -1,0 +1,64 @@
+diff --git a/src/frontend/GameFlow.cpp b/src/frontend/GameFlow.cpp
+index 1a773235..f9482cd8 100644
+--- a/src/frontend/GameFlow.cpp
++++ b/src/frontend/GameFlow.cpp
+@@ -994,6 +994,12 @@ void GameFlow::quitGame() {
+     // lobbies and private matches) -> QuitToFrontEnd from the party lobby (TnPlayerControllerPartyLobby.IsInPartyLobby),
+     // otherwise QuitToPartyLobby: TellClientsToReturnToPartyHost -> ClientReturnToParty -> BuildPartyLobbyURL.
+     bool toFrontEnd = level_ == LevelKind::PartyLobby || level_ == LevelKind::FrontEnd || level_ == LevelKind::None;
++    // Playtest 3: backing out of Campaign landed in the Escalation party lobby - the party lobby kept the last party's
++    // GameTeamStatus. Solo Campaign never had a party lobby (main menu > Campaign > Solo): back to the main menu; a co-op campaign
++    // returns to the campaign party lobby.
++    const std::string modeTag = level_ == LevelKind::Match ? match_.modeTag : lobby_.gameModeTag;
++    if (modeTag == "SOLO") toFrontEnd = true;
++    else if (isCampaignTag(modeTag)) gameTeamStatus_ = 4;   // GTS_CampaignGame
+     if (session_ && role_ != SessionRole::Offline && !toFrontEnd) {   // online: leave the game session (a host's leave ends it)
+         session_->leave();
+         FlowTrace::emit("online.leave", {{"role", sessionRoleName(role_)}, {"from", levelKindName(level_)}});
+diff --git a/src/frontend/FrontendRuntime.cpp b/src/frontend/FrontendRuntime.cpp
+index 23ca067f..588beee4 100644
+--- a/src/frontend/FrontendRuntime.cpp
++++ b/src/frontend/FrontendRuntime.cpp
+@@ -901,6 +901,8 @@ void FrontendRuntime::updateHdPackHint() {
+     if (!hdPackHintPending_ || flow_.level() != LevelKind::FrontEnd || !flow_.frontEndStarted() || flow_.ui().state() != UIState::FrontEnd ||
+         flow_.popup().open || !flow_.kismetMovie().empty() || !flow_.scriptMovie().empty())
+         return;
++    // first-boot modals queue (playtest 3): the first-launch brightness calibration first, this hint after it
++    if (!flow_.profile().getBool("HasAdjustedGamma")) return;
+     hdPackHintPending_ = false;
+     flow_.showMessage("HD Textures", "HD texture pack found. Turn it on in Settings > Graphics > HD Textures.");
+     flow_.profile().display.hdPackHintShown = true;
+diff --git a/src/ui/GfxPresenter.cpp b/src/ui/GfxPresenter.cpp
+index 70d382ee..8fd6d10a 100644
+--- a/src/ui/GfxPresenter.cpp
++++ b/src/ui/GfxPresenter.cpp
+@@ -1709,6 +1709,7 @@ void GfxPresenter::syncSettingsCommit() {
+ void GfxPresenter::syncFirstLaunchBrightness(gfx::Player& p, frontend::GameFlow& flow) {
+     if (firstBrightnessShown_ || flow.level() != frontend::LevelKind::FrontEnd || flow.ui().state() != frontend::UIState::FrontEnd) return;
+     if (std::getenv("WFC_FRONTEND_AUTOPLAY")) { firstBrightnessShown_ = true; return; }   // automation that jumps into a match
++    if (flow.popup().open) return;   // first-boot modals queue: never over another prompt
+     if (flow.profile().getBool("HasAdjustedGamma")) { firstBrightnessShown_ = true; return; }
+     gfx::MovieClip* mainMenu = findClipNamed(p.root(), "menuMain_mc");
+     if (!mainMenu || !mainMenu->script || !mainMenu->visible || !p.root() || !p.root()->script) return;
+@@ -2374,6 +2375,21 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame&
+     {   // the colour square takes its own presses; the movie then sees no button (the palette arrows' invisible hit areas overlap
+         // the square: a press there also shifted the palette)
+         gfx::Player* fp = focusPlayer();
++        // playtest 3 MP 5 (reported twice): Create a Character's Decepticon Chassis button mirrors its background / glow / tab with
++        // a VERTICAL flip too (sy -1; Autobot Chassis sy +1), so its box rose above the row while its label stayed. Keep the
++        // horizontal mirror, drop the vertical flip: the box lines up with Autobot Chassis.
++        if (fp) if (gfx::MovieClip* dBtn = findClipNamed(fp->root(), "chassisButtonD_mc"); dBtn && dBtn->script) {
++            gfx::avm1::VM& vm = fp->vm();
++            for (const char* n : {"background_mc", "glow_mc", "tab_mc"}) {
++                const gfx::avm1::Value c = vm.get(dBtn->script, n);
++                // (a -1 / -1 matrix decomposes as _rotation 180 with positive scales: rotation 0 + a negative _xscale = mirror only)
++                if (c.isObject() && std::fabs(vm.toNumber(vm.get(c.o, "_rotation"))) > 179.0) {
++                    const double xs = vm.toNumber(vm.get(c.o, "_xscale"));
++                    vm.set(c.o, "_rotation", gfx::avm1::Value(0.0));
++                    vm.set(c.o, "_xscale", gfx::avm1::Value(-std::fabs(xs)));
++                }
++            }
++        }
+         if (fp && colourPickerMouse(*fp, in)) {
+             platform::InputFrame noButton = in;
+             noButton.mouseLeft = false;
