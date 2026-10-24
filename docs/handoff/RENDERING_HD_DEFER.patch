@@ -1,0 +1,60 @@
+diff -ruN a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-24 04:13:49.508268400 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-24 04:13:49.588543500 -0500
+@@ -1391,7 +1391,7 @@
+     const float keepFsrScale = fsrScale_, keepFsrSharp = fsrSharpness_;
+     const int keepAniso = anisotropy_;
+     const int keepTexQ = texQuality_;
+-    const bool keepHd = hdTextures_;
++    const bool keepHd = hdTextures_, keepHdWanted = hdWanted_;
+     const bool keepFsr3 = fsr3On_;                     // (the Upscaling row's FSR 3.1: lost here before, FSR 1 in matches)
+     const bool keepModern = modern_;                   // (the HD row's Modern materials: lost here before - Original after the
+                                                        //  frontend -> match unload; WFC_SETTINGSTEST checks every kept setting)
+@@ -1414,7 +1414,7 @@
+     fsrScale_ = keepFsrScale; fsrSharpness_ = keepFsrSharp;
+     anisotropy_ = keepAniso;
+     texQuality_ = keepTexQ;
+-    hdTextures_ = keepHd;
++    hdTextures_ = keepHd; hdWanted_ = keepHdWanted;
+     fsr3On_ = keepFsr3;
+     modern_ = keepModern;
+     rtMode_ = keepRtMode; rtAvailKnown_ = keepRtAvail;
+@@ -1683,6 +1683,7 @@
+     if (std::getenv("WFC_LEGACYRENDER")) { LOG_INFO("wfc: WFC_LEGACYRENDER set; shader path disabled"); return false; }
+     std::string root = renderDataRoot();
+     cutPending_ = true; cutPendingWhy_ = "map load";   // (temporal history never spans maps)
++    applyHdChoice();   // the HD row, under the loading screen (its one-time pack verification froze the menu ~9 s in the setter)
+     rtInitMode();
+     rtInfra_ = rtMode_ > 0 || std::getenv("WFC_RT_SHADOWAO") != nullptr || std::getenv("WFC_RT_TOGGLE") != nullptr;
+     loadFrame_ = frameNo_;
+@@ -2399,9 +2400,15 @@
+ }
+ 
+ void Pipeline::setHdTextures(bool on) {
+-    hdTextures_ = on && hdIndexRows() && !hdIndex().empty();   // (turning on verifies the pack's files once)
+-    LOG_INFO("renderer: HD textures %s%s", hdTextures_ ? "on" : "off",
+-             on && !hdTextures_ ? " (pack not installed: originals)" : " (from the next map load)");
++    hdWanted_ = on && hdIndexRows();   // (the pack's files are verified at the next map load: applyHdChoice)
++    LOG_INFO("renderer: HD textures %s%s", hdWanted_ ? "on" : "off",
++             on && !hdWanted_ ? " (pack not installed: originals)" : " (from the next map load)");
++}
++
++void Pipeline::applyHdChoice() {   // (Pipeline::load) the HD row's choice; turning the pack on verifies its files once
++    if (hdWanted_ == hdTextures_) return;
++    hdTextures_ = hdWanted_ && hdIndexRows() && !hdIndex().empty();
++    if (hdWanted_ && !hdTextures_) LOG_INFO("renderer: HD textures: pack incomplete or invalid (originals)");
+ }
+ 
+ // platform::decodeImage's second source: the verified original top level (RGBA8, identical to the PNG)
+diff -ruN a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h	2026-10-24 04:13:49.521313000 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-24 04:13:49.586034900 -0500
+@@ -1360,6 +1360,8 @@
+     static bool hdEnhancedAvailable();          // HD level 2: the colour pack + the M6 modern material maps (hd_pbr_index)
+     void setHdTextures(bool on);
+     bool hdTextures_ = false;
++    bool hdWanted_ = false;    // the HD row's choice; the next map load verifies the pack and sets hdTextures_
++    void applyHdChoice();
+     int anisotropy_ = 4;
+     long fxPoolSeq_ = 0;
+     int statPoolPeak_ = 0, statPoolOver_ = 0, statPoolReclaimed_ = 0, statPoolFrames_ = 0;
