@@ -56,7 +56,8 @@ AGILITY_LICENSE_DEST = 'licenses/microsoft_d3d12_agility/LICENSE.txt'
 RENDER_EXTRA = ['materials_pbr.json']
 # ... and shipped when the map has one (newer than slim_files.tsv; the UI dirs have none): verify_slim 2026-10-13 found the
 # game opening every MP map's fog_volumes.json, missing from the package
-RENDER_IF_PRESENT = ['fog_volumes.json', 'render_index_extra.json']   # + the Escalation maps' weapon factory visuals (7f218986)
+RENDER_IF_PRESENT = ['fog_volumes.json', 'render_index_extra.json', 'lens_flares.json']   # + lens flares (verify on d5bb6863: Gorge / Debris read it)
+#   # + the Escalation maps' weapon factory visuals (7f218986)
 # AssetTools map manifests newer than slim_files.tsv, shipped into every packaged manifests/maps/<map>/ that has them in AssetTools:
 # the Escalation nav (WorldSurvival.cpp svManifest: the original NavigationCell mesh + its generator gating; without them a packaged
 # Escalation match silently falls back to the versus nav - Experimental 2026-10-23)
