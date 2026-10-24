@@ -12,6 +12,7 @@
 #include "platform/PresentHook.h"
 #include "platform/DisplayMode.h"
 #include "core/Log.h"
+#include "platform/PadActions.h"
 #include "platform/SeatRouting.h"
 
 #include <cmath>
@@ -213,8 +214,7 @@ public:
             // Melee is also the middle mouse button (shipped PC bindings: Q / MiddleMouseButton) [CONF Controls card].
             if ((Button)i == Button::Melee && (GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0) nowDown = true;
             if (!focused_) nowDown = false;
-            input.pressed[i] = nowDown && !input.down[i];
-            input.down[i] = nowDown;
+            kbDown_[i] = nowDown;   // the pad's actions join below, after the pad poll (pressed = the combined edge)
         }
 
         // Mouse-look via cursor recentering while captured + focused.
@@ -241,7 +241,15 @@ public:
         input.uiDown = ui;
         input.padActive = padBits_ != 0 || std::fabs(input.padRX) > 0.5f || std::fabs(input.padRY) > 0.5f;
         input.keyActive = keyUi;
-        for (int i = 0; i < (int)Button::Count && !input.keyActive; ++i) input.keyActive = input.down[i];
+        for (int i = 0; i < (int)Button::Count && !input.keyActive; ++i) input.keyActive = kbDown_[i];
+        {   // the match actions: keyboard / mouse OR seat 1's pad (the original's MP pad layout + the profile's remaps, PadActions.h)
+            const uint32_t pad = focused_ ? padActions(remapPad(padBits_ & 0xFFFFu, padAlt_, padSwapBRS_), (padBits_ & kPadRT) != 0) : 0u;
+            for (int i = 0; i < (int)Button::Count; ++i) {
+                const bool nowDown = kbDown_[i] || ((pad >> i) & 1u) != 0;
+                input.pressed[i] = nowDown && !input.down[i];
+                input.down[i] = nowDown;
+            }
+        }
         // Absolute pointer for the UI.
         input.mouseX = input.mouseY = -1;
         input.mouseLeft = focused_ && (GetAsyncKeyState(VK_LBUTTON) & 0x8000);
@@ -590,6 +598,8 @@ private:
     int lastActivePad_ = -1;
     int seat2Serial_ = 0;
     uint32_t seat2Prev_ = 0;
+    bool kbDown_[(int)Button::Count] = {};   // this pump's keyboard / mouse part of the match actions
+    bool padAlt_ = false, padSwapBRS_ = false;   // the profile's controller remaps (setPadScheme)
     std::vector<int> uiVk_[(int)UiKey::Count];
     std::vector<uint32_t> uiPad_[(int)UiKey::Count];
     int wheel_ = 0;
@@ -748,6 +758,11 @@ private:
     }
 
 public:
+    void setPadScheme(bool alternateScheme, bool swapRightStickAndB) override {
+        if (alternateScheme == padAlt_ && swapRightStickAndB == padSwapBRS_) return;
+        padAlt_ = alternateScheme; padSwapBRS_ = swapRightStickAndB;
+        LOG_INFO("input: controller scheme %s, B / right stick %s", padAlt_ ? "alternate" : "default", padSwapBRS_ ? "swapped" : "default");
+    }
     void setSplitScreen(bool on) override {
         if (on == split_) return;
         split_ = on;
@@ -775,7 +790,11 @@ public:
         input.uiDown = ui;
         input.padActive = bits != 0 || std::fabs(input.padRX) > 0.5f || std::fabs(input.padRY) > 0.5f;
         input.keyActive = false;
-        for (int i = 0; i < (int)Button::Count; ++i) { input.pressed[i] = false; input.down[i] = false; }   // keys are seat 1's
+        {   // keys are seat 1's; seat 2's pad drives its match actions (the same layout and remaps), edges against its last poll
+            const uint32_t now = padActions(remapPad(bits & 0xFFFFu, padAlt_, padSwapBRS_), (bits & kPadRT) != 0);
+            const uint32_t was = padActions(remapPad(seat2Prev_ & 0xFFFFu, padAlt_, padSwapBRS_), (seat2Prev_ & kPadRT) != 0);
+            for (int i = 0; i < (int)Button::Count; ++i) { input.down[i] = ((now >> i) & 1u) != 0; input.pressed[i] = input.down[i] && !((was >> i) & 1u); }
+        }
         input.mouseDX = input.mouseDY = 0.0f; input.mouseX = input.mouseY = -1; input.mouseLeft = input.mouseRight = false;
         input.mouseWheel = 0.0f; input.text.clear(); input.keyPresses.clear();
         seat2Prev_ = bits;

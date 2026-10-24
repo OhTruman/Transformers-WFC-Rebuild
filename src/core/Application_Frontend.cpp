@@ -731,6 +731,8 @@ void Application::attachPresenter() {
     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
     // and reported here so the owners can consume LocalProfile when they add the entry points.
     applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));
+    window_->setPadScheme(frontend_->flow().profile().getBool("UseAlternateControlScheme"),   // [Systems QC] the pad's match actions
+                          frontend_->flow().profile().getBool("SwitchRightThumbstickAndB"));
 #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
     // [Systems M08g] HmPlayerController.UpdateLocalCacheOfProfileSettings: SetAudioGroupVolume('Dialog' | 'SFX' |
     // 'MUSIC', slider / 100). Device-global and immediate: frontend, match and movie audio all follow.
@@ -749,6 +751,7 @@ void Application::attachPresenter() {
     }
     frontend_->flow().profile().onApplied = [this](const frontend::LocalProfile& p) {
         applyGamma(renderer_, p.getInt("GammaSetting"));
+        window_->setPadScheme(p.getBool("UseAlternateControlScheme"), p.getBool("SwitchRightThumbstickAndB"));
 #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
         game::LevelAudioHost::applyProfileVolumes(p.getInt("Music Volume"), p.getInt("FX Volume"), p.getInt("Dialogue Volume"));
 #endif

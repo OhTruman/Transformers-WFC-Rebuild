@@ -57,6 +57,9 @@ public:
     // nobody holds seat 2. seatPad(): the XInput index a seat uses (-1 = none). swapSeatPads(): the seats exchange pads.
     // releaseSeat2(): seat 2 leaves (its pad is free again). seat2JoinedSerial(): changes each time a pad takes seat 2.
     virtual void setSplitScreen(bool on) { (void)on; }
+    // [Systems QC] The profile's controller remaps for the match actions (PadActions.h): UseAlternateControlScheme,
+    // SwitchRightThumbstickAndB. Applied on boot and on every Settings Apply.
+    virtual void setPadScheme(bool alternateScheme, bool swapRightStickAndB) { (void)alternateScheme; (void)swapRightStickAndB; }
     virtual bool splitScreen() const { return false; }
     virtual bool pumpSeat2(InputFrame& input) { (void)input; return false; }
     virtual int seatPad(int seat) const { return seat == 0 ? 0 : -1; }

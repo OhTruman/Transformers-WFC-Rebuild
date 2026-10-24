@@ -19,6 +19,7 @@
 #include "frontend/UIController.h"
 #include "frontend/Url.h"
 #include "core/Config.h"
+#include "platform/PadActions.h"
 #include "platform/SeatRouting.h"
 
 #include <algorithm>
@@ -2366,6 +2367,22 @@ static void testLocalizeCaseInsensitive() {
           "catalog.localize_key_case_insensitive");
 }
 
+static void testPadActions() {   // [Systems QC] a controller drives the match actions (the original's MP layout + remaps)
+    using platform::Button;
+    auto has = [](uint32_t a, Button b) { return ((a >> (int)b) & 1u) != 0; };
+    auto act = [](uint32_t phys, bool alt, bool swap, bool rt = false) { return platform::padActions(platform::remapPad(phys, alt, swap), rt); };
+    const uint32_t d = act(platform::kPadA | platform::kPadX | platform::kPadLThumb | platform::kPadRThumb | platform::kPadY, false, false, true);
+    check(has(d, Button::Jump) && has(d, Button::Interact) && has(d, Button::Transform) && has(d, Button::Melee) &&
+          has(d, Button::NextWeapon) && has(d, Button::Fire) && has(d, Button::Reload) && !has(d, Button::Grenade), "input.pad_default_scheme");
+    check(has(act(platform::kPadB, false, false), Button::Grenade) && has(act(platform::kPadLB, false, false), Button::Ability1) &&
+          has(act(platform::kPadRB, false, false), Button::Dash) && has(act(platform::kPadDPadLeft, false, false), Button::Killstreak) &&
+          act(0, false, false) == 0u, "input.pad_buttons_bound");
+    const uint32_t sw = act(platform::kPadB, false, true), sr = act(platform::kPadRThumb, false, true);
+    check(has(sw, Button::Melee) && !has(sw, Button::Grenade) && has(sr, Button::Grenade) && !has(sr, Button::Melee), "input.pad_swap_b_right_stick");
+    const uint32_t ay = act(platform::kPadY, true, false), al = act(platform::kPadLThumb, true, false), au = act(platform::kPadDPadUp, true, false);
+    check(has(ay, Button::Transform) && !has(ay, Button::NextWeapon) && al == 0u && has(au, Button::NextWeapon), "input.pad_alternate_scheme");
+}
+
 static void testSeatRouting() {   // [Systems QC] controller ownership: seat 1 never loses its only pad to seat 2
     using platform::PadPoll; using platform::SeatPads;
     {   // a lone controller on XInput slot 1 (Steam Input / DS4Windows): the menus read it (outside split screen)
@@ -2512,6 +2529,7 @@ int main() {
     testOnlineSessionEnd();
     testOnlineVoice();
     testSeatRouting();
+    testPadActions();
     testOnlineMatchSide();
     testIconicMode();
     testVoiceUi();
