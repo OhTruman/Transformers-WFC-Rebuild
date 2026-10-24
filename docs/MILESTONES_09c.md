@@ -4462,3 +4462,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   512 + all 7 DLC maps, negative control differs, CAMPAIGN 24 / 24, KISMET 10 / 10, VOICE PASS. The TIMED rows never ran:
   the gate script waited 05:05-10:31 for a 'clear card' because its busy() counted the user's Codex node.exe runtimes
   (fixed). Decision: ship after the mp rerun + verify; the timed rows fold into the 300 fps phase-0 baseline.
+2026-10-24 10:35 MERGED 48e42af6 Private Match Start-after-cancel fix (Frontend proof: cancel at 8, Start again at the same spot, match
+  loads) = FINAL BUILD SHA. UNFREEZE sent. Systems refresh #2 + verify_everything on 48e42af6; Experimental mp menu
+  flow rerun on 48e42af6; the 300 fps phase starts (code / headless now; phase-0 slot after verify).
