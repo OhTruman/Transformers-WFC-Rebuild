@@ -4517,3 +4517,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   0.15 ms; SIMHASH identical; audio events vary by design: no strict audio gate). Cull-distance sidecars: ~0 culled nodes
   on the MP / DLC maps (Molten 154, Horizon 4, Debris 3): item 0a closed as a no-op; campaign sidecars skipped. Baseline
   exe -> 6ddb0abe; phase 0 waits for the user's play to end.
+2026-10-24 12:00 CULL SIDECARS done (19 maps): culled nodes 0 except Molten 154 / Horizon 4 / Debris 3 / Tranquillity 2 -> item 0a is a
+  measured no-op (files ship inert; campaign sidecars skipped). Gameplay: step 61 explained (energon default parse) and
+  covered by Systems' merged HITCH_LOADS (Gameplay's duplicate dropped); Systems follow-up: rosterPackage lazy static
+  thread safety + the job's thread contract. The user is playing 48e42af6; phase 0 GO after.
