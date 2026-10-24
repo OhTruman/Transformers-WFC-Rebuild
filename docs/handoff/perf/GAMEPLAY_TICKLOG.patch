@@ -1,0 +1,268 @@
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index 7ce31400..86736721 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -561,6 +561,14 @@ void Application::runHeadlessMatch() {
+         if ((float)steps * step > 600.0f) { LOG_INFO("HEADLESS end: 600 s simulated (guard)"); break; }
+         const bool inProgress = world_.matchActive() && world_.match().state() == game::Match::State::InProgress;
+         if (inProgress) started = true;
++        static bool soakGod = false;   // WFC_SOAK_GOD=1 (with WFC_QA=1): the human cannot die, so a perf soak runs its full time
++        if (inProgress && !soakGod && std::getenv("WFC_SOAK_GOD")) { soakGod = true; world_.qaSetGodMode(true); }
++        // WFC_SOAK_KILLEVERY=<s> (perf soaks): every s seconds the lowest live horde slot dies, so Escalation waves advance while the
++        // horde stays near its alive cap (the bot-driven human alone rarely clears a wave)
++        static const float soakKill = std::getenv("WFC_SOAK_KILLEVERY") ? (float)std::atof(std::getenv("WFC_SOAK_KILLEVERY")) : 0.0f;
++        if (soakKill > 0.0f && inProgress && steps > 0 && steps % std::max(1L, (long)std::lround(soakKill / step)) == 0)
++            for (const auto& sl : world_.survival().slots)
++                if (sl.inUse && sl.player >= 0 && world_.participantPawn(sl.player)) { world_.applyMatchDamage(sl.player, world_.localMatchPlayer(), 1.0e7f, false, "TnDamageType"); break; }
+         if (started && !inProgress) { LOG_INFO("HEADLESS end: the match left InProgress"); break; }
+         if (matchSeconds > 0.0f && inProgress && world_.match().elapsedTime() >= matchSeconds) {
+             LOG_INFO("WFC_MATCH_SECONDS: %d s of match time reached at step %ld (step-identical end point)", (int)world_.match().elapsedTime(), steps);
+diff --git a/src/game/TickProfile.h b/src/game/TickProfile.h
+new file mode 100644
+index 00000000..d15fba17
+--- /dev/null
++++ b/src/game/TickProfile.h
+@@ -0,0 +1,22 @@
++#pragma once
++// WFC_TICKPROF / WFC_TICKLOG (diagnostics): the step profiler's slots, usable from every World translation unit (World.cpp owns the
++// accumulators). WFC_TICKLOG=<csv> writes one row per sim step: prefix / remainder / total ms, the counters and every slot's ms.
++namespace game {
++
++bool tickProfOn();
++void tickProfAdd(int slot, double ms);
++double tickProfNowMs();
++void tickCount(int which);   // WFC_TICKLOG counters: 0 LOS rays, 1 path searches, 2 bot thinks, 3 spawn tries
++
++// Slots beyond the World.cpp phases (30+): the Escalation director, the campaign runtime, hazards, the presented-frame markers.
++enum TickSlot { kTsSurvival = 30, kTsSvKismet = 31, kTsSvMech = 32, kTsCpVm = 33, kTsCpMatinee = 34, kTsCpTouches = 35,
++                kTsCpDestructibles = 36, kTsCpInteracts = 37, kTsCpSentriesMines = 38, kTsCpFactories = 39, kTsHazards = 40,
++                kTsFillMarkers = 41, kTsPrefix = 42 };
++
++struct TickScope {
++    int s; double t0;
++    explicit TickScope(int slot) : s(slot), t0(tickProfOn() ? tickProfNowMs() : 0.0) {}
++    ~TickScope() { if (tickProfOn()) tickProfAdd(s, tickProfNowMs() - t0); }
++};
++
++} // namespace game
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 0b839d7b..bc0046a3 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -2,6 +2,8 @@
+ #include "core/WorkerPool.h"
+ #include "core/SimRandom.h"
+ #include "game/World.h"
++#include "game/TickProfile.h"
++#include <atomic>
+ #include "frontend/DataPaths.h"
+ #include <utility>
+ #include <set>
+@@ -1998,13 +2000,15 @@ namespace {
+ struct TickProf {
+     static bool env() { static const bool o = std::getenv("WFC_TICKPROF") != nullptr; return o; }
+     static bool& forced() { static bool f = false; return f; }   // World::setStepProfiling (WFC_SCALETEST)
+-    static bool on() { return env() || forced(); }
+-    double acc[30] = {}; long n = 0;
+-    const char* names[30] = {"pre", "abilities", "match", "bots", "oppMove", "oppAnim(cpu)", "partWeapons", "pawn+camera", "weaponFx", "projectiles", "actors", "rest",
++    static bool logOn() { static const bool o = std::getenv("WFC_TICKLOG") != nullptr; return o; }   // the per-step CSV
++    static bool on() { return env() || forced() || logOn(); }
++    double acc[48] = {}; double step[48] = {}; long n = 0;   // step: this sim step only (WFC_TICKLOG)
++    const char* names[48] = {"pre", "abilities", "match", "bots", "oppMove", "oppAnim(cpu)", "partWeapons", "pawn+camera", "weaponFx", "projectiles", "actors", "rest",
+                              "separate", "mapstate", "TOTAL", "ab.barrier", "ab.beacon", "ab.sentry", "ab.roller", "bot.think", "bot.steer", "bot.aim",
+                              // integration glue blocks (wrapped with TickTimer at merge): 22 ability audio, 23 participant notifies,
+                              // 24 participant audio loop (buff / hover / body / weapon), 25 participant shot FX hook, 26 character audio + cues
+-                             "glue.abilityAudio", "glue.partNotify", "glue.partAudio", "glue.shotFx", "glue.charAudio+cues", "ab.sentry.search", "ab.sentry.pose", "presentedFill"};
++                             "glue.abilityAudio", "glue.partNotify", "glue.partAudio", "glue.shotFx", "glue.charAudio+cues", "ab.sentry.search", "ab.sentry.pose", "presentedFill",
++                             "sv.director", "sv.kismet", "sv.mech", "cp.vm", "cp.matinee", "cp.touches", "cp.destructibles", "cp.interacts", "cp.sentries+mines", "cp.factories", "hazards", "fill.markers", "prefix", "s43", "s44", "s45", "s46", "s47"};
+ };
+ TickProf& tickProf() { static TickProf p; return p; }
+ }
+@@ -2016,10 +2020,13 @@ std::vector<std::pair<std::string, double>> World::stepProfileSums() {
+     for (int i = 0; i < 30; ++i) v.push_back({tickProf().names[i], tickProf().acc[i]});
+     return v;
+ }
+-void tickProfAdd(int slot, double ms) { if (TickProf::on() && slot >= 0 && slot < 30) tickProf().acc[slot] += ms; }
++void tickProfAdd(int slot, double ms) { if (TickProf::on() && slot >= 0 && slot < 48) { tickProf().acc[slot] += ms; tickProf().step[slot] += ms; } }
+ namespace {
+-struct TickTimer { int slot; double t0; TickTimer(int s) : slot(s), t0(TickProf::on() ? profNowMs() : 0.0) {} ~TickTimer() { if (TickProf::on()) tickProf().acc[slot] += profNowMs() - t0; } };
++struct TickTimer { int slot; double t0; TickTimer(int s) : slot(s), t0(TickProf::on() ? profNowMs() : 0.0) {} ~TickTimer() { if (TickProf::on()) { const double ms = profNowMs() - t0; tickProf().acc[slot] += ms; tickProf().step[slot] += ms; } } };
++std::atomic<long> gTickCounts[4];   // WFC_TICKLOG counters (LOS rays, path searches, thinks, spawn tries) since the last row
+ }
++double tickProfNowMs() { return profNowMs(); }
++void tickCount(int which) { if (TickProf::on() && which >= 0 && which < 4) gTickCounts[which].fetch_add(1, std::memory_order_relaxed); }
+ 
+ // The sim thread for the async step's background part (one job at a time).
+ struct World::AsyncStepThread {
+@@ -2207,6 +2214,24 @@ void World::finishRemainder() {
+     }
+     remainderPending_ = false;
+     lastRemainderMs_ = profNowMs() - t0;
++    if (TickProf::logOn()) {   // WFC_TICKLOG: this step's row (the prefix ran before this remainder)
++        static FILE* f = nullptr; static long stepNo = 0;
++        if (!f && (f = std::fopen(std::getenv("WFC_TICKLOG"), "w")) != nullptr) {
++            std::fprintf(f, "step,participants,horde,prefix_ms,remainder_ms,total_ms,los,searches,thinks,spawntries");
++            for (int i = 0; i < 48; ++i) std::fprintf(f, ",%s", tickProf().names[i]);
++            std::fprintf(f, "\n");
++        }
++        if (f) {
++            int horde = 0; for (const MatchPlayer& mp : match_.players()) horde += mp.directorSpawned && mp.alive;
++            const double pre = tickProf().step[kTsPrefix];
++            std::fprintf(f, "%ld,%zu,%d,%.4f,%.4f,%.4f", ++stepNo, match_.players().size(), horde, pre, lastRemainderMs_, pre + lastRemainderMs_);
++            for (int c = 0; c < 4; ++c) std::fprintf(f, ",%ld", gTickCounts[c].exchange(0));
++            for (int i = 0; i < 48; ++i) std::fprintf(f, ",%.4f", tickProf().step[i]);
++            std::fprintf(f, "\n");
++            if (stepNo % 600 == 0) std::fflush(f);
++        }
++        for (double& s : tickProf().step) s = 0.0;
++    }
+ }
+ 
+ // Weapon models of every held weapon, loaded on the main thread before the background part may switch to one (GL uploads).
+@@ -2244,6 +2269,7 @@ void World::tickPrefix(float dt) {
+         LOG_INFO("TICKPROF ms/step (%zu participants):%s", match_.players().size(), line.c_str());
+     }
+     TickTimer tickTotal(14);   // WFC_TICKPROF: the whole step (this local part + the background part)
++    TickTimer prefixTotal(kTsPrefix);   // WFC_TICKLOG: this local part alone
+     if (!commands_.empty()) {   // submitted commands, in order, at the step boundary
+         std::vector<std::function<void(World&)>> cmds; cmds.swap(commands_);
+         for (auto& c : cmds) c(*this);
+@@ -2648,7 +2674,7 @@ void World::stepRemainder(float dt) {
+         cues_.tick(dt);
+     }
+ 
+-    tickHazards(dt);
++    { TickTimer th(kTsHazards); tickHazards(dt); }
+     { TickTimer tt(9); tickProjectiles(dt); }
+     if (player_.pawn().position().y < killZ_ && !localPlayerDead()) {
+         // Below KillZ: FellOutOfWorld -> Died with no killer (an environmental death in a match).
+@@ -3053,6 +3079,7 @@ void World::fillPresented(PresentedFrame& p) {
+     // Markers for the local viewer [CONF RE 7bb8ec1 notes/MILESTONE_E_OBJECTIVE_MARKERS.md §4 visibility, §5 setup]. Pawn tags: the
+     // SetupEnemyMarker / cloak rules (hudState), the enemy label also hidden out of line of sight. Constant screen size, no distance
+     // fade; the 8 % safe-frame clamp / arrows belong to the drawer.
++    const double markersT0 = tickProfOn() ? profNowMs() : 0.0;   // WFC_TICKLOG fill.markers
+     p.markers.clear();
+     if (matchActive_ && localPlayer_ >= 0) {
+         const int myTeam = p.players[(size_t)localPlayer_].team;
+@@ -3176,6 +3203,7 @@ void World::fillPresented(PresentedFrame& p) {
+         }
+     }
+     // No generic removal fade (RE: removal is explicit by the owner; only Tombstone fades, through its lifeSpan).
++    if (tickProfOn()) tickProfAdd(kTsFillMarkers, profNowMs() - markersT0);
+     prevMarkers_ = p.markers;
+     p.damageTaken.insert(p.damageTaken.end(), pendingDamageTaken_.begin(), pendingDamageTaken_.end()); pendingDamageTaken_.clear();
+     p.damageCaused.insert(p.damageCaused.end(), pendingDamageCaused_.begin(), pendingDamageCaused_.end()); pendingDamageCaused_.clear();
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index 3ff00714..a7e58b6c 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -5,6 +5,7 @@
+ #include "core/WorkerPool.h"
+ #include "core/SimRandom.h"
+ #include "game/World.h"
++#include "game/TickProfile.h"
+ #include "game/PlayerController.h"
+ #include "core/Log.h"
+ #include <algorithm>
+@@ -55,6 +56,7 @@ static core::Vec3 targetable(const Character& c) { return c.actorLocation(); }
+ core::Vec3 World::botEye(const Character& c) const { return c.actorLocation() + core::Vec3{0, c.moveForm() == Form::Robot ? c.robotParams().eyeHeight : 1.0f, 0}; }
+ 
+ bool World::botLineOfSight(const core::Vec3& from, const core::Vec3& to) const {
++    tickCount(0);   // WFC_TICKLOG LOS rays
+     const CollisionWorld& lw = weaponCollision_.valid() ? weaponCollision_ : collision_;
+     if (!lw.valid()) return true;
+     float t; core::Vec3 n;
+@@ -704,6 +706,7 @@ void World::botPathUpkeep(BotBody o, BotBrain& b, float dt) {
+         if (match_.matchTime() > b.avoidUntil) b.avoidCells.clear();
+         ag.avoid = b.avoidCells.empty() ? nullptr : &b.avoidCells;
+         std::vector<BotNav::Waypoint> path;
++        tickCount(1);   // WFC_TICKLOG path searches
+         if (botNav_.findPath(pos, b.goal.pos, ag, path) && !path.empty()) { b.path.swap(path); b.wp = 0; b.bestDist = 1e9f; b.progressTimer = 0.0f; }
+         else botPathFailed(b, vehicle);
+         return;
+@@ -2425,6 +2428,7 @@ void World::tickBots(float dt) {
+             const double tp0 = tickProfOn() ? profMsBots() : 0.0;
+             const bool smartBot = anySmart_ && botIsSmart(b.player);
+             const BotGoal smartPrevGoal = b.goal; const bool smartPrevWant = b.wantRepath; const float smartPrevGoalTime = b.goalTime;
++            tickCount(2);   // WFC_TICKLOG bot thinks
+             botThink(*o, b);
+             if (smartBot) {
+                 SmartBot& sb = smart_[(size_t)b.player];
+diff --git a/src/game/WorldCampaign.cpp b/src/game/WorldCampaign.cpp
+index f1357a4c..faee8352 100644
+--- a/src/game/WorldCampaign.cpp
++++ b/src/game/WorldCampaign.cpp
+@@ -1,6 +1,7 @@
+ // Campaign chapters (TnCampaignGameSolo / TnCoopGame): the chapter World (the units' geometry merged), the chapter start, the AI squad,
+ // the game over and the level Kismet. See Campaign.h.
+ #include "game/World.h"
++#include "game/TickProfile.h"
+ #include "frontend/DataPaths.h"
+ #include "assets/Gltf.h"
+ #include "assets/Json.h"
+@@ -478,19 +479,18 @@ void World::tickCampaign(float dt) {
+         cp_.vm.begin(cp_.checkpoint);
+         LOG_INFO("campaign: Kismet begun at %s", cp_.checkpoint.empty() ? "the chapter start" : cp_.checkpoint.c_str());
+     }
+-    if (cp_.kismetBegun && !cp_.gameOver) cp_.vm.tick(dt);
++    { TickScope ts(kTsCpVm); if (cp_.kismetBegun && !cp_.gameOver) cp_.vm.tick(dt); }
+     cpSyncPicks();
+-    if (!cp_.gameOver) cpTickFactories(dt);
+-    cpTickMatinees(dt);
++    { TickScope ts(kTsCpFactories); if (!cp_.gameOver) cpTickFactories(dt); }
++    { TickScope ts(kTsCpMatinee); cpTickMatinees(dt); }
+     cpTickForms();
+-    if (!cp_.gameOver) cpTickTouches();
+-    cpTickDestructibles(dt);
+-    cpTickInteracts(dt);
++    { TickScope ts(kTsCpTouches); if (!cp_.gameOver) cpTickTouches(); }
++    { TickScope ts(kTsCpDestructibles); cpTickDestructibles(dt); }
++    { TickScope ts(kTsCpInteracts); cpTickInteracts(dt); }
+     cpTickAiUse();
+     cpTickTransformOps();
+     cpTickFactoryKills();
+-    if (!cp_.gameOver) cpTickSentries(dt);
+-    if (!cp_.gameOver) cpTickMines(dt);
++    { TickScope ts(kTsCpSentriesMines); if (!cp_.gameOver) cpTickSentries(dt); if (!cp_.gameOver) cpTickMines(dt); }
+     if (!cp_.gameOver) cpTickOmega(dt);
+     // TnCampaignGame.Killed: a human killed by anything but DmgType_Suicided -> CampaignGameOver (solo: never downed).
+     const auto& kh = match_.killHistory();
+diff --git a/src/game/WorldSurvival.cpp b/src/game/WorldSurvival.cpp
+index 46f863aa..b27a2109 100644
+--- a/src/game/WorldSurvival.cpp
++++ b/src/game/WorldSurvival.cpp
+@@ -3,6 +3,7 @@
+ // bodies / weapons / health are the versus bot presets of the horde faction with the Classic brain (the GOAP sets are not ported),
+ // no power / generators / downed state; spawn point positions inside the zone box until AssetTools' PossibleSpawnPoints land.
+ #include "game/World.h"
++#include "game/TickProfile.h"
+ #include "game/Destructible.h"
+ #include "assets/Json.h"
+ #include "core/Log.h"
+@@ -839,6 +840,7 @@ bool World::svSpawn(int slot) {
+     const int top = std::min<int>(3, (int)sorted.size());
+     if (top <= 0) return false;
+     for (int attempt = 0; attempt < 5; ++attempt) {
++        tickCount(3);   // WFC_TICKLOG spawn tries
+         float total = 0.0f;
+         for (int i = 0; i < top; ++i) total += std::fabs(svZoneScore(sorted[(size_t)i], t));
+         float r = match_.drawFloat() * total;
+@@ -917,6 +919,7 @@ bool World::svSpawn(int slot) {
+ }
+ 
+ void World::tickSurvival(float dt) {
++    TickScope tsSurvival(kTsSurvival);   // WFC_TICKLOG
+     if (sv_.phase == SurvivalState::Phase::Off || sv_.phase == SurvivalState::Phase::GameOver) return;
+     if (match_.state() == Match::State::MatchOver) { sv_.phase = SurvivalState::Phase::GameOver; return; }
+     // TnSurvivalGame.ElapsedTime counts from level start (the global Tick, PendingMatch included) [RE E1 review F1].
+@@ -927,8 +930,8 @@ void World::tickSurvival(float dt) {
+         sv_.power.resize(P.size(), 0.0f); sv_.nearGenerator.resize(P.size(), -1); sv_.drainFailed.resize(P.size(), 0);
+         sv_.allowDrain.resize(P.size(), 0); sv_.prevInteract.resize(P.size(), 0); sv_.drainClock.resize(P.size(), 0.0f);
+     }
+-    svTickKismet();
+-    svMechTick(dt);   // the DLC maps' mechanisms
++    { TickScope ts(kTsSvKismet); svTickKismet(); }
++    { TickScope ts(kTsSvMech); svMechTick(dt); }   // the DLC maps' mechanisms
+     svTickWeaponPickups(dt);
+     // Item generators (map Kismet per generator, PickupStatusChange Taken): Hide; ModifySurvivalGeneratorPower(-cost); a level drop
+     // (1 -> 0) fires "New Power Level" again - the event fires on negative changes too - so its actions re-apply (UnHide + the volume

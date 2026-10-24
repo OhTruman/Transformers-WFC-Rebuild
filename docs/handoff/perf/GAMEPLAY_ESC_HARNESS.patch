@@ -1,0 +1,53 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 67a08619..8d506064 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -657,7 +657,7 @@ bool Application::wantsFrontendBoot() {
+     for (const char* v : {"WFC_SMOKE_FRAMES", "WFC_AIDUEL", "WFC_SHOTLIST", "WFC_CHAPTER_VIEW", "WFC_GAMEMODE", "WFC_MAP", "WFC_PICKUPTEST", "WFC_TRAVERSE",
+                           "WFC_MAPTRAVERSE", "WFC_LOCKSTEP", "WFC_DEBUGCAM", "WFC_STARTVEHICLE",
+                           // [integration M05] Gameplay / Rendering harnesses written against the direct boot
+-                          "WFC_XFORMTEST", "WFC_MATCHTEST", "WFC_CAMTEST", "WFC_CHAOS", "WFC_TDMTEST", "WFC_ESCTEST", "WFC_CAMPAIGNTEST", "WFC_KISMETTEST", "WFC_LATESEATTEST", "WFC_MATCH",
++                          "WFC_XFORMTEST", "WFC_MATCHTEST", "WFC_CAMTEST", "WFC_CHAOS", "WFC_TDMTEST", "WFC_ESCTEST", "WFC_ESC_STARTWAVE", "WFC_ESC_INVULN", "WFC_CAMPAIGNTEST", "WFC_KISMETTEST", "WFC_LATESEATTEST", "WFC_MATCH",
+                           "WFC_MATCH_URL", "WFC_RELOADTEST", "WFC_CAMSYNC", "WFC_MODEPLAYTEST", "WFC_FRONTENDSCENE",
+                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
+                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 0b839d7b..8c8f5875 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -3297,7 +3297,8 @@ bool World::launchMatch(const MatchLaunch& l) {
+ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe, const std::string& damageType) {
+     const bool hitDirOk = pendingHitDirOk_; const core::Vec3 hitDir = pendingHitDir_; pendingHitDirOk_ = false;
+     if (!matchActive_ || match_.state() != Match::State::InProgress || victim < 0 || (size_t)victim >= match_.players().size()) return false;
+-    if (qaGod_ && victim == localPlayer_) return false;   // DEV / QA TOOLING god mode
++    static const bool escInvuln = std::getenv("WFC_ESC_INVULN") != nullptr;   // TEST ONLY: the local player cannot die in Escalation
++    if ((qaGod_ || (escInvuln && match_.settings().survival)) && victim == localPlayer_) return false;   // DEV / QA TOOLING god mode
+     if (!match_.players()[(size_t)victim].alive) return false;
+     // TnPlayerPawn.TakeDamage: teammates' damage is discarded except TnDamageTypeAOE (NotifyHitByFriendlyFire).
+     if (instigator != victim && match_.sameTeam(instigator, victim) && !aoe) return false;
+@@ -4442,6 +4443,8 @@ HudGameState World::hudState() const {
+ 
+ void World::killLocalPlayer(int killer, bool suicide, const std::string& damageType, const Match::KillContext* ctx) {
+     if (!matchActive_ || localDead_) return;
++    static const bool escInvuln = std::getenv("WFC_ESC_INVULN") != nullptr;   // TEST ONLY: no Escalation death (falls / stranded)
++    if (escInvuln && match_.settings().survival) { respawnPlayer(); return; }
+     const Match::KillContext kc = ctx ? *ctx : killContext(killer, localPlayer_, damageType);
+     match_.killed(killer, localPlayer_, suicide, damageType, &kc);
+     noteVehicleDeath(player_.pawn());   // VehicleDying body
+diff --git a/src/game/WorldSurvival.cpp b/src/game/WorldSurvival.cpp
+index 46f863aa..19f09f89 100644
+--- a/src/game/WorldSurvival.cpp
++++ b/src/game/WorldSurvival.cpp
+@@ -1098,6 +1098,12 @@ void World::tickSurvival(float dt) {
+         sv_.phaseTime = 0.0f;
+         sv_.filling = true; sv_.fillTimer = svData_.fillWaveReCheckTime;   // FillOutWave: the first enemy at once
+         ++sv_.roundBegins;   // TnSeqEvent_SurvivalEvents "Round Begin" (ActivateSequenceEvent 1) [RE E1 review F3]
++        static const int startWave = std::getenv("WFC_ESC_STARTWAVE") ? std::atoi(std::getenv("WFC_ESC_STARTWAVE")) : 0;
++        if (startWave > 1 && sv_.displayWave == 0) {   // TEST ONLY (WFC_ESC_STARTWAVE): the first wave is wave n
++            sv_.currentWave = std::min(startWave - 1, (int)svData_.waves.size() - 1);
++            sv_.displayWave = startWave - 1;
++            sv_.roundBegins = startWave;
++        }
+         levelAudioEvent("Game:TnSeqEvent_SurvivalEvents:Round Begin");   // the map sequence (announcer / dialog / mixer: LevelAudioScript)
+         LOG_INFO("escalation: wave %d begins (row %d: budget %d, alive %d, deficit %d)", sv_.displayWave + 1, sv_.currentWave,
+                  svData_.waves[(size_t)sv_.currentWave].budget, svData_.waves[(size_t)sv_.currentWave].budgetAlive, svData_.waves[(size_t)sv_.currentWave].deficit);

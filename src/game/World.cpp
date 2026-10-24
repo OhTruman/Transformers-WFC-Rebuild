@@ -2,6 +2,8 @@
 #include "core/WorkerPool.h"
 #include "core/SimRandom.h"
 #include "game/World.h"
+#include "game/TickProfile.h"
+#include <atomic>
 #include "frontend/DataPaths.h"
 #include <utility>
 #include <set>
@@ -1998,13 +2000,15 @@ namespace {
 struct TickProf {
     static bool env() { static const bool o = std::getenv("WFC_TICKPROF") != nullptr; return o; }
     static bool& forced() { static bool f = false; return f; }   // World::setStepProfiling (WFC_SCALETEST)
-    static bool on() { return env() || forced(); }
-    double acc[30] = {}; long n = 0;
-    const char* names[30] = {"pre", "abilities", "match", "bots", "oppMove", "oppAnim(cpu)", "partWeapons", "pawn+camera", "weaponFx", "projectiles", "actors", "rest",
+    static bool logOn() { static const bool o = std::getenv("WFC_TICKLOG") != nullptr; return o; }   // the per-step CSV
+    static bool on() { return env() || forced() || logOn(); }
+    double acc[48] = {}; double step[48] = {}; long n = 0;   // step: this sim step only (WFC_TICKLOG)
+    const char* names[48] = {"pre", "abilities", "match", "bots", "oppMove", "oppAnim(cpu)", "partWeapons", "pawn+camera", "weaponFx", "projectiles", "actors", "rest",
                              "separate", "mapstate", "TOTAL", "ab.barrier", "ab.beacon", "ab.sentry", "ab.roller", "bot.think", "bot.steer", "bot.aim",
                              // integration glue blocks (wrapped with TickTimer at merge): 22 ability audio, 23 participant notifies,
                              // 24 participant audio loop (buff / hover / body / weapon), 25 participant shot FX hook, 26 character audio + cues
-                             "glue.abilityAudio", "glue.partNotify", "glue.partAudio", "glue.shotFx", "glue.charAudio+cues", "ab.sentry.search", "ab.sentry.pose", "presentedFill"};
+                             "glue.abilityAudio", "glue.partNotify", "glue.partAudio", "glue.shotFx", "glue.charAudio+cues", "ab.sentry.search", "ab.sentry.pose", "presentedFill",
+                             "sv.director", "sv.kismet", "sv.mech", "cp.vm", "cp.matinee", "cp.touches", "cp.destructibles", "cp.interacts", "cp.sentries+mines", "cp.factories", "hazards", "fill.markers", "prefix", "s43", "s44", "s45", "s46", "s47"};
 };
 TickProf& tickProf() { static TickProf p; return p; }
 }
@@ -2016,10 +2020,13 @@ std::vector<std::pair<std::string, double>> World::stepProfileSums() {
     for (int i = 0; i < 30; ++i) v.push_back({tickProf().names[i], tickProf().acc[i]});
     return v;
 }
-void tickProfAdd(int slot, double ms) { if (TickProf::on() && slot >= 0 && slot < 30) tickProf().acc[slot] += ms; }
+void tickProfAdd(int slot, double ms) { if (TickProf::on() && slot >= 0 && slot < 48) { tickProf().acc[slot] += ms; tickProf().step[slot] += ms; } }
 namespace {
-struct TickTimer { int slot; double t0; TickTimer(int s) : slot(s), t0(TickProf::on() ? profNowMs() : 0.0) {} ~TickTimer() { if (TickProf::on()) tickProf().acc[slot] += profNowMs() - t0; } };
+struct TickTimer { int slot; double t0; TickTimer(int s) : slot(s), t0(TickProf::on() ? profNowMs() : 0.0) {} ~TickTimer() { if (TickProf::on()) { const double ms = profNowMs() - t0; tickProf().acc[slot] += ms; tickProf().step[slot] += ms; } } };
+std::atomic<long> gTickCounts[4];   // WFC_TICKLOG counters (LOS rays, path searches, thinks, spawn tries) since the last row
 }
+double tickProfNowMs() { return profNowMs(); }
+void tickCount(int which) { if (TickProf::on() && which >= 0 && which < 4) gTickCounts[which].fetch_add(1, std::memory_order_relaxed); }
 
 // The sim thread for the async step's background part (one job at a time).
 struct World::AsyncStepThread {
@@ -2207,6 +2214,24 @@ void World::finishRemainder() {
     }
     remainderPending_ = false;
     lastRemainderMs_ = profNowMs() - t0;
+    if (TickProf::logOn()) {   // WFC_TICKLOG: this step's row (the prefix ran before this remainder)
+        static FILE* f = nullptr; static long stepNo = 0;
+        if (!f && (f = std::fopen(std::getenv("WFC_TICKLOG"), "w")) != nullptr) {
+            std::fprintf(f, "step,participants,horde,prefix_ms,remainder_ms,total_ms,los,searches,thinks,spawntries");
+            for (int i = 0; i < 48; ++i) std::fprintf(f, ",%s", tickProf().names[i]);
+            std::fprintf(f, "\n");
+        }
+        if (f) {
+            int horde = 0; for (const MatchPlayer& mp : match_.players()) horde += mp.directorSpawned && mp.alive;
+            const double pre = tickProf().step[kTsPrefix];
+            std::fprintf(f, "%ld,%zu,%d,%.4f,%.4f,%.4f", ++stepNo, match_.players().size(), horde, pre, lastRemainderMs_, pre + lastRemainderMs_);
+            for (int c = 0; c < 4; ++c) std::fprintf(f, ",%ld", gTickCounts[c].exchange(0));
+            for (int i = 0; i < 48; ++i) std::fprintf(f, ",%.4f", tickProf().step[i]);
+            std::fprintf(f, "\n");
+            if (stepNo % 600 == 0) std::fflush(f);
+        }
+        for (double& s : tickProf().step) s = 0.0;
+    }
 }
 
 // Weapon models of every held weapon, loaded on the main thread before the background part may switch to one (GL uploads).
@@ -2244,6 +2269,7 @@ void World::tickPrefix(float dt) {
         LOG_INFO("TICKPROF ms/step (%zu participants):%s", match_.players().size(), line.c_str());
     }
     TickTimer tickTotal(14);   // WFC_TICKPROF: the whole step (this local part + the background part)
+    TickTimer prefixTotal(kTsPrefix);   // WFC_TICKLOG: this local part alone
     if (!commands_.empty()) {   // submitted commands, in order, at the step boundary
         std::vector<std::function<void(World&)>> cmds; cmds.swap(commands_);
         for (auto& c : cmds) c(*this);
@@ -2648,7 +2674,7 @@ void World::stepRemainder(float dt) {
         cues_.tick(dt);
     }
 
-    tickHazards(dt);
+    { TickTimer th(kTsHazards); tickHazards(dt); }
     { TickTimer tt(9); tickProjectiles(dt); }
     if (player_.pawn().position().y < killZ_ && !localPlayerDead()) {
         // Below KillZ: FellOutOfWorld -> Died with no killer (an environmental death in a match).
@@ -3053,6 +3079,7 @@ void World::fillPresented(PresentedFrame& p) {
     // Markers for the local viewer [CONF RE 7bb8ec1 notes/MILESTONE_E_OBJECTIVE_MARKERS.md §4 visibility, §5 setup]. Pawn tags: the
     // SetupEnemyMarker / cloak rules (hudState), the enemy label also hidden out of line of sight. Constant screen size, no distance
     // fade; the 8 % safe-frame clamp / arrows belong to the drawer.
+    const double markersT0 = tickProfOn() ? profNowMs() : 0.0;   // WFC_TICKLOG fill.markers
     p.markers.clear();
     if (matchActive_ && localPlayer_ >= 0) {
         const int myTeam = p.players[(size_t)localPlayer_].team;
@@ -3176,6 +3203,7 @@ void World::fillPresented(PresentedFrame& p) {
         }
     }
     // No generic removal fade (RE: removal is explicit by the owner; only Tombstone fades, through its lifeSpan).
+    if (tickProfOn()) tickProfAdd(kTsFillMarkers, profNowMs() - markersT0);
     prevMarkers_ = p.markers;
     p.damageTaken.insert(p.damageTaken.end(), pendingDamageTaken_.begin(), pendingDamageTaken_.end()); pendingDamageTaken_.clear();
     p.damageCaused.insert(p.damageCaused.end(), pendingDamageCaused_.begin(), pendingDamageCaused_.end()); pendingDamageCaused_.clear();
@@ -3297,7 +3325,8 @@ bool World::launchMatch(const MatchLaunch& l) {
 bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe, const std::string& damageType) {
     const bool hitDirOk = pendingHitDirOk_; const core::Vec3 hitDir = pendingHitDir_; pendingHitDirOk_ = false;
     if (!matchActive_ || match_.state() != Match::State::InProgress || victim < 0 || (size_t)victim >= match_.players().size()) return false;
-    if (qaGod_ && victim == localPlayer_) return false;   // DEV / QA TOOLING god mode
+    static const bool escInvuln = std::getenv("WFC_ESC_INVULN") != nullptr;   // TEST ONLY: the local player cannot die in Escalation
+    if ((qaGod_ || (escInvuln && match_.settings().survival)) && victim == localPlayer_) return false;   // DEV / QA TOOLING god mode
     if (!match_.players()[(size_t)victim].alive) return false;
     // TnPlayerPawn.TakeDamage: teammates' damage is discarded except TnDamageTypeAOE (NotifyHitByFriendlyFire).
     if (instigator != victim && match_.sameTeam(instigator, victim) && !aoe) return false;
@@ -4442,6 +4471,8 @@ HudGameState World::hudState() const {
 
 void World::killLocalPlayer(int killer, bool suicide, const std::string& damageType, const Match::KillContext* ctx) {
     if (!matchActive_ || localDead_) return;
+    static const bool escInvuln = std::getenv("WFC_ESC_INVULN") != nullptr;   // TEST ONLY: no Escalation death (falls / stranded)
+    if (escInvuln && match_.settings().survival) { respawnPlayer(); return; }
     const Match::KillContext kc = ctx ? *ctx : killContext(killer, localPlayer_, damageType);
     match_.killed(killer, localPlayer_, suicide, damageType, &kc);
     noteVehicleDeath(player_.pawn());   // VehicleDying body

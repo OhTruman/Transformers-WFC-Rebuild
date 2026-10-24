@@ -3,6 +3,7 @@
 // bodies / weapons / health are the versus bot presets of the horde faction with the Classic brain (the GOAP sets are not ported),
 // no power / generators / downed state; spawn point positions inside the zone box until AssetTools' PossibleSpawnPoints land.
 #include "game/World.h"
+#include "game/TickProfile.h"
 #include "game/Destructible.h"
 #include "assets/Json.h"
 #include "core/Log.h"
@@ -839,6 +840,7 @@ bool World::svSpawn(int slot) {
     const int top = std::min<int>(3, (int)sorted.size());
     if (top <= 0) return false;
     for (int attempt = 0; attempt < 5; ++attempt) {
+        tickCount(3);   // WFC_TICKLOG spawn tries
         float total = 0.0f;
         for (int i = 0; i < top; ++i) total += std::fabs(svZoneScore(sorted[(size_t)i], t));
         float r = match_.drawFloat() * total;
@@ -917,6 +919,7 @@ bool World::svSpawn(int slot) {
 }
 
 void World::tickSurvival(float dt) {
+    TickScope tsSurvival(kTsSurvival);   // WFC_TICKLOG
     if (sv_.phase == SurvivalState::Phase::Off || sv_.phase == SurvivalState::Phase::GameOver) return;
     if (match_.state() == Match::State::MatchOver) { sv_.phase = SurvivalState::Phase::GameOver; return; }
     // TnSurvivalGame.ElapsedTime counts from level start (the global Tick, PendingMatch included) [RE E1 review F1].
@@ -927,8 +930,8 @@ void World::tickSurvival(float dt) {
         sv_.power.resize(P.size(), 0.0f); sv_.nearGenerator.resize(P.size(), -1); sv_.drainFailed.resize(P.size(), 0);
         sv_.allowDrain.resize(P.size(), 0); sv_.prevInteract.resize(P.size(), 0); sv_.drainClock.resize(P.size(), 0.0f);
     }
-    svTickKismet();
-    svMechTick(dt);   // the DLC maps' mechanisms
+    { TickScope ts(kTsSvKismet); svTickKismet(); }
+    { TickScope ts(kTsSvMech); svMechTick(dt); }   // the DLC maps' mechanisms
     svTickWeaponPickups(dt);
     // Item generators (map Kismet per generator, PickupStatusChange Taken): Hide; ModifySurvivalGeneratorPower(-cost); a level drop
     // (1 -> 0) fires "New Power Level" again - the event fires on negative changes too - so its actions re-apply (UnHide + the volume
@@ -1098,6 +1101,12 @@ void World::tickSurvival(float dt) {
         sv_.phaseTime = 0.0f;
         sv_.filling = true; sv_.fillTimer = svData_.fillWaveReCheckTime;   // FillOutWave: the first enemy at once
         ++sv_.roundBegins;   // TnSeqEvent_SurvivalEvents "Round Begin" (ActivateSequenceEvent 1) [RE E1 review F3]
+        static const int startWave = std::getenv("WFC_ESC_STARTWAVE") ? std::atoi(std::getenv("WFC_ESC_STARTWAVE")) : 0;
+        if (startWave > 1 && sv_.displayWave == 0) {   // TEST ONLY (WFC_ESC_STARTWAVE): the first wave is wave n
+            sv_.currentWave = std::min(startWave - 1, (int)svData_.waves.size() - 1);
+            sv_.displayWave = startWave - 1;
+            sv_.roundBegins = startWave;
+        }
         levelAudioEvent("Game:TnSeqEvent_SurvivalEvents:Round Begin");   // the map sequence (announcer / dialog / mixer: LevelAudioScript)
         LOG_INFO("escalation: wave %d begins (row %d: budget %d, alive %d, deficit %d)", sv_.displayWave + 1, sv_.currentWave,
                  svData_.waves[(size_t)sv_.currentWave].budget, svData_.waves[(size_t)sv_.currentWave].budgetAlive, svData_.waves[(size_t)sv_.currentWave].deficit);

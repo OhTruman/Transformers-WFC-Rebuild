@@ -5,6 +5,7 @@
 #include "core/WorkerPool.h"
 #include "core/SimRandom.h"
 #include "game/World.h"
+#include "game/TickProfile.h"
 #include "game/PlayerController.h"
 #include "core/Log.h"
 #include <algorithm>
@@ -55,6 +56,7 @@ static core::Vec3 targetable(const Character& c) { return c.actorLocation(); }
 core::Vec3 World::botEye(const Character& c) const { return c.actorLocation() + core::Vec3{0, c.moveForm() == Form::Robot ? c.robotParams().eyeHeight : 1.0f, 0}; }
 
 bool World::botLineOfSight(const core::Vec3& from, const core::Vec3& to) const {
+    tickCount(0);   // WFC_TICKLOG LOS rays
     const CollisionWorld& lw = weaponCollision_.valid() ? weaponCollision_ : collision_;
     if (!lw.valid()) return true;
     float t; core::Vec3 n;
@@ -704,6 +706,7 @@ void World::botPathUpkeep(BotBody o, BotBrain& b, float dt) {
         if (match_.matchTime() > b.avoidUntil) b.avoidCells.clear();
         ag.avoid = b.avoidCells.empty() ? nullptr : &b.avoidCells;
         std::vector<BotNav::Waypoint> path;
+        tickCount(1);   // WFC_TICKLOG path searches
         if (botNav_.findPath(pos, b.goal.pos, ag, path) && !path.empty()) { b.path.swap(path); b.wp = 0; b.bestDist = 1e9f; b.progressTimer = 0.0f; }
         else botPathFailed(b, vehicle);
         return;
@@ -2425,6 +2428,7 @@ void World::tickBots(float dt) {
             const double tp0 = tickProfOn() ? profMsBots() : 0.0;
             const bool smartBot = anySmart_ && botIsSmart(b.player);
             const BotGoal smartPrevGoal = b.goal; const bool smartPrevWant = b.wantRepath; const float smartPrevGoalTime = b.goalTime;
+            tickCount(2);   // WFC_TICKLOG bot thinks
             botThink(*o, b);
             if (smartBot) {
                 SmartBot& sb = smart_[(size_t)b.player];

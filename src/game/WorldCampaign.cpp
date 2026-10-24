@@ -1,6 +1,7 @@
 // Campaign chapters (TnCampaignGameSolo / TnCoopGame): the chapter World (the units' geometry merged), the chapter start, the AI squad,
 // the game over and the level Kismet. See Campaign.h.
 #include "game/World.h"
+#include "game/TickProfile.h"
 #include "frontend/DataPaths.h"
 #include "assets/Gltf.h"
 #include "assets/Json.h"
@@ -478,19 +479,18 @@ void World::tickCampaign(float dt) {
         cp_.vm.begin(cp_.checkpoint);
         LOG_INFO("campaign: Kismet begun at %s", cp_.checkpoint.empty() ? "the chapter start" : cp_.checkpoint.c_str());
     }
-    if (cp_.kismetBegun && !cp_.gameOver) cp_.vm.tick(dt);
+    { TickScope ts(kTsCpVm); if (cp_.kismetBegun && !cp_.gameOver) cp_.vm.tick(dt); }
     cpSyncPicks();
-    if (!cp_.gameOver) cpTickFactories(dt);
-    cpTickMatinees(dt);
+    { TickScope ts(kTsCpFactories); if (!cp_.gameOver) cpTickFactories(dt); }
+    { TickScope ts(kTsCpMatinee); cpTickMatinees(dt); }
     cpTickForms();
-    if (!cp_.gameOver) cpTickTouches();
-    cpTickDestructibles(dt);
-    cpTickInteracts(dt);
+    { TickScope ts(kTsCpTouches); if (!cp_.gameOver) cpTickTouches(); }
+    { TickScope ts(kTsCpDestructibles); cpTickDestructibles(dt); }
+    { TickScope ts(kTsCpInteracts); cpTickInteracts(dt); }
     cpTickAiUse();
     cpTickTransformOps();
     cpTickFactoryKills();
-    if (!cp_.gameOver) cpTickSentries(dt);
-    if (!cp_.gameOver) cpTickMines(dt);
+    { TickScope ts(kTsCpSentriesMines); if (!cp_.gameOver) cpTickSentries(dt); if (!cp_.gameOver) cpTickMines(dt); }
     if (!cp_.gameOver) cpTickOmega(dt);
     // TnCampaignGame.Killed: a human killed by anything but DmgType_Suicided -> CampaignGameOver (solo: never downed).
     const auto& kh = match_.killHistory();
