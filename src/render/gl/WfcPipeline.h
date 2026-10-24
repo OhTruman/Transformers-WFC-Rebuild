@@ -311,7 +311,8 @@ public:
     void beginViewPass(const Camera& cam, int w, int h);
     void endViewPass();
     void endFrameTail(int windowW, int windowH);
-    void setSplitView(bool split, int view, int outX, int outY) { split_ = split; viewIdx_ = view; outX_ = outX; outY_ = outY; }
+    void setSplitView(bool split, int view, int outX, int outY);
+    int viewFrame() const { return frameNo_ * 2 + viewIdx_; }   // (split screen: the once-per-view guards' key)
     bool splitFrame() const { return split_; }
 
     // Returns a GPU mesh id, or -1 (caller falls back to the legacy path).
@@ -1629,6 +1630,17 @@ private:
     float toneMapKey() const;                         // the exposure key (per map; WFC_TONE_KEY wins)
     float hazeUniform() const;                        // (the shaders' uHazeK: hazeK_ in Realistic with haze exposure, else 1)
     GLuint hazePbo_[3] = {0, 0, 0}; int hazeIdx_ = 0; float hazeK_ = 1.0f;   // (haze exposure: async adapt readback)
+    struct ViewOther {                                 // (split screen) the inactive view's histories (swapViewState)
+        core::Mat4 rtPrevVP; bool rtHavePrevVP = false;
+        GLuint rtReflPrev = 0; int rtReflPrevW = 0, rtReflPrevH = 0; bool rtReflValid = false; float rtReflVP[16] = {};
+        float rtPrevColVP[16] = {}; bool rtPrevValid = false;
+        int ppTarget = -2; Post ppFrom, ppTo, ppCur; float ppToInterp[4] = {1, 1, 1, 1}; float ppT0 = 0.0f, ppCurLutLerp = 1.0f;
+        std::vector<PpvLive> ppvLive; float ppvLastTime = -1.0f;
+        GLuint toneAdaptTex[2] = {0, 0}, toneAdaptFbo[2] = {0, 0}; int toneIdx = 0; bool toneReset = true; double toneLast = 0.0;
+        GLuint hazePbo[3] = {0, 0, 0}; int hazeIdx = 0; float hazeK = 1.0f;
+    } viewOther_;
+    void swapViewState();
+    double toneLast_ = 0.0;                            // (exposure: the previous adaptation time, per view)
     void toneAdapt();
     int bloomW_ = 1, bloomH_ = 1;
     int fbW_ = 0, fbH_ = 0;

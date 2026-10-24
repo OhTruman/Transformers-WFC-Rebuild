@@ -1220,6 +1220,13 @@ void Pipeline::clearProgramCache() {
 
 // ------------------------------------------------------------------------- unloading (level travel)
 void Pipeline::release() {
+    {   // (split screen) the inactive view's histories go with the active view's
+        ViewOther& o = viewOther_;
+        for (GLuint* t : {&o.rtReflPrev, &o.toneAdaptTex[0], &o.toneAdaptTex[1]}) if (*t) { glDeleteTextures(1, t); *t = 0; }
+        for (GLuint* f : {&o.toneAdaptFbo[0], &o.toneAdaptFbo[1]}) if (*f) { DeleteFramebuffers(1, f); *f = 0; }
+        for (GLuint* b : {&o.hazePbo[0], &o.hazePbo[1], &o.hazePbo[2]}) if (*b) { DeleteBuffers(1, b); *b = 0; }
+        viewOther_ = ViewOther();
+    }
     evictPosed(true);                                  // drawDynamicMeshPosed buffers belong to the map / context
     evictSkin(true);
     instGroups_.clear(); instGroupIndex_.clear();
@@ -9285,6 +9292,28 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     beginViewPass(cam, w, h);
 }
 
+void Pipeline::setSplitView(bool split, int view, int outX, int outY) {
+    if (view != viewIdx_) swapViewState();             // (2 views: the other view's histories come in; back to 0 at the frame end)
+    split_ = split; viewIdx_ = view; outX_ = outX; outY_ = outY;
+}
+
+// the per-view histories, swapped with the inactive view's (the RT bridge swaps its own set in rtBridgeSelectView)
+void Pipeline::swapViewState() {
+    ViewOther& o = viewOther_;
+    using std::swap;
+    swap(rtPrevVP_, o.rtPrevVP); swap(rtHavePrevVP_, o.rtHavePrevVP);
+    swap(rtReflPrev_, o.rtReflPrev); swap(rtReflPrevW_, o.rtReflPrevW); swap(rtReflPrevH_, o.rtReflPrevH);
+    swap(rtReflValid_, o.rtReflValid); std::swap_ranges(rtReflVP_, rtReflVP_ + 16, o.rtReflVP);
+    std::swap_ranges(rtPrevColVP_, rtPrevColVP_ + 16, o.rtPrevColVP); swap(rtPrevValid_, o.rtPrevValid);
+    swap(ppTarget_, o.ppTarget); swap(ppFrom_, o.ppFrom); swap(ppTo_, o.ppTo); swap(ppCur_, o.ppCur);
+    std::swap_ranges(ppToInterp_, ppToInterp_ + 4, o.ppToInterp);
+    swap(ppT0_, o.ppT0); swap(ppCurLutLerp_, o.ppCurLutLerp);
+    swap(ppvLive_, o.ppvLive); swap(ppvLastTime_, o.ppvLastTime);
+    std::swap_ranges(toneAdaptTex_, toneAdaptTex_ + 2, o.toneAdaptTex); std::swap_ranges(toneAdaptFbo_, toneAdaptFbo_ + 2, o.toneAdaptFbo);
+    swap(toneIdx_, o.toneIdx); swap(toneReset_, o.toneReset); swap(toneLast_, o.toneLast);
+    std::swap_ranges(hazePbo_, hazePbo_ + 3, o.hazePbo); swap(hazeIdx_, o.hazeIdx); swap(hazeK_, o.hazeK);
+}
+
 // one view of the frame (split screen: one per view, GLRenderer::beginView; one view: called by beginFrame)
 void Pipeline::beginViewPass(const Camera& cam, int w, int h) {
     if (viewIdx_ > 0) {                                // (a later view: the screen-space targets are this view's again)
@@ -9603,7 +9632,7 @@ void Pipeline::endViewPass() {
         // a dark interior opens up to 1.8x, a bright exterior comes down to 0.7x)
         // (X3) on a frame with the volumetric light the contrast is x3ToneContrast: the in-scatter's lift is given back
         // (WFC_TONE_CONTRAST, when set, wins)
-        const bool x3Frame = rtVolFrame_ == frameNo_ && !rtdef::envSet("WFC_TONE_CONTRAST");
+        const bool x3Frame = rtVolFrame_ == viewFrame() && !rtdef::envSet("WFC_TONE_CONTRAST");
         const float key = rtdef::toneKey(), str = rtdef::toneAdapt(), gain = rtdef::toneGain(), sat = rtdef::toneSat();
         const float con = x3Frame ? rtdef::x3ToneContrast() : rtdef::toneContrast();
         ActiveTexture(GL_TEXTURE0 + 4); glBindTexture(GL_TEXTURE_2D, toneAdaptTex_[toneIdx_]);
@@ -9652,7 +9681,7 @@ void Pipeline::endFrameTail(int windowW, int windowH) {
 // bleaches character highlights), a saturation / contrast grade, a soft-knee HDR bloom; the map's own grade and CLUT
 // follow unchanged. Off / Faithful keep the original's post exactly. WFC_RT_TONE=0 off.
 void Pipeline::volApply() {
-    if (rtMode_ != 2 || rtVolFrame_ != frameNo_ || !volApplyProg_ || !rtTargets_.vol || !fbo_) return;
+    if (rtMode_ != 2 || rtVolFrame_ != viewFrame() || !volApplyProg_ || !rtTargets_.vol || !fbo_) return;
     glx::gpuStamp("X3: volumetric light apply");
     ensureSceneDepth();                                  // (first: the copy may change the framebuffer / state)
     BindFramebuffer(GL_FRAMEBUFFER, fbo_);
@@ -9706,6 +9735,9 @@ void Pipeline::toneAdapt() {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         BindFramebuffer(GL_FRAMEBUFFER, toneLumFbo_);
         FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, toneLumTex_, 0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+    if (!toneAdaptTex_[0]) {                           // (per view: a split frame's second view has its own adaptation)
         for (int i = 0; i < 2; ++i) {
             glGenTextures(1, &toneAdaptTex_[i]); GenFramebuffers(1, &toneAdaptFbo_[i]);
             glBindTexture(GL_TEXTURE_2D, toneAdaptTex_[i]);
@@ -9718,10 +9750,9 @@ void Pipeline::toneAdapt() {
         glBindTexture(GL_TEXTURE_2D, 0);
         toneReset_ = true;
     }
-    static auto last = std::chrono::steady_clock::now();
-    const auto now = std::chrono::steady_clock::now();
-    const float dt = std::min(std::chrono::duration<float>(now - last).count(), 0.25f);
-    last = now;
+    const double nowS = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    const float dt = toneLast_ > 0.0 ? std::min((float)(nowS - toneLast_), 0.25f) : 0.0f;   // (per view: its own previous time)
+    toneLast_ = nowS;
     BindVertexArray(postVao_);
     BindFramebuffer(GL_FRAMEBUFFER, toneLumFbo_);
     glViewport(0, 0, 128, 128);

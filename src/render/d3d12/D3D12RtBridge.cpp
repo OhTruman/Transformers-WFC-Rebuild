@@ -153,6 +153,27 @@ public:
         LOG_INFO("RT bridge: D3D12 device ready (raytracing tier %d.%d)", rtTier_ / 10, rtTier_ % 10);
         return true;
     }
+    // (split screen) the other view's view-sized set - targets, froxel history, hit / normal / velocity, denoiser - swapped
+    // with the active one; the descriptor tables follow the active set, rewritten after the GPU went idle (the previous
+    // view's round trip may still read them). The world, the TLAS rings and the GI stay shared
+    void selectView(int v) {
+        if (v == view_) return;
+        if ((depth_.res || other_.depth.res) && !waitIdle()) return;
+        using std::swap;
+        swap(depth_, other_.depth); swap(mask_, other_.mask); swap(ao_, other_.ao); swap(dnOut_, other_.dnOut);
+        swap(wdepth_, other_.wdepth); swap(refl_, other_.refl); swap(soft_, other_.soft); swap(lvis_, other_.lvis);
+        swap(pcol_, other_.pcol); swap(vol_, other_.vol);
+        swap(volH_[0], other_.volH[0]); swap(volH_[1], other_.volH[1]);
+        swap(volTx_, other_.volTx); swap(volTy_, other_.volTy); swap(volParity_, other_.volParity); swap(volHistValid_, other_.volHistValid);
+        swap(hit_, other_.hit); swap(nrm_, other_.nrm); swap(vel_, other_.vel);
+#if defined(WFC_RT_DENOISER)
+        swap(dn_, other_.dn); swap(dnViewInit_, other_.dnViewInit);
+        if (dnInit_ && !dnViewInit_) dnViewInit_ = dn_.init(dev_);   // (the second view's denoiser, first use)
+#endif
+        view_ = v;
+        if (heap_ && depth_.res) writeDescriptors();
+    }
+
     bool prepare(int w, int h, RtTargets* t) {
         if (w != depth_.w || h != depth_.h) {
             if (!waitIdle()) return false;               // (in flight: the old targets are not freed)
@@ -1038,6 +1059,7 @@ private:
         for (auto& r : volTsReadback_) r = volTsHeap_ ? makeBuffer(dev_, 16, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST) : nullptr;
 #if defined(WFC_RT_DENOISER)
         dnInit_ = dn_.init(dev_);
+        dnViewInit_ = dnInit_;
         if (!dnInit_) LOG_WARN("RT bridge: no shadow denoiser (raw RT shadow)");
         else if (depth_.res) {                           // (the targets came first: size the denoiser now)
             RtDenoiseInputs in; in.depth = depth_.res; in.hitMask = hit_; in.normal = nrm_; in.velocity = vel_; in.output = dnOut_.res;
@@ -1577,7 +1599,17 @@ private:
     bool tsShade_[4] = {true, true, true, true};
 #if defined(WFC_RT_DENOISER)
     RtShadowDenoiser dn_; bool dnInit_ = false;
+    bool dnViewInit_ = false;                            // (split screen) this view's denoiser initialised
 #endif
+    struct ViewSet {                                     // (split screen) the inactive view's set (selectView)
+        Shared depth, mask, ao, dnOut, wdepth, refl, soft, lvis, pcol, vol;
+        ID3D12Resource* volH[2] = {nullptr, nullptr}; int volTx = 0, volTy = 0, volParity = 0; bool volHistValid = false;
+        ID3D12Resource* hit = nullptr; ID3D12Resource* nrm = nullptr; ID3D12Resource* vel = nullptr;
+#if defined(WFC_RT_DENOISER)
+        RtShadowDenoiser dn; bool dnViewInit = false;
+#endif
+    } other_;
+    int view_ = 0;
     std::vector<ID3D12Resource*> blas_; std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instances_; ID3D12Resource* tlas_ = nullptr;
     ID3D12Resource* jobTlas_ = nullptr;                   // this job's TLAS: tlas_, or the ring slot's with the characters
     ID3D12GraphicsCommandList4* list4_ = nullptr;
@@ -1726,6 +1758,7 @@ bool ensure() {
 bool rtBridgeAvailable() { return g_bridge ? true : !g_failed && probeAvailable(); }
 void rtBridgeShutdown() { if (g_bridge) g_bridge->shutdown(); }
 bool rtBridgePrepare(int w, int h, RtTargets* t) { return ensure() && g_bridge->prepare(w, h, t); }
+void rtBridgeSelectView(int view) { if (g_bridge) g_bridge->selectView(view); }
 bool rtBridgeAddStaticWorld(const RtStaticWorld& world, unsigned mask) { return ensure() && g_bridge->addStaticWorld(world, mask); }
 void rtBridgeClearStaticWorld() { if (g_bridge) g_bridge->clearStaticWorld(); }
 bool rtBridgeRoundTrip(const RtFrame* frame) { return g_bridge && g_bridge->roundTrip(frame); }
@@ -1751,6 +1784,7 @@ namespace render {
 bool rtBridgeAvailable() { return false; }
 void rtBridgeShutdown() {}
 bool rtBridgePrepare(int, int, RtTargets*) { return false; }
+void rtBridgeSelectView(int) {}
 bool rtBridgeAddStaticWorld(const RtStaticWorld&, unsigned) { return false; }
 void rtBridgeClearStaticWorld() {}
 bool rtBridgeRoundTrip(const RtFrame*) { return false; }

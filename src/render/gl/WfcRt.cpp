@@ -909,10 +909,11 @@ void Pipeline::rtBuildHit() {
 // flushDynQueue's RT path (stage 1 option b), once per frame in the main scene pass with a static world on D3D12:
 // begin = the world depth (before the dynamic draws) copied, colour writes off for the dynamic depth pass
 bool Pipeline::rtDynBegin() {
-    if (!rtShadowAoOn() || rtMode_ <= 0 || rtFailed_ || rtWorldSets_ == 0 || rtFrame_ == frameNo_) return false;
+    if (!rtShadowAoOn() || rtMode_ <= 0 || rtFailed_ || rtWorldSets_ == 0 || rtFrame_ == viewFrame()) return false;
     GLint drawFb = 0; glGetIntegerv(0x8CA6, &drawFb);
     if ((GLuint)drawFb != fbo_) return false;
     RtTargets t;
+    rtBridgeSelectView(viewIdx_);                      // (split screen: this view's targets / history)
     if (!rtBridgePrepare(vpW_, vpH_, &t)) { rtFailed_ = true; LOG_WARN("RT: bridge unavailable"); return false; }
     if (t.depth != rtLastDepthTex_) { glx::textureCacheInvalidate(); rtLastDepthTex_ = t.depth; }
     if (!rtDepthProg_) {
@@ -1091,10 +1092,11 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
     if ((GLuint)drawFb != fbo_) return;                // the main scene pass only (not a shadow / warm-up pass's drawMdi)
     static const int checkSet = [] { const char* e = std::getenv("WFC_RT_CHECKSET"); return e ? std::atoi(e) : 0; }();
     const bool sao = rtInfra_ && !depthCheckOn();
-    if (sao ? (!endOfOpaque || rtFrame_ == frameNo_ || rtWorldSets_ == 0) : endOfOpaque ? true
-            : depthCheckOn() ? (bspSet ? 1 : 0) != checkSet : rtFrame_ == frameNo_) return;
-    rtFrame_ = frameNo_;
+    if (sao ? (!endOfOpaque || rtFrame_ == viewFrame() || rtWorldSets_ == 0) : endOfOpaque ? true
+            : depthCheckOn() ? (bspSet ? 1 : 0) != checkSet : rtFrame_ == viewFrame()) return;
+    rtFrame_ = viewFrame();
     RtTargets t;
+    rtBridgeSelectView(viewIdx_);
     if (!rtBridgePrepare(vpW_, vpH_, &t)) { rtFailed_ = true; LOG_WARN("RT round trip: bridge unavailable"); return; }
     if (t.depth != rtLastDepthTex_) { glx::textureCacheInvalidate(); rtLastDepthTex_ = t.depth; }   // (the bridge's raw binds)
     if (!rtDepthProg_) {
@@ -1264,7 +1266,7 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                     float* q = fr.volColors[fr.volLightN]; q[0] = lc.x; q[1] = lc.y; q[2] = lc.z; q[3] = L.falloff;
                     ++fr.volLightN;
                 }
-                rtVolFrame_ = frameNo_;
+                rtVolFrame_ = viewFrame();
             }
         }
         // (item 2, Realistic) this frame's shadow lights: the point / spot lights the characters used most as direct lights

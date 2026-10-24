@@ -1109,17 +1109,22 @@ Application::MatchExit Application::runMatch() {
                 else if (frame - lat.pressFrame > 240) { LOG_INFO("LATENCY %s timeout", latProbe); lat.phase = 0; }
             }
         }
-        // (split screen test hook) WFC_SPLITTEST=1 horizontal / 2 vertical: view 1 = the local camera turned round, until
-        // Gameplay's second seat drives it (render/SplitScreen.h protocol)
+        // (split screen, render/SplitScreen.h protocol) two local seats -> two views: each the seat's camera with its pawn as
+        // "me" (absolute draw owners 100 + player, World side); the layout horizontal (the stock 2P default) until the
+        // Settings row. WFC_SPLITTEST=1 horizontal / 2 vertical: the override for runs without a second seat (view 1 = the
+        // local camera turned round) - with two seats it picks the layout only
         static const int splitTest = WFC_ENV("WFC_SPLITTEST") ? std::atoi(WFC_ENV("WFC_SPLITTEST")) : 0;
-        if (splitTest) renderer_->setSplitLayout(world_.matchActive() ? (splitTest == 2 ? render::SplitLayout::Vertical
-                                                                                         : render::SplitLayout::Horizontal)
-                                                                      : render::SplitLayout::Single);
+        const int seats = world_.matchActive() ? world_.localSeatCount() : 1;
+        const bool split = seats >= 2 || (splitTest && world_.matchActive());
+        renderer_->setSplitLayout(!split ? render::SplitLayout::Single
+                                         : splitTest == 2 ? render::SplitLayout::Vertical : render::SplitLayout::Horizontal);
         renderer_->beginFrame(camera_, window_->width(), window_->height());
         for (int view = 0; view < renderer_->viewCount(); ++view) {
             render::Camera viewCam = camera_;
-            if (view > 0) viewCam.yaw += 3.14159265f;
+            if (seats >= 2) world_.seatCamera(view, viewCam);
+            else if (view > 0) viewCam.yaw += 3.14159265f;
             renderer_->beginView(view, viewCam);
+            if (seats >= 2 && renderer_->viewCount() >= 2) renderer_->setLocalOwner(100 + world_.localSeatPlayer(view));
             // (diagnostics) WFC_CHAPTER_VIEW=1: the level alone - no World draw (a campaign chapter's merged units judged lit with
             // WFC_SHOTLIST cameras before the World's campaign boot exists; the renderer draws the units itself)
             if (!WFC_ENV("WFC_CHAPTER_VIEW")) world_.draw(*renderer_);

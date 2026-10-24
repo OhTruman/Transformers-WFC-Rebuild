@@ -1,0 +1,275 @@
+diff -ru a/src/core/Application.cpp b/src/core/Application.cpp
+--- a/src/core/Application.cpp	2026-10-23 21:20:50.043590600 -0500
++++ b/src/core/Application.cpp	2026-10-23 21:20:50.022518400 -0500
+@@ -1109,17 +1109,22 @@
+                 else if (frame - lat.pressFrame > 240) { LOG_INFO("LATENCY %s timeout", latProbe); lat.phase = 0; }
+             }
+         }
+-        // (split screen test hook) WFC_SPLITTEST=1 horizontal / 2 vertical: view 1 = the local camera turned round, until
+-        // Gameplay's second seat drives it (render/SplitScreen.h protocol)
++        // (split screen, render/SplitScreen.h protocol) two local seats -> two views: each the seat's camera with its pawn as
++        // "me" (absolute draw owners 100 + player, World side); the layout horizontal (the stock 2P default) until the
++        // Settings row. WFC_SPLITTEST=1 horizontal / 2 vertical: the override for runs without a second seat (view 1 = the
++        // local camera turned round) - with two seats it picks the layout only
+         static const int splitTest = WFC_ENV("WFC_SPLITTEST") ? std::atoi(WFC_ENV("WFC_SPLITTEST")) : 0;
+-        if (splitTest) renderer_->setSplitLayout(world_.matchActive() ? (splitTest == 2 ? render::SplitLayout::Vertical
+-                                                                                         : render::SplitLayout::Horizontal)
+-                                                                      : render::SplitLayout::Single);
++        const int seats = world_.matchActive() ? world_.localSeatCount() : 1;
++        const bool split = seats >= 2 || (splitTest && world_.matchActive());
++        renderer_->setSplitLayout(!split ? render::SplitLayout::Single
++                                         : splitTest == 2 ? render::SplitLayout::Vertical : render::SplitLayout::Horizontal);
+         renderer_->beginFrame(camera_, window_->width(), window_->height());
+         for (int view = 0; view < renderer_->viewCount(); ++view) {
+             render::Camera viewCam = camera_;
+-            if (view > 0) viewCam.yaw += 3.14159265f;
++            if (seats >= 2) world_.seatCamera(view, viewCam);
++            else if (view > 0) viewCam.yaw += 3.14159265f;
+             renderer_->beginView(view, viewCam);
++            if (seats >= 2 && renderer_->viewCount() >= 2) renderer_->setLocalOwner(100 + world_.localSeatPlayer(view));
+             // (diagnostics) WFC_CHAPTER_VIEW=1: the level alone - no World draw (a campaign chapter's merged units judged lit with
+             // WFC_SHOTLIST cameras before the World's campaign boot exists; the renderer draws the units itself)
+             if (!WFC_ENV("WFC_CHAPTER_VIEW")) world_.draw(*renderer_);
+diff -ru a/src/render/d3d12/D3D12RtBridge.cpp b/src/render/d3d12/D3D12RtBridge.cpp
+--- a/src/render/d3d12/D3D12RtBridge.cpp	2026-10-23 21:20:49.752593000 -0500
++++ b/src/render/d3d12/D3D12RtBridge.cpp	2026-10-23 21:20:49.732022500 -0500
+@@ -153,6 +153,27 @@
+         LOG_INFO("RT bridge: D3D12 device ready (raytracing tier %d.%d)", rtTier_ / 10, rtTier_ % 10);
+         return true;
+     }
++    // (split screen) the other view's view-sized set - targets, froxel history, hit / normal / velocity, denoiser - swapped
++    // with the active one; the descriptor tables follow the active set, rewritten after the GPU went idle (the previous
++    // view's round trip may still read them). The world, the TLAS rings and the GI stay shared
++    void selectView(int v) {
++        if (v == view_) return;
++        if ((depth_.res || other_.depth.res) && !waitIdle()) return;
++        using std::swap;
++        swap(depth_, other_.depth); swap(mask_, other_.mask); swap(ao_, other_.ao); swap(dnOut_, other_.dnOut);
++        swap(wdepth_, other_.wdepth); swap(refl_, other_.refl); swap(soft_, other_.soft); swap(lvis_, other_.lvis);
++        swap(pcol_, other_.pcol); swap(vol_, other_.vol);
++        swap(volH_[0], other_.volH[0]); swap(volH_[1], other_.volH[1]);
++        swap(volTx_, other_.volTx); swap(volTy_, other_.volTy); swap(volParity_, other_.volParity); swap(volHistValid_, other_.volHistValid);
++        swap(hit_, other_.hit); swap(nrm_, other_.nrm); swap(vel_, other_.vel);
++#if defined(WFC_RT_DENOISER)
++        swap(dn_, other_.dn); swap(dnViewInit_, other_.dnViewInit);
++        if (dnInit_ && !dnViewInit_) dnViewInit_ = dn_.init(dev_);   // (the second view's denoiser, first use)
++#endif
++        view_ = v;
++        if (heap_ && depth_.res) writeDescriptors();
++    }
++
+     bool prepare(int w, int h, RtTargets* t) {
+         if (w != depth_.w || h != depth_.h) {
+             if (!waitIdle()) return false;               // (in flight: the old targets are not freed)
+@@ -1038,6 +1059,7 @@
+         for (auto& r : volTsReadback_) r = volTsHeap_ ? makeBuffer(dev_, 16, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST) : nullptr;
+ #if defined(WFC_RT_DENOISER)
+         dnInit_ = dn_.init(dev_);
++        dnViewInit_ = dnInit_;
+         if (!dnInit_) LOG_WARN("RT bridge: no shadow denoiser (raw RT shadow)");
+         else if (depth_.res) {                           // (the targets came first: size the denoiser now)
+             RtDenoiseInputs in; in.depth = depth_.res; in.hitMask = hit_; in.normal = nrm_; in.velocity = vel_; in.output = dnOut_.res;
+@@ -1577,7 +1599,17 @@
+     bool tsShade_[4] = {true, true, true, true};
+ #if defined(WFC_RT_DENOISER)
+     RtShadowDenoiser dn_; bool dnInit_ = false;
++    bool dnViewInit_ = false;                            // (split screen) this view's denoiser initialised
++#endif
++    struct ViewSet {                                     // (split screen) the inactive view's set (selectView)
++        Shared depth, mask, ao, dnOut, wdepth, refl, soft, lvis, pcol, vol;
++        ID3D12Resource* volH[2] = {nullptr, nullptr}; int volTx = 0, volTy = 0, volParity = 0; bool volHistValid = false;
++        ID3D12Resource* hit = nullptr; ID3D12Resource* nrm = nullptr; ID3D12Resource* vel = nullptr;
++#if defined(WFC_RT_DENOISER)
++        RtShadowDenoiser dn; bool dnViewInit = false;
+ #endif
++    } other_;
++    int view_ = 0;
+     std::vector<ID3D12Resource*> blas_; std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instances_; ID3D12Resource* tlas_ = nullptr;
+     ID3D12Resource* jobTlas_ = nullptr;                   // this job's TLAS: tlas_, or the ring slot's with the characters
+     ID3D12GraphicsCommandList4* list4_ = nullptr;
+@@ -1726,6 +1758,7 @@
+ bool rtBridgeAvailable() { return g_bridge ? true : !g_failed && probeAvailable(); }
+ void rtBridgeShutdown() { if (g_bridge) g_bridge->shutdown(); }
+ bool rtBridgePrepare(int w, int h, RtTargets* t) { return ensure() && g_bridge->prepare(w, h, t); }
++void rtBridgeSelectView(int view) { if (g_bridge) g_bridge->selectView(view); }
+ bool rtBridgeAddStaticWorld(const RtStaticWorld& world, unsigned mask) { return ensure() && g_bridge->addStaticWorld(world, mask); }
+ void rtBridgeClearStaticWorld() { if (g_bridge) g_bridge->clearStaticWorld(); }
+ bool rtBridgeRoundTrip(const RtFrame* frame) { return g_bridge && g_bridge->roundTrip(frame); }
+@@ -1751,6 +1784,7 @@
+ bool rtBridgeAvailable() { return false; }
+ void rtBridgeShutdown() {}
+ bool rtBridgePrepare(int, int, RtTargets*) { return false; }
++void rtBridgeSelectView(int) {}
+ bool rtBridgeAddStaticWorld(const RtStaticWorld&, unsigned) { return false; }
+ void rtBridgeClearStaticWorld() {}
+ bool rtBridgeRoundTrip(const RtFrame*) { return false; }
+diff -ru a/src/render/d3d12/D3D12RtBridge.h b/src/render/d3d12/D3D12RtBridge.h
+--- a/src/render/d3d12/D3D12RtBridge.h	2026-10-23 21:20:49.679844000 -0500
++++ b/src/render/d3d12/D3D12RtBridge.h	2026-10-23 21:20:49.661280400 -0500
+@@ -66,6 +66,7 @@
+ bool rtBridgeAvailable();                                  // a DXR 1.1 device on GL's adapter (a throwaway probe)
+ void rtBridgeShutdown();                                   // process exit, GL context current: queue idle, GL imports released
+ bool rtBridgePrepare(int w, int h, RtTargets* t);           // (re)create at this size; false: unavailable
++void rtBridgeSelectView(int view);                          // (split screen) view 0 / 1: its own targets + history
+ bool rtBridgeAddStaticWorld(const RtStaticWorld& world, unsigned mask);   // add a set's BLAS, rebuild the TLAS (map load)
+ void rtBridgeClearStaticWorld();                            // map unload
+ // GL signal -> D3D12 job -> GL wait (GPU side). frame != nullptr and a static world: the depth check, else the copy.
+diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-23 21:20:49.968834200 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 21:20:49.948765400 -0500
+@@ -1220,6 +1220,13 @@
+ 
+ // ------------------------------------------------------------------------- unloading (level travel)
+ void Pipeline::release() {
++    {   // (split screen) the inactive view's histories go with the active view's
++        ViewOther& o = viewOther_;
++        for (GLuint* t : {&o.rtReflPrev, &o.toneAdaptTex[0], &o.toneAdaptTex[1]}) if (*t) { glDeleteTextures(1, t); *t = 0; }
++        for (GLuint* f : {&o.toneAdaptFbo[0], &o.toneAdaptFbo[1]}) if (*f) { DeleteFramebuffers(1, f); *f = 0; }
++        for (GLuint* b : {&o.hazePbo[0], &o.hazePbo[1], &o.hazePbo[2]}) if (*b) { DeleteBuffers(1, b); *b = 0; }
++        viewOther_ = ViewOther();
++    }
+     evictPosed(true);                                  // drawDynamicMeshPosed buffers belong to the map / context
+     evictSkin(true);
+     instGroups_.clear(); instGroupIndex_.clear();
+@@ -9285,6 +9292,28 @@
+     beginViewPass(cam, w, h);
+ }
+ 
++void Pipeline::setSplitView(bool split, int view, int outX, int outY) {
++    if (view != viewIdx_) swapViewState();             // (2 views: the other view's histories come in; back to 0 at the frame end)
++    split_ = split; viewIdx_ = view; outX_ = outX; outY_ = outY;
++}
++
++// the per-view histories, swapped with the inactive view's (the RT bridge swaps its own set in rtBridgeSelectView)
++void Pipeline::swapViewState() {
++    ViewOther& o = viewOther_;
++    using std::swap;
++    swap(rtPrevVP_, o.rtPrevVP); swap(rtHavePrevVP_, o.rtHavePrevVP);
++    swap(rtReflPrev_, o.rtReflPrev); swap(rtReflPrevW_, o.rtReflPrevW); swap(rtReflPrevH_, o.rtReflPrevH);
++    swap(rtReflValid_, o.rtReflValid); std::swap_ranges(rtReflVP_, rtReflVP_ + 16, o.rtReflVP);
++    std::swap_ranges(rtPrevColVP_, rtPrevColVP_ + 16, o.rtPrevColVP); swap(rtPrevValid_, o.rtPrevValid);
++    swap(ppTarget_, o.ppTarget); swap(ppFrom_, o.ppFrom); swap(ppTo_, o.ppTo); swap(ppCur_, o.ppCur);
++    std::swap_ranges(ppToInterp_, ppToInterp_ + 4, o.ppToInterp);
++    swap(ppT0_, o.ppT0); swap(ppCurLutLerp_, o.ppCurLutLerp);
++    swap(ppvLive_, o.ppvLive); swap(ppvLastTime_, o.ppvLastTime);
++    std::swap_ranges(toneAdaptTex_, toneAdaptTex_ + 2, o.toneAdaptTex); std::swap_ranges(toneAdaptFbo_, toneAdaptFbo_ + 2, o.toneAdaptFbo);
++    swap(toneIdx_, o.toneIdx); swap(toneReset_, o.toneReset); swap(toneLast_, o.toneLast);
++    std::swap_ranges(hazePbo_, hazePbo_ + 3, o.hazePbo); swap(hazeIdx_, o.hazeIdx); swap(hazeK_, o.hazeK);
++}
++
+ // one view of the frame (split screen: one per view, GLRenderer::beginView; one view: called by beginFrame)
+ void Pipeline::beginViewPass(const Camera& cam, int w, int h) {
+     if (viewIdx_ > 0) {                                // (a later view: the screen-space targets are this view's again)
+@@ -9603,7 +9632,7 @@
+         // a dark interior opens up to 1.8x, a bright exterior comes down to 0.7x)
+         // (X3) on a frame with the volumetric light the contrast is x3ToneContrast: the in-scatter's lift is given back
+         // (WFC_TONE_CONTRAST, when set, wins)
+-        const bool x3Frame = rtVolFrame_ == frameNo_ && !rtdef::envSet("WFC_TONE_CONTRAST");
++        const bool x3Frame = rtVolFrame_ == viewFrame() && !rtdef::envSet("WFC_TONE_CONTRAST");
+         const float key = rtdef::toneKey(), str = rtdef::toneAdapt(), gain = rtdef::toneGain(), sat = rtdef::toneSat();
+         const float con = x3Frame ? rtdef::x3ToneContrast() : rtdef::toneContrast();
+         ActiveTexture(GL_TEXTURE0 + 4); glBindTexture(GL_TEXTURE_2D, toneAdaptTex_[toneIdx_]);
+@@ -9652,7 +9681,7 @@
+ // bleaches character highlights), a saturation / contrast grade, a soft-knee HDR bloom; the map's own grade and CLUT
+ // follow unchanged. Off / Faithful keep the original's post exactly. WFC_RT_TONE=0 off.
+ void Pipeline::volApply() {
+-    if (rtMode_ != 2 || rtVolFrame_ != frameNo_ || !volApplyProg_ || !rtTargets_.vol || !fbo_) return;
++    if (rtMode_ != 2 || rtVolFrame_ != viewFrame() || !volApplyProg_ || !rtTargets_.vol || !fbo_) return;
+     glx::gpuStamp("X3: volumetric light apply");
+     ensureSceneDepth();                                  // (first: the copy may change the framebuffer / state)
+     BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+@@ -9706,6 +9735,9 @@
+         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+         BindFramebuffer(GL_FRAMEBUFFER, toneLumFbo_);
+         FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, toneLumTex_, 0);
++        glBindTexture(GL_TEXTURE_2D, 0);
++    }
++    if (!toneAdaptTex_[0]) {                           // (per view: a split frame's second view has its own adaptation)
+         for (int i = 0; i < 2; ++i) {
+             glGenTextures(1, &toneAdaptTex_[i]); GenFramebuffers(1, &toneAdaptFbo_[i]);
+             glBindTexture(GL_TEXTURE_2D, toneAdaptTex_[i]);
+@@ -9718,10 +9750,9 @@
+         glBindTexture(GL_TEXTURE_2D, 0);
+         toneReset_ = true;
+     }
+-    static auto last = std::chrono::steady_clock::now();
+-    const auto now = std::chrono::steady_clock::now();
+-    const float dt = std::min(std::chrono::duration<float>(now - last).count(), 0.25f);
+-    last = now;
++    const double nowS = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
++    const float dt = toneLast_ > 0.0 ? std::min((float)(nowS - toneLast_), 0.25f) : 0.0f;   // (per view: its own previous time)
++    toneLast_ = nowS;
+     BindVertexArray(postVao_);
+     BindFramebuffer(GL_FRAMEBUFFER, toneLumFbo_);
+     glViewport(0, 0, 128, 128);
+diff -ru a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h	2026-10-23 21:20:49.896084900 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-23 21:20:49.878023000 -0500
+@@ -311,7 +311,8 @@
+     void beginViewPass(const Camera& cam, int w, int h);
+     void endViewPass();
+     void endFrameTail(int windowW, int windowH);
+-    void setSplitView(bool split, int view, int outX, int outY) { split_ = split; viewIdx_ = view; outX_ = outX; outY_ = outY; }
++    void setSplitView(bool split, int view, int outX, int outY);
++    int viewFrame() const { return frameNo_ * 2 + viewIdx_; }   // (split screen: the once-per-view guards' key)
+     bool splitFrame() const { return split_; }
+ 
+     // Returns a GPU mesh id, or -1 (caller falls back to the legacy path).
+@@ -1629,6 +1630,17 @@
+     float toneMapKey() const;                         // the exposure key (per map; WFC_TONE_KEY wins)
+     float hazeUniform() const;                        // (the shaders' uHazeK: hazeK_ in Realistic with haze exposure, else 1)
+     GLuint hazePbo_[3] = {0, 0, 0}; int hazeIdx_ = 0; float hazeK_ = 1.0f;   // (haze exposure: async adapt readback)
++    struct ViewOther {                                 // (split screen) the inactive view's histories (swapViewState)
++        core::Mat4 rtPrevVP; bool rtHavePrevVP = false;
++        GLuint rtReflPrev = 0; int rtReflPrevW = 0, rtReflPrevH = 0; bool rtReflValid = false; float rtReflVP[16] = {};
++        float rtPrevColVP[16] = {}; bool rtPrevValid = false;
++        int ppTarget = -2; Post ppFrom, ppTo, ppCur; float ppToInterp[4] = {1, 1, 1, 1}; float ppT0 = 0.0f, ppCurLutLerp = 1.0f;
++        std::vector<PpvLive> ppvLive; float ppvLastTime = -1.0f;
++        GLuint toneAdaptTex[2] = {0, 0}, toneAdaptFbo[2] = {0, 0}; int toneIdx = 0; bool toneReset = true; double toneLast = 0.0;
++        GLuint hazePbo[3] = {0, 0, 0}; int hazeIdx = 0; float hazeK = 1.0f;
++    } viewOther_;
++    void swapViewState();
++    double toneLast_ = 0.0;                            // (exposure: the previous adaptation time, per view)
+     void toneAdapt();
+     int bloomW_ = 1, bloomH_ = 1;
+     int fbW_ = 0, fbH_ = 0;
+diff -ru a/src/render/gl/WfcRt.cpp b/src/render/gl/WfcRt.cpp
+--- a/src/render/gl/WfcRt.cpp	2026-10-23 21:20:49.824840700 -0500
++++ b/src/render/gl/WfcRt.cpp	2026-10-23 21:20:49.807280500 -0500
+@@ -909,10 +909,11 @@
+ // flushDynQueue's RT path (stage 1 option b), once per frame in the main scene pass with a static world on D3D12:
+ // begin = the world depth (before the dynamic draws) copied, colour writes off for the dynamic depth pass
+ bool Pipeline::rtDynBegin() {
+-    if (!rtShadowAoOn() || rtMode_ <= 0 || rtFailed_ || rtWorldSets_ == 0 || rtFrame_ == frameNo_) return false;
++    if (!rtShadowAoOn() || rtMode_ <= 0 || rtFailed_ || rtWorldSets_ == 0 || rtFrame_ == viewFrame()) return false;
+     GLint drawFb = 0; glGetIntegerv(0x8CA6, &drawFb);
+     if ((GLuint)drawFb != fbo_) return false;
+     RtTargets t;
++    rtBridgeSelectView(viewIdx_);                      // (split screen: this view's targets / history)
+     if (!rtBridgePrepare(vpW_, vpH_, &t)) { rtFailed_ = true; LOG_WARN("RT: bridge unavailable"); return false; }
+     if (t.depth != rtLastDepthTex_) { glx::textureCacheInvalidate(); rtLastDepthTex_ = t.depth; }
+     if (!rtDepthProg_) {
+@@ -1091,10 +1092,11 @@
+     if ((GLuint)drawFb != fbo_) return;                // the main scene pass only (not a shadow / warm-up pass's drawMdi)
+     static const int checkSet = [] { const char* e = std::getenv("WFC_RT_CHECKSET"); return e ? std::atoi(e) : 0; }();
+     const bool sao = rtInfra_ && !depthCheckOn();
+-    if (sao ? (!endOfOpaque || rtFrame_ == frameNo_ || rtWorldSets_ == 0) : endOfOpaque ? true
+-            : depthCheckOn() ? (bspSet ? 1 : 0) != checkSet : rtFrame_ == frameNo_) return;
+-    rtFrame_ = frameNo_;
++    if (sao ? (!endOfOpaque || rtFrame_ == viewFrame() || rtWorldSets_ == 0) : endOfOpaque ? true
++            : depthCheckOn() ? (bspSet ? 1 : 0) != checkSet : rtFrame_ == viewFrame()) return;
++    rtFrame_ = viewFrame();
+     RtTargets t;
++    rtBridgeSelectView(viewIdx_);
+     if (!rtBridgePrepare(vpW_, vpH_, &t)) { rtFailed_ = true; LOG_WARN("RT round trip: bridge unavailable"); return; }
+     if (t.depth != rtLastDepthTex_) { glx::textureCacheInvalidate(); rtLastDepthTex_ = t.depth; }   // (the bridge's raw binds)
+     if (!rtDepthProg_) {
+@@ -1264,7 +1266,7 @@
+                     float* q = fr.volColors[fr.volLightN]; q[0] = lc.x; q[1] = lc.y; q[2] = lc.z; q[3] = L.falloff;
+                     ++fr.volLightN;
+                 }
+-                rtVolFrame_ = frameNo_;
++                rtVolFrame_ = viewFrame();
+             }
+         }
+         // (item 2, Realistic) this frame's shadow lights: the point / spot lights the characters used most as direct lights
