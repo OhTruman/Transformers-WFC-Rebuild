@@ -140,7 +140,7 @@ bool World::cpPawnFactoryActivate(KismetVM& vm, int op, int input) {
                 if (di < 0) continue;
                 cpBindDesEvents(di);
                 F.spawnedDes.push_back(di);
-                for (int v : vm.varLink(op, "Spawned")) if (KismetVM::Var* var = vm.var(v)) var->obj = "des:" + std::to_string(di);
+                cpWriteSpawned(vm, op, "des:" + std::to_string(di));
             }
             vm.output(op, std::find(F.outputs.begin(), F.outputs.end(), "All Pawns Spawned") != F.outputs.end() ? "All Pawns Spawned" : "Out");
             return true;
@@ -175,7 +175,7 @@ void World::cpTickFactories(float dt) {
             for (int v = 0; v < cp_.vm.varCount(); ++v)
                 if (KismetVM::Var* var = cp_.vm.var(v); var && var->varName == F.spawnedVar) var->obj = "pawn:" + std::to_string(p);
         if (F.op >= 0) {   // the factory's Spawned variable + its "Spawned" output for each pawn
-            for (int v : cp_.vm.varLink(F.op, "Spawned")) if (KismetVM::Var* var = cp_.vm.var(v)) var->obj = "pawn:" + std::to_string(p);
+            cpWriteSpawned(cp_.vm, F.op, "pawn:" + std::to_string(p));
             if (std::find(F.outputs.begin(), F.outputs.end(), "Spawned") != F.outputs.end()) cp_.vm.output(F.op, "Spawned");
         }
         if (--F.pending > 0) { F.timer = F.delay; continue; }
@@ -351,6 +351,7 @@ std::vector<int> World::cpTargets(KismetVM& vm, int op, const std::string& link)
         } else if (v->cls == "SeqVar_Player") {
             for (size_t q = 0; q < match_.players().size(); ++q) if (match_.players()[q].kind != ParticipantKind::Bot) out.push_back((int)q);
         } else if (v->obj.rfind("pawn:", 0) == 0) out.push_back(std::atoi(v->obj.c_str() + 5));
+        for (const std::string& e : v->list) if (e.rfind("pawn:", 0) == 0) out.push_back(std::atoi(e.c_str() + 5));   // SeqVar_ObjectList
     }
     return out;
 }
@@ -738,6 +739,7 @@ void World::cpTickFactoryKills() {
     if (cp_.factoryKillsSeen > kh.size()) cp_.factoryKillsSeen = 0;
     for (; cp_.factoryKillsSeen < kh.size(); ++cp_.factoryKillsSeen) {
         const int v = kh[cp_.factoryKillsSeen].victim;
+        if (v >= 0) { cpObjectListsDrop("pawn:" + std::to_string(v)); cp_.tactical.erase(v); }   // gone from the lists / its volume
         for (CampaignFactory& F : cp_.factories) cpFactoryPawnDied(F, v);
     }
 }
@@ -851,7 +853,7 @@ bool World::cpSentryFactoryActivate(KismetVM& vm, int op, int input, CampaignFac
         cp_.sentries.push_back(S);
         const int si = (int)cp_.sentries.size() - 1;
         F.liveSentries.push_back(si);
-        for (int v : vm.varLink(op, "Spawned")) if (KismetVM::Var* var = vm.var(v)) var->obj = "sentry:" + std::to_string(si);
+        cpWriteSpawned(vm, op, "sentry:" + std::to_string(si));
         if (std::find(F.outputs.begin(), F.outputs.end(), "Spawned") != F.outputs.end()) vm.output(op, "Spawned");
         if (renderer_) renderer_->setActorHidden(S.body, false);
     }
@@ -1165,6 +1167,140 @@ bool World::cpTeleportActivate(KismetVM& vm, int op, int input) {
     LOG_INFO("campaign: %s -> %s: %d pawns", afterDot(o.path).c_str(), afterDot(dest).c_str(), moved);
     if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
     return true;
+}
+
+} // namespace game
+
+namespace game {
+
+// ---- SeqVar_ObjectList (870 campaign vars: the factories' spawned groups) ----
+// A factory's Spawned link to an object list appends the pawn (UE ActorFactory -> SeqVar_ObjectList); SeqAct_ModifyObjectList adds /
+// removes / empties; a dead pawn leaves every list (its actor is gone in the original, the pool reuses the participant here).
+void World::cpWriteSpawned(KismetVM& vm, int op, const std::string& obj) {
+    for (int v : vm.varLink(op, "Spawned")) {
+        KismetVM::Var* var = vm.var(v);
+        if (!var) continue;
+        if (var->cls == "SeqVar_ObjectList") { if (std::find(var->list.begin(), var->list.end(), obj) == var->list.end()) var->list.push_back(obj); }
+        else var->obj = obj;
+    }
+}
+
+void World::cpObjectListsDrop(const std::string& obj) {
+    for (int v = 0; v < cp_.vm.varCount(); ++v)
+        if (KismetVM::Var* var = cp_.vm.var(v); var && !var->list.empty())
+            var->list.erase(std::remove(var->list.begin(), var->list.end(), obj), var->list.end());
+}
+
+bool World::cpModifyObjectList(KismetVM& vm, int op, int input) {
+    const KismetVM::Op& o = vm.op(op);
+    if (o.cls != "SeqAct_ModifyObjectList") return false;
+    std::vector<std::string> refs;
+    for (int v : vm.varLink(op, "ObjectRef")) {
+        const KismetVM::Var* var = vm.var(v);
+        if (var && var->named >= 0) var = vm.var(var->named);
+        if (!var) continue;
+        if (!var->obj.empty()) refs.push_back(var->obj);
+        refs.insert(refs.end(), var->list.begin(), var->list.end());
+    }
+    for (int v : vm.varLink(op, "ObjectListVar")) {
+        KismetVM::Var* var = vm.var(v);
+        if (var && var->named >= 0) var = vm.var(var->named);
+        if (!var) continue;
+        if (input == 2) var->list.clear();   // Empty List
+        else for (const std::string& r : refs) {
+            auto it = std::find(var->list.begin(), var->list.end(), r);
+            if (input == 0 && it == var->list.end()) var->list.push_back(r);   // Add To List
+            if (input == 1 && it != var->list.end()) var->list.erase(it);      // Remove From List
+        }
+    }
+    if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
+    return true;
+}
+
+// ---- tactical volumes (SeqAct_TnAssignTacticalVolume, A3 130 / A4 117 / D3A 708 refs) [C, RE CAMPAIGN_AI_LAYER 1] ----
+// Assign / UnAssign / Toggle on the Target AI: an assigned AI takes its positions inside the volume - a goal whose spot lies outside
+// is moved to the nearest walkable spot inside (the nav cells inside the brush, our stand-in for its TacticalPathNodes); outside, it
+// walks back in. PROV: the volume's own tactical path nodes, the melee-only-inside rule and AlertAssignedAiToEnemiesInVolume.
+void World::cpLoadTacticalVolumes() {
+    cp_.tacVolumes.clear();
+    for (const std::string& u : cpChapter_.allUnits) {
+        assets::Json pj;
+        if (!readJsonFile(cpChapter_.dir + u + "/physics.json", pj)) continue;
+        const assets::Json& vs = pj["volumes"];
+        for (size_t i = 0; i < vs.size(); ++i) {
+            if (vs[i]["class"].asString() != "TnTacticalVolume") continue;
+            CampaignState::TacVolume T;
+            T.name = vs[i]["actor"].asString();
+            const assets::Json& polys = vs[i]["polygons_gltf"];
+            core::Vec3 c{0, 0, 0}; int nv = 0;
+            for (size_t p = 0; p < polys.size(); ++p)
+                for (size_t k = 0; k < polys[p].size(); ++k) {
+                    const core::Vec3 q{polys[p][k][0].asFloat(), polys[p][k][1].asFloat(), polys[p][k][2].asFloat()};
+                    c = c + q; ++nv;
+                    T.lo = nv == 1 ? q : core::Vec3{std::min(T.lo.x, q.x), std::min(T.lo.y, q.y), std::min(T.lo.z, q.z)};
+                    T.hi = nv == 1 ? q : core::Vec3{std::max(T.hi.x, q.x), std::max(T.hi.y, q.y), std::max(T.hi.z, q.z)};
+                }
+            if (nv == 0) continue;
+            c = c * (1.0f / (float)nv);
+            for (size_t p = 0; p < polys.size(); ++p) {   // the brush's faces: outward planes (the centroid is inside)
+                if (polys[p].size() < 3) continue;
+                auto P = [&](size_t k) { return core::Vec3{polys[p][k][0].asFloat(), polys[p][k][1].asFloat(), polys[p][k][2].asFloat()}; };
+                core::Vec3 n = core::normalize(core::cross(P(1) - P(0), P(2) - P(0)));
+                float w = core::dot(n, P(0));
+                if (core::dot(n, c) > w) { n = n * -1.0f; w = -w; }
+                T.planes.push_back({n, w});
+            }
+            cp_.tacVolumes[T.name] = T;
+        }
+    }
+    LOG_INFO("campaign: %zu tactical volumes", cp_.tacVolumes.size());
+}
+
+bool World::cpInTactical(const CampaignState::TacVolume& T, const core::Vec3& p) const {
+    if (p.x < T.lo.x || p.x > T.hi.x || p.z < T.lo.z || p.z > T.hi.z || p.y < T.lo.y - 2.0f || p.y > T.hi.y + 2.0f) return false;
+    for (const auto& pl : T.planes) if (core::dot(pl.first, p) > pl.second + 1.0f) return false;   // (1 m of slack: a pawn at a face)
+    return true;
+}
+
+bool World::cpTacticalActivate(KismetVM& vm, int op, int input) {
+    const KismetVM::Op& o = vm.op(op);
+    if (o.cls != "SeqAct_TnAssignTacticalVolume") return false;
+    const std::string vol = afterDot(vm.objectOf(op, "Tactical Volume"));
+    const std::vector<int> who = cpTargets(vm, op, "Target");
+    for (int p : who) {
+        const bool on = input == 0 ? true : input == 1 ? false : cp_.tactical.find(p) == cp_.tactical.end();
+        if (on && cp_.tacVolumes.count(vol)) cp_.tactical[p] = vol; else cp_.tactical.erase(p);
+        if (BotBrain* b = [&]() -> BotBrain* { for (BotBrain& x : bots_) if (x.player == p) return &x; return nullptr; }()) b->wantRepath = true;
+    }
+    static const bool klog = std::getenv("WFC_KISMETLOG") != nullptr;
+    if (klog) LOG_INFO("campaign: %s %s %s: %zu AI", afterDot(o.path).c_str(), input == 0 ? "Assign" : input == 1 ? "UnAssign" : "Toggle", vol.c_str(), who.size());
+    if (!o.outputs.empty()) vm.output(op, o.outputs.front().first);
+    return true;
+}
+
+// The goal of an AI assigned to a volume stays inside it: a spot outside -> the nearest nav cell centroid inside (cached per volume).
+void World::cpTacticalConstrain(BotBrain& b, BotGoal& g) {
+    auto it = cp_.tactical.find(b.player);
+    if (it == cp_.tactical.end()) return;
+    auto vt = cp_.tacVolumes.find(it->second);
+    if (vt == cp_.tacVolumes.end()) return;
+    CampaignState::TacVolume& T = vt->second;
+    if (!T.cellsBuilt && botNav_.valid()) {
+        T.cellsBuilt = true;
+        for (const auto& c : botNav_.cells()) if (cpInTactical(T, c.centroid)) T.inside.push_back(c.centroid);
+    }
+    const Character* me = participantPawn(b.player);
+    if (cpInTactical(T, g.pos) || T.inside.empty()) return;
+    // outside: the inside spot nearest the wanted spot (a target outside: fight it from the volume's edge nearest it)
+    (void)me;
+    float best = 1e30f; core::Vec3 at = T.inside.front();
+    for (const core::Vec3& q : T.inside) {
+        const float dx = q.x - g.pos.x, dz = q.z - g.pos.z, d = dx * dx + dz * dz;
+        if (d < best) { best = d; at = q; }
+    }
+    g.pos = at;
+    if (g.kind == BotGoalKind::Roam) g.kind = BotGoalKind::Defend;
+    g.radius = std::max(g.radius, 3.0f);
 }
 
 } // namespace game

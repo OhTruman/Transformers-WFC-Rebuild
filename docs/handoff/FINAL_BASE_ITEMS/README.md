@@ -107,3 +107,10 @@ Verified:
   FMV_a1intro after a skip, because the end reaches the World asynchronously;
 - the Frontend's FrontendRuntime changes that came in with 6d30fff2.
 Apply it after 11. Verified: the 01–12 chain applies to a fresh af4d0731 and matches the tested tree over every patched path.
+
+## 13: campaign object lists + tactical volumes (12 tree -> c4155702 + GAMEPLAY_CAMPAIGN_TACTICAL)
+
+`13_campaign_tactical.patch`: the same paths, from the 12 tree to c4155702 + TACTICAL. It covers:
+- SeqVar_ObjectList: factory Spawned appends to it, SeqAct_ModifyObjectList, dead pawns leave the lists;
+- SeqAct_TnAssignTacticalVolume: assigned AI keep their goal spots inside the volume.
+Apply it after 12. Verified: the 01–13 chain applies to a fresh af4d0731 and matches the tested tree over every patched path.
