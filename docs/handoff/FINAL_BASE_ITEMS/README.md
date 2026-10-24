@@ -143,3 +143,17 @@ wfc_rebuild (Release, llvm-mingw) with 0 errors.
 - WFC_ESCTEST's DLC branch buys a door generator and checks its doors and zones.
 Apply it after 14. Verified: a fresh full af4d0731 + 01-15 applies (`git apply --check`), configures and builds wfc_rebuild with 0
 errors, and its District ESCTEST log equals the head build's line for line.
+
+## 16: DLC Escalation map mechanisms (15 tree -> d2998d23 + GAMEPLAY_ESC_MECHANISMS)
+
+`16_esc_mechanisms.patch`: the same paths, from the 15 tree to d2998d23 + ESC_MECHANISMS. It covers:
+- the mechanisms of RE's DLC_ESC_MECHANISMS_RE.md (1104a86) as data + director code (SurvivalMech.h, WorldSurvivalMech.cpp):
+  District's laser defense grid (all five pain volumes off at start; bought: on 45 s, the button ends it early, the generator
+  re-buyable), sentries (dormant + invulnerable, woken by their generators; ion / repair; 3-use limit), the power outage (the Match
+  RNG; no buying for 60 s) and detpacks; Tranquillity's floodgate drain (three purchases), its zones and the base doors' blocking
+  volumes as switchable collision;
+- hazard volumes can be switched off; HudGameState.svPowerOutage;
+- WFC_ESCTEST's DLC branch checks each mechanism;
+- the Systems audio changes merged since 15 on these paths (LevelAudio.inc, SoundCues.cpp).
+Apply it after 15. Verified: a fresh full af4d0731 + 01-16 applies (`git apply --check`), builds wfc_rebuild with 0 errors, and its
+District and Tranquillity ESCTEST logs equal the head build's line for line.
