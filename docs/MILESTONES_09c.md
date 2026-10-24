@@ -4543,3 +4543,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   FSR 3.1 + volumetric + lens flare), Language -> Audio, split layout to the bottom, vignette, campaign exit routing.
   Rendering: aim audit with Gameplay, max-settings perf A/B (card), headlight flicker, preview pairs. Systems: ESC 30 s
   load. Experimental / RE / AssetTools stood down; 300 fps phase 0 and campaign deferred. GitHub = origin, pushed.
+2026-10-24 12:51 MERGED 54dd587b playtest-3 frontend batch 1: Escalation solo start (private host alone, per RE), duplicate Optimus (DLC
+  ESC maps lacked CampaignCharacters), join panel only with lobby input, 'Cancel Start' hint (mouse / B / Esc), Graphics
+  at top + fixed arrows, Language -> Audio, Split layout bottom, standard preview panel (baseline / selected, hover zoom,
+  FG text). Open: ESC map list in the package (Systems greps), preview PNGs (Rendering), batch 2 (Frontend).
