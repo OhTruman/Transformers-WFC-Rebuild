@@ -4453,3 +4453,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   a frontend-only delta. Pre PASS: same match head = base on 508 / 506 / 505 / 511 / 512 + all 7 bare-name DLC maps,
   negative control differs; CAMPAIGNTEST 24 / 24, KISMETTEST 10 / 10, VOICETEST PASS; 10 MP maps clean TDM both seeds.
   Timed rows running under the hold (restarted ~05:10 after a stale matB manifest read).
+2026-10-24 09:08 USER TARGET (~05:30): campaign + Escalation >= 300 FPS MINIMUM with the original settings on (Off look, native res). Phase
+  after the a2e9fbd9 package: Rendering (render side, PERF_300_PLAN.md), Gameplay (sim side, PERF_300_SIM_PLAN.md),
+  Systems (platform half), Experimental (min-fps harness per chapter / ESC map at 1440p + 2160p), RE (original culling /
+  LOD rules). Lossless fixes only; the target is a gate for this pass.
