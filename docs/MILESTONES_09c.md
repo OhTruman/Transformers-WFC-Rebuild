@@ -4247,3 +4247,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   or a scripted join). MERGED ebbbdf05 DLC audio 1 (Fortress + Havoc level audio) + the DLC packaging rule (+0.4 GB / 2
   maps). Experimental: Havoc rows PASS; Fortress re-check 0 texture failures; Streets identity holds through the split code.
   Open data: materials parent rerun, LightsVisibilitiesVolume, 147 _LOC twins (AssetTools).
+2026-10-23 21:43 MERGED a503085c seat-2 script hook (Frontend) + 6263d73e DLC audio root move + LevelAudio.inc with District / Fortress /
+  Havoc (Tranquillity waits on its props re-export + the _LOC twins: AssetTools). Systems on the online two-locals patch.
