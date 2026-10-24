@@ -2253,6 +2253,13 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     const bool fpsOn = rt_.flow().profile().display.showFps;
     if (!fpsOn && fps_) { fps_.reset(); fpsMeter_.reset(); fpsW_ = fpsH_ = 0; fpsText_.clear(); }
     if (movies_.empty() && !loading_ && !video_ && !(hud_ && hudVisible_) && !(scoreboard_ && scoreboardShown_) && !fpsOn) return;
+    {   // Brightness (QC #35): the original applies the display gamma to the whole frame, the UI and the calibration screen
+        // included (its logos are static art) [RE BASE_GAME_FLOWS_RE 5]. The 3D scene takes it in Rendering's post pass; the GFx
+        // layer here: output = c^(2.2 / displayGamma), displayGamma = 2.2 + lerp(-0.95, 0.95, GammaSetting / 100) - exactly 1
+        // at the default 50 (Rendering GfxRendererGL::setGammaExponent).
+        const float g = std::max(0.0f, std::min(1.0f, flow.profile().getInt("GammaSetting") / 100.0f));
+        gl_.setGammaExponent(2.2f / (2.2f - 0.95f + 1.9f * g));
+    }
     gl_.begin(w, h);
     if (video_ && !videoOver_) gl_.drawVideo(video_, videoW_, videoH_, videoSerial_);
     auto drawMovie = [&](GfxMovie& m) {

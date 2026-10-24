@@ -1561,10 +1561,12 @@ void GameFlow::matchLoaded() {
     // controller with UseInGameLobby = !PRI.HasSelectedCharacter() = true [CONFIRMED script]. WaitingOnGameStart then
     // ignores OnBeginGame (Choose Character stays up until a character is chosen) and the UI enters InGame when the
     // player's pawn spawns (OnRespawn, event 5).
-    // Escalation: the Survival GRI has RetainSelectedCharacterOnTransition = True - the lobby pick carries into the map and the
-    // player goes straight to the countdown; versus (False) picks again [RE BASE_GAME_FLOWS_RE 1.5; playtest 2026-10-23b #15]
+    // Escalation and the campaign: their GRIs keep RetainSelectedCharacterOnTransition = True (only the multiplayer GRI sets it
+    // False) and lobby -> map is seamless, so the lobby pick carries into the map - no in-map select for a valid pick; the
+    // campaign lobby clears it on entry instead. Versus picks again [RE BASE_GAME_FLOWS_RE 1.5, CAMPAIGN_FRONTEND_FLOW_RE 8;
+    // playtest 2026-10-23b #15 and its campaign twin]
     const bool survival = match_.modeTag == "SV";
-    if (!survival) selected_ = SelectedCharacter{};
+    if (!survival && !campaign()) selected_ = SelectedCharacter{};
     // a late joiner enters a running match: GRI.bMatchHasBegun is already true, so its pick spawns it at once (no pre-game
     // countdown screen) [RE ONLINE_JOIN_IN_PROGRESS_RE]
     matchHasBegun_ = match_.lateSeat >= 0;
