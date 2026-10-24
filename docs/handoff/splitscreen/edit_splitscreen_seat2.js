@@ -36,7 +36,32 @@ ed('src/game/World.h', [
      '    PlayerController seat2Ctl_;                // its camera / aim / intent (wire seat: commands only)\n' +
      '    platform::InputFrame seat2In_;\n' +
      '    void seat2HandleInput(float dt);\n' +
-     '    void seat2QueueCommand();\n'],
+     '    void seat2QueueCommand();\n' +
+     '    std::vector<PresentedFrame::DamageTaken> seat2Taken_;   // seat 2\'s damage-direction / hit-marker queues (as pendingDamage*)\n' +
+     '    std::vector<PresentedFrame::DamageCaused> seat2Caused_;\n' +
+     '    void fillSeats(PresentedFrame& p);\n' +
+     '    void seat2NoteDamage(int victim, int instigator, float applied, bool killed);\n'],
+    ['        bool extendedLobby = false;                     // World::extendedLobby() at this step\n',
+     '        bool extendedLobby = false;                     // World::extendedLobby() at this step\n' +
+     '        // Split screen (GAMEPLAY_SPLITSCREEN_PLAN.md step 2): the per-seat HUD state. seats[0] mirrors the local fields above;\n' +
+     '        // seats[1] exists while a second local seat plays. The view camera is World::seatCamera (main thread, per render frame).\n' +
+     '        // Each seat\'s death / respawn: dead here + the Respawn match events of its player.\n' +
+     '        struct Seat {\n' +
+     '            int player = -1;                            // the seat\'s match player\n' +
+     '            bool dead = false;\n' +
+     '            float health = 0.0f, healthMax = 0.0f; std::vector<float> segmentTops;\n' +
+     '            int clip = 0, reserve = 0, mag = 0, reserveMax = 0;   // the held weapon (vehicle weapon in vehicle form)\n' +
+     '            std::string weaponId, chassis;\n' +
+     '            HudAimState aim;\n' +
+     '            HudObservers hud2;                          // seat 2: abilities, grenade, weapon jam / spread, cloak / warcry buffs\n' +
+     '            std::vector<Marker> markers;                // seat 2: seat 1\'s (same team), enemy labels by seat 2\'s line of sight\n' +
+     '            std::vector<DamageTaken> damageTaken;       // since the last consumePresented (yaw relative to the seat\'s view)\n' +
+     '            std::vector<DamageCaused> damageCaused;\n' +
+     '        };\n' +
+     '        std::vector<Seat> seats;\n'],
+    ['                              presented_.damageTaken.clear(); presented_.damageCaused.clear(); presented_.steps = 0; }',
+     '                              presented_.damageTaken.clear(); presented_.damageCaused.clear(); presented_.steps = 0;\n' +
+     '                              for (auto& s : presented_.seats) { s.damageTaken.clear(); s.damageCaused.clear(); } }'],
 ]);
 let w = fs.readFileSync('src/game/World.cpp', 'utf8');
 const crlf = w.includes('\r\n'); w = w.replace(/\r\n/g, '\n');
@@ -55,11 +80,25 @@ ed2('    player_.controller().handleInput(cp_.active && cp_.cinematicMode ? plat
     '    player_.controller().handleInput(cp_.active && cp_.cinematicMode ? platform::InputFrame{} : in, dt);\n    seat2HandleInput(dt);   // split screen: the second local seat\'s controller');
 ed2('    joinStep();\n    applyQueuedRemoteCommands(dt);',
     '    joinStep();\n    seat2QueueCommand();   // split screen: the second local seat\'s command for this step (applied with the remote ones)\n' +
-    '    if (seat2_ >= 0) seat2Ctl_.tickCameraCollision(dt);\n    applyQueuedRemoteCommands(dt);');
+    '    if (seat2_ >= 0 && seat2Ctl_.pawn()) seat2Ctl_.tickCameraCollision(dt);\n    applyQueuedRemoteCommands(dt);');
 ed2('             l.settings.timeLimit, nb, l.bots.friendly, l.bots.enemy, botDifficultyName(l.bots.difficulty));\n',
     '             l.settings.timeLimit, nb, l.bots.friendly, l.bots.enemy, botDifficultyName(l.bots.difficulty));\n' +
     '    seat2_ = -1; seat2Pad_ = -1;   // a new match: no second local seat until a pad joins\n' +
     '    if (std::getenv("WFC_SEAT2BOT") && localPlayer_ >= 0)   // test only: seat 2 joins with the first player\'s pick\n' +
     '        addLocalSeat(1, match_.players()[(size_t)localPlayer_].selection, match_.players()[(size_t)localPlayer_].hasSelectedCharacter);\n');
+ed2('    if (instigator == localPlayer_ && victim != localPlayer_ && applied > 0.0f) pendingDamageCaused_.push_back({victim, applied, h->isDead()});\n',
+    '    if (instigator == localPlayer_ && victim != localPlayer_ && applied > 0.0f) pendingDamageCaused_.push_back({victim, applied, h->isDead()});\n' +
+    '    seat2NoteDamage(victim, instigator, applied, h->isDead());   // split screen: seat 2\'s own queues\n');
+ed2('    if (p.damageCaused.size() > 1024) p.damageCaused.erase(p.damageCaused.begin(), p.damageCaused.end() - 1024L);\n',
+    '    if (p.damageCaused.size() > 1024) p.damageCaused.erase(p.damageCaused.begin(), p.damageCaused.end() - 1024L);\n' +
+    '    fillSeats(p);   // split screen: the per-seat HUD state\n');
+ed2('    b.steps += f.steps;\n    std::swap(f, b);\n',
+    '    for (size_t i = 0; i < b.seats.size() && i < f.seats.size(); ++i) {   // split screen: each seat\'s unconsumed queues, front first\n' +
+    '        if (b.seats[i].player != f.seats[i].player) continue;   // a seat that changed: the old player\'s entries go\n' +
+    '        front(b.seats[i].damageTaken, f.seats[i].damageTaken); front(b.seats[i].damageCaused, f.seats[i].damageCaused);\n' +
+    '    }\n' +
+    '    b.steps += f.steps;\n    std::swap(f, b);\n' +
+    '    for (auto& s : b.seats) { s.damageTaken.clear(); s.damageCaused.clear(); }\n');
+ed2('\n    pendingDamageCaused_.clear();\n', '\n    pendingDamageCaused_.clear();\n    seat2Taken_.clear(); seat2Caused_.clear();\n');
 fs.writeFileSync('src/game/World.cpp', crlf ? w.replace(/\n/g, '\r\n') : w);
 console.log('ok');
