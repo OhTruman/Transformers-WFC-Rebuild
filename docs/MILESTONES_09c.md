@@ -4327,3 +4327,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   was culled / drawn / culled) + 13cb3355 the rest of the QA gate hooks (nav.check match fields, scripted stick deflection).
   Pending: Gameplay's frozen-seat one-liner + proof; the Frontend's Escalation / pause / D1 flows; Experimental's gate
   (card after the repro exes); Rendering's measured settings audit (card).
+2026-10-24 00:15 P0 FIXED f0d500cc: a solo-hosted private / Escalation match ran the local player as a driverless lockstep wire seat
+  (gl.online true with 0 remotes); now gl.online = !gl.remotes.empty(). Gate proof (Frontend): stick 43 m, Forward 44 m,
+  20 shots, transform, jitter 0. MERGED 4f00a495: TnUIControllerSurvival (Escalation keeps the lobby pick, no second
+  Choose Character, the map's 13 CampaignCharacters on the wheel in authored order: closes #11 / #12 / #15 / #29) + the
+  gate's buttonhold step; d95ebc91 controller seat routing (Systems). NEW finding -> Systems: pad buttons map only to UI
+  actions, so on a controller nothing fires / transforms / jumps / reloads in a match.
