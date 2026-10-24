@@ -289,6 +289,7 @@ public:
     void setLastMatchScoreForTest(const std::string& fingerprint, int score) { lastMatchScores_[fingerprint] = score; }
     void snakeDraftForTest() { publicSnakeDraft(); }
     std::string selfFingerprintForTest() const { return selfId_.fingerprint; }
+    const SessionMemberId& selfId() const { return selfId_; }
     int humanFaction() const { return lobby_.localTeam == 1 ? 1 : 0; }   // 0 Autobots, 1 Decepticons
     // Gameplay's MatchSettings maxPerTeam / maxPlayers (players incl. the human): the extended limits never exceed them.
     void setBotCapacity(int perTeam, int maxPlayers, int botsPerTeam = 0) {
@@ -527,6 +528,7 @@ private:
     void endSession(const char* titleKey, const char* messageKey, const char* why);
     std::string pendingEndTitle_, pendingEndMessage_;
     void sendMemberInfo(int teamRequest = -1);
+    void sendSecondLocal();   // split screen online: seat 2 as this peer's second member (<fingerprint>/2)
     void returnToPartyLobby() { travel(partyLobbyUrl(), false); }
     static const char* partyLobbyUrl();           // member: name (D1), platform, character, a team request
     int pickOnlineTeam();                               // TnTeamHandlerTwoTeams.PickTeam over the humans

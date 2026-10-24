@@ -346,7 +346,9 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
             c.enabled.push_back(true);
         }
         if (online) {   // online lobby: the other humans
+            const std::string ownSecond = flow_.selfId().fingerprint.empty() ? std::string() : ISession::secondLocalId(flow_.selfId().fingerprint);
             for (const GameFlow::OnlineMember& m : flow_.onlineMembers()) {
+                if (flow_.localSeats() == 2 && !ownSecond.empty() && m.info.id.fingerprint == ownSecond) continue;   // our seat 2: its local row
                 std::string headset;
                 const std::string shown = onlineRow(m, headset);
                 const int mt = flow_.level() == LevelKind::PartyLobby || m.team < 0 ? 255 : m.team;   // no teams in the party lobby

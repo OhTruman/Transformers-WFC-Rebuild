@@ -2065,6 +2065,27 @@ static void testDlcMerge() {
           std::to_string(unlocked) + " " + png + " unlocks=" + std::to_string(c.dlcUnlockedChassis().size()));
 }
 
+static void testSplitOnline() {
+    // split step 3: a hosted lobby on a session with two-locals support - seat 2 joins as this peer's second member and leaves again
+    using E = SessionEvent::Type;
+    FakeSession::Step opened; opened.afterCall = "host"; opened.delay = 1.0 / 60.0; opened.event.type = E::HostOpened;
+    opened.event.joinCode = "WFC-7QK2-M9TD";
+    OnlineRig r({opened});
+    if (!r.ok) { check(false, "split.online", "rig"); return; }
+    r.fake->secondLocal = true;
+    GameFlow& f = r.f();
+    f.call("Online.HostPrivateNow");
+    const bool lobby = runUntil(*r.rt, [&] { return f.level() == LevelKind::GameLobby && !f.loading().active; });
+    const bool joined = f.joinSeat2(2);
+    r.frames(2);
+    const FakeSession::Call* add = r.fake->last("setSecondLocal");
+    const bool added = add && add->arg == "add" && !add->info.displayName.empty();
+    f.leaveSeat2();
+    const FakeSession::Call* rem = r.fake->last("setSecondLocal");
+    check(lobby && joined && added && rem && rem->arg == "remove" && f.localSeats() == 1, "split.online",
+          std::to_string(lobby) + std::to_string(joined) + std::to_string(added) + " calls=" + std::to_string(r.fake->count("setSecondLocal")));
+}
+
 static void testSettingsPreview() {
     // #5: the preview images resolve per row and value; a value without an image is "" (the panel hides)
     const std::string off = frontend::settingsPreviewPng("RayTracing", 0), none = frontend::settingsPreviewPng("RayTracing", 99);
@@ -2567,6 +2588,7 @@ int main() {
     testEscalationNoXp();
     testLanguageSetting();
     testSettingsPreview();
+    testSplitOnline();
     testDlcMerge();
     testSplitProfiles();
     testCampaignCoopLobby();

@@ -1,0 +1,151 @@
+diff --git a/src/frontend/FakeSession.h b/src/frontend/FakeSession.h
+index 3d99cca1..edb556cd 100644
+--- a/src/frontend/FakeSession.h
++++ b/src/frontend/FakeSession.h
+@@ -53,6 +53,15 @@ public:
+     void leave() override { calls_.push_back(mk("leave")); }
+     void publishLobby(const SessionLobby& l) override { Call c = mk("publishLobby"); c.lobby = l; calls_.push_back(c); }
+     void setMemberInfo(const SessionMemberInfo& i) override { Call c = mk("setMemberInfo"); c.info = i; calls_.push_back(c); }
++    // split screen online: supportsSecondLocal() follows secondLocal; setSecondLocal records the info ("add") or "remove"
++    bool secondLocal = false;
++    bool supportsSecondLocal() const override { return secondLocal; }
++    void setSecondLocal(const SessionMemberInfo* i) override {
++        Call c = mk("setSecondLocal");
++        c.arg = i ? "add" : "remove";
++        if (i) c.info = *i;
++        calls_.push_back(c);
++    }
+     void requestStart() override { calls_.push_back(mk("requestStart")); }
+     void setLaunch(const std::string& url, uint32_t seed, const SessionLobby&) override { Call c = mk("setLaunch"); c.arg = url + "|" + std::to_string(seed); calls_.push_back(c); }
+     void reportLoaded(uint64_t simId, uint64_t loadHash) override {
+diff --git a/src/frontend/GameFlow.h b/src/frontend/GameFlow.h
+index 1bfbba83..14882cbc 100644
+--- a/src/frontend/GameFlow.h
++++ b/src/frontend/GameFlow.h
+@@ -289,6 +289,7 @@ public:
+     void setLastMatchScoreForTest(const std::string& fingerprint, int score) { lastMatchScores_[fingerprint] = score; }
+     void snakeDraftForTest() { publicSnakeDraft(); }
+     std::string selfFingerprintForTest() const { return selfId_.fingerprint; }
++    const SessionMemberId& selfId() const { return selfId_; }
+     int humanFaction() const { return lobby_.localTeam == 1 ? 1 : 0; }   // 0 Autobots, 1 Decepticons
+     // Gameplay's MatchSettings maxPerTeam / maxPlayers (players incl. the human): the extended limits never exceed them.
+     void setBotCapacity(int perTeam, int maxPlayers, int botsPerTeam = 0) {
+@@ -527,6 +528,7 @@ private:
+     void endSession(const char* titleKey, const char* messageKey, const char* why);
+     std::string pendingEndTitle_, pendingEndMessage_;
+     void sendMemberInfo(int teamRequest = -1);
++    void sendSecondLocal();   // split screen online: seat 2 as this peer's second member (<fingerprint>/2)
+     void returnToPartyLobby() { travel(partyLobbyUrl(), false); }
+     static const char* partyLobbyUrl();           // member: name (D1), platform, character, a team request
+     int pickOnlineTeam();                               // TnTeamHandlerTwoTeams.PickTeam over the humans
+diff --git a/src/frontend/GameFlow_Online.cpp b/src/frontend/GameFlow_Online.cpp
+index b0a5170a..a9bcbe51 100644
+--- a/src/frontend/GameFlow_Online.cpp
++++ b/src/frontend/GameFlow_Online.cpp
+@@ -48,6 +48,7 @@ void GameFlow::sendMemberInfo(int teamRequest) {
+     info.teamRequest = teamRequest;
+     info.mapVote = myVote_;
+     session_->setMemberInfo(info);
++    if (seat2Active_) sendSecondLocal();
+ }
+ 
+ GameFlow::VoiceState GameFlow::voiceStateOf(const SessionMemberId& m) const {
+@@ -143,7 +144,7 @@ bool GameFlow::joinSeat2(int pad) {
+     if (seat2Active_) why = "already joined";
+     else if (pad < 0 || pad == seat1Pad_) why = "seat 1's device";
+     else if (!lobby) why = "not in a lobby";
+-    else if (role_ == SessionRole::Member) why = "an online member cannot add a local player";
++    else if (role_ == SessionRole::Member && !(session_ && session_->supportsSecondLocal())) why = "an online member cannot add a local player";
+     if (!why.empty()) { FlowTrace::emit("split.join", {{"pad", std::to_string(pad)}, {"result", "refused"}, {"why", why}}); return false; }
+     seat2Profile_ = LocalProfile{};
+     seat2Profile_.setFile(LocalProfile::kSeat2File);
+@@ -151,13 +152,35 @@ bool GameFlow::joinSeat2(int pad) {
+     seat2Active_ = true;
+     seat2Pad_ = pad;
+     FlowTrace::emit("split.join", {{"pad", std::to_string(pad)}, {"result", "joined"}, {"profile", LocalProfile::kSeat2File}});
++    sendSecondLocal();   // online: seat 2 takes a lobby slot as this peer's second member
+     return true;
+ }
+ 
++void GameFlow::sendSecondLocal() {
++    // [Systems] two locals on one connection (e36b6654; RE SPLITSCREEN_RE: two PRIs, counted against MaxPlayers): seat 2's own
++    // SessionMemberInfo - its profile's name (else 'Player 2'), level and character state - as <fingerprint>/2. The session
++    // reports it back as a member like any other (other peers show it; our own lobby rows show it once, as the local seat 2).
++    if (!session_ || role_ == SessionRole::Offline || !session_->supportsSecondLocal() || !seat2Active_) return;
++    SessionMemberInfo info;
++    if (!selfId_.fingerprint.empty()) info.id.fingerprint = ISession::secondLocalId(selfId_.fingerprint);
++    std::string name = seat2Profile_.playerName();
++    if (name.empty() || name == profile_.playerName()) name = txt("$WfcPC.Split.Player2");
++    info.displayName = name;
++    info.platform = SessionPlatform::PC;
++    info.hasCharacter = !iconicMode();   // seat 2 plays the roster's first preset until it has its own Choose Character
++    info.level = progression::playerLevel(seat2Profile_.progression);
++    session_->setSecondLocal(&info);
++    FlowTrace::emit("split.online", {{"state", "added"}, {"id", info.id.fingerprint}, {"name", info.displayName}});
++}
++
+ void GameFlow::leaveSeat2() {
+     if (!seat2Active_) return;
+     seat2Profile_.save();
+     seat2Active_ = false;
++    if (session_ && role_ != SessionRole::Offline && session_->supportsSecondLocal()) {
++        session_->setSecondLocal(nullptr);
++        FlowTrace::emit("split.online", {{"state", "removed"}});
++    }
+     FlowTrace::emit("split.leave", {{"pad", std::to_string(seat2Pad_)}});
+     seat2Pad_ = -1;
+ }
+diff --git a/src/frontend/DataStores.cpp b/src/frontend/DataStores.cpp
+index 8f3c7d01..fa04746e 100644
+--- a/src/frontend/DataStores.cpp
++++ b/src/frontend/DataStores.cpp
+@@ -346,7 +346,9 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
+             c.enabled.push_back(true);
+         }
+         if (online) {   // online lobby: the other humans
++            const std::string ownSecond = flow_.selfId().fingerprint.empty() ? std::string() : ISession::secondLocalId(flow_.selfId().fingerprint);
+             for (const GameFlow::OnlineMember& m : flow_.onlineMembers()) {
++                if (flow_.localSeats() == 2 && !ownSecond.empty() && m.info.id.fingerprint == ownSecond) continue;   // our seat 2: its local row
+                 std::string headset;
+                 const std::string shown = onlineRow(m, headset);
+                 const int mt = flow_.level() == LevelKind::PartyLobby || m.team < 0 ? 255 : m.team;   // no teams in the party lobby
+diff --git a/tests/FrontendTests.cpp b/tests/FrontendTests.cpp
+index f0f8d580..66d0b1fd 100644
+--- a/tests/FrontendTests.cpp
++++ b/tests/FrontendTests.cpp
+@@ -2065,6 +2065,27 @@ static void testDlcMerge() {
+           std::to_string(unlocked) + " " + png + " unlocks=" + std::to_string(c.dlcUnlockedChassis().size()));
+ }
+ 
++static void testSplitOnline() {
++    // split step 3: a hosted lobby on a session with two-locals support - seat 2 joins as this peer's second member and leaves again
++    using E = SessionEvent::Type;
++    FakeSession::Step opened; opened.afterCall = "host"; opened.delay = 1.0 / 60.0; opened.event.type = E::HostOpened;
++    opened.event.joinCode = "WFC-7QK2-M9TD";
++    OnlineRig r({opened});
++    if (!r.ok) { check(false, "split.online", "rig"); return; }
++    r.fake->secondLocal = true;
++    GameFlow& f = r.f();
++    f.call("Online.HostPrivateNow");
++    const bool lobby = runUntil(*r.rt, [&] { return f.level() == LevelKind::GameLobby && !f.loading().active; });
++    const bool joined = f.joinSeat2(2);
++    r.frames(2);
++    const FakeSession::Call* add = r.fake->last("setSecondLocal");
++    const bool added = add && add->arg == "add" && !add->info.displayName.empty();
++    f.leaveSeat2();
++    const FakeSession::Call* rem = r.fake->last("setSecondLocal");
++    check(lobby && joined && added && rem && rem->arg == "remove" && f.localSeats() == 1, "split.online",
++          std::to_string(lobby) + std::to_string(joined) + std::to_string(added) + " calls=" + std::to_string(r.fake->count("setSecondLocal")));
++}
++
+ static void testSettingsPreview() {
+     // #5: the preview images resolve per row and value; a value without an image is "" (the panel hides)
+     const std::string off = frontend::settingsPreviewPng("RayTracing", 0), none = frontend::settingsPreviewPng("RayTracing", 99);
+@@ -2567,6 +2588,7 @@ int main() {
+     testEscalationNoXp();
+     testLanguageSetting();
+     testSettingsPreview();
++    testSplitOnline();
+     testDlcMerge();
+     testSplitProfiles();
+     testCampaignCoopLobby();
