@@ -4531,3 +4531,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   identical). Sim status: on D1 / D3A / Remnant / Streets the only steps over 1.5 ms are the level-start steps (the
   original's synchronous level start, 1.7-3.6 ms; excluded from the PASS rule). Gameplay cuts the perf-phase
   FINAL_BASE_ITEMS entries, then idle until phase 0 names sim targets.
+2026-10-24 12:28 FINAL_BASE_ITEMS for the next package: Gameplay OWNS the chain (22-25 theirs, 26-27 Systems' hitch loads / threads, 28
+  hull / LOS, Rendering's a-d incl. the constant rename next to the Config.h change and the ESC_MECH game half); one
+  fresh full af4d0731 + chain build; the gate launches the game exe only (no wfc_fidelity.exe item).
