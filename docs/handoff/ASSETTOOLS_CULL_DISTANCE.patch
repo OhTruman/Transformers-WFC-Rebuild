@@ -1,0 +1,20 @@
+diff -ru a/scripts/wfc/vs_map.py b/scripts/wfc/vs_map.py
+--- a/scripts/wfc/vs_map.py	2026-10-24 09:13:06.224940800 -0500
++++ b/scripts/wfc/vs_map.py	2026-10-24 09:13:13.651986700 -0500
+@@ -128,8 +128,15 @@
+             extras['lm_scalevec'] = r.get('scaleVec', [1.0, 1.0, 1.0])   # HDR coeff-0 scale
+         # PrimitiveComponent.HiddenGame (editor-only helpers such as Seed's tubelight): exported for completeness / Kismet
+         # ToggleHidden, but marked so renderers skip them by default (same component values as props_authored 'render')
+-        if comp_ref and (AUTH.values(comp_ref) or {}).get('HiddenGame'):
++        cv = (AUTH.values(comp_ref) or {}) if comp_ref else {}
++        if cv.get('HiddenGame'):
+             extras['hidden_game'] = True
++        # PrimitiveComponent.CachedCullDistance (RE CAMPAIGN_CULLING_LOD_RE.md section 2): the effective cull distance baked at cook
++        # from the CullDistanceVolumes and the component's own CullDistance; the original draws the primitive only while the view
++        # origin is within it of the bounds. UE units, as shipped (never recomputed from the volumes); 0 / absent = never culled.
++        ccd = cv.get('CachedCullDistance')
++        if isinstance(ccd, (int, float)) and ccd > 0:
++            extras['cached_cull_distance'] = float(ccd)
+         return extras
+     os.makedirs(OUT, exist_ok=True)
+     glb = GLB('AssetTools vs_map (WFC %s)' % MAP)
