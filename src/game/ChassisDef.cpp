@@ -206,8 +206,9 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     if (arm.isObject()) {
         d.armGltf = contentPath(arm["Mesh"].asString(), ".gltf");
         d.armAnimGltf = contentPath(arm["Animations"].asString(), ".anim.gltf");
-        if (!fileExists(extRoot + d.armGltf)) d.armGltf.clear();
-        if (!fileExists(extRoot + d.armAnimGltf)) d.armAnimGltf.clear();
+        // (an empty path is no file: probing it opened the asset folder itself - verify 277d6e33's "ExtractedAssets\" opens)
+        if (!d.armGltf.empty() && !fileExists(extRoot + d.armGltf)) d.armGltf.clear();
+        if (!d.armAnimGltf.empty() && !fileExists(extRoot + d.armAnimGltf)) d.armAnimGltf.clear();
     }
     socketFrom(c["robot"]["sockets"], "WeaponSocket_Primary", d.weaponPrimary);
     socketFrom(c["robot"]["sockets"], "WeaponSocket_Secondary", d.weaponSecondary);

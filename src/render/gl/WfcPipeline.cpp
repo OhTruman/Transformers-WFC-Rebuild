@@ -1260,6 +1260,19 @@ std::string Pipeline::relocateDataPath(const std::string& path) const {
     k = low.rfind(kRender);
     const size_t sl = dataDir_.find_last_of("/\\");
     if (k != std::string::npos && sl != std::string::npos) return dataDir_.substr(0, sl + 1) + path.substr(k + kRender.size());
+    // [Systems, verify 277d6e33] the DLC maps' render data names AssetTools' DLC trees by their build-machine path; a package ships
+    // them in the render root (dlc_render/<map>/ -> <render data>/<map>/) and the content root. The relocated file is used when it
+    // exists (a package), else the path as written (the development tree, where only AssetTools has the DLC files).
+    static const std::string kDlcRender = "/assettools/out/dlc_render/", kDlcContent = "/assettools/out/dlc_content/content/";
+    std::string moved;
+    if ((k = low.rfind(kDlcRender)) != std::string::npos && sl != std::string::npos)
+        moved = dataDir_.substr(0, sl + 1) + path.substr(k + kDlcRender.size());
+    else if ((k = low.rfind(kDlcContent)) != std::string::npos)
+        moved = contentRoot() + path.substr(k + kDlcContent.size());
+    if (!moved.empty()) {
+        std::error_code ec;
+        if (std::filesystem::exists(platform::longPath(moved), ec)) return moved;
+    }
     // (campaign units: AssetTools' .../campaign_render/<chapter>/<unit>[_m]/<file> -> <render root>/<unit>/<file> - the
     // sublevel's own textures, e.g. its cubemap faces, written before the per-unit layout dropped the _m)
     static const std::string kCampaign = "/campaign_render/";
