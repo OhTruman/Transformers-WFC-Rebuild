@@ -4277,3 +4277,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-23 23:13 MERGED 83d8a199 DLC Escalation mechanisms (District laser grid off at start + buyable 45 s sets, 10 sentries, power outage,
   detpacks; Tranquillity floodgates / base doors; District 11 / 11) + FINAL_BASE_ITEMS 16; 27b879f0 Tranquillity level
   audio (14 damaged exports left out). Visuals -> Rendering (survival().mech); outage HUD -> Frontend. Pack 2 in the chain.
+2026-10-23 23:20 USER PLAYTEST 2 (package d5bb6863): "the entirety of the build is broken" - Escalation hosts as TDM, Private Match lost
+  its Game Settings, Scout cannot move (flicker), menus trap the player, Campaign D1 blank screen, character select
+  overlap, calibration preview broken, 40 items: docs/handoff/USER_PLAYTEST_2026-10-23b.md + playtest_2026-10-23b/.
+  ORDER: (1) QUALITY PASS now (settings do what they say; everything per the user or else the base game), (2) the new
+  settings items, (3) a complete performance pass; DLC / split screen feature work PAUSED for Frontend + Gameplay.
