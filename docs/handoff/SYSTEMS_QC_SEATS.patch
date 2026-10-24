@@ -1,0 +1,157 @@
+diff -ruN a/src/platform/SeatRouting.h b/src/platform/SeatRouting.h
+--- a/src/platform/SeatRouting.h	1969-12-31 18:00:00.000000000 -0600
++++ b/src/platform/SeatRouting.h	2026-10-24 00:08:15.571000600 -0500
+@@ -0,0 +1,41 @@
++// [Systems] Which controller drives which local seat - the platform window's pad routing as a pure function (testable without
++// controllers). Seat 1 = the keyboard / mouse + ONE pad; seat 2 (split screen) = one other pad, joined by its Start press.
++#pragma once
++
++namespace platform {
++
++constexpr int kMaxPads = 4;
++
++struct PadPoll {   // one poll of every XInput slot
++    bool connected[kMaxPads] = {};
++    bool startDown[kMaxPads] = {};
++    bool startEdge[kMaxPads] = {};   // Start went down this poll
++    int lastActive = -1;             // the last slot with any button / trigger activity (-1: none yet)
++};
++
++struct SeatPads {
++    int seat1 = 0, seat2 = -1;   // pad slots (-1: none - seat 1 then plays on the keyboard / mouse only)
++};
++
++// Outside split screen seat 1 reads the pad in use (any slot: Steam Input / DS4Windows / some adapters put a lone controller on
++// slot 1+). With split screen: while seat 1 has no pad plugged in, the pad in use becomes seat 1's - the player's only controller
++// is never a second player; a Start press on ANOTHER pad joins seat 2, unless seat 1's pad shows Start in the same poll (a mirrored
++// virtual device of the same controller). Returns true when seat 2 joined this poll.
++inline bool routeSeatPads(bool split, const PadPoll& p, SeatPads& s) {
++    auto plugged = [&p](int i) { return i >= 0 && i < kMaxPads && p.connected[i]; };
++    if (!split) {
++        s.seat1 = p.lastActive >= 0 ? p.lastActive : 0;
++        return false;
++    }
++    if (!plugged(s.seat1) && s.seat2 < 0 && plugged(p.lastActive)) s.seat1 = p.lastActive;
++    if (s.seat2 >= 0 || !plugged(s.seat1)) return false;   // seat 2 taken / seat 1 first
++    for (int i = 0; i < kMaxPads; ++i) {
++        if (!p.startEdge[i] || i == s.seat1) continue;
++        if (p.startDown[s.seat1]) continue;   // mirrors seat 1's own Start: the same controller twice
++        s.seat2 = i;
++        return true;
++    }
++    return false;
++}
++
++}  // namespace platform
+diff -ruN a/src/platform/win32/Win32Window.cpp b/src/platform/win32/Win32Window.cpp
+--- a/src/platform/win32/Win32Window.cpp	2026-10-24 00:08:15.499254800 -0500
++++ b/src/platform/win32/Win32Window.cpp	2026-10-24 00:08:15.517818400 -0500
+@@ -12,6 +12,7 @@
+ #include "platform/PresentHook.h"
+ #include "platform/DisplayMode.h"
+ #include "core/Log.h"
++#include "platform/SeatRouting.h"
+ 
+ #include <cmath>
+ #include <cstdio>
+@@ -802,11 +803,11 @@
+         if (input.padLX < -0.5f) bits |= kPadLStickLeft;
+         if (input.padLX > 0.5f) bits |= kPadLStickRight;
+     }
+-    // Every pad's state this pump and the last pad used (seat 1's pad when split screen turns on). With split screen, a Start press
+-    // on a pad no seat holds gives it seat 2 (seat 1 keeps the keyboard and its own pad). An empty slot is probed once a second
+-    // only (XInputGetState on a disconnected index is slow).
++    // Every pad's state this pump and the last pad used; which pad drives which seat = platform::routeSeatPads (SeatRouting.h). An
++    // empty slot is probed once a second only (XInputGetState on a disconnected index is slow).
+     void pollAllPads() {
+         const ULONGLONG nowMs = GetTickCount64();
++        PadPoll poll;
+         for (int i = 0; i < 4; ++i) {
+             PadState& p = pads_[i];
+             const bool wasStart = p.startDown;
+@@ -816,17 +817,21 @@
+             p.startDown = p.connected && (p.st.Gamepad.wButtons & XINPUT_GAMEPAD_START) != 0;
+             if (p.connected && (p.st.Gamepad.wButtons != 0 || p.st.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD ||
+                                 p.st.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)) lastActivePad_ = i;
+-            if (split_ && p.startDown && !wasStart && i != seatPad_[0] && i != seatPad_[1] && seatPad_[1] < 0) {
+-                seatPad_[1] = i; ++seat2Serial_;
+-                LOG_INFO("input: pad %d pressed Start - seat 2 joined", i);
+-            }
++            poll.connected[i] = true; poll.startDown[i] = p.startDown; poll.startEdge[i] = p.startDown && !wasStart;
+         }
++        poll.lastActive = lastActivePad_;
++        SeatPads s{seatPad_[0], seatPad_[1]};
++        const int was1 = s.seat1;
++        const bool joined = routeSeatPads(split_, poll, s);
++        if (split_ && s.seat1 != was1) LOG_INFO("input: seat 1 took pad %d (it had none plugged in)", s.seat1);
++        seatPad_[0] = s.seat1; seatPad_[1] = s.seat2;
++        if (joined) { ++seat2Serial_; LOG_INFO("input: pad %d pressed Start - seat 2 joined", s.seat2); }
+     }
+     void pollGamepad(InputFrame& input) {
+         static const bool noPad = std::getenv("WFC_NOPAD") != nullptr;   // scripted runs: ignore a real controller
+         if (noPad || noInteract()) { padBits_ = fakePad_; fakeAxes(input); return; }   // (NOINTERACT: the user's controller is theirs)
+         pollAllPads();
+-        const int seat1Pad = split_ ? seatPad_[0] : 0;   // split screen: seat 1's own pad (or none: the keyboard only)
++        const int seat1Pad = seatPad_[0];   // routeSeatPads: split - seat 1's own pad (-1: the keyboard only); else the pad in use
+         XINPUT_STATE st{};
+         if (seat1Pad >= 0 && pads_[seat1Pad].connected && (st = pads_[seat1Pad].st, true)) {
+             static bool logged = false;
+diff -ruN a/tests/FrontendTests.cpp b/tests/FrontendTests.cpp
+--- a/tests/FrontendTests.cpp	2026-10-24 00:08:15.537887400 -0500
++++ b/tests/FrontendTests.cpp	2026-10-24 00:08:15.557454300 -0500
+@@ -19,6 +19,7 @@
+ #include "frontend/UIController.h"
+ #include "frontend/Url.h"
+ #include "core/Config.h"
++#include "platform/SeatRouting.h"
+ 
+ #include <algorithm>
+ #include <cmath>
+@@ -2365,6 +2366,39 @@
+           "catalog.localize_key_case_insensitive");
+ }
+ 
++static void testSeatRouting() {   // [Systems QC] controller ownership: seat 1 never loses its only pad to seat 2
++    using platform::PadPoll; using platform::SeatPads;
++    {   // a lone controller on XInput slot 1 (Steam Input / DS4Windows): the menus read it (outside split screen)
++        PadPoll p; p.connected[1] = true; p.lastActive = 1;
++        SeatPads s; platform::routeSeatPads(false, p, s);
++        check(s.seat1 == 1 && s.seat2 == -1, "input.lone_pad_any_slot");
++    }
++    {   // a lobby entered on the keyboard / mouse (no pad used yet), then the only pad presses Start: seat 1's, not a second player
++        SeatPads s{-1, -1};
++        PadPoll p; p.connected[0] = true; p.startDown[0] = p.startEdge[0] = true; p.lastActive = 0;
++        const bool joined = platform::routeSeatPads(true, p, s);
++        check(!joined && s.seat1 == 0 && s.seat2 == -1, "input.only_pad_stays_seat1");
++    }
++    {   // the same on slot 1 while seat 1 latched the empty slot 0
++        SeatPads s{0, -1};
++        PadPoll p; p.connected[1] = true; p.startDown[1] = p.startEdge[1] = true; p.lastActive = 1;
++        const bool joined = platform::routeSeatPads(true, p, s);
++        check(!joined && s.seat1 == 1 && s.seat2 == -1, "input.only_pad_other_slot_stays_seat1");
++    }
++    {   // a mirrored virtual pad (both slots show the one controller's Start): no second player
++        SeatPads s{0, -1};
++        PadPoll p; p.connected[0] = p.connected[1] = true; p.startDown[0] = p.startDown[1] = p.startEdge[0] = p.startEdge[1] = true; p.lastActive = 1;
++        const bool joined = platform::routeSeatPads(true, p, s);
++        check(!joined && s.seat1 == 0 && s.seat2 == -1, "input.mirrored_pad_not_seat2");
++    }
++    {   // a real second controller: seat 1 holds pad 0, pad 2 presses Start alone -> seat 2
++        SeatPads s{0, -1};
++        PadPoll p; p.connected[0] = p.connected[2] = true; p.startDown[2] = p.startEdge[2] = true; p.lastActive = 2;
++        const bool joined = platform::routeSeatPads(true, p, s);
++        check(joined && s.seat1 == 0 && s.seat2 == 2, "input.second_pad_joins_seat2");
++    }
++}
++
+ static void testOnlineFirstRun() {
+     const std::string title = [] { FrontendRuntime t; t.init(); return t.catalog().localizeKey("$WfcPC.FirstRun.Title"); }();
+     {   // FR1: online, a fresh profile -> the prompt (no account: "Choose the name..."); offline -> never
+@@ -2477,6 +2511,7 @@
+     testOnlineMemberCountdown();
+     testOnlineSessionEnd();
+     testOnlineVoice();
++    testSeatRouting();
+     testOnlineMatchSide();
+     testIconicMode();
+     testVoiceUi();

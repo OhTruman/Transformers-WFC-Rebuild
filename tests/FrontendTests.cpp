@@ -19,6 +19,7 @@
 #include "frontend/UIController.h"
 #include "frontend/Url.h"
 #include "core/Config.h"
+#include "platform/SeatRouting.h"
 
 #include <algorithm>
 #include <cmath>
@@ -2365,6 +2366,39 @@ static void testLocalizeCaseInsensitive() {
           "catalog.localize_key_case_insensitive");
 }
 
+static void testSeatRouting() {   // [Systems QC] controller ownership: seat 1 never loses its only pad to seat 2
+    using platform::PadPoll; using platform::SeatPads;
+    {   // a lone controller on XInput slot 1 (Steam Input / DS4Windows): the menus read it (outside split screen)
+        PadPoll p; p.connected[1] = true; p.lastActive = 1;
+        SeatPads s; platform::routeSeatPads(false, p, s);
+        check(s.seat1 == 1 && s.seat2 == -1, "input.lone_pad_any_slot");
+    }
+    {   // a lobby entered on the keyboard / mouse (no pad used yet), then the only pad presses Start: seat 1's, not a second player
+        SeatPads s{-1, -1};
+        PadPoll p; p.connected[0] = true; p.startDown[0] = p.startEdge[0] = true; p.lastActive = 0;
+        const bool joined = platform::routeSeatPads(true, p, s);
+        check(!joined && s.seat1 == 0 && s.seat2 == -1, "input.only_pad_stays_seat1");
+    }
+    {   // the same on slot 1 while seat 1 latched the empty slot 0
+        SeatPads s{0, -1};
+        PadPoll p; p.connected[1] = true; p.startDown[1] = p.startEdge[1] = true; p.lastActive = 1;
+        const bool joined = platform::routeSeatPads(true, p, s);
+        check(!joined && s.seat1 == 1 && s.seat2 == -1, "input.only_pad_other_slot_stays_seat1");
+    }
+    {   // a mirrored virtual pad (both slots show the one controller's Start): no second player
+        SeatPads s{0, -1};
+        PadPoll p; p.connected[0] = p.connected[1] = true; p.startDown[0] = p.startDown[1] = p.startEdge[0] = p.startEdge[1] = true; p.lastActive = 1;
+        const bool joined = platform::routeSeatPads(true, p, s);
+        check(!joined && s.seat1 == 0 && s.seat2 == -1, "input.mirrored_pad_not_seat2");
+    }
+    {   // a real second controller: seat 1 holds pad 0, pad 2 presses Start alone -> seat 2
+        SeatPads s{0, -1};
+        PadPoll p; p.connected[0] = p.connected[2] = true; p.startDown[2] = p.startEdge[2] = true; p.lastActive = 2;
+        const bool joined = platform::routeSeatPads(true, p, s);
+        check(joined && s.seat1 == 0 && s.seat2 == 2, "input.second_pad_joins_seat2");
+    }
+}
+
 static void testOnlineFirstRun() {
     const std::string title = [] { FrontendRuntime t; t.init(); return t.catalog().localizeKey("$WfcPC.FirstRun.Title"); }();
     {   // FR1: online, a fresh profile -> the prompt (no account: "Choose the name..."); offline -> never
@@ -2477,6 +2511,7 @@ int main() {
     testOnlineMemberCountdown();
     testOnlineSessionEnd();
     testOnlineVoice();
+    testSeatRouting();
     testOnlineMatchSide();
     testIconicMode();
     testVoiceUi();
