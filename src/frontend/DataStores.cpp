@@ -265,7 +265,7 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
         bool inMatch = flow_.level() == LevelKind::Match;
         const MatchValues& mv = flow_.matchValues();
         const bool live = inMatch && mv.valid;   // [integration] Gameplay's PRI values in a match
-        int team = live ? mv.myTeam : inMatch ? flow_.currentMatch().teamIndex : flow_.lobby().localTeam;
+        int team = live ? mv.myTeam : inMatch ? flow_.currentMatch().teamIndex : flow_.lobby().shownTeam(flow_.onlineMembers().empty());
         // The party lobby has no teams (TnPartyLobbyGame TeamHandler = TnTeamHandlerNoTeams: TeamID 255 for everyone), so
         // PlayerList draws one plain list - a stale / unset team (-1) drew AUTOBOTS / DECEPTICONS there [RE BASE_GAME_FLOWS_RE 2;
         // playtest 2026-10-23b #19]. 255 is also the original's "no team yet" anywhere else.

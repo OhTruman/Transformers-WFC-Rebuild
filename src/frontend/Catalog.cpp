@@ -10,6 +10,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
+#include <iterator>
 #include <sstream>
 
 namespace frontend {
@@ -139,6 +140,7 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
         }
     }
 
+    dlcTextKeys_ = mergeDlcText("int");
     locInt_ = loc_;
     language_ = "INT";
     loadProviders(extractedRoot);
@@ -599,6 +601,72 @@ void Catalog::loadDlc(const std::string& manifestRoot, const std::string& runtim
     std::stable_sort(maps_.begin(), maps_.end(), [](const MapInfo& a, const MapInfo& b) { return a.iniOrder < b.iniOrder; });
 }
 
+namespace {
+bool validUtf8(const std::string& s) {
+    for (size_t i = 0; i < s.size();) {
+        const unsigned char c = (unsigned char)s[i];
+        const int n = c < 0x80 ? 0 : (c >> 5) == 0x6 ? 1 : (c >> 4) == 0xE ? 2 : (c >> 3) == 0x1E ? 3 : -1;
+        if (n < 0 || i + n >= s.size() + (n == 0 ? 1 : 0)) return false;
+        for (int k = 1; k <= n; ++k) if (((unsigned char)s[i + k] >> 6) != 0x2) return false;
+        i += (size_t)n + 1;
+    }
+    return true;
+}
+
+// An ini / int file's text as UTF-8. The DLC packs' localisation mixes encodings: ASCII (INT), UTF-16 LE with a BOM (pack 1's
+// FRA) and 8-bit Latin-1 (pack 2's FRA: 'Métropole'); UTF-16 and text that is not valid UTF-8 are converted.
+std::string readTextUtf8(const std::string& path) {
+    std::ifstream f(openPath(path), std::ios::binary);
+    std::string raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    if (raw.size() < 2 || (unsigned char)raw[0] != 0xFF || (unsigned char)raw[1] != 0xFE) {
+        if (validUtf8(raw)) return raw;
+        std::string out;   // Latin-1: each byte is its code point
+        for (const char ch : raw) {
+            const unsigned char c = (unsigned char)ch;
+            if (c < 0x80) out += ch;
+            else { out += (char)(0xC0 | (c >> 6)); out += (char)(0x80 | (c & 0x3F)); }
+        }
+        return out;
+    }
+    std::string out;
+    for (size_t i = 2; i + 1 < raw.size(); i += 2) {
+        uint32_t c = (unsigned char)raw[i] | ((unsigned char)raw[i + 1] << 8);
+        if (c >= 0xD800 && c < 0xDC00 && i + 3 < raw.size()) {   // a surrogate pair
+            const uint32_t lo = (unsigned char)raw[i + 2] | ((unsigned char)raw[i + 3] << 8);
+            c = 0x10000 + ((c - 0xD800) << 10) + (lo - 0xDC00);
+            i += 2;
+        }
+        if (c < 0x80) out += (char)c;
+        else if (c < 0x800) { out += (char)(0xC0 | (c >> 6)); out += (char)(0x80 | (c & 0x3F)); }
+        else if (c < 0x10000) { out += (char)(0xE0 | (c >> 12)); out += (char)(0x80 | ((c >> 6) & 0x3F)); out += (char)(0x80 | (c & 0x3F)); }
+        else { out += (char)(0xF0 | (c >> 18)); out += (char)(0x80 | ((c >> 12) & 0x3F)); out += (char)(0x80 | ((c >> 6) & 0x3F)); out += (char)(0x80 | (c & 0x3F)); }
+    }
+    return out;
+}
+}
+
+int Catalog::mergeDlcText(const std::string& lang) {
+    // the DLC packs' TransGame text (map / presence names, the new SurvivalGeneratorNames: Teleporter, Incinerator): merged as
+    // TransGame.<Section>.<Key>, the packs over the base for the same key (the stock UE3 DLC .int merge)
+    int keys = 0;
+    for (int pack = 1; pack <= 2; ++pack) {
+        std::stringstream in(readTextUtf8(dlcTextFile(pack, lang)));
+        std::string line, section;
+        while (std::getline(in, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (line.empty() || line[0] == ';') continue;
+            if (line[0] == '[') { section = line.substr(1, line.find(']') - 1); continue; }
+            const size_t eq = line.find('=');
+            if (eq == std::string::npos || section.empty()) continue;
+            std::string v = line.substr(eq + 1);
+            if (v.size() >= 2 && v.front() == '"' && v.back() == '"') v = v.substr(1, v.size() - 2);
+            loc_["TransGame." + section + "." + line.substr(0, eq)] = v;
+            ++keys;
+        }
+    }
+    return keys;
+}
+
 std::vector<std::string> Catalog::languages() const {
     std::vector<std::string> out{"INT"};
     for (const char* c : {"FRA", "DEU", "ITA", "ESN", "ESM", "JPN", "KOR", "CHT", "POL", "RUS", "CZE", "HUN", "PTB"}) {
@@ -644,6 +712,7 @@ void Catalog::setLanguage(const std::string& codeIn) {
         };
         for (const char* file : {"TransGame", "UIText", "Engine", "TransContent"}) overlay(dir + file + "." + lc, std::string(file) + ".", true);
         overlay(frontendDataFile(("pc_strings." + lc).c_str()), "WfcPC.", false);   // the PC-only rows' translation, when present
+        mergeDlcText(lc);   // the DLC packs' text in that language (FRA ships)
     }
     for (MapInfo& m : maps_) {
         if (m.friendlyNameInt.empty()) m.friendlyNameInt = m.friendlyName;

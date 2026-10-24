@@ -1648,14 +1648,37 @@ void GfxPresenter::syncSettingsCommit() {
     gfx::avm1::VM& vm = p->vm();
     if (self.isObject() && vm.getV(self, "_name").isUndef()) return;   // the page closed meanwhile
     frontend::LocalProfile& prof = rt_.flow().profile();
-    const frontend::LocalProfile::Display before = prof.display;
+    const frontend::LocalProfile::Display before = graphicsOpened_;   // the PC rows save as they change: compare with the page's start
     gfx::avm1::Args none;
     vm.call(fn, self, none);
     prof.apply();
     const auto& d = prof.display;
     const bool restart = rt_.frameGenerationAvailable() && (d.frameGeneration != 0) != rt_.frameGenerationActive();
-    const bool nextMap = d.hdTextures != before.hdTextures || rt_.rayTracingOnAppliesNextMap();
+    const bool nextMap = d.hdTextures != before.hdTextures || (d.rayTracing != before.rayTracing && rt_.rayTracingOnAppliesNextMap());
+    graphicsOpened_ = d;   // a second Commit on the same page reports only what changed since
     rt_.flow().settingsCommitted(restart, nextMap);
+}
+
+// PC ADAPTATION (the user, playtest 2026-10-23b #34): the brightness calibration belongs to the first-launch setup. The original
+// shows it on the first Campaign entry only (the Campaign submenu: !ProfileData.HasAdjustedGamma -> attach
+// mc_brightnessMenuLoader, hide the menu) [RE BASE_GAME_FLOWS_RE 5]. Here the first main menu does the same once: Brightness
+// records _global.currentMenu (the main menu) and on Accept / Cancel sets HasAdjustedGamma, shows that menu again and gives it
+// the input - so Campaign does not ask again.
+void GfxPresenter::syncFirstLaunchBrightness(gfx::Player& p, frontend::GameFlow& flow) {
+    if (firstBrightnessShown_ || flow.level() != frontend::LevelKind::FrontEnd || flow.ui().state() != frontend::UIState::FrontEnd) return;
+    if (flow.profile().getBool("HasAdjustedGamma")) { firstBrightnessShown_ = true; return; }
+    gfx::MovieClip* mainMenu = findClipNamed(p.root(), "menuMain_mc");
+    if (!mainMenu || !mainMenu->script || !mainMenu->visible || !p.root() || !p.root()->script) return;
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    const V cur = vm.get(vm.global, "currentMenu");
+    if (!cur.isObject() || cur.o != mainMenu->script) return;   // the main menu has the input (after the intro / press start)
+    if (findClipNamed(p.root(), "brightnessMenuLoader_mc")) { firstBrightnessShown_ = true; return; }
+    firstBrightnessShown_ = true;
+    const V depth = vm.callMethod(V(p.root()->script), "getNextHighestDepth", {});
+    vm.callMethod(V(p.root()->script), "attachMovie", {V(std::string("mc_brightnessMenuLoader")), V(std::string("brightnessMenuLoader_mc")), depth});
+    vm.set(mainMenu->script, "_visible", V(false));
+    frontend::FlowTrace::emit("brightness.firstLaunch", {{"shown", "true"}, {"provenance", "PC ADAPTATION (user playtest 2026-10-23b #34)"}});
 }
 
 // ONLINE_LOBBY_FLOW_V2 1.1: the party lobby's Private Match row hosts at once (the last-used mode; offline the same lobby
@@ -1809,9 +1832,9 @@ void GfxPresenter::syncGameSettings(gfx::Player& p, frontend::GameFlow& flow) {
         }
     }
     if (const V tr = cc && cc->parent && cc->parent->script ? vm.get(cc->parent->script, "wfcTeam_mc") : V(); tr.isObject()) {
-        const int t = flow.lobby().localTeam;
+        const int t = flow.lobby().shownTeam(flow.onlineMembers().empty());
         const std::string side = rt_.catalog().localize("TransGame", t == 1 ? "TnFactionTeamDecepticons" : "TnFactionTeamAutobots", "TeamName");
-        const std::string label = rt_.catalog().localizeKey("$WfcPC.Lobby.Team") + "   < " + (t < 0 ? std::string("-") : side) + " >";
+        const std::string label = rt_.catalog().localizeKey("$WfcPC.Lobby.Team") + "   &lt; " + (t < 0 ? std::string("-") : side) + " &gt;";   // htmlText
         if (vm.toString(vm.get(tr.o, "__wfcLabel")) != label) {
             vm.set(tr.o, "__wfcLabel", V(label));
             vm.set(tr.o, "text", V(label));
@@ -1849,6 +1872,16 @@ void GfxPresenter::syncGameSettings(gfx::Player& p, frontend::GameFlow& flow) {
         if (close) {
             if (sub && !sub->removed) vm.callMethod(V(sub->script), "removeMovieClip", {});
             vm.callMethod(V(vm.global), "closeSettings", {});
+            // QC #10 (Back left the global Settings root - Graphics / Audio / Controls - over the lobby): closeSettings' own
+            // _parent.removeMovieClip() does not reach our holder when called from here, so the page's holder goes explicitly, the
+            // lobby menu shows again and gets the input back.
+            if (gfx::MovieClip* holder = findClipNamed(p.root(), "wfcGameSettings_mc"); holder && holder->script && !holder->removed)
+                vm.callMethod(V(holder->script), "removeMovieClip", {});
+            if (gfx::MovieClip* anchor = findClipNamed(p.root(), "menuAnchor_mc"); anchor && anchor->script) vm.set(anchor->script, "_alpha", V(100.0));
+            if (cc && cc->parent && cc->parent->script) {
+                const V ih = p.root() && p.root()->script ? vm.get(p.root()->script, "inputHandler") : V();
+                if (ih.isObject()) vm.callMethod(ih, "giveInput", {V(cc->parent->script)});
+            }
             gsState_ = 0; gsPlayer_ = nullptr; gsMenu_ = nullptr;
             frontend::FlowTrace::emit("lobby.gameSettingsPage", {{"closed", "true"}});
         } else if (flow.lobby().gameModeTag != gsMode_) {   // a new mode: its own rows
@@ -2273,6 +2306,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
         if (flow.online() && op.object.find("PartyLobby_GFX") != std::string::npos) runFirstRunUi(op.movie->player(), flow, op.object);
         if (op.object.find("PartyLobby_GFX") != std::string::npos) syncHostNowRow(op.movie->player(), flow);   // lobby flow v2
         if (op.object.find("GameLobby_GFX") != std::string::npos) syncGameSettings(op.movie->player(), flow);
+        if (op.object.find("FrontEnd_GFX") != std::string::npos) syncFirstLaunchBrightness(op.movie->player(), flow);
         if (op.object.find("GameLobby_GFX") != std::string::npos) syncVoteRows(op.movie->player(), flow);
         if (op.object.find("PauseMenu_GFX") != std::string::npos) syncPauseChooseCharacter(op.movie->player(), flow);
         syncIconicPlayerList(op.movie->player(), flow);   // the countdown roster / end-of-match list (#7)
@@ -2303,7 +2337,10 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
                                           commitPlayer_ = &p; commitFn_ = fn; commitSelf_ = self;
                                           rt_.flow().requestSettingsCommit();
                                       }))
+                {
                     graphicsPagePlayer_ = &p;
+                    graphicsOpened_ = rt_.flow().profile().display;
+                }
                 else if (rt_.flow().online() && addVoiceRows(p, linkage, init, rt_.flow().profile().voice.pttKey))   // online only
                     audioPagePlayer_ = &p;
             };

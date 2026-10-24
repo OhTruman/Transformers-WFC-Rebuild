@@ -3,6 +3,7 @@
 #include "core/FrameProfile.h"
 #include "core/Log.h"
 
+#include <cctype>
 #include <algorithm>
 #include <unordered_set>
 #include <cmath>
@@ -315,6 +316,24 @@ bool Player::findExportedBitmap(const std::string& linkage, std::shared_ptr<cons
             std::shared_ptr<const MovieDef> lib = path.empty() ? nullptr : loadDef(path);
             if (lib && resolveExport(lib, linkage, outDef, outId) && isBitmap(outDef, outId)) return true;
         }
+    // The shipped linkage names are not always cased like the names built for them: CharacterSelect_GFX loads
+    // CharacterName + "_Robot" with the iconic id "SilverBolt", the export is "Silverbolt_Robot" (QC #12, RE BASE_GAME_FLOWS_RE 1.4)
+    // - Flash's linkage lookup forgave that. A case-insensitive match, then the exact lookup with its spelling.
+    auto lower = [](std::string v) { for (char& c : v) c = (char)std::tolower((unsigned char)c); return v; };
+    const std::string want = lower(linkage);
+    auto ciIn = [&](const std::shared_ptr<const MovieDef>& d) -> std::string {
+        if (d) for (const auto& [name, id] : d->exports) if (name != linkage && lower(name) == want) return name;
+        return std::string();
+    };
+    std::vector<std::shared_ptr<const MovieDef>> all = loaded;
+    all.push_back(rootDef_);
+    for (auto& d : loaded)
+        for (const ImportDef& im : d->imports) {
+            std::string path = resolveMovieUrl ? resolveMovieUrl(im.url, d->dir()) : "";
+            if (std::shared_ptr<const MovieDef> lib = path.empty() ? nullptr : loadDef(path)) all.push_back(lib);
+        }
+    for (auto& d : all)
+        if (const std::string exact = ciIn(d); !exact.empty() && resolveExport(d, exact, outDef, outId) && isBitmap(outDef, outId)) return true;
     return false;
 }
 
