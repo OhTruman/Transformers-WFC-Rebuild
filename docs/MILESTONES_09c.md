@@ -4249,3 +4249,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Open data: materials parent rerun, LightsVisibilitiesVolume, 147 _LOC twins (AssetTools).
 2026-10-23 21:43 MERGED a503085c seat-2 script hook (Frontend) + 6263d73e DLC audio root move + LevelAudio.inc with District / Fortress /
   Havoc (Tranquillity waits on its props re-export + the _LOC twins: AssetTools). Systems on the online two-locals patch.
+2026-10-23 22:03 DLC MAPS 3-4 SHIPPED (Tranquillity, District; materials rerun 0 errors on all four; only District authors a light-
+  visibility volume, the others take the original's unbaked path, no renderer change). Dev junctions added; both boot
+  headless (0 errors). Gameplay wires the two ESC maps' waves; District's transforming actors re-export after psa2gltf.
+  Rendering's eye pass (4 maps) + Realistic split test + the Frontend's scripted split check wait for the card.
