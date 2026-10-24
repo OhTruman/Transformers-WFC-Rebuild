@@ -4416,3 +4416,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   work/dlc/cooked (old copies in Rebuild/work/stfs_fix/old). Static chain running; District chain + Pulse content
   re-extract + Tranquillity audio regen follow. Merged 2400c037 Static ESC prep + FG capture + perf report (D1 12.5 fps
   CPU-bound = the one perf problem; split A/B after the chains).
+2026-10-24 02:31 STATIC LANDED (chain 02:30: pipeline OK, render data 496 files, bot_nav + 2 m air, lists: waves 265, loc 5 languages);
+  junction added to assets_dlc (all 9 DLC maps). Pulse content re-extracted from the fixed ENV_Pulse_Custom_p: one door
+  texture recovered (Door_01_CLR_TEXSET_Color_NormX). Running: DLC authored.db regen (4 shards), District chain re-run,
+  Pulse render refresh. Gameplay GO on Static data + item 21.
