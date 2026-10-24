@@ -314,7 +314,8 @@ def main():
         top = os.path.join(REPO, d)
         if not os.path.isdir(top):
             problems.append('head data folder missing: %s (build_slim must run from the head tree)' % top); continue
-        for f in sorted(os.listdir(top)):
+        # recursive: data/frontend/previews/ (the Graphics rows' preview images, playtest 2026-10-23b #5) is a subfolder
+        for f in sorted(os.path.relpath(os.path.join(dp, n), top).replace(os.sep, '/') for dp, _, fs in os.walk(top) for n in fs):
             src_abs = os.path.join(top, f)
             if not os.path.isfile(src_abs):
                 continue
