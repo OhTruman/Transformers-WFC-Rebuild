@@ -1,0 +1,22 @@
+diff -ru a/tools/render/build_render_data.ps1 b/tools/render/build_render_data.ps1
+--- a/tools/render/build_render_data.ps1	2026-10-23 20:59:20.245885100 -0500
++++ b/tools/render/build_render_data.ps1	2026-10-23 20:59:20.276991600 -0500
+@@ -28,7 +28,17 @@
+ $levelPkgs = @((& $py -c "import sys; sys.path.insert(0, r'$PSScriptRoot'); from ue3obj import map_packages; print(' '.join(map_packages('$Map')[0]))") -split ' ' | Where-Object { $_ })
+ $env:PYTHONDONTWRITEBYTECODE = "1"
+ $inline = @((& $py (Join-Path $PSScriptRoot "build_lighting.py") --list-inline $Map) -split ' ' | Where-Object { $_ })
+-if ($inline.Count -gt 0) { foreach ($pk in $levelPkgs) { & $umodel -export "-path=$cooked" -game=trans "-out=$um" -png $pk ($inline | ForEach-Object { "-obj=$_" }) | Out-Null } }
++# (batches of 100 -obj names: one call with every name ran past the Windows command-line limit on a DLC map - Fortress,
++# 282 names - and umodel never ran, its inline atlases silently missing; the shipped maps peak at 168 names)
++if ($inline.Count -gt 0) {
++    foreach ($pk in $levelPkgs) {
++        for ($i = 0; $i -lt $inline.Count; $i += 100) {
++            $batch = $inline[$i..([Math]::Min($i + 99, $inline.Count - 1))]
++            & $umodel -export "-path=$cooked" -game=trans "-out=$um" -png $pk ($batch | ForEach-Object { "-obj=$_" }) | Out-Null
++            if ($LASTEXITCODE -ne 0) { Write-Warning "umodel inline atlases: $pk batch $($i / 100) exited $LASTEXITCODE" }
++        }
++    }
++}
+ 
+ # 2. Lightmap bindings (3 coefficients), BSP rebuilt from the cooked vertex buffer, lights, fog.
+ & $py (Join-Path $PSScriptRoot "build_lighting.py") $Map $out $um
