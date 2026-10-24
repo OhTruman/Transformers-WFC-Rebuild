@@ -193,6 +193,10 @@ struct CampaignState {
     std::map<std::string, bool> actorHidden;   // world actor -> hidden (authored bHidden, then ToggleHidden / Destroy)
     std::set<std::string> actorDestroyed;      // SeqAct_Destroy'd world actors (they stay hidden)
     std::map<std::string, float> actorYaw;     // actors.json rotation_deg yaw (UE degrees): teleport destinations
+    struct TacVolume { std::string name; core::Vec3 lo{0, 0, 0}, hi{0, 0, 0}; std::vector<std::pair<core::Vec3, float>> planes;
+                       bool cellsBuilt = false; std::vector<core::Vec3> inside; };   // a TnTacticalVolume brush + its nav spots
+    std::map<std::string, TacVolume> tacVolumes;
+    std::map<int, std::string> tactical;       // AI player -> its assigned tactical volume
     std::vector<std::pair<int, std::vector<int>>> transformOps;   // TnSeqAct_TransformWorldProp waiting for Finished: op, actors
     bool transformMoved = false;               // a matinee moved a transforming actor (nav blocks re-applied at rest)
     std::map<int, std::string> shootAt;        // SeqAct_TnAiShootAtActor: AI player -> its forced fire target

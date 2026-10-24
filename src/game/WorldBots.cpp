@@ -466,6 +466,7 @@ void World::botThink(BotBody o, BotBrain& b) {
              (b.goal.kind == BotGoalKind::Roam && !b.path.empty() && b.wp >= b.path.size() && !b.wantRepath))   // the path ended short of the goal: idled up to 40 s (WFC_STUCKWATCH Berth)
         ng = botObjectiveGoal(b, pc);
     else ng = b.goal;
+    if (cp_.active) cpTacticalConstrain(b, ng);   // campaign: an AI assigned to a tactical volume keeps its spot inside it
     if (!b.hasGoal || hdist(ng.pos, b.goal.pos) > 4.0f || ng.kind != b.goal.kind) { b.wantRepath = true; b.goalTime = now; }
     b.goal = ng; b.hasGoal = true;
     // Purposeful transform (cars, trucks, tanks; jets hover-fly along the robot corridor, PC ADAPTATION): travel

@@ -25,6 +25,7 @@ public:
         int i = 0; float f = 0.0f; bool b = false; std::string s, obj, findName;   // SeqVar_Int / Float / Bool / String / Object / Named
         int buddyIndex = 1;   // TnSeqVar_Buddy BuddyIndex (1-based, CDO default 1)
         std::string chassisPath;   // TnSeqVar_Character ChassisTypePathName (a ROBODEF)
+        std::vector<std::string> list;   // SeqVar_ObjectList entries ("pawn:<p>", actor paths)
         int named = -1;                                                         // SeqVar_Named: the var it resolved to (by VarName)
         std::string varName;                                                    // the var's own VarName (Named targets)
     };

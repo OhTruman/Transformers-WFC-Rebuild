@@ -1490,6 +1490,13 @@ private:
     bool cpHideOpActivate(KismetVM& vm, int op, int input);
     std::vector<int> cpCharacterTargets(const std::string& robodef);
     bool cpTeleportActivate(KismetVM& vm, int op, int input);
+    void cpWriteSpawned(KismetVM& vm, int op, const std::string& obj);
+    void cpObjectListsDrop(const std::string& obj);
+    bool cpModifyObjectList(KismetVM& vm, int op, int input);
+    void cpLoadTacticalVolumes();
+    bool cpInTactical(const CampaignState::TacVolume& T, const core::Vec3& p) const;
+    bool cpTacticalActivate(KismetVM& vm, int op, int input);
+    void cpTacticalConstrain(BotBrain& b, BotGoal& g);
     bool cpShootAtPoint(int player, core::Vec3& out) const;
     bool cpAuxSpawn(const std::string& actor, int k, core::Vec3& out);
     void cpDrawDestructibles(render::IRenderer& r) const;

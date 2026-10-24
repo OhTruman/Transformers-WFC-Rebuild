@@ -248,6 +248,7 @@ void World::setupCampaign(const MatchLaunch& l) {
         cpLoadInteracts();
         cpLoadSentryDefs();
         cpLoadMineDefs();
+        cpLoadTacticalVolumes();
         cpLoadTouches();
         cpLoadPlacedDestructibles();
         cpBindMoverNav();   // (the nav is loaded by addBots above)
@@ -303,6 +304,8 @@ bool World::cpKismetActivate(KismetVM& vm, int op, int input) {
     if (cpSentryOpActivate(vm, op, input)) return true;     // sentry force target / dormant
     if (cpHideOpActivate(vm, op, input)) return true;       // SeqAct_ToggleHidden / SeqAct_Destroy on world actors
     if (cpTeleportActivate(vm, op, input)) return true;     // SeqAct_Teleport
+    if (cpModifyObjectList(vm, op, input)) return true;     // SeqAct_ModifyObjectList
+    if (cpTacticalActivate(vm, op, input)) return true;     // SeqAct_TnAssignTacticalVolume
     if (cpOmegaActivate(vm, op, input)) return true;      // SetOmegaStage / CorruptOmegaBattery
     if (c == "SeqAct_TnPawnFactory") return cpPawnFactoryActivate(vm, op, input);
     if (cpInterpActivate(vm, op, input)) return true;   // SeqAct_Interp: Matinee
