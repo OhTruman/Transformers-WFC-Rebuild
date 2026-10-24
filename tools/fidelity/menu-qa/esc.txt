@@ -1,0 +1,43 @@
+# FLOW 2 (USER_PLAYTEST_2026-10-23b section 43): MAIN MENU -> ESCALATION -> HOST GAME -> CONFIGURE -> SELECT CHARACTER -> START
+# -> SPAWN -> ACTUALLY PLAY -> RETURN. Fresh profile: the first entry creates the Escalation profile (#8).
+# P0 #9 / #14: the lobby must be Escalation (not TDM) and the match must load as ESC; #15: no second character select.
+#expect mode ESC
+#expect chassis-kept
+#expect no-charselect-after-ingame
+#expect state ingame.spawned InGame
+#expect moved ingame.spawned ingame.played 2
+#expect still ingame.spawned 2
+#expect level returned PartyLobby
+wait:ui=FrontEnd
+wait:t=2
+mouse:5,5
+navcheck:main
+shot:01_main.bmp
+# TODO(frontend): the Escalation entry from the main menu (button clip) + the first-time profile creation
+navcheck:esc.menu
+shot:02_esc_menu.bmp
+# TODO(frontend): Host a Game -> the Escalation lobby (title / description / settings must read Escalation, #9 / #14)
+navcheck:esc.lobby
+shot:03_esc_lobby.bmp
+# TODO(frontend): Game Settings (map / difficulty) and Back - must return to the lobby, NOT the global Settings (#10)
+navcheck:esc.lobby.after_settings
+# TODO(frontend): character select (#11 / #12 layout + roster), pick, Start
+navcheck:esc.charselect
+shot:04_esc_charselect.bmp
+wait:level=Match
+wait:ui=InGame
+wait:t=3
+navcheck:ingame.spawned
+shot:05_spawned.bmp
+# TODO(frontend): keyhold W 3 s - play (move) for a few seconds
+navcheck:ingame.played
+shot:06_played.bmp
+showmenu
+wait:t=1
+call:Game.QuitToMainMenu
+wait:t=1
+navcheck:quitbox
+ui:Accept
+wait:t=3
+navcheck:returned
+shot:07_returned.bmp

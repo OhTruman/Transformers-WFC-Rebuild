@@ -1,0 +1,69 @@
+# FLOW 1 (USER_PLAYTEST_2026-10-23b section 43): MAIN MENU -> MULTIPLAYER -> PRIVATE MATCH -> CHANGE SETTINGS -> SELECT MAP ->
+# SELECT CHARACTER -> START MATCH -> SPAWN -> MOVE / SHOOT / TRANSFORM -> PAUSE / CHANGE CHARACTER -> RETURN TO LOBBY
+# Real menu buttons only (no call:Online.* shortcuts). Lines marked TODO(frontend) wait for the Frontend's canonical steps.
+#expect mode TDM
+#expect chassis-kept
+#expect no-charselect-after-ingame
+#expect state ingame.spawned InGame
+#expect moved ingame.spawned ingame.moved 2
+#expect still ingame.spawned 2
+#expect shots ingame.moved ingame.shot
+#expect form ingame.shot ingame.transformed
+#expect state changechar.back InGame
+#expect level lobby.returned PartyLobby
+wait:ui=FrontEnd
+wait:t=2
+mouse:5,5
+navcheck:main
+shot:01_main.bmp
+clickclip:menuAnchor_mc.menuMain_mc.multiplayerBtn_mc
+wait:level=PartyLobby
+wait:t=2
+mouse:5,5
+navcheck:partylobby
+ui:Down
+wait:t=0.6
+ui:Accept
+wait:t=1.5
+navcheck:privatematch.modes
+# TODO(frontend): the Private Match lobby with its Game Settings row (P0 #24 / #26) - open Game Settings, change mode / bots,
+#   select a map, back; the team switch (#23); Start + a countdown cancel (#25) + Start again
+navcheck:gamelobby.settings
+shot:02_gamesettings.bmp
+navcheck:gamelobby.ready
+wait:level=Match
+wait:t=2
+navcheck:charselect
+shot:03_charselect.bmp
+# TODO(frontend): pick the Scout class on the wheel (the P0 #16 / #28 class), Accept
+wait:ui=InGame
+wait:t=3
+navcheck:ingame.spawned
+shot:04_spawned.bmp
+# TODO(frontend): keyhold W 2 s (forward), keyhold D 1 s (strafe) - needs the requested keyhold: step
+navcheck:ingame.moved
+shot:05_moved.bmp
+# TODO(frontend): hold fire 1 s (keyhold / mouse button)
+navcheck:ingame.shot
+# TODO(frontend): the transform key, wait 2 s
+navcheck:ingame.transformed
+shot:06_transformed.bmp
+showmenu
+wait:t=1
+navcheck:pause
+# TODO(frontend): Pause > Change Character (P0 #17 / #29: must open the MP character select, not Escalation's), pick Soldier
+navcheck:changechar.select
+shot:07_changechar.bmp
+# TODO(frontend): Back out of Change Character to the pause menu, then resume - control must come back
+navcheck:changechar.back
+shot:08_back_ingame.bmp
+showmenu
+wait:t=1
+call:Game.QuitToMainMenu
+wait:t=1
+navcheck:quitbox
+ui:Accept
+wait:level=PartyLobby
+wait:t=2
+navcheck:lobby.returned
+shot:09_lobby.bmp

@@ -1,0 +1,31 @@
+# FLOW 3 (USER_PLAYTEST_2026-10-23b section 43): MAIN MENU -> CAMPAIGN -> SOLO -> DIFFICULTY -> CHAPTER I -> CRASH SITE ->
+# SELECT CHARACTER -> LOAD LEVEL -> ACTUALLY PLAY. P0 #38 / #39: Chapter I > Crash Site > Megatron -> blank screen; Back misbehaves.
+#expect mode SOLO
+#expect state ingame.spawned InGame
+#expect moved ingame.spawned ingame.played 2
+#expect still ingame.spawned 2
+wait:ui=FrontEnd
+wait:t=2
+mouse:5,5
+navcheck:main
+shot:01_main.bmp
+clickclip:menuAnchor_mc.menuMain_mc.campaignBtn_mc
+wait:t=2
+# (first launch: brightness calibration may come up here, #34 / #35 - accept it)
+navcheck:campaign.root
+shot:02_campaign_root.bmp
+# TODO(frontend): Solo -> difficulty -> Chapter I "Dark Energon" -> mission Crash Site -> character (Megatron) -> load
+navcheck:campaign.solo
+navcheck:campaign.difficulty
+navcheck:campaign.chapter1
+shot:03_chapter1.bmp
+navcheck:campaign.crashsite.charselect
+shot:04_charselect.bmp
+wait:fmv=0
+wait:ui=InGame
+wait:t=3
+navcheck:ingame.spawned
+shot:05_spawned.bmp
+# TODO(frontend): keyhold W 3 s - play
+navcheck:ingame.played
+shot:06_played.bmp
