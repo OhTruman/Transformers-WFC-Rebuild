@@ -326,6 +326,7 @@ public:
     enum class SessionRole { Offline, Host, Member };
     bool online() const { return session_ != nullptr; }
     SessionRole sessionRole() const { return role_; }
+    int partyTeamStatus() const { return gameTeamStatus_; }   // the party lobby's GTS (3 versus, 2 Escalation, 1 Campaign co-op)
     static const char* sessionRoleName(SessionRole r) { return r == SessionRole::Host ? "Host" : r == SessionRole::Member ? "Member" : "Offline"; }
     double onlineTime() const { return clock_; }   // the frontend-update time the session's timeouts count
     const std::string& joinCode() const { return joinCode_; }        // host: shown in the lobby's join panel

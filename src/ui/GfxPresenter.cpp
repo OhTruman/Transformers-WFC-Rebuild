@@ -1588,8 +1588,11 @@ void GfxPresenter::runFirstRunUi(gfx::Player& p, frontend::GameFlow& flow, const
 }
 
 // ONLINE_LOBBY_FLOW_V2 1.1: the party lobby's Private Match row hosts at once (the last-used mode; offline the same lobby
-// with bots) instead of opening the mode list and the options page.
+// with bots) instead of opening the mode list and the options page. Versus only (GTS_TeamGame): the Escalation and Campaign
+// party lobbies keep the original Host Game (mc_menuEscalationHostGame / mc_menuCampaignHostGame, PartyLobby_GFX sprites
+// 50-56) - overriding them hosted the last versus mode (playtest 2026-10-23b #9: Escalation > Host a Game opened TDM).
 void GfxPresenter::syncHostNowRow(gfx::Player& p, frontend::GameFlow& flow) {
+    if (flow.partyTeamStatus() != 3) return;
     gfx::MovieClip* host = findClipNamed(p.root(), "hostGame_mc");
     if (!host || !host->script) return;
     gfx::avm1::VM& vm = p.vm();
