@@ -177,3 +177,15 @@ headless Streets CTF 120 s gives identical MATCH events to the head build (18 / 
 - everything merged between the 17 tree and 74e41849 on these paths.
 Apply it after 17. Verified: a fresh full af4d0731 + 01-18 applies (`git apply --check`), builds wfc_rebuild with 0 errors, and its
 A4 campaign run (90 s, bot-driven) equals the head build line for line (no game over).
+
+## 19: Escalation spawn finder as the base game + Pulse waves (18 tree -> 9e1e46e5 + GAMEPLAY_ESC_SPAWN_AUTHORED)
+
+`19_esc_spawn_authored.patch`: the same paths, from the 18 tree to 9e1e46e5 + ESC_SPAWN_AUTHORED. It covers:
+- the spawn finder uses the zone's authored TnSurvivalSpawnPoint (ground + capsule check, 5 tries) with no navmesh requirement
+  (RE DLC_ESC_MECHANISMS_RE.md section 7); the PROV on-nav stand-in is gone;
+- the Pulse Escalation data (30 waves) in EscalationData.inc;
+- WFC_ESCTEST's DLC branch checks the due enemy TYPES (a one-wave row may legitimately never be drawn by the budget).
+Re-baseline, deliberate: Escalation spawn positions change on every ESC map where the stand-in used to move an off-nav point (the
+base ESCTEST rows still pass: Remnant 15/15, BrokenHope 36/36); Tranquillity / District failed spawns 1 / 5 -> 0; Pulse 0 -> 134
+spawns. Versus is unchanged (ESC only). Apply it after 18. Verified: a fresh full af4d0731 + 01-19 applies and builds with 0
+errors; its Remnant and Pulse ESCTEST logs equal the head build's line for line.

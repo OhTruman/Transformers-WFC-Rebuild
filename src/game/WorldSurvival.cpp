@@ -857,40 +857,8 @@ bool World::svSpawn(int slot) {
         if (zone.points <= 0) continue;   // GetSpawnPoint: none (an error log in the original), the try is spent
         int idx = sv_.pointIndex[(size_t)z] % zone.points;
         sv_.pointIndex[(size_t)z] = (idx + 1) % zone.points;
-        // PROV (Integration 2026-10-23, removed with E2b part 3's Escalation nav): about half the authored points are off our bot nav
-        // (the horde would stand stranded there); until the nav covers them the next on-nav point of this zone stands in (round
-        // robin), logged; no on-nav point in the zone -> the try is spent.
-        const SurvivalData::Zone* pz = &zone;   // the zone whose point is used (PROV stand-in below)
-        if (botNav_.valid() && (size_t)idx < zone.spawnPoints.size()) {
-            // reachable = on a cell of the main connected piece (the Escalation nav still loads as several pieces: AssetTools asked for
-            // its drop links; a perch outside the main piece would strand the horde)
-            auto onNav = [&](const SurvivalData::Zone& zz, int k) {
-                const auto& q = zz.spawnPoints[(size_t)k];
-                const int c = botNav_.findCell(core::Vec3{q[0], q[1], q[2]}, 2.0f);
-                return c >= 0 && botNav_.pieceOf(c) == botNav_.mainPieceId();
-            };
-            if (!onNav(zone, idx)) {
-                int sub = -1;
-                for (int k = 1; k < (int)zone.spawnPoints.size() && sub < 0; ++k) if (onNav(zone, (idx + k) % (int)zone.spawnPoints.size())) sub = (idx + k) % (int)zone.spawnPoints.size();
-                std::string how;
-                if (sub >= 0) { idx = sub; how = "#" + std::to_string(sub) + " of the zone stands in"; }
-                else {   // no on-nav point in the zone: the nearest on-nav authored point of any active zone
-                    const core::Vec3 c = (zone.mn + zone.mx) * 0.5f; float best = 1e18f; int bz = -1, bk = -1;
-                    for (int az : sv_.zonesList) {
-                        const SurvivalData::Zone& zz = svData_.zones[(size_t)az];
-                        for (int k = 0; k < (int)zz.spawnPoints.size(); ++k) {
-                            if (!onNav(zz, k)) continue;
-                            const auto& q = zz.spawnPoints[(size_t)k];
-                            const float d = (q[0] - c.x) * (q[0] - c.x) + (q[1] - c.y) * (q[1] - c.y) + (q[2] - c.z) * (q[2] - c.z);
-                            if (d < best) { best = d; bz = az; bk = k; }
-                        }
-                    }
-                    if (bz < 0) { LOG_INFO("escalation: PROV spawn point zone %s #%d is off the bot nav and no active zone has an on-nav point: the try is spent", zone.id.c_str(), idx); continue; }
-                    pz = &svData_.zones[(size_t)bz]; idx = bk; how = "zone " + pz->id + " #" + std::to_string(bk) + " (nearest on-nav point) stands in";
-                }
-                LOG_INFO("escalation: PROV spawn point zone %s is not nav-reachable: %s", zone.id.c_str(), how.c_str());
-            }
-        }
+        // The authored point (RE section 7: no navmesh requirement; the AI re-anchors to the nearest nav from there).
+        const SurvivalData::Zone* pz = &zone;
         core::Vec3 at; float yaw = 0.0f;
         if ((size_t)idx < pz->spawnPoints.size()) {
             const auto& q = pz->spawnPoints[(size_t)idx];

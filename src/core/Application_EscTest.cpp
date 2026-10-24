@@ -143,9 +143,13 @@ void Application::runEscalationTest() {
         bool due = true;
         for (size_t e = 0; e < D.enemies.size(); ++e) {
             LOG_INFO("ESCTEST %s: %s (waves %d-%d) spawned %d", map.c_str(), D.enemies[e].type.c_str(), D.enemies[e].minWave, D.enemies[e].maxWave, spawnedByEntry[e]);
-            if (D.enemies[e].minWave < S.currentWave - 1 && D.enemies[e].maxCount > 0 && spawnedByEntry[e] == 0) due = false;
         }
-        check(due, "every enemy row due by the reached wave spawned");
+        for (size_t e = 0; e < D.enemies.size(); ++e) {   // every TYPE due by the reached wave spawned (any of its rows)
+            if (D.enemies[e].minWave >= S.currentWave - 1 || D.enemies[e].maxCount <= 0) continue;
+            int n = 0; for (size_t k = 0; k < D.enemies.size(); ++k) if (D.enemies[k].type == D.enemies[e].type) n += spawnedByEntry[k];
+            if (n == 0) { due = false; LOG_INFO("ESCTEST %s: %s due but never spawned", map.c_str(), D.enemies[e].type.c_str()); }
+        }
+        check(due, "every enemy type due by the reached wave spawned");
         if (map == "MP_ESC_District") {
             int jets = 0; for (size_t e = 0; e < D.enemies.size(); ++e) if (D.enemies[e].type.find("Soldier_Jet_Autobot") != std::string::npos) jets += spawnedByEntry[e];
             check(jets > 0, "District: the Autobot jet soldier (AiEscalation_Soldier_Jet_Autobot_AICD) spawns");
