@@ -4261,3 +4261,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   exported; the jet AICD's roster_package row with its real cylinder; existing rows byte-identical). FINAL_BASE_ITEMS 14
   self-contained (6438ac5b). Next: Tranquillity_AUDIO reparse, LOC twins, then Pack 2 (Horizon, Metropolis, Sector,
   Pulse, Static).
+2026-10-23 22:32 MERGED 0378fca6 DLC audio 2 (wave / twin lookup: level root -> DLC-only root -> base root; the 'missing' twins were base
+  lines the DLC reuses). Open: Gameplay's District door loader + Zone_Manager generator flattening (base item 15); RE's
+  Tranquillity_AUDIO reader answer; AssetTools Pack 2; Systems online two-locals; card checks after the playtest.
