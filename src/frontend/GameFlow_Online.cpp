@@ -139,7 +139,6 @@ bool GameFlow::joinSeat2(int pad) {
     else if (pad < 0 || pad == seat1Pad_) why = "seat 1's device";
     else if (!lobby) why = "not in a lobby";
     else if (role_ == SessionRole::Member) why = "an online member cannot add a local player";
-    else if (campaign()) why = "campaign chapter";
     if (!why.empty()) { FlowTrace::emit("split.join", {{"pad", std::to_string(pad)}, {"result", "refused"}, {"why", why}}); return false; }
     seat2Profile_ = LocalProfile{};
     seat2Profile_.setFile(LocalProfile::kSeat2File);

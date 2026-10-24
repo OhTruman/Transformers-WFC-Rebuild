@@ -1392,6 +1392,7 @@ void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
     updateInputDevice(in, dt);
     if (flow_.profile().display.language != catalog_.language()) {   // boot and the Settings Apply: the profile's text language
         catalog_.setLanguage(flow_.profile().display.language);
+        if (audio_) audio_->setLanguage(catalog_.language());   // Systems: dialogue / localized waves from the next level audio load
         if (catalog_.language() != flow_.profile().display.language) flow_.profile().display.language = catalog_.language();   // unavailable -> INT
     }
     { core::prof::Scope prof("flow.tick"); flow_.tick(dt); }

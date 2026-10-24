@@ -1,0 +1,399 @@
+diff --git a/src/frontend/FrontendRuntime.h b/src/frontend/FrontendRuntime.h
+index df8016a8..5cacfaea 100644
+--- a/src/frontend/FrontendRuntime.h
++++ b/src/frontend/FrontendRuntime.h
+@@ -80,6 +80,10 @@ public:
+     virtual void setWorldLabels(const std::vector<WorldLabel>& labels) { (void)labels; }   // DEV TOOL overlay text
+     // The HUD movie's visible stage in its own units (Hud_GFX Stage.width / height): marker screen coordinates.
+     virtual bool hudStageSize(double& w, double& h) const { (void)w; (void)h; return false; }
++    // Split screen: seat 1's own Hud_GFX (seat 0 is the HUD above), drawn in its view rect.
++    virtual void setSeatHud(int seat, bool open, bool visible) { if (seat == 0) setHud(open, visible); }
++    virtual void seatHudCall(int seat, const std::string& fn, const std::vector<BridgeValue>& args) { if (seat == 0) hudCall(fn, args); }
++    virtual bool seatHudStageSize(int seat, double& w, double& h) const { return seat == 0 && hudStageSize(w, h); }
+     // Keyboard prompts: pad glyphs (pad = true) or key text in the movies' button glyph slots.
+     virtual void setPadPrompts(bool pad) { (void)pad; }
+     // A function of a notification movie (e.g. UI_GFxChallengeNotifies_p.ChallengeNotify_GFX ChallengeUnlocked): the
+@@ -192,6 +196,7 @@ public:
+     void setSceneRenderer(IFrontendSceneRenderer* r) { sceneRenderer_ = r; }
+     const FrontendScene& scene() const { return scene_; }
+     HudController& hud() { return hud_; }
++    HudController& hud2() { return hud2_; }   // split screen: seat 2's HUD (fed from Gameplay's PresentedFrame::seats[1])
+     // Campaign tutorial message (TnSeqAct_DisplayTutorialMessage(MessageType) -> TnHUD.DisplayTutorialMessage;
+     // CAMPAIGN_HUD_PLAN.md E5): once per profile, text Localize("TutorialMessages", type, "TransGame") with commands
+     // translated, sound WHSH_TUTORIAL_BOX. False (nothing shown) in versus, for a type already shown, or an unknown type.
+@@ -311,6 +316,7 @@ private:
+     BridgeValue commitCharacter(const std::vector<std::string>& args);
+     BridgeValue pcSettings(const std::string& fn, const std::vector<std::string>& args);
+     HudController hud_;
++    HudController hud2_;
+     InputPrompts prompts_;          // ^COMMAND -> key text (TnInputCommandToBindingMapper)
+     InputDevice device_;            // the last-used device (prompts)
+     int lastMouseX_ = -1, lastMouseY_ = -1;
+diff --git a/src/frontend/FrontendRuntime.cpp b/src/frontend/FrontendRuntime.cpp
+index 36259cd9..1cfae65a 100644
+--- a/src/frontend/FrontendRuntime.cpp
++++ b/src/frontend/FrontendRuntime.cpp
+@@ -260,6 +260,7 @@ bool FrontendRuntime::init() {
+     if (!catalog_.load(Catalog::defaultManifestRoot(), Catalog::defaultExtractedRoot(), vs + "/Maps")) return false;
+     if (!prompts_.load(Catalog::defaultExtractedRoot())) LOG_WARN("frontend: TnInputCommandToBindingMapper tables not found");
+     hud_.setPromptTranslator([this](const std::string& t) { return prompts_.translate(t, device_.pad()); });
++    hud2_.setPromptTranslator([this](const std::string& t) { return prompts_.translate(t, true); });   // seat 2 plays on a pad
+     GameFlow::Options o;
+     o.skipIntroMovies = std::getenv("WFC_SKIPINTRO") != nullptr;
+     // Flow RNG (loading tips, lobby team pick, map rotation): WFC_FLOWSEED; else, in deterministic runs, WFC_SEED or a
+@@ -1166,6 +1167,21 @@ void FrontendRuntime::stopMovieAudio() {
+ }
+ 
+ namespace {
++// Split screen: seat 2's HudController talks to the presenter through this, so its HUD calls reach seat 2's Hud_GFX.
++class SeatHudSink : public IMoviePresenter {
++public:
++    SeatHudSink(IMoviePresenter* p, int seat) : p_(p), seat_(seat) {}
++    bool runsMovie(const std::string&) const override { return false; }
++    void update(GameFlow&, const platform::InputFrame&, float) override {}
++    void draw(const GameFlow&, int, int) override {}
++    void setHud(bool open, bool visible) override { if (p_) p_->setSeatHud(seat_, open, visible); }
++    void hudCall(const std::string& fn, const std::vector<BridgeValue>& args) override { if (p_) p_->seatHudCall(seat_, fn, args); }
++    bool hudStageSize(double& w, double& h) const override { return p_ && p_->seatHudStageSize(seat_, w, h); }
++private:
++    IMoviePresenter* p_;
++    int seat_;
++};
++
+ // The extracted movies carry region / language suffixes: <name>_NA_<lang>, <name>_<lang>, then the INT forms, then <name>.
+ std::string localizedMovie(const std::string& b, const std::string& lang = "INT") {
+     for (const std::string& c : {b + "_NA_" + lang, b + "_" + lang, b + "_NA_INT", b + "_INT"})
+@@ -1377,6 +1393,7 @@ void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
+     updateInputDevice(in, dt);
+     if (flow_.profile().display.language != catalog_.language()) {   // boot and the Settings Apply: the profile's text language
+         catalog_.setLanguage(flow_.profile().display.language);
++        if (audio_) audio_->setLanguage(catalog_.language());   // Systems: dialogue / localized waves from the next level audio load
+         if (catalog_.language() != flow_.profile().display.language) flow_.profile().display.language = catalog_.language();   // unavailable -> INT
+     }
+     { core::prof::Scope prof("flow.tick"); flow_.tick(dt); }
+@@ -1440,6 +1457,11 @@ void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt)
+     for (const std::string& line : flow_.takeGameMessages())   // online: "`k has left the game" (the original kill-feed line)
+         if (presenter_) presenter_->hudCall("_global.GameMessage", {BridgeValue(line)});
+     hud_.update(presenter_.get(), catalog_, inMatch, hudShown);
++    {   // split screen: seat 2's HUD exists while it plays (two local seats in a match); its prompts are pad glyphs
++        const bool seat2 = flow_.localSeats() == 2;
++        SeatHudSink sink(presenter_.get(), 1);
++        hud2_.update(&sink, catalog_, inMatch && seat2, hudShown && seat2);
++    }
+     {   // the respawn movie's "currently spectating" label (RE audit 3): on change, and again when the movie (re)opens
+         const bool respawnUp = inMatch && st == UIState::Spectating;
+         const std::string target = hud_.frame().spectateTarget.value_or(std::string());
+diff --git a/src/ui/GfxPresenter.h b/src/ui/GfxPresenter.h
+index 8a9285fd..56d751ac 100644
+--- a/src/ui/GfxPresenter.h
++++ b/src/ui/GfxPresenter.h
+@@ -40,6 +40,9 @@ public:
+     void setScoreboard(bool open) override;
+     void hudCall(const std::string& fn, const std::vector<frontend::BridgeValue>& args) override;
+     bool hudStageSize(double& w, double& h) const override;
++    void setSeatHud(int seat, bool open, bool visible) override;
++    void seatHudCall(int seat, const std::string& fn, const std::vector<frontend::BridgeValue>& args) override;
++    bool seatHudStageSize(int seat, double& w, double& h) const override;
+     void setPadPrompts(bool pad) override;
+     void installGlyphLabels();
+     void setWorldLabels(const std::vector<frontend::WorldLabel>& labels) override { worldLabels_ = labels; }
+@@ -113,6 +116,10 @@ private:
+     std::unique_ptr<GfxMovie> cursor_;
+     std::unique_ptr<GfxMovie> hud_;           // TnHUD.HudMovie (Hud_GFX), under the UIController movies
+     bool hudVisible_ = false;
++    std::unique_ptr<GfxMovie> hud2_;          // split screen: seat 2's Hud_GFX
++    bool hud2Visible_ = false;
++    bool splitHud_ = false;                   // two seats in a match: each HUD in its view rect (title-safe)
++    int hudRect_[2][4] = {};                  // x, y, w, h per seat (window pixels)
+     std::unique_ptr<GfxMovie> scoreboard_;   // InGameStats_GFX: one instance per HUD (TnHUD.ScoreboardMovie)
+     bool scoreboardShown_ = false;            // started (advanced, drawn, focused); false = Close(KeepLoaded)
+     // Movies a movie opens itself (Self.OpenMovieWithPath(path, CaptureInput, CaptureFocus), e.g. Brightness_GFX ->
+diff --git a/src/ui/GfxPresenter.cpp b/src/ui/GfxPresenter.cpp
+index 7c038ffa..4698244d 100644
+--- a/src/ui/GfxPresenter.cpp
++++ b/src/ui/GfxPresenter.cpp
+@@ -4,6 +4,7 @@
+ #include "core/FrameProfile.h"
+ #include "core/Log.h"
+ #include "frontend/DataPaths.h"
++#include "render/SplitScreen.h"
+ #include "frontend/FlowTrace.h"
+ 
+ #include <algorithm>
+@@ -151,6 +152,40 @@ void GfxPresenter::installGlyphLabels() {
+         };
+ }
+ 
++void GfxPresenter::setSeatHud(int seat, bool open, bool visible) {
++    if (seat == 0) { setHud(open, visible); return; }
++    if (!open) {
++        if (hud2_) { rt_.dataStores().forgetMovie(hud2_->object()); shapesStale_ = true; }
++        hud2_.reset(); hud2Visible_ = false;
++        return;
++    }
++    if (!hud2_) {
++        hud2_ = std::make_unique<GfxMovie>();
++        bool ok = hud2_->open(lib_, &rt_.catalog(), frontend::HudController::kMovie,
++                              [this](GfxMovie& mv, const std::string& fn, Args& a) { return bridge(mv, fn, a); },
++                              [this](GfxMovie& mv, const std::string& c, const std::string& a) { fsCommand(mv, c, a); });
++        frontend::FlowTrace::emit("gfx.movie", {{"movie", frontend::HudController::kMovie}, {"seat", "2"}, {"opened", frontend::FlowTrace::boolean(ok)}});
++        if (!ok) { hud2_.reset(); return; }
++    }
++    hud2Visible_ = visible;
++}
++
++void GfxPresenter::seatHudCall(int seat, const std::string& fn, const std::vector<frontend::BridgeValue>& args) {
++    if (seat == 0) { hudCall(fn, args); return; }
++    if (!hud2_) return;
++    Args a;
++    for (const frontend::BridgeValue& b : args) a.push_back(toValue(hud2_->player().vm(), b));
++    hud2_->invoke(fn, a);
++}
++
++bool GfxPresenter::seatHudStageSize(int seat, double& w, double& h) const {
++    if (seat == 0) return hudStageSize(w, h);
++    if (!hud2_) return false;
++    w = hud2_->player().stageViewW();
++    h = hud2_->player().stageViewH();
++    return w > 0 && h > 0;
++}
++
+ bool GfxPresenter::hudStageSize(double& w, double& h) const {
+     if (!hud_) return false;
+     w = hud_->player().stageViewW();
+@@ -2034,7 +2069,22 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame&
+ #if WFC_DLSS_PACKAGE
+     syncPackageCredit();
+ #endif
+-    if (hud_) { hud_->player().setViewport((float)viewW_, (float)viewH_); hud_->advance(dt); hudInterpUpdate(*hud_); if (extendedMatch_) checkKillFeed(dt); syncWorldLabels(); }
++    {   // split screen: two seats in a match -> each HUD sized to its view rect inside the title-safe zone (SPLITSCREEN_RE 2)
++        const bool split = flow.level() == frontend::LevelKind::Match && flow.localSeats() == 2;
++        const render::SplitLayout layout = !split ? render::SplitLayout::Single
++                                         : flow.profile().display.splitLayout == 2 ? render::SplitLayout::Vertical : render::SplitLayout::Horizontal;
++        splitHud_ = split;
++        for (int v = 0; v < 2; ++v) {
++            render::ViewPixels r = render::splitViewPixels(layout, split ? v : 0, viewW_, viewH_);
++            if (split) r = render::titleSafe(r);
++            hudRect_[v][0] = r.x; hudRect_[v][1] = r.y; hudRect_[v][2] = std::max(1, r.w); hudRect_[v][3] = std::max(1, r.h);
++        }
++    }
++    if (hud_) {
++        hud_->player().setViewport((float)(splitHud_ ? hudRect_[0][2] : viewW_), (float)(splitHud_ ? hudRect_[0][3] : viewH_));
++        hud_->advance(dt); hudInterpUpdate(*hud_); if (extendedMatch_) checkKillFeed(dt); syncWorldLabels();
++    }
++    if (hud2_) { hud2_->player().setViewport((float)hudRect_[1][2], (float)hudRect_[1][3]); hud2_->advance(dt); hudInterpUpdate(*hud2_); }
+     if (scoreboard_ && scoreboardShown_) { scoreboard_->advance(dt); scrollPlayerList(scoreboard_->player(), scoreScroll_, in, dt); } else scoreScroll_ = 0.0f;
+     if (scoreboard_) syncIconicPlayerList(scoreboard_->player(), flow);   // the Tab scoreboard (#7)
+     // PlayerList_GFX _global.GivePlayerListInput (RE audit 3): the scoreboard's rows take the pad / keys while it is up, so a
+@@ -2207,7 +2257,17 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
+     if (emptyLayer) {}
+     else if (loading_) drawMovie(*loading_);
+     else {
+-        if (hud_ && hudVisible_) drawMovie(*hud_);
++        auto drawInRect = [&](GfxMovie& m, const int* r) {   // a seat's HUD: the stage fitted to its view rect
++            items_.clear();
++            gfx::Player& p = m.player();
++            gfx::Matrix mx = GfxRendererGL::movieMatrix(p, r[2], r[3]);
++            mx.tx += (float)r[0];
++            mx.ty += (float)r[1];
++            p.buildRenderList(mx, items_);
++            gl_.draw(items_);
++        };
++        if (hud_ && hudVisible_) { if (splitHud_) drawInRect(*hud_, hudRect_[0]); else drawMovie(*hud_); }
++        if (hud2_ && hud2Visible_ && splitHud_) drawInRect(*hud2_, hudRect_[1]);
+         if (scoreboard_ && scoreboardShown_) drawMovie(*scoreboard_);
+         for (Open& o : movies_) drawMovie(*o.movie);
+         for (Extra& e : extras_) drawMovie(*e.movie);
+diff --git a/src/frontend/DataStores.cpp b/src/frontend/DataStores.cpp
+index 78da4f69..2cd3178d 100644
+--- a/src/frontend/DataStores.cpp
++++ b/src/frontend/DataStores.cpp
+@@ -329,6 +329,17 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
+                           std::to_string(progression::levelForXp(pr.xp[0])), std::to_string(progression::levelForXp(pr.xp[2])),
+                           std::to_string(progression::playerLevel(pr))});
+         c.enabled.push_back(true);
++        if (flow_.localSeats() == 2) {   // split screen: the second local seat on seat 1's team (its own profile's name and levels)
++            const LocalProfile& p2 = flow_.seat2Profile();
++            std::string n2 = p2.playerName();
++            if (n2.empty() || n2 == playerName()) n2 = cat_.localizeKey("$WfcPC.Split.Player2");
++            const auto& x = p2.progression.xp;
++            c.rows.push_back({n2, std::to_string(team), teamName, "0", "0", "0", "0", "0", "", "0", "0", "0", "", "",
++                              std::to_string(progression::levelForXp(x[3])), std::to_string(progression::levelForXp(x[1])),
++                              std::to_string(progression::levelForXp(x[0])), std::to_string(progression::levelForXp(x[2])),
++                              std::to_string(progression::playerLevel(p2.progression))});
++            c.enabled.push_back(true);
++        }
+         if (online) {   // online lobby: the other humans
+             for (const GameFlow::OnlineMember& m : flow_.onlineMembers()) {
+                 std::string headset;
+diff --git a/src/frontend/GameFlow.h b/src/frontend/GameFlow.h
+index 48aefc2e..dc0d31ed 100644
+--- a/src/frontend/GameFlow.h
++++ b/src/frontend/GameFlow.h
+@@ -316,6 +316,7 @@ public:
+     int seat2Pad() const { return seat2Active_ ? seat2Pad_ : -1; }
+     void setSeat1Pad(int pad) { seat1Pad_ = pad; }
+     LocalProfile& seat2Profile() { return seat2Profile_; }
++    const LocalProfile& seat2Profile() const { return seat2Profile_; }
+     // Online session (PC EXTENSION, Session.h; docs/handoff/ONLINE_MP_FRONTEND_TESTS.md). Not set = the offline flow
+     // (today's behaviour); nothing reads it yet.
+     void setSession(std::unique_ptr<ISession> s) { session_ = std::move(s); role_ = SessionRole::Offline; }
+diff --git a/src/frontend/GameFlow_Online.cpp b/src/frontend/GameFlow_Online.cpp
+index 7a89f69d..5858b82c 100644
+--- a/src/frontend/GameFlow_Online.cpp
++++ b/src/frontend/GameFlow_Online.cpp
+@@ -144,7 +144,6 @@ bool GameFlow::joinSeat2(int pad) {
+     else if (pad < 0 || pad == seat1Pad_) why = "seat 1's device";
+     else if (!lobby) why = "not in a lobby";
+     else if (role_ == SessionRole::Member) why = "an online member cannot add a local player";
+-    else if (campaign()) why = "campaign chapter";
+     if (!why.empty()) { FlowTrace::emit("split.join", {{"pad", std::to_string(pad)}, {"result", "refused"}, {"why", why}}); return false; }
+     seat2Profile_ = LocalProfile{};
+     seat2Profile_.setFile(LocalProfile::kSeat2File);
+diff --git a/data/frontend/pc_strings.int b/data/frontend/pc_strings.int
+index 2df049f8..2cd15298 100644
+--- a/data/frontend/pc_strings.int
++++ b/data/frontend/pc_strings.int
+@@ -97,3 +97,8 @@ VoteNext=Next map:
+ GameModeDesc=The kind of match. Each mode keeps its own settings.
+ NoPublicGames=No public games found.
+ LanOnly=Public matches need the lobby service. LAN games only.
++
++[Split]
++Player2=Player 2
++Player2Joined=Player 2 joined
++Player2Left=Player 2 left
+diff --git a/tests/FrontendTests.cpp b/tests/FrontendTests.cpp
+index c09f21ab..2f01aa51 100644
+--- a/tests/FrontendTests.cpp
++++ b/tests/FrontendTests.cpp
+@@ -2001,9 +2001,15 @@ static void testSplitProfiles() {
+         const bool refusedSamePad = !f.joinSeat2(0);
+         const bool joined = f.joinSeat2(1) && f.localSeats() == 2 && f.seat2Pad() == 1 && f.seat2Profile().file() == LocalProfile::kSeat2File &&
+                             f.seat2Profile().voice.mode == 2;   // the file written above
++        // the lobby lists both locals: seat 2's row after seat 1's, on its team, named from its profile (else "Player 2")
++        DataStores& ds = rt.dataStores();
++        ds.poll();
++        const bool rows = ds.call("GetCollectionRowCount", {"<CurrentGame:Players>"}).n == 2;
+         f.leaveSeat2();
+-        check(refusedFrontEnd && refusedSamePad && joined && f.localSeats() == 1, "split.seat2_join",
+-              std::to_string(refusedFrontEnd) + std::to_string(refusedSamePad) + std::to_string(joined));
++        ds.poll();
++        const bool oneRow = ds.call("GetCollectionRowCount", {"<CurrentGame:Players>"}).n == 1;
++        check(refusedFrontEnd && refusedSamePad && joined && rows && oneRow && f.localSeats() == 1, "split.seat2_join",
++              std::to_string(refusedFrontEnd) + std::to_string(refusedSamePad) + std::to_string(joined) + std::to_string(rows) + std::to_string(oneRow));
+     }
+     std::remove("wfc_profile.ini");
+     std::remove(LocalProfile::kSeat2File);
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index b0d56afb..49b83ecf 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -1321,6 +1321,21 @@ void Application::runFrontend() {
+                 frontend_->update(input, (float)dt);
+             }
+             syncSplitLayout(renderer_, flow);   // [Frontend] menus: a single view
++            {   // [Frontend, split screen] Systems' window routes a second pad to seat 2 while a lobby can take it (or it is in):
++                // a new join -> GameFlow::joinSeat2 (refused -> the pad is released); seat 2's Back in a lobby -> it leaves
++                const bool lobby = flow.level() == frontend::LevelKind::PartyLobby || flow.level() == frontend::LevelKind::GameLobby;
++                window_->setSplitScreen(lobby || flow.localSeats() == 2);
++                static int seenSerial = window_->seat2JoinedSerial();
++                if (window_->seat2JoinedSerial() != seenSerial) {
++                    seenSerial = window_->seat2JoinedSerial();
++                    if (!flow.joinSeat2(window_->seatPad(1))) window_->releaseSeat2();
++                }
++                platform::InputFrame s2;
++                static bool backWas = false;
++                const bool back = window_->pumpSeat2(s2) && s2.uiIsDown(platform::UiKey::Back);
++                if (back && !backWas && lobby && flow.localSeats() == 2) { flow.leaveSeat2(); window_->releaseSeat2(); }
++                backWas = back;
++            }
+             tickLobbyVoice();   // [Systems] lobby voice (in a session, no match)
+             if (flow.quitRequested()) { quit = true; break; }
+             drawFrontendFrame();
+@@ -1903,6 +1918,70 @@ void Application::routeMatchToFrontend(float dt) {
+         for (size_t i = 0; i < pf.damageCaused.size(); ++i) frontend_->hud().causedDamage();               // hit marker per hit
+     }
+     frontend_->hud().setFrame(hf);
++    {   // [Frontend, split screen] seat 2: into the match once per launch (Gameplay assigns its match player on seat 1's team),
++        // then its own HUD from PresentedFrame::seats[1]. Until seat 2 has its own Choose Character / characters file it plays
++        // the roster's first preset, as the automated pick does.
++        static int seatAddedFor = -1;
++        if (flow.localSeats() == 2 && world_.localSeatCount() < 2 && seatAddedFor != matchesLaunched_) {
++            seatAddedFor = matchesLaunched_;
++            const std::string first = frontend_->roster().customCharacters().empty() ? std::string() : frontend_->roster().customCharacters().front().name;
++            const frontend::GameFlow::SelectedCharacter fc = frontend_->selectionFor(first);
++            game::CharacterSelection cs;
++            cs.type = fc.type;
++            cs.specialty = fc.specialty == "Scientist" ? game::Specialty::Scientist : fc.specialty == "Scout" ? game::Specialty::Scout
++                         : fc.specialty == "Soldier" ? game::Specialty::Soldier : game::Specialty::Leader;
++            const int team = (size_t)me < pf.players.size() ? pf.players[(size_t)me].team : 0;
++            cs.chassisId = fc.chassis[team == 1 ? 1 : 0].empty() ? fc.chassis[0] : fc.chassis[team == 1 ? 1 : 0];
++            cs.customSlot = fc.name;
++            fillFullSelection(cs, fc);
++            const int p2 = world_.addLocalSeat(flow.seat2Pad(), cs, fc.valid);
++            frontend::FlowTrace::emit("split.seat2Match", {{"pad", std::to_string(flow.seat2Pad())}, {"player", std::to_string(p2)}, {"character", fc.name}});
++        }
++        if (pf.seats.size() > 1 && flow.localSeats() == 2) {
++            using HC = frontend::HudController;
++            const auto& s2 = pf.seats[1];
++            frontend::HudFrame h2;
++            h2.valid = h.matchActive;
++            h2.alive = !s2.dead;
++            h2.totalSegments = (int)s2.segmentTops.size();
++            int active = 0;
++            while ((size_t)active < s2.segmentTops.size() && s2.health > s2.segmentTops[(size_t)active] + 0.001f) ++active;
++            if (active >= h2.totalSegments) { h2.fullSegments = h2.totalSegments; h2.currentSegment = 1.0; }
++            else {
++                const float bottom = active > 0 ? s2.segmentTops[(size_t)active - 1] : 0.0f, top = s2.segmentTops[(size_t)active];
++                h2.fullSegments = active;
++                h2.currentSegment = top > bottom ? std::max(0.0f, std::min(1.0f, (s2.health - bottom) / (top - bottom))) : 0.0;
++            }
++            h2.clip = s2.clip; h2.clipCapacity = s2.mag; h2.reserve = s2.reserve; h2.reserveCapacity = s2.reserveMax;
++            h2.weapon = s2.aim.weaponClass ? s2.aim.weaponClass : "";
++            h2.aimType = s2.aim.aimType;
++            const auto& o2 = s2.hud2;
++            for (size_t i = 0; i < o2.abilities.size() && i < h2.abilities.size(); ++i) {
++                const auto& a = o2.abilities[i];
++                frontend::HudFrame::Ability ha;
++                ha.id = a.id.empty() ? std::string("None") : a.id;
++                ha.cooldown = a.cooldownLeft;
++                ha.fraction = a.cooldownTime > 0.0f ? std::max(0.0f, std::min(1.0f, 1.0f - a.cooldownLeft / a.cooldownTime)) : 1.0f;
++                h2.abilities[i] = ha;
++            }
++            if (o2.grenade.ammo >= 0) {
++                h2.grenadeAmmo = o2.grenade.ammo;
++                h2.grenadeType = HC::grenadeTypeFor(o2.grenade.type);
++                h2.activeGrenades = o2.grenade.activeCount;
++            }
++            h2.targetType = o2.target.type;
++            h2.targetName = o2.target.name;
++            if (o2.target.health >= 0.0f) h2.targetHealth = o2.target.health;
++            h2.weaponJammed = o2.weapon.jammed;
++            h2.weaponSpread = o2.weapon.spread;
++            h2.weaponMessage = o2.weapon.message;
++            h2.contextualPrompts = o2.contextual;
++            h2.cantTransformCount = o2.cantTransformCount;
++            for (const auto& d : s2.damageTaken) frontend_->hud2().damageIndicator(HC::hudYaw(d.yaw), std::min(100.0f, d.amount));
++            for (size_t i = 0; i < s2.damageCaused.size(); ++i) frontend_->hud2().causedDamage();
++            frontend_->hud2().setFrame(h2);
++        }
++    }
+     world_.consumePresented();   // once per call: the queues above were read
+ }
+ 
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index 64f323ee..b4825f2a 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -876,6 +876,10 @@ Application::MatchExit Application::runMatch() {
+             }
+         }
+         world_.playerBotInput(input, (float)realDt);   // WFC_PLAYERBOT: the bot brain plays the local player through its input
++        if (world_.localSeatCount() > 1) {   // [Frontend, split screen] seat 2's pad-only frame (Systems' window routing)
++            platform::InputFrame seat2;
++            if (window_->pumpSeat2(seat2)) world_.setSeat2Input(seat2);
++        }
+         // Per-frame input (camera orientation, buffered movement intent).
+         world_.handleInput(input, (float)realDt);
+ 
