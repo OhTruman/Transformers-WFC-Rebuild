@@ -125,7 +125,7 @@ private:
     bool scoreboardShown_ = false;            // started (advanced, drawn, focused); false = Close(KeepLoaded)
     // Movies a movie opens itself (Self.OpenMovieWithPath(path, CaptureInput, CaptureFocus), e.g. Brightness_GFX ->
     // CalibrationImage_GFX): drawn above their opener; with CaptureFocus they take the keys.
-    struct Extra { std::string object; std::unique_ptr<GfxMovie> movie; bool focus = false; };
+    struct Extra { std::string object; std::unique_ptr<GfxMovie> movie; bool focus = false; std::string owner; };   // owner: the movie whose OpenMovieWithPath opened it
     std::vector<Extra> extras_;
     std::vector<std::string> deferredErase_;    // TnHUD.ScoreboardMovie (InGameStats_GFX), above the HUD, with focus
     bool shapesStale_ = false;                // a movie was destroyed since the last draw
@@ -143,7 +143,7 @@ private:
     void recommendedSettingsPressed();
     void syncSettingsCommit();
     void syncSettingsPreview();
-    void colourPickerMouse(gfx::Player& p, const platform::InputFrame& in);   // #21: Create a Character colours by mouse
+    bool colourPickerMouse(gfx::Player& p, const platform::InputFrame& in);   // #21: Create a Character colours by mouse (true: took the press)
     bool pickerHeld_ = false;   // #5: the focused Graphics row's preview image (previewPng_, previewRect_)
     std::string previewPng_;
     float previewRect_[4] = {0, 0, 0, 0};

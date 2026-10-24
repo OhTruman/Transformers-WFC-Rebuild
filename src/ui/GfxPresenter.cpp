@@ -495,6 +495,7 @@ Value GfxPresenter::bridge(GfxMovie& m, const std::string& fn, Args& a) {
         for (const Extra& e : extras_) if (e.object == sa[0]) return Value();
         Extra e;
         e.object = sa[0];
+        e.owner = m.object();
         e.focus = sa.size() > 2 && (sa[2] == "true" || sa[2] == "1");
         e.movie = std::make_unique<GfxMovie>();
         bool ok = e.movie->open(lib_, &rt_.catalog(), sa[0],
@@ -778,6 +779,21 @@ void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
             movies_.erase(movies_.begin() + (long)i);
             shapesStale_ = true;
         }
+    }
+    // A movie another one opened (Self.OpenMovieWithPath: Brightness.swf's CalibrationImage_GFX) goes with its owner: the
+    // calibration screen left open by a level change (an automated jump into a match from the first-launch / Campaign-entry
+    // calibration) kept its logos and grey bars over gameplay (Rendering perf_pass_shots fg_gen_301_match.png, P1).
+    for (size_t i = extras_.size(); i-- > 0;) {
+        const std::string& own = extras_[i].owner;
+        if (own.empty()) continue;
+        bool alive = false;
+        for (const Open& op : movies_) if (op.object == own) alive = true;
+        for (const Extra& x : extras_) if (x.object == own) alive = true;
+        if (alive) continue;
+        frontend::FlowTrace::emit("gfx.extraClosedWithOwner", {{"movie", extras_[i].object}, {"owner", own}});
+        rt_.dataStores().forgetMovie(extras_[i].object);
+        extras_.erase(extras_.begin() + (long)i);
+        shapesStale_ = true;
     }
     for (const std::string& o : want) {
         bool have = false;
@@ -1667,6 +1683,7 @@ void GfxPresenter::syncSettingsCommit() {
 // the input - so Campaign does not ask again.
 void GfxPresenter::syncFirstLaunchBrightness(gfx::Player& p, frontend::GameFlow& flow) {
     if (firstBrightnessShown_ || flow.level() != frontend::LevelKind::FrontEnd || flow.ui().state() != frontend::UIState::FrontEnd) return;
+    if (std::getenv("WFC_FRONTEND_AUTOPLAY")) { firstBrightnessShown_ = true; return; }   // automation that jumps into a match
     if (flow.profile().getBool("HasAdjustedGamma")) { firstBrightnessShown_ = true; return; }
     gfx::MovieClip* mainMenu = findClipNamed(p.root(), "menuMain_mc");
     if (!mainMenu || !mainMenu->script || !mainMenu->visible || !p.root() || !p.root()->script) return;
@@ -1730,24 +1747,25 @@ void GfxPresenter::syncSettingsPreview() {
 // 256 x 256 colour square also moves the selector to the pointer and follows the held button, calling the palette's
 // selectionUpdated as the left-stick path does. The pad's left stick / D-pad and the arrow keys keep driving it
 // (Input.RegisterLeftStickCallback).
-void GfxPresenter::colourPickerMouse(gfx::Player& p, const platform::InputFrame& in) {
-    if (!in.mouseLeft) { pickerHeld_ = false; return; }
-    if (in.mouseX < 0 || in.mouseY < 0) return;
+bool GfxPresenter::colourPickerMouse(gfx::Player& p, const platform::InputFrame& in) {
+    if (!in.mouseLeft) { pickerHeld_ = false; return false; }
+    if (in.mouseX < 0 || in.mouseY < 0) return false;
     gfx::MovieClip* sel = findClipNamed(p.root(), "selectClip_mc");
-    if (!sel || !sel->script || !sel->parent || !sel->parent->script || !sel->visible || sel->removed) return;
+    if (!sel || !sel->script || !sel->parent || !sel->parent->script || !sel->visible || sel->removed) return false;
     gfx::avm1::VM& vm = p.vm();
     using V = gfx::avm1::Value;
-    if (vm.toNumber(vm.get(sel->script, "_alpha")) < 50.0) return;   // the picker is closed (the selector fades out)
+    if (vm.toNumber(vm.get(sel->script, "_alpha")) < 50.0) return false;   // the picker is closed (the selector fades out)
     const gfx::Matrix inv = GfxRendererGL::movieMatrix(p, viewW_, viewH_).inverse();
     const gfx::Point stage = inv.apply({(float)in.mouseX, (float)in.mouseY});   // stage twips
     const gfx::Point local = sel->parent->worldMatrix().inverse().apply(stage);
     const float x = local.x / 20.0f, y = local.y / 20.0f;
     const bool inside = x >= 0.0f && x <= 255.0f && y >= 0.0f && y <= 255.0f;
-    if (!pickerHeld_ && !inside) return;   // a press elsewhere (the swatches, the buttons) is the movie's
+    if (!pickerHeld_ && !inside) return false;   // a press elsewhere (the swatches, the buttons) is the movie's
     pickerHeld_ = true;
     vm.set(sel->script, "_x", V((double)std::max(0.0f, std::min(255.0f, x))));
     vm.set(sel->script, "_y", V((double)std::max(0.0f, std::min(255.0f, y))));
     if (vm.get(sel->parent->script, "selectionUpdated").isObject()) vm.callMethod(V(sel->parent->script), "selectionUpdated", {});
+    return true;
 }
 
 // ONLINE_LOBBY_FLOW_V2 1.1: the party lobby's Private Match row hosts at once (the last-used mode; offline the same lobby
@@ -2277,8 +2295,15 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
         if (!ok) cursor_.reset();
     }
     deliverKeys(in);
-    deliverMouse(in);
-    if (gfx::Player* fp = focusPlayer()) colourPickerMouse(*fp, in);
+    {   // the colour square takes its own presses; the movie then sees no button (the palette arrows' invisible hit areas overlap
+        // the square: a press there also shifted the palette)
+        gfx::Player* fp = focusPlayer();
+        if (fp && colourPickerMouse(*fp, in)) {
+            platform::InputFrame noButton = in;
+            noButton.mouseLeft = false;
+            deliverMouse(noButton);
+        } else deliverMouse(in);
+    }
     if (!stickCallbacks_.empty()) {
         // Left stick for registered callbacks: the pad (XInput +Y up -> +Y down) or, on PC, the movement keys (W / A / S / D,
         // the PC left-stick equivalent) and the held arrow keys as full deflection [PC ADAPTATION: the shipped PC
