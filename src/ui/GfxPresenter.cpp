@@ -4,6 +4,7 @@
 #include "core/FrameProfile.h"
 #include "core/Log.h"
 #include "frontend/DataPaths.h"
+#include "render/SplitScreen.h"
 #include "frontend/FlowTrace.h"
 
 #include <algorithm>
@@ -149,6 +150,40 @@ void GfxPresenter::installGlyphLabels() {
             for (const auto& [k, v] : t) if (image.find(k) != std::string::npos) return v;
             return {};
         };
+}
+
+void GfxPresenter::setSeatHud(int seat, bool open, bool visible) {
+    if (seat == 0) { setHud(open, visible); return; }
+    if (!open) {
+        if (hud2_) { rt_.dataStores().forgetMovie(hud2_->object()); shapesStale_ = true; }
+        hud2_.reset(); hud2Visible_ = false;
+        return;
+    }
+    if (!hud2_) {
+        hud2_ = std::make_unique<GfxMovie>();
+        bool ok = hud2_->open(lib_, &rt_.catalog(), frontend::HudController::kMovie,
+                              [this](GfxMovie& mv, const std::string& fn, Args& a) { return bridge(mv, fn, a); },
+                              [this](GfxMovie& mv, const std::string& c, const std::string& a) { fsCommand(mv, c, a); });
+        frontend::FlowTrace::emit("gfx.movie", {{"movie", frontend::HudController::kMovie}, {"seat", "2"}, {"opened", frontend::FlowTrace::boolean(ok)}});
+        if (!ok) { hud2_.reset(); return; }
+    }
+    hud2Visible_ = visible;
+}
+
+void GfxPresenter::seatHudCall(int seat, const std::string& fn, const std::vector<frontend::BridgeValue>& args) {
+    if (seat == 0) { hudCall(fn, args); return; }
+    if (!hud2_) return;
+    Args a;
+    for (const frontend::BridgeValue& b : args) a.push_back(toValue(hud2_->player().vm(), b));
+    hud2_->invoke(fn, a);
+}
+
+bool GfxPresenter::seatHudStageSize(int seat, double& w, double& h) const {
+    if (seat == 0) return hudStageSize(w, h);
+    if (!hud2_) return false;
+    w = hud2_->player().stageViewW();
+    h = hud2_->player().stageViewH();
+    return w > 0 && h > 0;
 }
 
 bool GfxPresenter::hudStageSize(double& w, double& h) const {
@@ -2034,7 +2069,22 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
 #if WFC_DLSS_PACKAGE
     syncPackageCredit();
 #endif
-    if (hud_) { hud_->player().setViewport((float)viewW_, (float)viewH_); hud_->advance(dt); hudInterpUpdate(*hud_); if (extendedMatch_) checkKillFeed(dt); syncWorldLabels(); }
+    {   // split screen: two seats in a match -> each HUD sized to its view rect inside the title-safe zone (SPLITSCREEN_RE 2)
+        const bool split = flow.level() == frontend::LevelKind::Match && flow.localSeats() == 2;
+        const render::SplitLayout layout = !split ? render::SplitLayout::Single
+                                         : flow.profile().display.splitLayout == 2 ? render::SplitLayout::Vertical : render::SplitLayout::Horizontal;
+        splitHud_ = split;
+        for (int v = 0; v < 2; ++v) {
+            render::ViewPixels r = render::splitViewPixels(layout, split ? v : 0, viewW_, viewH_);
+            if (split) r = render::titleSafe(r);
+            hudRect_[v][0] = r.x; hudRect_[v][1] = r.y; hudRect_[v][2] = std::max(1, r.w); hudRect_[v][3] = std::max(1, r.h);
+        }
+    }
+    if (hud_) {
+        hud_->player().setViewport((float)(splitHud_ ? hudRect_[0][2] : viewW_), (float)(splitHud_ ? hudRect_[0][3] : viewH_));
+        hud_->advance(dt); hudInterpUpdate(*hud_); if (extendedMatch_) checkKillFeed(dt); syncWorldLabels();
+    }
+    if (hud2_) { hud2_->player().setViewport((float)hudRect_[1][2], (float)hudRect_[1][3]); hud2_->advance(dt); hudInterpUpdate(*hud2_); }
     if (scoreboard_ && scoreboardShown_) { scoreboard_->advance(dt); scrollPlayerList(scoreboard_->player(), scoreScroll_, in, dt); } else scoreScroll_ = 0.0f;
     if (scoreboard_) syncIconicPlayerList(scoreboard_->player(), flow);   // the Tab scoreboard (#7)
     // PlayerList_GFX _global.GivePlayerListInput (RE audit 3): the scoreboard's rows take the pad / keys while it is up, so a
@@ -2207,7 +2257,17 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     if (emptyLayer) {}
     else if (loading_) drawMovie(*loading_);
     else {
-        if (hud_ && hudVisible_) drawMovie(*hud_);
+        auto drawInRect = [&](GfxMovie& m, const int* r) {   // a seat's HUD: the stage fitted to its view rect
+            items_.clear();
+            gfx::Player& p = m.player();
+            gfx::Matrix mx = GfxRendererGL::movieMatrix(p, r[2], r[3]);
+            mx.tx += (float)r[0];
+            mx.ty += (float)r[1];
+            p.buildRenderList(mx, items_);
+            gl_.draw(items_);
+        };
+        if (hud_ && hudVisible_) { if (splitHud_) drawInRect(*hud_, hudRect_[0]); else drawMovie(*hud_); }
+        if (hud2_ && hud2Visible_ && splitHud_) drawInRect(*hud2_, hudRect_[1]);
         if (scoreboard_ && scoreboardShown_) drawMovie(*scoreboard_);
         for (Open& o : movies_) drawMovie(*o.movie);
         for (Extra& e : extras_) drawMovie(*e.movie);

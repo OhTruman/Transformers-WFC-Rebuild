@@ -329,6 +329,17 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
                           std::to_string(progression::levelForXp(pr.xp[0])), std::to_string(progression::levelForXp(pr.xp[2])),
                           std::to_string(progression::playerLevel(pr))});
         c.enabled.push_back(true);
+        if (flow_.localSeats() == 2) {   // split screen: the second local seat on seat 1's team (its own profile's name and levels)
+            const LocalProfile& p2 = flow_.seat2Profile();
+            std::string n2 = p2.playerName();
+            if (n2.empty() || n2 == playerName()) n2 = cat_.localizeKey("$WfcPC.Split.Player2");
+            const auto& x = p2.progression.xp;
+            c.rows.push_back({n2, std::to_string(team), teamName, "0", "0", "0", "0", "0", "", "0", "0", "0", "", "",
+                              std::to_string(progression::levelForXp(x[3])), std::to_string(progression::levelForXp(x[1])),
+                              std::to_string(progression::levelForXp(x[0])), std::to_string(progression::levelForXp(x[2])),
+                              std::to_string(progression::playerLevel(p2.progression))});
+            c.enabled.push_back(true);
+        }
         if (online) {   // online lobby: the other humans
             for (const GameFlow::OnlineMember& m : flow_.onlineMembers()) {
                 std::string headset;

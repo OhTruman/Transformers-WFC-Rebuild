@@ -260,6 +260,7 @@ bool FrontendRuntime::init() {
     if (!catalog_.load(Catalog::defaultManifestRoot(), Catalog::defaultExtractedRoot(), vs + "/Maps")) return false;
     if (!prompts_.load(Catalog::defaultExtractedRoot())) LOG_WARN("frontend: TnInputCommandToBindingMapper tables not found");
     hud_.setPromptTranslator([this](const std::string& t) { return prompts_.translate(t, device_.pad()); });
+    hud2_.setPromptTranslator([this](const std::string& t) { return prompts_.translate(t, true); });   // seat 2 plays on a pad
     GameFlow::Options o;
     o.skipIntroMovies = std::getenv("WFC_SKIPINTRO") != nullptr;
     // Flow RNG (loading tips, lobby team pick, map rotation): WFC_FLOWSEED; else, in deterministic runs, WFC_SEED or a
@@ -1166,6 +1167,21 @@ void FrontendRuntime::stopMovieAudio() {
 }
 
 namespace {
+// Split screen: seat 2's HudController talks to the presenter through this, so its HUD calls reach seat 2's Hud_GFX.
+class SeatHudSink : public IMoviePresenter {
+public:
+    SeatHudSink(IMoviePresenter* p, int seat) : p_(p), seat_(seat) {}
+    bool runsMovie(const std::string&) const override { return false; }
+    void update(GameFlow&, const platform::InputFrame&, float) override {}
+    void draw(const GameFlow&, int, int) override {}
+    void setHud(bool open, bool visible) override { if (p_) p_->setSeatHud(seat_, open, visible); }
+    void hudCall(const std::string& fn, const std::vector<BridgeValue>& args) override { if (p_) p_->seatHudCall(seat_, fn, args); }
+    bool hudStageSize(double& w, double& h) const override { return p_ && p_->seatHudStageSize(seat_, w, h); }
+private:
+    IMoviePresenter* p_;
+    int seat_;
+};
+
 // The extracted movies carry region / language suffixes: <name>_NA_<lang>, <name>_<lang>, then the INT forms, then <name>.
 std::string localizedMovie(const std::string& b, const std::string& lang = "INT") {
     for (const std::string& c : {b + "_NA_" + lang, b + "_" + lang, b + "_NA_INT", b + "_INT"})
@@ -1377,6 +1393,7 @@ void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
     updateInputDevice(in, dt);
     if (flow_.profile().display.language != catalog_.language()) {   // boot and the Settings Apply: the profile's text language
         catalog_.setLanguage(flow_.profile().display.language);
+        if (audio_) audio_->setLanguage(catalog_.language());   // Systems: dialogue / localized waves from the next level audio load
         if (catalog_.language() != flow_.profile().display.language) flow_.profile().display.language = catalog_.language();   // unavailable -> INT
     }
     { core::prof::Scope prof("flow.tick"); flow_.tick(dt); }
@@ -1440,6 +1457,11 @@ void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt)
     for (const std::string& line : flow_.takeGameMessages())   // online: "`k has left the game" (the original kill-feed line)
         if (presenter_) presenter_->hudCall("_global.GameMessage", {BridgeValue(line)});
     hud_.update(presenter_.get(), catalog_, inMatch, hudShown);
+    {   // split screen: seat 2's HUD exists while it plays (two local seats in a match); its prompts are pad glyphs
+        const bool seat2 = flow_.localSeats() == 2;
+        SeatHudSink sink(presenter_.get(), 1);
+        hud2_.update(&sink, catalog_, inMatch && seat2, hudShown && seat2);
+    }
     {   // the respawn movie's "currently spectating" label (RE audit 3): on change, and again when the movie (re)opens
         const bool respawnUp = inMatch && st == UIState::Spectating;
         const std::string target = hud_.frame().spectateTarget.value_or(std::string());

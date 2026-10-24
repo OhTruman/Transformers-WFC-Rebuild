@@ -40,6 +40,9 @@ public:
     void setScoreboard(bool open) override;
     void hudCall(const std::string& fn, const std::vector<frontend::BridgeValue>& args) override;
     bool hudStageSize(double& w, double& h) const override;
+    void setSeatHud(int seat, bool open, bool visible) override;
+    void seatHudCall(int seat, const std::string& fn, const std::vector<frontend::BridgeValue>& args) override;
+    bool seatHudStageSize(int seat, double& w, double& h) const override;
     void setPadPrompts(bool pad) override;
     void installGlyphLabels();
     void setWorldLabels(const std::vector<frontend::WorldLabel>& labels) override { worldLabels_ = labels; }
@@ -113,6 +116,10 @@ private:
     std::unique_ptr<GfxMovie> cursor_;
     std::unique_ptr<GfxMovie> hud_;           // TnHUD.HudMovie (Hud_GFX), under the UIController movies
     bool hudVisible_ = false;
+    std::unique_ptr<GfxMovie> hud2_;          // split screen: seat 2's Hud_GFX
+    bool hud2Visible_ = false;
+    bool splitHud_ = false;                   // two seats in a match: each HUD in its view rect (title-safe)
+    int hudRect_[2][4] = {};                  // x, y, w, h per seat (window pixels)
     std::unique_ptr<GfxMovie> scoreboard_;   // InGameStats_GFX: one instance per HUD (TnHUD.ScoreboardMovie)
     bool scoreboardShown_ = false;            // started (advanced, drawn, focused); false = Close(KeepLoaded)
     // Movies a movie opens itself (Self.OpenMovieWithPath(path, CaptureInput, CaptureFocus), e.g. Brightness_GFX ->

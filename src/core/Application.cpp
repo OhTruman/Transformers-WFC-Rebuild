@@ -876,6 +876,10 @@ Application::MatchExit Application::runMatch() {
             }
         }
         world_.playerBotInput(input, (float)realDt);   // WFC_PLAYERBOT: the bot brain plays the local player through its input
+        if (world_.localSeatCount() > 1) {   // [Frontend, split screen] seat 2's pad-only frame (Systems' window routing)
+            platform::InputFrame seat2;
+            if (window_->pumpSeat2(seat2)) world_.setSeat2Input(seat2);
+        }
         // Per-frame input (camera orientation, buffered movement intent).
         world_.handleInput(input, (float)realDt);
 

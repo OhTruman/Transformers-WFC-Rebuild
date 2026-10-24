@@ -97,3 +97,8 @@ VoteNext=Next map:
 GameModeDesc=The kind of match. Each mode keeps its own settings.
 NoPublicGames=No public games found.
 LanOnly=Public matches need the lobby service. LAN games only.
+
+[Split]
+Player2=Player 2
+Player2Joined=Player 2 joined
+Player2Left=Player 2 left

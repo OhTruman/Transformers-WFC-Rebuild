@@ -1321,6 +1321,21 @@ void Application::runFrontend() {
                 frontend_->update(input, (float)dt);
             }
             syncSplitLayout(renderer_, flow);   // [Frontend] menus: a single view
+            {   // [Frontend, split screen] Systems' window routes a second pad to seat 2 while a lobby can take it (or it is in):
+                // a new join -> GameFlow::joinSeat2 (refused -> the pad is released); seat 2's Back in a lobby -> it leaves
+                const bool lobby = flow.level() == frontend::LevelKind::PartyLobby || flow.level() == frontend::LevelKind::GameLobby;
+                window_->setSplitScreen(lobby || flow.localSeats() == 2);
+                static int seenSerial = window_->seat2JoinedSerial();
+                if (window_->seat2JoinedSerial() != seenSerial) {
+                    seenSerial = window_->seat2JoinedSerial();
+                    if (!flow.joinSeat2(window_->seatPad(1))) window_->releaseSeat2();
+                }
+                platform::InputFrame s2;
+                static bool backWas = false;
+                const bool back = window_->pumpSeat2(s2) && s2.uiIsDown(platform::UiKey::Back);
+                if (back && !backWas && lobby && flow.localSeats() == 2) { flow.leaveSeat2(); window_->releaseSeat2(); }
+                backWas = back;
+            }
             tickLobbyVoice();   // [Systems] lobby voice (in a session, no match)
             if (flow.quitRequested()) { quit = true; break; }
             drawFrontendFrame();
@@ -1903,6 +1918,70 @@ void Application::routeMatchToFrontend(float dt) {
         for (size_t i = 0; i < pf.damageCaused.size(); ++i) frontend_->hud().causedDamage();               // hit marker per hit
     }
     frontend_->hud().setFrame(hf);
+    {   // [Frontend, split screen] seat 2: into the match once per launch (Gameplay assigns its match player on seat 1's team),
+        // then its own HUD from PresentedFrame::seats[1]. Until seat 2 has its own Choose Character / characters file it plays
+        // the roster's first preset, as the automated pick does.
+        static int seatAddedFor = -1;
+        if (flow.localSeats() == 2 && world_.localSeatCount() < 2 && seatAddedFor != matchesLaunched_) {
+            seatAddedFor = matchesLaunched_;
+            const std::string first = frontend_->roster().customCharacters().empty() ? std::string() : frontend_->roster().customCharacters().front().name;
+            const frontend::GameFlow::SelectedCharacter fc = frontend_->selectionFor(first);
+            game::CharacterSelection cs;
+            cs.type = fc.type;
+            cs.specialty = fc.specialty == "Scientist" ? game::Specialty::Scientist : fc.specialty == "Scout" ? game::Specialty::Scout
+                         : fc.specialty == "Soldier" ? game::Specialty::Soldier : game::Specialty::Leader;
+            const int team = (size_t)me < pf.players.size() ? pf.players[(size_t)me].team : 0;
+            cs.chassisId = fc.chassis[team == 1 ? 1 : 0].empty() ? fc.chassis[0] : fc.chassis[team == 1 ? 1 : 0];
+            cs.customSlot = fc.name;
+            fillFullSelection(cs, fc);
+            const int p2 = world_.addLocalSeat(flow.seat2Pad(), cs, fc.valid);
+            frontend::FlowTrace::emit("split.seat2Match", {{"pad", std::to_string(flow.seat2Pad())}, {"player", std::to_string(p2)}, {"character", fc.name}});
+        }
+        if (pf.seats.size() > 1 && flow.localSeats() == 2) {
+            using HC = frontend::HudController;
+            const auto& s2 = pf.seats[1];
+            frontend::HudFrame h2;
+            h2.valid = h.matchActive;
+            h2.alive = !s2.dead;
+            h2.totalSegments = (int)s2.segmentTops.size();
+            int active = 0;
+            while ((size_t)active < s2.segmentTops.size() && s2.health > s2.segmentTops[(size_t)active] + 0.001f) ++active;
+            if (active >= h2.totalSegments) { h2.fullSegments = h2.totalSegments; h2.currentSegment = 1.0; }
+            else {
+                const float bottom = active > 0 ? s2.segmentTops[(size_t)active - 1] : 0.0f, top = s2.segmentTops[(size_t)active];
+                h2.fullSegments = active;
+                h2.currentSegment = top > bottom ? std::max(0.0f, std::min(1.0f, (s2.health - bottom) / (top - bottom))) : 0.0;
+            }
+            h2.clip = s2.clip; h2.clipCapacity = s2.mag; h2.reserve = s2.reserve; h2.reserveCapacity = s2.reserveMax;
+            h2.weapon = s2.aim.weaponClass ? s2.aim.weaponClass : "";
+            h2.aimType = s2.aim.aimType;
+            const auto& o2 = s2.hud2;
+            for (size_t i = 0; i < o2.abilities.size() && i < h2.abilities.size(); ++i) {
+                const auto& a = o2.abilities[i];
+                frontend::HudFrame::Ability ha;
+                ha.id = a.id.empty() ? std::string("None") : a.id;
+                ha.cooldown = a.cooldownLeft;
+                ha.fraction = a.cooldownTime > 0.0f ? std::max(0.0f, std::min(1.0f, 1.0f - a.cooldownLeft / a.cooldownTime)) : 1.0f;
+                h2.abilities[i] = ha;
+            }
+            if (o2.grenade.ammo >= 0) {
+                h2.grenadeAmmo = o2.grenade.ammo;
+                h2.grenadeType = HC::grenadeTypeFor(o2.grenade.type);
+                h2.activeGrenades = o2.grenade.activeCount;
+            }
+            h2.targetType = o2.target.type;
+            h2.targetName = o2.target.name;
+            if (o2.target.health >= 0.0f) h2.targetHealth = o2.target.health;
+            h2.weaponJammed = o2.weapon.jammed;
+            h2.weaponSpread = o2.weapon.spread;
+            h2.weaponMessage = o2.weapon.message;
+            h2.contextualPrompts = o2.contextual;
+            h2.cantTransformCount = o2.cantTransformCount;
+            for (const auto& d : s2.damageTaken) frontend_->hud2().damageIndicator(HC::hudYaw(d.yaw), std::min(100.0f, d.amount));
+            for (size_t i = 0; i < s2.damageCaused.size(); ++i) frontend_->hud2().causedDamage();
+            frontend_->hud2().setFrame(h2);
+        }
+    }
     world_.consumePresented();   // once per call: the queues above were read
 }
 
