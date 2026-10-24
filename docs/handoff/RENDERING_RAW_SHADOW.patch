@@ -1,0 +1,58 @@
+diff -ruN a/src/render/d3d12/D3D12RtBridge.cpp b/src/render/d3d12/D3D12RtBridge.cpp
+--- a/src/render/d3d12/D3D12RtBridge.cpp	2026-10-24 03:47:15.547797900 -0500
++++ b/src/render/d3d12/D3D12RtBridge.cpp	2026-10-24 03:47:15.625564100 -0500
+@@ -174,6 +174,12 @@
+         if (heap_ && depth_.res) writeDescriptors();
+     }
+ 
++#if defined(WFC_RT_DENOISER)
++    bool denoised() const { return dn_.ready(); }
++#else
++    bool denoised() const { return false; }
++#endif
++
+     bool prepare(int w, int h, RtTargets* t) {
+         if (w != depth_.w || h != depth_.h) {
+             if (!waitIdle()) return false;               // (in flight: the old targets are not freed)
+@@ -1758,6 +1764,7 @@
+ bool rtBridgeAvailable() { return g_bridge ? true : !g_failed && probeAvailable(); }
+ void rtBridgeShutdown() { if (g_bridge) g_bridge->shutdown(); }
+ bool rtBridgePrepare(int w, int h, RtTargets* t) { return ensure() && g_bridge->prepare(w, h, t); }
++bool rtBridgeDenoised() { return g_bridge && g_bridge->denoised(); }
+ void rtBridgeSelectView(int view) { if (g_bridge) g_bridge->selectView(view); }
+ bool rtBridgeAddStaticWorld(const RtStaticWorld& world, unsigned mask) { return ensure() && g_bridge->addStaticWorld(world, mask); }
+ void rtBridgeClearStaticWorld() { if (g_bridge) g_bridge->clearStaticWorld(); }
+@@ -1784,6 +1791,7 @@
+ bool rtBridgeAvailable() { return false; }
+ void rtBridgeShutdown() {}
+ bool rtBridgePrepare(int, int, RtTargets*) { return false; }
++bool rtBridgeDenoised() { return false; }
+ void rtBridgeSelectView(int) {}
+ bool rtBridgeAddStaticWorld(const RtStaticWorld&, unsigned) { return false; }
+ void rtBridgeClearStaticWorld() {}
+diff -ruN a/src/render/d3d12/D3D12RtBridge.h b/src/render/d3d12/D3D12RtBridge.h
+--- a/src/render/d3d12/D3D12RtBridge.h	2026-10-24 03:47:15.559337400 -0500
++++ b/src/render/d3d12/D3D12RtBridge.h	2026-10-24 03:47:15.624561300 -0500
+@@ -66,6 +66,7 @@
+ bool rtBridgeAvailable();                                  // a DXR 1.1 device on GL's adapter (a throwaway probe)
+ void rtBridgeShutdown();                                   // process exit, GL context current: queue idle, GL imports released
+ bool rtBridgePrepare(int w, int h, RtTargets* t);           // (re)create at this size; false: unavailable
++bool rtBridgeDenoised();                                    // the shadow denoiser runs (else RtTargets::shadowDn is never written)
+ void rtBridgeSelectView(int view);                          // (split screen) view 0 / 1: its own targets + history
+ bool rtBridgeAddStaticWorld(const RtStaticWorld& world, unsigned mask);   // add a set's BLAS, rebuild the TLAS (map load)
+ void rtBridgeClearStaticWorld();                            // map unload
+diff -ruN a/src/render/gl/WfcRt.cpp b/src/render/gl/WfcRt.cpp
+--- a/src/render/gl/WfcRt.cpp	2026-10-24 03:47:15.568869700 -0500
++++ b/src/render/gl/WfcRt.cpp	2026-10-24 03:47:15.626065600 -0500
+@@ -977,7 +977,10 @@
+     else BlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_ZERO, GL_ONE);   // colour *= factor, alpha kept
+     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
+     UseProgram(cp);
+-    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, rtSoftActive_ ? t.shadowSoft : t.shadowDn);
++    // (no denoiser - its SM 6.6 PSO needs the D3D12 Agility runtime: shadowDn is never written, and Faithful drew black) the
++    // raw sun visibility, shadowAo .x, stands in; soft shadows are built from the denoised one
++    const bool denoised = rtBridgeDenoised();
++    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, !denoised ? t.shadowAo : rtSoftActive_ ? t.shadowSoft : t.shadowDn);
+     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, t.shadowAo);
+     if (r1) { ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, r1SunTex_); }
+     ActiveTexture(GL_TEXTURE0);

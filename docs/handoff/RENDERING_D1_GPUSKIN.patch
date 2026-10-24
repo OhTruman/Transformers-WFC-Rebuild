@@ -1,0 +1,57 @@
+diff -ruN a/src/game/Campaign.h b/src/game/Campaign.h
+--- a/src/game/Campaign.h	2026-10-24 03:47:16.199532000 -0500
++++ b/src/game/Campaign.h	2026-10-24 03:47:16.256728400 -0500
+@@ -94,6 +94,8 @@
+     assets::SkinnedModel model;
+     render::MeshData skinned;
+     std::vector<core::Mat4> scratch;
++    std::vector<core::Mat4> palette;     // GPU skin: the bone palette of (posedClip, posedT), its serial for the renderer's cache
++    int posedClip = -1; float posedT = -1.0f; uint64_t serial = 0;
+ };
+ 
+ struct CampaignFactory {
+diff -ruN a/src/game/WorldCampaignMatinee.cpp b/src/game/WorldCampaignMatinee.cpp
+--- a/src/game/WorldCampaignMatinee.cpp	2026-10-24 03:47:16.209065000 -0500
++++ b/src/game/WorldCampaignMatinee.cpp	2026-10-24 03:47:16.257229800 -0500
+@@ -5,6 +5,7 @@
+ #include "game/World.h"
+ #include "assets/Json.h"
+ #include "assets/SkinnedModel.h"
++#include "game/GpuSkin.h"
+ #include "render/Renderer.h"
+ #include "core/Log.h"
+ 
+@@ -434,7 +435,8 @@
+     LOG_INFO("campaign: %zu matinee skeletal actors", cpSkel_.size());
+ }
+ 
+-// Draw the active ones: the clip sampled at its matinee time, CPU-skinned (a handful of cinematic actors).
++// Draw the active ones: the clip sampled at its matinee time. GPU-skinned (D1 Crash runs 244 at once: CPU skinning them every
++// frame cost ~45 ms); the palette is rebuilt only when the clip / time changes. The CPU skin draws when the renderer cannot.
+ void World::cpDrawSkeletal(render::IRenderer& r) const {
+     const std::string root = "F:/Transformers Rebuild/ExtractedAssets/";
+     for (auto& kv : cpSkel_) {
+@@ -449,8 +451,22 @@
+         if (!k.ok) continue;
+         const int clip = k.model.clipByName(k.clip);
+         if (clip < 0) continue;
++        const core::Mat4 world = core::Mat4::translate(k.pos) * core::Mat4::rotateY(-k.yawDeg * 3.14159265f / 180.0f);
++        if (!k.model.joints.empty()) {
++            if (clip != k.posedClip || k.time != k.posedT || k.palette.empty()) {
++                assets::LocalPose lp;
++                assets::samplePose(k.model, clip, k.time, k.loop, lp);
++                assets::poseGlobals(k.model, lp, k.scratch);
++                buildPalette(k.model, k.scratch, k.palette);
++                k.posedClip = clip; k.posedT = k.time; ++k.serial;
++            }
++            render::MeshData& bind = bindMeshOf(k.model);
++            syncMats(bind.mats, k.model.mats);
++            if (drawSkinnedGpu(r, bind, k.model.joints, k.model.weights, k.palette, nullptr, 1.0f, world, core::Vec3{1, 1, 1}, &k, k.serial, 0))
++                continue;
++        }
+         assets::evaluatePose(k.model, clip, k.time, k.scratch, k.skinned, k.loop);
+-        r.drawDynamicMesh(k.skinned, core::Mat4::translate(k.pos) * core::Mat4::rotateY(-k.yawDeg * 3.14159265f / 180.0f), core::Vec3{1, 1, 1});
++        r.drawDynamicMesh(k.skinned, world, core::Vec3{1, 1, 1});
+     }
+ }
+ 
