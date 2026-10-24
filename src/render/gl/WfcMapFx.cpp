@@ -1712,7 +1712,7 @@ void Pipeline::ensurePickupMesh(PickupMeshRT& pm) {
 void Pipeline::drawMapPresentation() {
     flushDynQueue();                                   // characters before the map presentation (pass order)
     glx::gpuStamp("pawn occlusion queries");
-    if (pawnOcclusionOn()) {
+    if (pawnOcclusionOn() && !split_) {
         const double tp = fxSubCpuOn() ? fxSubNowMs() : 0.0;
         pawnOcclusionQueries();                        // characters are all drawn: test their boxes against the depth
         if (fxSubCpuOn()) gFxSub.ms[FxSubCpu::PawnOcc] += fxSubNowMs() - tp;

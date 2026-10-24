@@ -305,6 +305,14 @@ public:
 
     void beginFrame(const Camera& cam, int w, int h);
     void endFrame();
+    // (split screen) beginFrame = the frame-global part + view pass 0; GLRenderer::beginView runs one more view pass per
+    // view (setSplitView first), each ended by endViewPass (its post into its window rect); endFrameTail once (HUD effect,
+    // frame generation, canvas tiles over the whole window). One view: beginFrame / endFrame exactly as before
+    void beginViewPass(const Camera& cam, int w, int h);
+    void endViewPass();
+    void endFrameTail(int windowW, int windowH);
+    void setSplitView(bool split, int view, int outX, int outY) { split_ = split; viewIdx_ = view; outX_ = outX; outY_ = outY; }
+    bool splitFrame() const { return split_; }
 
     // Returns a GPU mesh id, or -1 (caller falls back to the legacy path).
     int upload(const MeshData& m);
@@ -430,7 +438,9 @@ private:
     float tlPos_[8][4] = {}, tlCol_[8][4] = {}; int tlN_ = 0;
     float tlCut_[8] = {};
     float tlDir_[8][4] = {}, tlCosI_[8] = {};   // (v3 row 3) spot axis (xyz), cos(outer) (w; -2 = a point light); cos(inner)   // (item 4) per light: (d / radius)^2 beyond which its falloff is < 1/512 (the cull sphere)   // (item 4) the applied lights as uniforms
-    void selectTransientLights();
+    void selectTransientLights(bool rankOnly = false);   // (rankOnly: a split frame's later view - this frame's list re-ranked)
+    void collectTransientLights();
+    void rankTransientLights();
     // (tiled transient lights) every selected light (up to 64 in Realistic; 8 elsewhere, the original's count) in a data
     // texture (4 texels per light), and a per-32-pixel screen-tile mask of the lights whose cull sphere reaches the tile:
     // a pixel loops over its tile's lights only. The first 4 are the RT-shadowed ones (the ranking order). WFC_TLTILED=0:
@@ -562,6 +572,7 @@ private:
     struct SkinDraw { GLuint vao; core::Vec3 mn, mx; };
     const SkinDraw* skinDraw_ = nullptr;                  // drawDynamic: a GPU-skinned draw (no vertex build / scan)
     int winW_ = 0, winH_ = 0;                          // the window size this frame (vpW_ / vpH_: the render size)
+    bool split_ = false; int viewIdx_ = 0, outX_ = 0, outY_ = 0;   // (split screen) this view pass: index, GL window offset
     // optional FSR 1 upscaling (WfcFsr.cpp; OFF by default: scale 1, sharpness < 0)
     float fsrScale_ = 1.0f, fsrSharpness_ = -1.0f;
     bool fsrFailed_ = false;

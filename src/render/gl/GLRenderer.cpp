@@ -255,6 +255,69 @@ public:
         c.fx = wfc_.fxMsTotal() - c.fx0; c.fxSim = wfc_.fxSimMsTotal() - c.fxSim0;
     }
 
+    // the frame's camera as drawn: the diagnostic overrides, the far plane over the world; in a split frame the view's aspect
+    Camera prepareCamera(const Camera& cam0, int w, int h) {
+        // Diagnostic camera override for render inspection: WFC_RENDERCAM="x,y,z,yawRad,pitchRad".
+        Camera camOv = cam0;
+        if (const char* rc = WFC_ENV("WFC_RENDERCAM"))
+            std::sscanf(rc, "%f,%f,%f,%f,%f", &camOv.pos.x, &camOv.pos.y, &camOv.pos.z, &camOv.yaw, &camOv.pitch);
+        // Measurements: WFC_FIXEDCAM="x,y,z,yawDeg,pitchDeg" holds every MATCH frame at one view (menu scenes keep their
+        // own cameras), so performance runs see the same scene regardless of where the local player goes
+        if (matchMap_) {
+            static const char* fc = std::getenv("WFC_FIXEDCAM");
+            float y = 0, pt = 0;
+            if (fc && std::sscanf(fc, "%f,%f,%f,%f,%f", &camOv.pos.x, &camOv.pos.y, &camOv.pos.z, &y, &pt) == 5) {
+                camOv.yaw = core::radians(y); camOv.pitch = core::radians(pt);
+            }
+        }
+        // M51: the far plane covers the loaded world's geometry (UE3 renders with an infinite far plane). Debris' sky
+        // dome (SpaceDome x6, radius ~26.6 km) lay beyond the 20 km default and was clipped mid-screen (black sky with
+        // pieces at the view edges). Depth precision is governed by the near plane; one far plane for every 3D pass.
+        if (wfc_.active() && wfc_.worldRadius() > 0.0f) {
+            float need = wfc_.worldRadius() + core::length(camOv.pos) + 1000.0f;
+            if (need > camOv.zfar) camOv.zfar = need;
+        }
+        if (splitNow_ && h > 0) camOv.aspect = (float)w / (float)h;   // (split: the view's rect - the horizontal FOV kept)
+        return camOv;
+    }
+
+    // ---- split screen (render/SplitScreen.h) ----
+    bool splitScreenSupported() const override { return wfc_.active(); }
+    void setSplitLayout(SplitLayout layout) override { split_ = layout; }
+    SplitLayout splitLayout() const override { return wfc_.active() ? split_ : SplitLayout::Single; }
+    int currentView() const override { return curView_; }
+    void setLocalOwner(int drawOwner) override { localOwner_ = drawOwner; }
+    void beginView(int view, const Camera& camIn) override {
+        if (!inFrame_ || !splitNow_ || view <= curView_ || view >= splitViewCount(split_)) return;   // (view 0: beginFrame's)
+        finishView();
+        curView_ = view;
+        const ViewPixels p = splitViewPixels(split_, view, winW_, winH_);
+        const ViewPixels p0 = splitViewPixels(split_, 0, winW_, winH_);
+        wfc_.setSplitView(true, view, p.x, winH_ - p.y - p.h);
+        const Camera cam = prepareCamera(camIn, p0.w, p0.h);
+        lastCam_ = cam;
+        wfc_.beginViewPass(cam, p0.w, p0.h);
+        glMatrixMode(GL_PROJECTION);
+        const core::Mat4 pm = cam.proj();
+        glLoadMatrixf(pm.m);
+        glMatrixMode(GL_MODELVIEW);
+        view_ = cam.view();
+        glLoadMatrixf(view_.m);
+    }
+    // the end of one view: chapter units, map presentation, its post into its rect
+    void finishView() {
+        if (wfc_.active() && !chapterMeshes_.empty() && chapterFrame_ != viewKey()) {
+            chapterFrame_ = viewKey();
+            for (MeshHandle c : chapterMeshes_)
+                if (c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0 && wfc_.chapterMeshVisible(gpu_[(size_t)c]))
+                    wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
+            glLoadMatrixf(view_.m);
+        }
+        if (wfc_.active()) wfc_.drawMapPresentation();
+        if (wfc_.active()) wfc_.endViewPass();
+    }
+    int viewKey() const { return wfc_.frameNumber() * 4 + curView_; }   // (the chapter units: once per view)
+
     void beginFrame(const Camera& camIn, int vpW, int vpH) override {
         watchdog::phase("beginFrame");
         // [Systems] a lost context (TDR): checked before this frame's first query read-back - after a reset AMD's
@@ -349,34 +412,22 @@ public:
             // anything. Inject the leak the GFx pass used to leave, so the harness keeps proving it FAILs this state.
             glDisable(GL_DEPTH_TEST);
         }
-        const Camera& cam0 = camIn;
         glViewport(0, 0, vpW, vpH);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        // Diagnostic camera override for render inspection: WFC_RENDERCAM="x,y,z,yawRad,pitchRad".
-        Camera camOv = cam0;
-        if (const char* rc = WFC_ENV("WFC_RENDERCAM"))
-            std::sscanf(rc, "%f,%f,%f,%f,%f", &camOv.pos.x, &camOv.pos.y, &camOv.pos.z, &camOv.yaw, &camOv.pitch);
-        // Measurements: WFC_FIXEDCAM="x,y,z,yawDeg,pitchDeg" holds every MATCH frame at one view (menu scenes keep their
-        // own cameras), so performance runs see the same scene regardless of where the local player goes
-        if (matchMap_) {
-            static const char* fc = std::getenv("WFC_FIXEDCAM");
-            float y = 0, pt = 0;
-            if (fc && std::sscanf(fc, "%f,%f,%f,%f,%f", &camOv.pos.x, &camOv.pos.y, &camOv.pos.z, &y, &pt) == 5) {
-                camOv.yaw = core::radians(y); camOv.pitch = core::radians(pt);
-            }
-        }
-        // M51: the far plane covers the loaded world's geometry (UE3 renders with an infinite far plane). Debris' sky
-        // dome (SpaceDome x6, radius ~26.6 km) lay beyond the 20 km default and was clipped mid-screen (black sky with
-        // pieces at the view edges). Depth precision is governed by the near plane; one far plane for every 3D pass.
-        if (wfc_.active() && wfc_.worldRadius() > 0.0f) {
-            float need = wfc_.worldRadius() + core::length(camOv.pos) + 1000.0f;
-            if (need > camOv.zfar) camOv.zfar = need;
-        }
-        const Camera& cam = camOv;
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);   // (the window: once per frame, every view)
+        // (split screen) view 0 of a split frame renders at its rect's size and posts into its rect; the later views
+        // (beginView) share that size - one target set - and post at their own offset
+        winW_ = vpW; winH_ = vpH; curView_ = 0;
+        splitNow_ = split_ != SplitLayout::Single && wfc_.active();
+        int rw = vpW, rh = vpH;
+        if (splitNow_) {
+            const ViewPixels p = splitViewPixels(split_, 0, vpW, vpH);
+            rw = p.w; rh = p.h;
+            wfc_.setSplitView(true, 0, p.x, vpH - p.y - p.h);
+        } else if (wfc_.active()) wfc_.setSplitView(false, 0, 0, 0);
+        const Camera cam = prepareCamera(camIn, rw, rh);
         lastCam_ = cam;
-        if (wfc_.active()) wfc_.beginFrame(cam, vpW, vpH);
-        vpW_ = vpW; vpH_ = vpH;
+        if (wfc_.active()) wfc_.beginFrame(cam, rw, rh);
+        vpW_ = rw; vpH_ = rh;
         inFrame_ = true;
         glMatrixMode(GL_PROJECTION);
         core::Mat4 p = cam.proj();
@@ -400,8 +451,16 @@ public:
         watchdog::phase("endFrame: map presentation");
         // (chapter) the merged units, when no world mesh of the game's carried them this frame - a campaign persistent level
         // has no geometry of its own (D5_OME_BASE: an empty world.glb), so its units are the whole level
-        if (wfc_.active() && !chapterMeshes_.empty() && chapterFrame_ != wfc_.frameNumber()) {
-            chapterFrame_ = wfc_.frameNumber();
+        if (splitNow_) {                             // (split screen) the last view, then the window-wide tail
+            finishView();
+            watchdog::phase("endFrame: post / composite");
+            wfc_.endFrameTail(winW_, winH_);
+            wfc_.setSplitView(false, 0, 0, 0);
+            vpW_ = winW_; vpH_ = winH_;
+            glViewport(0, 0, winW_, winH_);          // (2D composition / GFx over the whole window)
+        } else {
+        if (wfc_.active() && !chapterMeshes_.empty() && chapterFrame_ != viewKey()) {
+            chapterFrame_ = viewKey();
             for (MeshHandle c : chapterMeshes_)
                 if (c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0 && wfc_.chapterMeshVisible(gpu_[(size_t)c]))
                     wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
@@ -410,6 +469,7 @@ public:
         if (wfc_.active()) wfc_.drawMapPresentation();
         watchdog::phase("endFrame: post / composite");
         if (wfc_.active()) wfc_.endFrame();
+        }
         glx::gpuMark(glx::kPassPost);
         slowFrameEnd();
         glx::gpuTimerEnd();
@@ -1669,8 +1729,8 @@ public:
         if (wfc_.active() && gpu_[(size_t)h] >= 0) {
             wfc_.draw(gpu_[(size_t)h], model);
             // (chapter, stage 1) the merged units' world meshes, once per frame, with the game's world mesh
-            if (!chapterMeshes_.empty() && chapterFrame_ != wfc_.frameNumber() && wfc_.isWorldMesh(gpu_[(size_t)h])) {
-                chapterFrame_ = wfc_.frameNumber();
+            if (!chapterMeshes_.empty() && chapterFrame_ != viewKey() && wfc_.isWorldMesh(gpu_[(size_t)h])) {
+                chapterFrame_ = viewKey();
                 for (MeshHandle c : chapterMeshes_)
                     if (c != h && c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0 && wfc_.chapterMeshVisible(gpu_[(size_t)c]))
                         wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
@@ -2312,6 +2372,9 @@ private:
 
     core::Mat4 view_;
     int vpW_ = 0, vpH_ = 0;
+    SplitLayout split_ = SplitLayout::Single;   // (split screen) the layout; splitNow_: this frame is split
+    bool splitNow_ = false;
+    int curView_ = 0, winW_ = 0, winH_ = 0, localOwner_ = 0;
     std::string glEntry_;
     struct PreviewBody { assets::SkinnedModel model; int clip = -1; std::vector<core::Mat4> scratch; };
     std::vector<std::unique_ptr<PreviewBody>> previewBodies_;

@@ -1109,10 +1109,21 @@ Application::MatchExit Application::runMatch() {
                 else if (frame - lat.pressFrame > 240) { LOG_INFO("LATENCY %s timeout", latProbe); lat.phase = 0; }
             }
         }
+        // (split screen test hook) WFC_SPLITTEST=1 horizontal / 2 vertical: view 1 = the local camera turned round, until
+        // Gameplay's second seat drives it (render/SplitScreen.h protocol)
+        static const int splitTest = WFC_ENV("WFC_SPLITTEST") ? std::atoi(WFC_ENV("WFC_SPLITTEST")) : 0;
+        if (splitTest) renderer_->setSplitLayout(world_.matchActive() ? (splitTest == 2 ? render::SplitLayout::Vertical
+                                                                                         : render::SplitLayout::Horizontal)
+                                                                      : render::SplitLayout::Single);
         renderer_->beginFrame(camera_, window_->width(), window_->height());
-        // (diagnostics) WFC_CHAPTER_VIEW=1: the level alone - no World draw (a campaign chapter's merged units judged lit with
-        // WFC_SHOTLIST cameras before the World's campaign boot exists; the renderer draws the units itself)
-        if (!WFC_ENV("WFC_CHAPTER_VIEW")) world_.draw(*renderer_);
+        for (int view = 0; view < renderer_->viewCount(); ++view) {
+            render::Camera viewCam = camera_;
+            if (view > 0) viewCam.yaw += 3.14159265f;
+            renderer_->beginView(view, viewCam);
+            // (diagnostics) WFC_CHAPTER_VIEW=1: the level alone - no World draw (a campaign chapter's merged units judged lit with
+            // WFC_SHOTLIST cameras before the World's campaign boot exists; the renderer draws the units itself)
+            if (!WFC_ENV("WFC_CHAPTER_VIEW")) world_.draw(*renderer_);
+        }
         if (WFC_ENV("WFC_PICK")) {                 // diagnostics: authored source of the surface under the crosshair
             static render::IRenderer::PickHit last;
             static bool lastOk = false;

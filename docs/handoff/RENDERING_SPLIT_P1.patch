@@ -1,0 +1,463 @@
+diff -ru a/src/core/Application.cpp b/src/core/Application.cpp
+--- a/src/core/Application.cpp	2026-10-23 21:12:37.521743400 -0500
++++ b/src/core/Application.cpp	2026-10-23 21:12:37.499166100 -0500
+@@ -1109,10 +1109,21 @@
+                 else if (frame - lat.pressFrame > 240) { LOG_INFO("LATENCY %s timeout", latProbe); lat.phase = 0; }
+             }
+         }
++        // (split screen test hook) WFC_SPLITTEST=1 horizontal / 2 vertical: view 1 = the local camera turned round, until
++        // Gameplay's second seat drives it (render/SplitScreen.h protocol)
++        static const int splitTest = WFC_ENV("WFC_SPLITTEST") ? std::atoi(WFC_ENV("WFC_SPLITTEST")) : 0;
++        if (splitTest) renderer_->setSplitLayout(world_.matchActive() ? (splitTest == 2 ? render::SplitLayout::Vertical
++                                                                                         : render::SplitLayout::Horizontal)
++                                                                      : render::SplitLayout::Single);
+         renderer_->beginFrame(camera_, window_->width(), window_->height());
+-        // (diagnostics) WFC_CHAPTER_VIEW=1: the level alone - no World draw (a campaign chapter's merged units judged lit with
+-        // WFC_SHOTLIST cameras before the World's campaign boot exists; the renderer draws the units itself)
+-        if (!WFC_ENV("WFC_CHAPTER_VIEW")) world_.draw(*renderer_);
++        for (int view = 0; view < renderer_->viewCount(); ++view) {
++            render::Camera viewCam = camera_;
++            if (view > 0) viewCam.yaw += 3.14159265f;
++            renderer_->beginView(view, viewCam);
++            // (diagnostics) WFC_CHAPTER_VIEW=1: the level alone - no World draw (a campaign chapter's merged units judged lit with
++            // WFC_SHOTLIST cameras before the World's campaign boot exists; the renderer draws the units itself)
++            if (!WFC_ENV("WFC_CHAPTER_VIEW")) world_.draw(*renderer_);
++        }
+         if (WFC_ENV("WFC_PICK")) {                 // diagnostics: authored source of the surface under the crosshair
+             static render::IRenderer::PickHit last;
+             static bool lastOk = false;
+diff -ru a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
+--- a/src/render/gl/GLRenderer.cpp	2026-10-23 21:12:37.443976800 -0500
++++ b/src/render/gl/GLRenderer.cpp	2026-10-23 21:12:37.425915100 -0500
+@@ -255,6 +255,69 @@
+         c.fx = wfc_.fxMsTotal() - c.fx0; c.fxSim = wfc_.fxSimMsTotal() - c.fxSim0;
+     }
+ 
++    // the frame's camera as drawn: the diagnostic overrides, the far plane over the world; in a split frame the view's aspect
++    Camera prepareCamera(const Camera& cam0, int w, int h) {
++        // Diagnostic camera override for render inspection: WFC_RENDERCAM="x,y,z,yawRad,pitchRad".
++        Camera camOv = cam0;
++        if (const char* rc = WFC_ENV("WFC_RENDERCAM"))
++            std::sscanf(rc, "%f,%f,%f,%f,%f", &camOv.pos.x, &camOv.pos.y, &camOv.pos.z, &camOv.yaw, &camOv.pitch);
++        // Measurements: WFC_FIXEDCAM="x,y,z,yawDeg,pitchDeg" holds every MATCH frame at one view (menu scenes keep their
++        // own cameras), so performance runs see the same scene regardless of where the local player goes
++        if (matchMap_) {
++            static const char* fc = std::getenv("WFC_FIXEDCAM");
++            float y = 0, pt = 0;
++            if (fc && std::sscanf(fc, "%f,%f,%f,%f,%f", &camOv.pos.x, &camOv.pos.y, &camOv.pos.z, &y, &pt) == 5) {
++                camOv.yaw = core::radians(y); camOv.pitch = core::radians(pt);
++            }
++        }
++        // M51: the far plane covers the loaded world's geometry (UE3 renders with an infinite far plane). Debris' sky
++        // dome (SpaceDome x6, radius ~26.6 km) lay beyond the 20 km default and was clipped mid-screen (black sky with
++        // pieces at the view edges). Depth precision is governed by the near plane; one far plane for every 3D pass.
++        if (wfc_.active() && wfc_.worldRadius() > 0.0f) {
++            float need = wfc_.worldRadius() + core::length(camOv.pos) + 1000.0f;
++            if (need > camOv.zfar) camOv.zfar = need;
++        }
++        if (splitNow_ && h > 0) camOv.aspect = (float)w / (float)h;   // (split: the view's rect - the horizontal FOV kept)
++        return camOv;
++    }
++
++    // ---- split screen (render/SplitScreen.h) ----
++    bool splitScreenSupported() const override { return wfc_.active(); }
++    void setSplitLayout(SplitLayout layout) override { split_ = layout; }
++    SplitLayout splitLayout() const override { return wfc_.active() ? split_ : SplitLayout::Single; }
++    int currentView() const override { return curView_; }
++    void setLocalOwner(int drawOwner) override { localOwner_ = drawOwner; }
++    void beginView(int view, const Camera& camIn) override {
++        if (!inFrame_ || !splitNow_ || view <= curView_ || view >= splitViewCount(split_)) return;   // (view 0: beginFrame's)
++        finishView();
++        curView_ = view;
++        const ViewPixels p = splitViewPixels(split_, view, winW_, winH_);
++        const ViewPixels p0 = splitViewPixels(split_, 0, winW_, winH_);
++        wfc_.setSplitView(true, view, p.x, winH_ - p.y - p.h);
++        const Camera cam = prepareCamera(camIn, p0.w, p0.h);
++        lastCam_ = cam;
++        wfc_.beginViewPass(cam, p0.w, p0.h);
++        glMatrixMode(GL_PROJECTION);
++        const core::Mat4 pm = cam.proj();
++        glLoadMatrixf(pm.m);
++        glMatrixMode(GL_MODELVIEW);
++        view_ = cam.view();
++        glLoadMatrixf(view_.m);
++    }
++    // the end of one view: chapter units, map presentation, its post into its rect
++    void finishView() {
++        if (wfc_.active() && !chapterMeshes_.empty() && chapterFrame_ != viewKey()) {
++            chapterFrame_ = viewKey();
++            for (MeshHandle c : chapterMeshes_)
++                if (c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0 && wfc_.chapterMeshVisible(gpu_[(size_t)c]))
++                    wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
++            glLoadMatrixf(view_.m);
++        }
++        if (wfc_.active()) wfc_.drawMapPresentation();
++        if (wfc_.active()) wfc_.endViewPass();
++    }
++    int viewKey() const { return wfc_.frameNumber() * 4 + curView_; }   // (the chapter units: once per view)
++
+     void beginFrame(const Camera& camIn, int vpW, int vpH) override {
+         watchdog::phase("beginFrame");
+         // [Systems] a lost context (TDR): checked before this frame's first query read-back - after a reset AMD's
+@@ -349,34 +412,22 @@
+             // anything. Inject the leak the GFx pass used to leave, so the harness keeps proving it FAILs this state.
+             glDisable(GL_DEPTH_TEST);
+         }
+-        const Camera& cam0 = camIn;
+         glViewport(0, 0, vpW, vpH);
+-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+-
+-        // Diagnostic camera override for render inspection: WFC_RENDERCAM="x,y,z,yawRad,pitchRad".
+-        Camera camOv = cam0;
+-        if (const char* rc = WFC_ENV("WFC_RENDERCAM"))
+-            std::sscanf(rc, "%f,%f,%f,%f,%f", &camOv.pos.x, &camOv.pos.y, &camOv.pos.z, &camOv.yaw, &camOv.pitch);
+-        // Measurements: WFC_FIXEDCAM="x,y,z,yawDeg,pitchDeg" holds every MATCH frame at one view (menu scenes keep their
+-        // own cameras), so performance runs see the same scene regardless of where the local player goes
+-        if (matchMap_) {
+-            static const char* fc = std::getenv("WFC_FIXEDCAM");
+-            float y = 0, pt = 0;
+-            if (fc && std::sscanf(fc, "%f,%f,%f,%f,%f", &camOv.pos.x, &camOv.pos.y, &camOv.pos.z, &y, &pt) == 5) {
+-                camOv.yaw = core::radians(y); camOv.pitch = core::radians(pt);
+-            }
+-        }
+-        // M51: the far plane covers the loaded world's geometry (UE3 renders with an infinite far plane). Debris' sky
+-        // dome (SpaceDome x6, radius ~26.6 km) lay beyond the 20 km default and was clipped mid-screen (black sky with
+-        // pieces at the view edges). Depth precision is governed by the near plane; one far plane for every 3D pass.
+-        if (wfc_.active() && wfc_.worldRadius() > 0.0f) {
+-            float need = wfc_.worldRadius() + core::length(camOv.pos) + 1000.0f;
+-            if (need > camOv.zfar) camOv.zfar = need;
+-        }
+-        const Camera& cam = camOv;
++        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);   // (the window: once per frame, every view)
++        // (split screen) view 0 of a split frame renders at its rect's size and posts into its rect; the later views
++        // (beginView) share that size - one target set - and post at their own offset
++        winW_ = vpW; winH_ = vpH; curView_ = 0;
++        splitNow_ = split_ != SplitLayout::Single && wfc_.active();
++        int rw = vpW, rh = vpH;
++        if (splitNow_) {
++            const ViewPixels p = splitViewPixels(split_, 0, vpW, vpH);
++            rw = p.w; rh = p.h;
++            wfc_.setSplitView(true, 0, p.x, vpH - p.y - p.h);
++        } else if (wfc_.active()) wfc_.setSplitView(false, 0, 0, 0);
++        const Camera cam = prepareCamera(camIn, rw, rh);
+         lastCam_ = cam;
+-        if (wfc_.active()) wfc_.beginFrame(cam, vpW, vpH);
+-        vpW_ = vpW; vpH_ = vpH;
++        if (wfc_.active()) wfc_.beginFrame(cam, rw, rh);
++        vpW_ = rw; vpH_ = rh;
+         inFrame_ = true;
+         glMatrixMode(GL_PROJECTION);
+         core::Mat4 p = cam.proj();
+@@ -400,8 +451,16 @@
+         watchdog::phase("endFrame: map presentation");
+         // (chapter) the merged units, when no world mesh of the game's carried them this frame - a campaign persistent level
+         // has no geometry of its own (D5_OME_BASE: an empty world.glb), so its units are the whole level
+-        if (wfc_.active() && !chapterMeshes_.empty() && chapterFrame_ != wfc_.frameNumber()) {
+-            chapterFrame_ = wfc_.frameNumber();
++        if (splitNow_) {                             // (split screen) the last view, then the window-wide tail
++            finishView();
++            watchdog::phase("endFrame: post / composite");
++            wfc_.endFrameTail(winW_, winH_);
++            wfc_.setSplitView(false, 0, 0, 0);
++            vpW_ = winW_; vpH_ = winH_;
++            glViewport(0, 0, winW_, winH_);          // (2D composition / GFx over the whole window)
++        } else {
++        if (wfc_.active() && !chapterMeshes_.empty() && chapterFrame_ != viewKey()) {
++            chapterFrame_ = viewKey();
+             for (MeshHandle c : chapterMeshes_)
+                 if (c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0 && wfc_.chapterMeshVisible(gpu_[(size_t)c]))
+                     wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
+@@ -410,6 +469,7 @@
+         if (wfc_.active()) wfc_.drawMapPresentation();
+         watchdog::phase("endFrame: post / composite");
+         if (wfc_.active()) wfc_.endFrame();
++        }
+         glx::gpuMark(glx::kPassPost);
+         slowFrameEnd();
+         glx::gpuTimerEnd();
+@@ -1669,8 +1729,8 @@
+         if (wfc_.active() && gpu_[(size_t)h] >= 0) {
+             wfc_.draw(gpu_[(size_t)h], model);
+             // (chapter, stage 1) the merged units' world meshes, once per frame, with the game's world mesh
+-            if (!chapterMeshes_.empty() && chapterFrame_ != wfc_.frameNumber() && wfc_.isWorldMesh(gpu_[(size_t)h])) {
+-                chapterFrame_ = wfc_.frameNumber();
++            if (!chapterMeshes_.empty() && chapterFrame_ != viewKey() && wfc_.isWorldMesh(gpu_[(size_t)h])) {
++                chapterFrame_ = viewKey();
+                 for (MeshHandle c : chapterMeshes_)
+                     if (c != h && c >= 0 && (size_t)c < gpu_.size() && gpu_[(size_t)c] >= 0 && wfc_.chapterMeshVisible(gpu_[(size_t)c]))
+                         wfc_.draw(gpu_[(size_t)c], core::Mat4::identity());
+@@ -2312,6 +2372,9 @@
+ 
+     core::Mat4 view_;
+     int vpW_ = 0, vpH_ = 0;
++    SplitLayout split_ = SplitLayout::Single;   // (split screen) the layout; splitNow_: this frame is split
++    bool splitNow_ = false;
++    int curView_ = 0, winW_ = 0, winH_ = 0, localOwner_ = 0;
+     std::string glEntry_;
+     struct PreviewBody { assets::SkinnedModel model; int clip = -1; std::vector<core::Mat4> scratch; };
+     std::vector<std::unique_ptr<PreviewBody>> previewBodies_;
+diff -ru a/src/render/gl/WfcFrameGen.cpp b/src/render/gl/WfcFrameGen.cpp
+--- a/src/render/gl/WfcFrameGen.cpp	2026-10-23 21:12:37.375241500 -0500
++++ b/src/render/gl/WfcFrameGen.cpp	2026-10-23 21:12:37.362196500 -0500
+@@ -39,10 +39,10 @@
+ )";
+ }  // namespace
+ 
+-bool Pipeline::framegenOn() const { return framegenActive(); }
++bool Pipeline::framegenOn() const { return !split_ && framegenActive(); }   // (split: one swap chain, off)
+ 
+ void Pipeline::framegenCapture(int outW, int outH) {
+-    if (!framegenActive()) return;
++    if (split_ || !framegenActive()) return;
+     FgInputs in;
+     if (velValidFrame_ != frameNo_ || !velTex_ || !depthCopyTex_) return;   // no 3D frame (menus): real frames only
+     if (!framegenInputs(vpW_, vpH_, &in)) return;
+diff -ru a/src/render/gl/WfcFsr.cpp b/src/render/gl/WfcFsr.cpp
+--- a/src/render/gl/WfcFsr.cpp	2026-10-23 21:12:37.241282200 -0500
++++ b/src/render/gl/WfcFsr.cpp	2026-10-23 21:12:37.227234000 -0500
+@@ -68,7 +68,7 @@
+     fsrSharpness_ = sharpness;
+ }
+ 
+-bool Pipeline::fsrActive() const { return fsrScale_ < 0.999f || fsrSharpness_ >= 0.0f; }
++bool Pipeline::fsrActive() const { return !split_ && (fsrScale_ < 0.999f || fsrSharpness_ >= 0.0f); }   // (split: off for now)
+ 
+ bool Pipeline::ensureFsr(int inW, int inH, int outW, int outH) {
+     if (!fsrEasuProg_) {
+diff -ru a/src/render/gl/WfcMapFx.cpp b/src/render/gl/WfcMapFx.cpp
+--- a/src/render/gl/WfcMapFx.cpp	2026-10-23 21:12:37.176560700 -0500
++++ b/src/render/gl/WfcMapFx.cpp	2026-10-23 21:12:37.157494900 -0500
+@@ -1712,7 +1712,7 @@
+ void Pipeline::drawMapPresentation() {
+     flushDynQueue();                                   // characters before the map presentation (pass order)
+     glx::gpuStamp("pawn occlusion queries");
+-    if (pawnOcclusionOn()) {
++    if (pawnOcclusionOn() && !split_) {
+         const double tp = fxSubCpuOn() ? fxSubNowMs() : 0.0;
+         pawnOcclusionQueries();                        // characters are all drawn: test their boxes against the depth
+         if (fxSubCpuOn()) gFxSub.ms[FxSubCpu::PawnOcc] += fxSubNowMs() - tp;
+diff -ru a/src/render/gl/WfcMotion.cpp b/src/render/gl/WfcMotion.cpp
+--- a/src/render/gl/WfcMotion.cpp	2026-10-23 21:12:37.311522800 -0500
++++ b/src/render/gl/WfcMotion.cpp	2026-10-23 21:12:37.293962700 -0500
+@@ -137,11 +137,13 @@
+ }  // namespace
+ 
+ bool Pipeline::temporalActive() const {
++    if (split_) return false;                          // (split screen: per-view temporal state comes later)
+     static const bool env = std::getenv("WFC_TEMPORAL") != nullptr;   // test switch until a temporal upscaler sets it
+     return temporalOn_ || env || (fsr3Mode() && fsrActive());   // (FSR 3: jitter + motion vectors + reactive mask)
+ }
+ 
+ bool Pipeline::motionVectorsOn() const {
++    if (split_) return false;
+     static const bool env = std::getenv("WFC_MOTIONVECTORS") != nullptr || std::getenv("WFC_MOTIONVIEW") != nullptr;
+     return motionOn_ || env || temporalActive() || framegenOn();   // (FSR 3 FG: motion vectors, no jitter)
+ }
+diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-23 21:12:37.104312500 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-23 21:12:37.083742000 -0500
+@@ -6123,7 +6123,7 @@
+         return mn.x <= mx.x && std::isfinite(mn.x) && std::isfinite(mx.x) && std::isfinite(mn.y) && std::isfinite(mx.y) &&
+                std::isfinite(mn.z) && std::isfinite(mx.z);
+     };
+-    const bool skipPrep = pawnOccPrepOn() && si.serial != 0 && si.mx.x >= si.mn.x && pawnOcc_.count(drawOwner_) &&
++    const bool skipPrep = pawnOccPrepOn() && !split_ && si.serial != 0 && si.mx.x >= si.mn.x && pawnOcc_.count(drawOwner_) &&
+                           pawnOcc_[drawOwner_].occluded;
+     if (skipPrep) {                                     // hidden body + shadow: light env tick + query box only
+         SkinDraw d0;
+@@ -6786,6 +6786,7 @@
+ }
+ 
+ bool Pipeline::occCullReady() {
++    if (split_) return false;                          // (split screen: the visible set is per view - culling off, lossless)
+     if (!mdiOccBox_ || !mdiOccVis_ || !DispatchCompute) return false;
+     if (!occSelectProg_) {
+         static const char* kSel = R"(#version 430
+@@ -7821,7 +7822,7 @@
+     gStats.dynEnvMs += std::chrono::duration<double, std::milli>(tEnv1 - tEnv0).count();
+     if (offscreen) { envSamples_ = nullptr; envForm_ = -1; return; }   // light environment ticked above
+     bool occluded = false;
+-    if (envSamples_ && !warmup_ && pawnOcclusionOn()) {   // character / weapon parts: the owner's occlusion box
++    if (envSamples_ && !warmup_ && pawnOcclusionOn() && !split_) {   // character / weapon parts: the owner's occlusion box
+         PawnOcc& po = pawnOcc_[drawOwner_];
+         if (po.boxFrame != frameNo_) { po.mn = {1e30f, 1e30f, 1e30f}; po.mx = {-1e30f, -1e30f, -1e30f}; po.boxFrame = frameNo_; }
+         for (int k = 0; k < 8; ++k) {
+@@ -7830,7 +7831,7 @@
+             po.mn = {std::min(po.mn.x, w.x), std::min(po.mn.y, w.y), std::min(po.mn.z, w.z)};
+             po.mx = {std::max(po.mx.x, w.x), std::max(po.mx.y, w.y), std::max(po.mx.z, w.z)};
+         }
+-        if (pawnOccPrepOn() && !weapon && !WFC_ENV("WFC_NOCHARSHADOWS")) {   // + the composite-shadow volume
++        if (pawnOccPrepOn() && !split_ && !weapon && !WFC_ENV("WFC_NOCHARSHADOWS")) {   // + the composite-shadow volume
+             ShadowProjector scratch;
+             if (const ShadowProjector* sp = projectorFor(envForm_, scratch); sp && sp->on && sp->type >= 1 && sp->type <= 3) {
+                 const core::Vec3 B = envBoundsCenter_;
+@@ -8712,6 +8713,7 @@
+ 
+ void Pipeline::addTransientLight(const core::Vec3& pos, const core::Vec3& color, float radius, float falloffExponent,
+                                  const core::Vec3* spotDir, float cosInner, float cosOuter) {
++    if (split_ && viewIdx_ > 0) return;                // (split screen: the frame's lights are collected in view 0's draws)
+     if (!(radius > 0.0f) || !std::isfinite(pos.x) || !std::isfinite(pos.y) || !std::isfinite(pos.z) || tlights_.size() >= 256) return;
+     if (!(color.x > 0.0f || color.y > 0.0f || color.z > 0.0f)) return;
+     TransientLight L{pos, color, radius, std::max(falloffExponent, 0.0f)};
+@@ -8725,7 +8727,12 @@
+ 
+ // (item 4, at the frame start: camera set) the lights collected since the last frame start; the 8 that reach the camera
+ // the most (brightness x their falloff at the camera's distance, those whose sphere holds the camera first)
+-void Pipeline::selectTransientLights() {
++void Pipeline::selectTransientLights(bool rankOnly) {
++    if (!rankOnly) collectTransientLights();
++    rankTransientLights();
++}
++
++void Pipeline::collectTransientLights() {
+     static const char* test = std::getenv("WFC_TLTEST");   // (diagnostics) r,g,b,radius,exp: one light 4 m ahead, 1 m up
+     if (test) {
+         float v[6] = {1, 1, 1, 6, 2, 1};   // (6th: a count - n lights on a 3 m ring 6 m ahead, hues around the wheel)
+@@ -8757,6 +8764,9 @@
+             }
+     tlightsDraw_.swap(tlights_);
+     tlights_.clear();
++}
++
++void Pipeline::rankTransientLights() {
+     static const bool off = std::getenv("WFC_NOTRANSIENTLIGHTS") != nullptr;   // A/B
+     tlN_ = 0; tlAllN_ = 0; tlWorldOnly_ = 0;
+     if (off || tlightsDraw_.empty()) return;
+@@ -9223,7 +9233,7 @@
+     gInstPipeline = this;
+     touchNewTextures();                                // textures created since the last frame (loads, prewarms)
+     ++frameNo_;
+-    if (pawnOcclusionOn()) pawnOcclusionResults();
++    if (pawnOcclusionOn() && !split_) pawnOcclusionResults();
+     {   // WFC_RENDERSTATS: frame intervals over WFC_HITCH_MS (default 20) are logged by frame number, next to the
+         // "wfc first-use" lines (programs / textures / meshes created that frame) - first-appearance hitch evidence
+         static const bool on = std::getenv("WFC_RENDERSTATS") != nullptr;
+@@ -9272,6 +9282,15 @@
+     static auto t0 = std::chrono::steady_clock::now();
+     static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;   // deterministic captures
+     time_ = lockstep ? (float)(frameNo_ - lockBase_) / 60.0f : std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
++    beginViewPass(cam, w, h);
++}
++
++// one view of the frame (split screen: one per view, GLRenderer::beginView; one view: called by beginFrame)
++void Pipeline::beginViewPass(const Camera& cam, int w, int h) {
++    if (viewIdx_ > 0) {                                // (a later view: the screen-space targets are this view's again)
++        maskClearedFrame_ = -1; maskDrawnFrame_ = -1; r1ClearedFrame_ = -1;
++        sceneColorCopied_ = false;
++    }
+     // WFC_RENDERSIZE=<w>x<h> (measurement): every 3D pass renders at this internal size; the post pass scales it into
+     // the window (GPU cost of e.g. 3840x2160 on a smaller desktop; presentation scaling aside)
+     winW_ = w; winH_ = h;
+@@ -9324,9 +9343,11 @@
+         camProj_ = proj;
+     }
+     camView_ = cam.view();
+-    updateMovers();
+-    if (lastFxTime_ >= 0.0f) tickMapFx(std::min(time_ - lastFxTime_, 0.25f));
+-    lastFxTime_ = time_;
++    if (viewIdx_ == 0) {                               // (once per frame: movers and the map FX simulation)
++        updateMovers();
++        if (lastFxTime_ >= 0.0f) tickMapFx(std::min(time_ - lastFxTime_, 0.25f));
++        lastFxTime_ = time_;
++    }
+     shadowFrame_.clear();
+     // frustum planes (Gribb/Hartmann, column-major m[col*4+row])
+     const float* m = viewProj_.m;
+@@ -9338,7 +9359,7 @@
+             for (int c = 0; c < 4; ++c) pl[c] = row(3, c) + sg * row(i, c);
+         }
+     }
+-    selectTransientLights();                           // (item 4) after the frustum: lights whose cull sphere is off-screen are dropped
++    selectTransientLights(viewIdx_ > 0);               // (item 4) after the frustum: lights whose cull sphere is off-screen are dropped
+ }
+ 
+ // Canvas material tiles: screen quads in pixels (top-left origin) shaded by their compiled material, no depth,
+@@ -9387,6 +9408,11 @@
+ }
+ 
+ void Pipeline::endFrame() {
++    endViewPass();
++    endFrameTail(winW_ > 0 ? winW_ : vpW_, winH_ > 0 ? winH_ : vpH_);
++}
++
++void Pipeline::endViewPass() {
+     glx::gpuStamp("end of frame: late queues");
+     flushDynQueue();
+     shadowGpuReport();                                     // WFC_SHADOWGPU (diagnostics)
+@@ -9537,7 +9563,7 @@
+     const bool fsr = !fsr3 && fsrActive() && !fsrFailed_ && ensureFsr(vpW_, vpH_, outW, outH);
+     BindVertexArray(postVao_);
+     if (fsr) { BindFramebuffer(GL_FRAMEBUFFER, fsrInFbo_); glViewport(0, 0, vpW_, vpH_); }   // FSR input (render size)
+-    else { BindFramebuffer(GL_FRAMEBUFFER, 0); glViewport(0, 0, outW, outH); }   // the window (WFC_RENDERSIZE: scaled)
++    else { BindFramebuffer(GL_FRAMEBUFFER, 0); glViewport(outX_, outY_, outW, outH); }   // the window (split: this view's rect)
+     UseProgram(postProg_);
+     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, bloomTex_[0]);
+     ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, depthTex_);
+@@ -9600,11 +9626,6 @@
+     motionDebugView(outW, outH);                       // WFC_MOTIONVIEW (diagnostics)
+     BindVertexArray(0);
+     UseProgram(0);
+-    glx::gpuStamp("HUD screen effect");
+-    drawHudScreenEffect();                             // HUD post-process chain (over the frame, under canvas / GFx)
+-    framegenCapture(outW, outH);                       // FSR 3 FG (optional): HUD-less frame + depth / motion inputs
+-    glx::gpuStamp("canvas tiles");
+-    drawCanvasTiles();
+     if (filmic) { ActiveTexture(GL_TEXTURE0 + 4); glBindTexture(GL_TEXTURE_2D, 0); }
+     ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_3D, 0);
+     ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, 0);
+@@ -9613,6 +9634,18 @@
+     glEnable(GL_DEPTH_TEST);
+     glEnable(GL_CULL_FACE);
+ }
++
++// once per frame after the last view: over the whole window
++void Pipeline::endFrameTail(int windowW, int windowH) {
++    winW_ = windowW; winH_ = windowH;
++    glx::gpuStamp("HUD screen effect");
++    if (!split_) drawHudScreenEffect();                // HUD post-process chain (over the frame, under canvas / GFx; split: per seat, later)
++    framegenCapture(windowW, windowH);                 // FSR 3 FG (optional): HUD-less frame + depth / motion inputs (off while split)
++    glx::gpuStamp("canvas tiles");
++    drawCanvasTiles();
++    glEnable(GL_DEPTH_TEST);
++    glEnable(GL_CULL_FACE);
++}
+ 
+ // X1 (Realistic): a modern tone curve over the original's grade - exposure that adapts to the view (interiors open up,
+ // sunlit exteriors stop clipping), a filmic shoulder (the ACES fit) instead of the hard clip at 1 (the RT sun no longer
+diff -ru a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h	2026-10-23 21:12:37.031061600 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-23 21:12:37.011494600 -0500
+@@ -305,6 +305,14 @@
+ 
+     void beginFrame(const Camera& cam, int w, int h);
+     void endFrame();
++    // (split screen) beginFrame = the frame-global part + view pass 0; GLRenderer::beginView runs one more view pass per
++    // view (setSplitView first), each ended by endViewPass (its post into its window rect); endFrameTail once (HUD effect,
++    // frame generation, canvas tiles over the whole window). One view: beginFrame / endFrame exactly as before
++    void beginViewPass(const Camera& cam, int w, int h);
++    void endViewPass();
++    void endFrameTail(int windowW, int windowH);
++    void setSplitView(bool split, int view, int outX, int outY) { split_ = split; viewIdx_ = view; outX_ = outX; outY_ = outY; }
++    bool splitFrame() const { return split_; }
+ 
+     // Returns a GPU mesh id, or -1 (caller falls back to the legacy path).
+     int upload(const MeshData& m);
+@@ -430,7 +438,9 @@
+     float tlPos_[8][4] = {}, tlCol_[8][4] = {}; int tlN_ = 0;
+     float tlCut_[8] = {};
+     float tlDir_[8][4] = {}, tlCosI_[8] = {};   // (v3 row 3) spot axis (xyz), cos(outer) (w; -2 = a point light); cos(inner)   // (item 4) per light: (d / radius)^2 beyond which its falloff is < 1/512 (the cull sphere)   // (item 4) the applied lights as uniforms
+-    void selectTransientLights();
++    void selectTransientLights(bool rankOnly = false);   // (rankOnly: a split frame's later view - this frame's list re-ranked)
++    void collectTransientLights();
++    void rankTransientLights();
+     // (tiled transient lights) every selected light (up to 64 in Realistic; 8 elsewhere, the original's count) in a data
+     // texture (4 texels per light), and a per-32-pixel screen-tile mask of the lights whose cull sphere reaches the tile:
+     // a pixel loops over its tile's lights only. The first 4 are the RT-shadowed ones (the ranking order). WFC_TLTILED=0:
+@@ -562,6 +572,7 @@
+     struct SkinDraw { GLuint vao; core::Vec3 mn, mx; };
+     const SkinDraw* skinDraw_ = nullptr;                  // drawDynamic: a GPU-skinned draw (no vertex build / scan)
+     int winW_ = 0, winH_ = 0;                          // the window size this frame (vpW_ / vpH_: the render size)
++    bool split_ = false; int viewIdx_ = 0, outX_ = 0, outY_ = 0;   // (split screen) this view pass: index, GL window offset
+     // optional FSR 1 upscaling (WfcFsr.cpp; OFF by default: scale 1, sharpness < 0)
+     float fsrScale_ = 1.0f, fsrSharpness_ = -1.0f;
+     bool fsrFailed_ = false;

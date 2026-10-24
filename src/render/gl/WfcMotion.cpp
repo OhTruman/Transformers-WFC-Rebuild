@@ -137,11 +137,13 @@ bool invert(const float* m, float* out) {        // column-major 4x4 (core::Mat4
 }  // namespace
 
 bool Pipeline::temporalActive() const {
+    if (split_) return false;                          // (split screen: per-view temporal state comes later)
     static const bool env = std::getenv("WFC_TEMPORAL") != nullptr;   // test switch until a temporal upscaler sets it
     return temporalOn_ || env || (fsr3Mode() && fsrActive());   // (FSR 3: jitter + motion vectors + reactive mask)
 }
 
 bool Pipeline::motionVectorsOn() const {
+    if (split_) return false;
     static const bool env = std::getenv("WFC_MOTIONVECTORS") != nullptr || std::getenv("WFC_MOTIONVIEW") != nullptr;
     return motionOn_ || env || temporalActive() || framegenOn();   // (FSR 3 FG: motion vectors, no jitter)
 }

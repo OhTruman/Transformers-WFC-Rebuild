@@ -68,7 +68,7 @@ void Pipeline::setUpscaling(float scale, float sharpness) {
     fsrSharpness_ = sharpness;
 }
 
-bool Pipeline::fsrActive() const { return fsrScale_ < 0.999f || fsrSharpness_ >= 0.0f; }
+bool Pipeline::fsrActive() const { return !split_ && (fsrScale_ < 0.999f || fsrSharpness_ >= 0.0f); }   // (split: off for now)
 
 bool Pipeline::ensureFsr(int inW, int inH, int outW, int outH) {
     if (!fsrEasuProg_) {

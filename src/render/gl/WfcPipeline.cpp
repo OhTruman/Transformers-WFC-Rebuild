@@ -6123,7 +6123,7 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
         return mn.x <= mx.x && std::isfinite(mn.x) && std::isfinite(mx.x) && std::isfinite(mn.y) && std::isfinite(mx.y) &&
                std::isfinite(mn.z) && std::isfinite(mx.z);
     };
-    const bool skipPrep = pawnOccPrepOn() && si.serial != 0 && si.mx.x >= si.mn.x && pawnOcc_.count(drawOwner_) &&
+    const bool skipPrep = pawnOccPrepOn() && !split_ && si.serial != 0 && si.mx.x >= si.mn.x && pawnOcc_.count(drawOwner_) &&
                           pawnOcc_[drawOwner_].occluded;
     if (skipPrep) {                                     // hidden body + shadow: light env tick + query box only
         SkinDraw d0;
@@ -6786,6 +6786,7 @@ static GLuint linkCompute(const char* src, const char* tag) {
 }
 
 bool Pipeline::occCullReady() {
+    if (split_) return false;                          // (split screen: the visible set is per view - culling off, lossless)
     if (!mdiOccBox_ || !mdiOccVis_ || !DispatchCompute) return false;
     if (!occSelectProg_) {
         static const char* kSel = R"(#version 430
@@ -7821,7 +7822,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
     gStats.dynEnvMs += std::chrono::duration<double, std::milli>(tEnv1 - tEnv0).count();
     if (offscreen) { envSamples_ = nullptr; envForm_ = -1; return; }   // light environment ticked above
     bool occluded = false;
-    if (envSamples_ && !warmup_ && pawnOcclusionOn()) {   // character / weapon parts: the owner's occlusion box
+    if (envSamples_ && !warmup_ && pawnOcclusionOn() && !split_) {   // character / weapon parts: the owner's occlusion box
         PawnOcc& po = pawnOcc_[drawOwner_];
         if (po.boxFrame != frameNo_) { po.mn = {1e30f, 1e30f, 1e30f}; po.mx = {-1e30f, -1e30f, -1e30f}; po.boxFrame = frameNo_; }
         for (int k = 0; k < 8; ++k) {
@@ -7830,7 +7831,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
             po.mn = {std::min(po.mn.x, w.x), std::min(po.mn.y, w.y), std::min(po.mn.z, w.z)};
             po.mx = {std::max(po.mx.x, w.x), std::max(po.mx.y, w.y), std::max(po.mx.z, w.z)};
         }
-        if (pawnOccPrepOn() && !weapon && !WFC_ENV("WFC_NOCHARSHADOWS")) {   // + the composite-shadow volume
+        if (pawnOccPrepOn() && !split_ && !weapon && !WFC_ENV("WFC_NOCHARSHADOWS")) {   // + the composite-shadow volume
             ShadowProjector scratch;
             if (const ShadowProjector* sp = projectorFor(envForm_, scratch); sp && sp->on && sp->type >= 1 && sp->type <= 3) {
                 const core::Vec3 B = envBoundsCenter_;
@@ -8712,6 +8713,7 @@ void Pipeline::spriteAppendTo(const Sprite* sp, size_t n, const core::Vec3& faci
 
 void Pipeline::addTransientLight(const core::Vec3& pos, const core::Vec3& color, float radius, float falloffExponent,
                                  const core::Vec3* spotDir, float cosInner, float cosOuter) {
+    if (split_ && viewIdx_ > 0) return;                // (split screen: the frame's lights are collected in view 0's draws)
     if (!(radius > 0.0f) || !std::isfinite(pos.x) || !std::isfinite(pos.y) || !std::isfinite(pos.z) || tlights_.size() >= 256) return;
     if (!(color.x > 0.0f || color.y > 0.0f || color.z > 0.0f)) return;
     TransientLight L{pos, color, radius, std::max(falloffExponent, 0.0f)};
@@ -8725,7 +8727,12 @@ void Pipeline::addTransientLight(const core::Vec3& pos, const core::Vec3& color,
 
 // (item 4, at the frame start: camera set) the lights collected since the last frame start; the 8 that reach the camera
 // the most (brightness x their falloff at the camera's distance, those whose sphere holds the camera first)
-void Pipeline::selectTransientLights() {
+void Pipeline::selectTransientLights(bool rankOnly) {
+    if (!rankOnly) collectTransientLights();
+    rankTransientLights();
+}
+
+void Pipeline::collectTransientLights() {
     static const char* test = std::getenv("WFC_TLTEST");   // (diagnostics) r,g,b,radius,exp: one light 4 m ahead, 1 m up
     if (test) {
         float v[6] = {1, 1, 1, 6, 2, 1};   // (6th: a count - n lights on a 3 m ring 6 m ahead, hues around the wheel)
@@ -8757,6 +8764,9 @@ void Pipeline::selectTransientLights() {
             }
     tlightsDraw_.swap(tlights_);
     tlights_.clear();
+}
+
+void Pipeline::rankTransientLights() {
     static const bool off = std::getenv("WFC_NOTRANSIENTLIGHTS") != nullptr;   // A/B
     tlN_ = 0; tlAllN_ = 0; tlWorldOnly_ = 0;
     if (off || tlightsDraw_.empty()) return;
@@ -9223,7 +9233,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     gInstPipeline = this;
     touchNewTextures();                                // textures created since the last frame (loads, prewarms)
     ++frameNo_;
-    if (pawnOcclusionOn()) pawnOcclusionResults();
+    if (pawnOcclusionOn() && !split_) pawnOcclusionResults();
     {   // WFC_RENDERSTATS: frame intervals over WFC_HITCH_MS (default 20) are logged by frame number, next to the
         // "wfc first-use" lines (programs / textures / meshes created that frame) - first-appearance hitch evidence
         static const bool on = std::getenv("WFC_RENDERSTATS") != nullptr;
@@ -9272,6 +9282,15 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     static auto t0 = std::chrono::steady_clock::now();
     static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;   // deterministic captures
     time_ = lockstep ? (float)(frameNo_ - lockBase_) / 60.0f : std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
+    beginViewPass(cam, w, h);
+}
+
+// one view of the frame (split screen: one per view, GLRenderer::beginView; one view: called by beginFrame)
+void Pipeline::beginViewPass(const Camera& cam, int w, int h) {
+    if (viewIdx_ > 0) {                                // (a later view: the screen-space targets are this view's again)
+        maskClearedFrame_ = -1; maskDrawnFrame_ = -1; r1ClearedFrame_ = -1;
+        sceneColorCopied_ = false;
+    }
     // WFC_RENDERSIZE=<w>x<h> (measurement): every 3D pass renders at this internal size; the post pass scales it into
     // the window (GPU cost of e.g. 3840x2160 on a smaller desktop; presentation scaling aside)
     winW_ = w; winH_ = h;
@@ -9324,9 +9343,11 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
         camProj_ = proj;
     }
     camView_ = cam.view();
-    updateMovers();
-    if (lastFxTime_ >= 0.0f) tickMapFx(std::min(time_ - lastFxTime_, 0.25f));
-    lastFxTime_ = time_;
+    if (viewIdx_ == 0) {                               // (once per frame: movers and the map FX simulation)
+        updateMovers();
+        if (lastFxTime_ >= 0.0f) tickMapFx(std::min(time_ - lastFxTime_, 0.25f));
+        lastFxTime_ = time_;
+    }
     shadowFrame_.clear();
     // frustum planes (Gribb/Hartmann, column-major m[col*4+row])
     const float* m = viewProj_.m;
@@ -9338,7 +9359,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
             for (int c = 0; c < 4; ++c) pl[c] = row(3, c) + sg * row(i, c);
         }
     }
-    selectTransientLights();                           // (item 4) after the frustum: lights whose cull sphere is off-screen are dropped
+    selectTransientLights(viewIdx_ > 0);               // (item 4) after the frustum: lights whose cull sphere is off-screen are dropped
 }
 
 // Canvas material tiles: screen quads in pixels (top-left origin) shaded by their compiled material, no depth,
@@ -9387,6 +9408,11 @@ void Pipeline::drawCanvasTiles() {
 }
 
 void Pipeline::endFrame() {
+    endViewPass();
+    endFrameTail(winW_ > 0 ? winW_ : vpW_, winH_ > 0 ? winH_ : vpH_);
+}
+
+void Pipeline::endViewPass() {
     glx::gpuStamp("end of frame: late queues");
     flushDynQueue();
     shadowGpuReport();                                     // WFC_SHADOWGPU (diagnostics)
@@ -9537,7 +9563,7 @@ void Pipeline::endFrame() {
     const bool fsr = !fsr3 && fsrActive() && !fsrFailed_ && ensureFsr(vpW_, vpH_, outW, outH);
     BindVertexArray(postVao_);
     if (fsr) { BindFramebuffer(GL_FRAMEBUFFER, fsrInFbo_); glViewport(0, 0, vpW_, vpH_); }   // FSR input (render size)
-    else { BindFramebuffer(GL_FRAMEBUFFER, 0); glViewport(0, 0, outW, outH); }   // the window (WFC_RENDERSIZE: scaled)
+    else { BindFramebuffer(GL_FRAMEBUFFER, 0); glViewport(outX_, outY_, outW, outH); }   // the window (split: this view's rect)
     UseProgram(postProg_);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, bloomTex_[0]);
     ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, depthTex_);
@@ -9600,16 +9626,23 @@ void Pipeline::endFrame() {
     motionDebugView(outW, outH);                       // WFC_MOTIONVIEW (diagnostics)
     BindVertexArray(0);
     UseProgram(0);
-    glx::gpuStamp("HUD screen effect");
-    drawHudScreenEffect();                             // HUD post-process chain (over the frame, under canvas / GFx)
-    framegenCapture(outW, outH);                       // FSR 3 FG (optional): HUD-less frame + depth / motion inputs
-    glx::gpuStamp("canvas tiles");
-    drawCanvasTiles();
     if (filmic) { ActiveTexture(GL_TEXTURE0 + 4); glBindTexture(GL_TEXTURE_2D, 0); }
     ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_3D, 0);
     ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, 0);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, 0);
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, 0);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+}
+
+// once per frame after the last view: over the whole window
+void Pipeline::endFrameTail(int windowW, int windowH) {
+    winW_ = windowW; winH_ = windowH;
+    glx::gpuStamp("HUD screen effect");
+    if (!split_) drawHudScreenEffect();                // HUD post-process chain (over the frame, under canvas / GFx; split: per seat, later)
+    framegenCapture(windowW, windowH);                 // FSR 3 FG (optional): HUD-less frame + depth / motion inputs (off while split)
+    glx::gpuStamp("canvas tiles");
+    drawCanvasTiles();
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
 }

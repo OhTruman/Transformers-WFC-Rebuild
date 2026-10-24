@@ -39,10 +39,10 @@ void main() { ivec2 p = ivec2(gl_FragCoord.xy); vec2 v = texelFetch(uSrc, ivec2(
 )";
 }  // namespace
 
-bool Pipeline::framegenOn() const { return framegenActive(); }
+bool Pipeline::framegenOn() const { return !split_ && framegenActive(); }   // (split: one swap chain, off)
 
 void Pipeline::framegenCapture(int outW, int outH) {
-    if (!framegenActive()) return;
+    if (split_ || !framegenActive()) return;
     FgInputs in;
     if (velValidFrame_ != frameNo_ || !velTex_ || !depthCopyTex_) return;   // no 3D frame (menus): real frames only
     if (!framegenInputs(vpW_, vpH_, &in)) return;
