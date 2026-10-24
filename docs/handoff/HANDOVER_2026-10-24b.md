@@ -1,6 +1,6 @@
-# Hand-over note 2, 2026-10-24: build 277d6e33 = the laptop-ready package with the playtest-3 fixes
+# Hand-over note 2, 2026-10-24: build ae63135a = the laptop-ready package with the playtest-3 fixes
 
-Package: F:/Transformers Rebuild/Rebuild-Systems/work/playtest_slim_277d6e33 (Play.bat; the HD pack beside it as playtest_slim_277d6e33_HDpack). This one is self-contained:
+Package: F:/Transformers Rebuild/Rebuild-Systems/work/playtest_slim_ae63135a (Play.bat; the HD pack beside it as playtest_slim_ae63135a_HDpack). This one is self-contained:
 copy the folder to the laptop and run Play.bat there (no dev folders needed). First launch of a new build compiles its
 shaders once (~30-50 s into the first map); every later launch reads the shader cache (~10 s).
 
