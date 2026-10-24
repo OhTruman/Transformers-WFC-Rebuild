@@ -4579,3 +4579,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   078b108a the preview image set (Upscaling 0-6, HD, RT, Volumetric, LensFlares). AIM CLOSED: Rendering's pixel proof
   on 5239fc0f = mean 0.02 px / worst 0.8 px over 30 shots (the old build traced camYaw while drawing viewYaw + shake).
   Card: Frontend (bots scoreboard + ESC lobby dump) -> batch 2b -> item 31 -> package cut.
+2026-10-24 13:42 MERGED 463faf3a vehicle headlights follow the drawn frame (the lamps were placed from the simulated bone while the car
+  is drawn interpolated at the render rate: the 'flicker' reported twice). Remaining before the cut: Frontend batch 2b
+  (scoreboard rows, ESC lobby map row, Upscaling 0-6 mapping, menu fade), Gameplay item 31.
