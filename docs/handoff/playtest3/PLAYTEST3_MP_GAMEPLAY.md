@@ -67,3 +67,35 @@ SIMHASH note: item 1 changes the local player's shot directions (deliberate); bo
   blue cylinder over a radius ~13.9 glass section, and the box spans both, so its corners stand up to ~7 units outside the
   visible cylinder. That is the original's authored collision, so the "skip glass sections" fix does not apply. Keeping the
   original box is the faithful choice. A tighter hull would be a PC adaptation and is the user's decision.
+
+## User follow-up answers (2026-10-24 ~17:30)
+
+- **The cubes are the placed pickups, and they work.** Streets has 15 ammo crates, 9 health "Energon" cubes (sound
+  HEALTH_PU_ENERGON) and 1 overshield, all touch pickups with no button.
+  - Headless WFC_PICKUPTEST on Streets: each is taken on touch, plays its sound, sleeps, and respawns after its authored time
+    (ammo 30 s, health 60 s, overshield 120 s). A health cube re-takes when you stand on it at respawn (CheckTouching).
+  - Payloads: health +50 (AddedHealth); ammo refills; overshield.
+  - As in the original, a pickup is not taken when you don't need it: a health cube at full health, an ammo crate at full
+    ammo, an overshield at a full shield. That is the likely reason the user saw "nothing happened".
+  - Fixed: `GAMEPLAY_AMMO_CRATE_ALL_WEAPONS.patch` (on 5239fc0f). The ammo crate checked and refilled only the active weapon
+    (a leftover from the one-weapon slice). It now covers every primary / secondary / vehicle weapon (ValidWeaponTypes), and
+    WFC_PICKUPTEST passes unchanged.
+- **The Streets crater hitbox is `ENV_CraterUpNoRing_STAT`** (10 colliding placements). Pawns use its simple collision
+  (physics.json: UseSimpleBoxCollision true by default, none authored).
+  - The collision is one convex hull: 18 vertices, ±27.7 m wide, 7.8 m tall. The visible mesh is ±18-19.5 m, so the hull
+    reaches 8-10 m past the visible crater edge.
+  - Its shape is a flat lens. The underside rises from 0 at the centre to a knife edge 1.1 m above the mesh origin at the
+    27.7 m rim; the top faces slope 21 deg then 11 deg.
+  - Measured against the collision floor just outside the rim at 10 placements, that edge stands 0.4-0.8 m above the floor.
+    Our step height is the original's 0.35 m (TnRobotForm MaxStepHeight 35 UU), so our knee probe (a horizontal ray at
+    0.55 m) hits the downward-facing underside and stops the pawn, far from anything visible.
+  - A UE3 cylinder sweep that meets the walkable 21 deg face would most likely slide up it, so the original probably let
+    players walk over the lip. That is plausible from the engine, not confirmed.
+  - Nothing is missing: every collidable near the crater has a drawn mesh, and no export failed. The difference is our
+    provisional movement model (centre point + knee probe, no cylinder sweep) against the authored convex hull.
+  - Options, for Integration / the user:
+    - (a) movement model: a contact with a walkable-sloped hull face lets the pawn ramp up, as the UE3 sweep does
+      (the faithful fix; changes walking everywhere, needs a broad regression);
+    - (b) a per-mesh data override: per-poly collision for ENV_CraterUpNoRing_STAT only (narrow, but not the original
+      collision);
+    - (c) keep it as is.

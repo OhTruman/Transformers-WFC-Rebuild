@@ -1,0 +1,24 @@
+diff --git a/src/game/PickupFactory.cpp b/src/game/PickupFactory.cpp
+index 4e6dcad1..9e07841f 100644
+--- a/src/game/PickupFactory.cpp
++++ b/src/game/PickupFactory.cpp
+@@ -37,12 +37,13 @@ bool PickupFactory::tryGive(Character& c) {
+             c.health().heal(Health::HealType::AddAllSegments, kAddedHealth);
+             return true;
+         case Kind::AmmoCrate: {
+-            // ValidWeaponTypes WT_Primary/WT_Secondary/WT_Vehicle [CONF]; amount native -> [PROV] refill the
+-            // reserve to MaxAmmoCount. The slice's only weapon is the Ion Blaster (primary).
+-            Weapon& w = c.weapon();
+-            if (w.reserve >= w.reserveMax) return false;                 // AmmoMaxed
+-            w.reserve = w.reserveMax;
+-            return true;
++            // ValidWeaponTypes WT_Primary/WT_Secondary/WT_Vehicle [CONF]: every such weapon the pawn carries; amount native ->
++            // [PROV] refill each reserve to MaxAmmoCount. AmmoMaxed (no take) only when all of them are full.
++            bool any = false;
++            for (Weapon& w : c.inventoryMutable())
++                if (w.def && (w.def->typeCode == 0 || w.def->typeCode == 1) && w.reserve < w.reserveMax) { w.reserve = w.reserveMax; any = true; }
++            if (Weapon* vw = c.vehicleWeapon()) if (vw->reserve < vw->reserveMax) { vw->reserve = vw->reserveMax; any = true; }
++            return any;
+         }
+         case Kind::OverShield:
+             if (c.health().normalizedOverShield() >= 1.0f) return false;
