@@ -4343,3 +4343,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   merged 7f0efe32 (settings re-apply after recreate, Texture Quality wired, Water neutral, subtitles drawn, loading
   bar). RE: a campaign lobby pick persists into the map (our clearing = the bug; one-line follow-up). Gate: all three
   flows on 1edec0c2 once the card frees.
+2026-10-24 00:41 MERGED 7a7b8ba6 the campaign lobby pick carries into the map (no in-map trio select for a valid pick) + per-movie gamma
+  (calibration logos respond). Card free: Experimental runs the full gate (mp + esc + camp) on 7a7b8ba6 now; then the
+  Frontend's calibration check, then Rendering's measured settings audit.
