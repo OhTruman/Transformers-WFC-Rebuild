@@ -31,7 +31,7 @@ param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir
       [string[]]$Res = @("2560x1440", "3840x2160"),
       [string[]]$Chapters = @("A1_IAC", "A2_KON", "A3_COR", "A4_ORB", "A5_TRY", "D1_ORB", "D2_COR", "D3A_IAC", "D3B_IAC", "D5_OME"),
       [string[]]$EscMaps = @("505", "506", "MP_ESC_Tranquillity", "MP_ESC_District", "MP_ESC_Pulse", "MP_ESC_Static"),
-      [int]$PlaySeconds = 60, [int]$EscSeconds = 240, [double]$TargetFps = 300, [switch]$ReportOnly,
+      [int]$PlaySeconds = 60, [int]$EscSeconds = 240, [int]$WaveSeconds = 90, [double]$TargetFps = 300, [switch]$ReportOnly,
       [string]$Assets = "F:\Transformers Rebuild\Rebuild\work\assets_dlc\VerticalSlice",
       [string]$RenderData = "F:\Transformers Rebuild\Rebuild\work\render")   # (Integration 2026-10-24: one root incl. the nine DLC maps)
 $ErrorActionPreference = "Continue"
@@ -157,7 +157,17 @@ foreach ($rs in $Res) {
             $reached = (@($live | % { $_.wave }) | Sort-Object -Unique) -join ','
             $results.Add((Stats $live "esc" $lvl $rs "match ($EscSeconds s)" "waves seen: $reached"))
             $results.Add((Stats @($live | ? { $_.t -ge 2.0 }) "esc" $lvl $rs "steady (from 2 s)"))
-            foreach ($wv in 1..3) { $results.Add((Stats @($live | ? { $_.wave -eq $wv }) "esc" $lvl $rs "wave $wv")) }
+            $results.Add((Stats @($live | ? { $_.wave -eq 1 -and $_.t -ge 2.0 }) "esc" $lvl $rs "wave 1"))
+            # waves 2 / 3 (bots rarely clear wave 1): their own runs from that wave with the local player kept alive - TEST ONLY switches
+            # WFC_ESC_STARTWAVE=<n> + WFC_ESC_INVULN=1 (Gameplay, bcd70a61+); -WaveSeconds of match time, from 2 s on
+            foreach ($wv in 2, 3) {
+                $dw = Join-Path $OutDir "$tag\escwave${wv}_$lvl"
+                if (-not $ReportOnly) { Run-Row $dw @{ WFC_MAP = $lvl; WFC_MATCH_URL = "${lvl}_BASE_m?GameModeTag=ESC?BotsFriendly=4"; WFC_PLAYERBOT = "1"; WFC_ESCLOG = "1"
+                                                       WFC_ESC_STARTWAVE = "$wv"; WFC_ESC_INVULN = "1"; WFC_MATCH_SECONDS = "$WaveSeconds" } $w $h $rs (300 + $WaveSeconds) }
+                $rw = Read-Frames (Join-Path $dw "wfc.log"); $lw = @($rw.frames | ? { $_.live -and $_.t -ge 2.0 })
+                $seen = (@($lw | % { $_.wave }) | Sort-Object -Unique) -join ','
+                $results.Add((Stats @($lw | ? { $_.wave -eq $wv }) "esc" $lvl $rs "wave $wv" "STARTWAVE $wv + INVULN; waves logged: $seen"))
+            }
         }
     }
 }
