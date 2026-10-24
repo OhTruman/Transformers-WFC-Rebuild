@@ -4523,3 +4523,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   thread safety + the job's thread contract. The user is playing 48e42af6; phase 0 GO after.
 2026-10-24 12:06 MERGED 4098c267 chassis async thread contract (GPU work only at the join; rosterPackage magic static). BASELINE SHA FROZEN
   at 4098c267 (fast_4098c26): the phase-0 rows run on it after the user's play; later merges wait for phase 1.
+2026-10-24 12:14 READY STATE: phase-0 baseline armed (fast_4098c26, 1440p then 4K, then an untimed PRESENTTRACE pass for Systems);
+  the distributable refresh staged (bash work/everything.sh <sha>: build + build_slim + HD split + verify_everything with
+  the D1 / Remnant / Horizon / Pulse rows; guards for every clean-machine piece). Binary anim cache rejected (measured).
+  Waiting for the user to finish playing 48e42af6.
