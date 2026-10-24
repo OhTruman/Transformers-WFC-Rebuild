@@ -1652,6 +1652,7 @@ private:
     struct SharedAnimFile { assets::AnimFile file; std::map<std::string, size_t> byName; bool ok = false; unsigned lastUse = 0; };
     std::map<std::string, std::unique_ptr<SharedAnimFile>> animFiles_;
     const SharedAnimFile* sharedAnimFile(const std::string& path);
+    void prefetchAnimFiles(const std::vector<std::string>& paths);   // [Systems] uncached ones load on worker threads
 public:
     bool loadRobotShared(const ChassisDef& def, assets::SkinnedModel& out);   // false -> the caller uses robot.glb
     // WFC_ANIMSHARECHECK: robot.glb vs loadRobotShared for one chassis; returns a one-line report, ok = identical within eps.
