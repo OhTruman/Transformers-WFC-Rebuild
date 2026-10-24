@@ -4386,3 +4386,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   QC FREEZE LIFTED for DLC completion (P0s + audits closed, gate PASS): Pulse §8 Power_Generator_Action + Static §9
   DoorGenerators GO (Gameplay sim, Rendering visuals). Experimental final gate PREPARED (base fast_af4d073_final9,
   FINAL_ASSETS + final_render with 8 DLC maps; mp flow carries the #20 / #27 shots).
+2026-10-24 01:33 MERGED ee98ab39 lossless texture decoder (WIC for the proven PNG classes, 60,458 / 60,458 byte-identical vs GDI+;
+  worker-thread prefetch, main-thread uploads): headless Streets 2.21 -> ~1.9 s, Remnant 2.45 -> ~2.0 s. Next lossless
+  load target: animation files (~0.4 s / map) after Systems' two-locals wire patch.
