@@ -4563,3 +4563,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   byte-identical; the first launch of a new build still compiles once). ESC 'only District' = the Escalation lobby's map
   row (Frontend batch 2b), not the package. Scatter Blaster = the authored 2.5 s whole-clip reload. Card: Rendering (aim
   proof, previews) -> Frontend (bots scoreboard + ESC lobby dump).
+2026-10-24 13:12 MERGED 5239fc0f shots follow the drawn camera view incl. shake (UE3 rule) + FINAL_BASE_ITEMS 29; the sim shows 0.000 deg
+  view-vs-shot at every bot shot, so the steady 'left' offset is still open: Rendering's windowed pixel proof on 5239fc0f
+  decides (projection / FOV mismatch or reticle art). Scatter Blaster = authored. Streets cylinder = the authored collision
+  box (faithful; a tighter hull is a user decision). Item 30 being cut.
