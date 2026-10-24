@@ -4536,3 +4536,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   fresh full af4d0731 + chain build; the gate launches the game exe only (no wfc_fidelity.exe item).
 2026-10-24 12:36 FINAL_BASE_ITEMS 22-28 complete through b8963b8e (Gameplay a446ba6a; fresh full build 0 errors; SIMHASH identical on 5
   rows). Experimental pre-builds the base arm final13. All lanes idle or on standby; the user is playing 48e42af6.
+2026-10-24 12:42 PLAYTEST 3 (docs/handoff/USER_PLAYTEST_2026-10-24.md) dispatched; usage 14 %: batch mode. Gameplay: aim-to-crosshair P0,
+  XP regression, Scout lockout, Orbital Beacon, pickup, collision, ESC launch min-player check. Frontend: ESC solo (RE:
+  private host starts alone), ESC map list, duplicate Optimus, join-code leak, visible countdown cancel, Start grey,
+  scoreboard rows, CaC chassis, modal queue, Graphics at top, fixed arrows, preview panel (baseline / selected + zoom +
+  FSR 3.1 + volumetric + lens flare), Language -> Audio, split layout to the bottom, vignette, campaign exit routing.
+  Rendering: aim audit with Gameplay, max-settings perf A/B (card), headlight flicker, preview pairs. Systems: ESC 30 s
+  load. Experimental / RE / AssetTools stood down; 300 fps phase 0 and campaign deferred. GitHub = origin, pushed.
