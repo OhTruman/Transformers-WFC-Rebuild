@@ -4593,3 +4593,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 16:35 PACKAGE ae63135a VERIFIED (clean-machine rows): Rebuild-Systems/work/playtest_slim_ae63135a (19 GB) + _HDpack (22 GB);
   verify_everything PASS / PASS (Streets, Gorge, Debris, D1, Remnant ESC, Horizon TDM, Pulse ESC; HD runtime row;
   settings 12 / 12; RT). 48e42af6 + the 277d6e33 test pair deleted (F: 525 GB free). Gate: menu flows running.
+2026-10-24 16:40 FINAL GATE ae63135a PASS (Experimental 21358dac): menu flows MP + ESC 76 / 76; same match head = base on 12 rows vs
+  final15 (01-31); stability: campaign 24 / 24, Kismet 10 / 10, voice, 38 TDM runs on all 19 versus maps 0 errors, 6 ESC
+  maps clean. PACKAGE ae63135a HANDED OVER (HANDOVER_2026-10-24b.md). GitHub pushed.

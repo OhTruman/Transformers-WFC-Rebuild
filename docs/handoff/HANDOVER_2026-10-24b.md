@@ -44,8 +44,8 @@ Settings / frontend
 
 Campaign: deferred as you asked; your findings are recorded in USER_PLAYTEST_2026-10-24.md.
 
-## Proof: (pending) the mp + esc scripted menu flows on the final build and the same-match gate vs the base chain
-   (FINAL_BASE_ITEMS 01-31).
+## Proof: tools/fidelity/results/FINAL_GATE_ae63135a.md: PASS. The scripted MP and Escalation menu flows on this build pass every row (76 / 76: countdown cancel and restart, Scout, move, shoot, transform, Change Character and back; the Escalation pick kept, play, return). Same match head = base on all 12 rows vs the base chain
+   (FINAL_BASE_ITEMS 01-31), negative control differs everywhere. Stability: campaign 24 / 24, Kismet 10 / 10, voice PASS, 38 TDM runs across all 19 versus maps incl. the nine DLC maps with 0 errors, all six Escalation maps clean. The package itself passed the clean-machine verify (every map row, D1, Remnant, Horizon, Pulse, HD runtime, settings, RT).
 
 ## Still open after this package
 - The 300 FPS minimum target: the sim side is within budget everywhere except the level-start frame; the render-side
