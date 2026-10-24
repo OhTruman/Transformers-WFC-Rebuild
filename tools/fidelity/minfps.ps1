@@ -27,7 +27,7 @@
 #   .\tools\fidelity\minfps.ps1 -Root work\ab\fast_48e42af -OutDir work\minfps\48e42af [-Rows camp-play,camp-sweep,esc]
 #        [-Res 2560x1440,3840x2160] [-Chapters A1_IAC,...] [-EscMaps 505,...] [-PlaySeconds 60] [-EscSeconds 240] [-ReportOnly]
 #        [-Assets <WFC_ASSETS for the DLC maps>] [-RenderData <WFC_RENDER_DATA>]
-param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [string[]]$Rows = @("camp-play", "control", "camp-sweep", "esc"),
+param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [string[]]$Rows = @("camp-play", "control", "camp-sweep", "esc", "cull-ab"),
       [string[]]$Res = @("2560x1440", "3840x2160"),
       [string[]]$Chapters = @("A1_IAC", "A2_KON", "A3_COR", "A4_ORB", "A5_TRY", "D1_ORB", "D2_COR", "D3A_IAC", "D3B_IAC", "D5_OME"),
       [string[]]$EscMaps = @("505", "506", "MP_ESC_Tranquillity", "MP_ESC_District", "MP_ESC_Pulse", "MP_ESC_Static"),
@@ -39,7 +39,7 @@ $ErrorActionPreference = "Continue"
 $Rows = @($Rows | % { "$_" -split ',' } | ? { $_ }); $Res = @($Res | % { "$_" -split ',' } | ? { $_ })
 $Chapters = @($Chapters | % { "$_" -split ',' } | ? { $_ }); $EscMaps = @($EscMaps | % { "$_" -split ',' } | ? { $_ })
 New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
-$exe = Join-Path (Resolve-Path $Root).Path "build-release\bin\wfc_rebuild.exe"
+$rootDir = (Resolve-Path $Root).Path; $exe = Join-Path $rootDir "build-release\bin\wfc_rebuild.exe"
 if (-not (Test-Path $exe)) { throw "no exe at $exe" }
 $mapIds = @{ "A1_IAC" = 96; "A2_KON" = 97; "A3_COR" = 98; "A4_ORB" = 99; "A5_TRY" = 100; "D1_ORB" = 101; "D2_COR" = 102; "D3A_IAC" = 103; "D3B_IAC" = 104; "D5_OME" = 105 }
 $escLevels = @{ "505" = "MP_ESC_BrokenHope"; "506" = "MP_ESC_Remnant" }
@@ -52,6 +52,8 @@ function Run-Row([string]$dir, [hashtable]$extra, [int]$w, [int]$h, [string]$rs,
     $e = @{ WFC_BOOT = "match"; WFC_LOGEVERY = "0"; WFC_SLOWFRAME = "0.01"; WFC_FPS_LIMIT = "0"; WFC_BOTAI = ""; WFC_HDTEXTURES = "0"
             WFC_RENDER_DATA = $RenderData; WFC_ASSETS = $Assets
             # Rendering's phase-0 parser reads the same logs (2026-10-24): timestamps, FRAME lines, the sim / draw profilers (not CPUPROF)
+            WFC_FRONTEND_DATA = (Join-Path $rootDir "data\frontend")   # (Gameplay 2026-10-24: pinned - an exe resolving its own folder had 0 conversations)
+            WFC_NOCULLDIST = "1"   # (Integration 2026-10-24: the baseline without the cull_distance.json reader; the cull-ab row turns it on)
             WFC_LOGTIME = "1"; WFC_FRAMELOG = "1"; WFC_TICKPROF = "1"; WFC_DRAWPROF = "1"; WFC_SKIPINTRO = "1"; WFC_NOMOUSE = "1" }
     if ($rs -ne "${w}x${h}") { $e.WFC_RENDERSIZE = $rs }
     foreach ($k in $extra.Keys) { $e[$k] = $extra[$k] }
@@ -111,7 +113,9 @@ foreach ($rs in $Res) {
         if ($Rows -contains "camp-play") {
             if (-not $ReportOnly) { Run-Row $dPlay @{ WFC_MAP = $ch; WFC_MATCH_URL = $url; WFC_PLAYERBOT = "1"; WFC_MATCH_SECONDS = "$PlaySeconds" } $w $h $rs (300 + $PlaySeconds) }
             $r = Read-Frames (Join-Path $dPlay "wfc.log")
-            $results.Add((Stats @($r.frames | ? { $_.live }) "camp-play" $ch $rs "chapter start + $PlaySeconds s"))
+            $cv = Select-String -Path (Join-Path $dPlay "wfc.log") -Pattern 'campaign: (\d+) conversations timed' -ErrorAction SilentlyContinue | Select-Object -First 1
+            $cvn = if ($cv) { [int]$cv.Matches[0].Groups[1].Value } else { 0 }
+            $results.Add((Stats @($r.frames | ? { $_.live }) "camp-play" $ch $rs "chapter start + $PlaySeconds s" "conversations $cvn$(if ($cvn -eq 0) { ' - CHECK: frontend data not found (the sim diverges)' })"))
             $results.Add((Stats @($r.frames | ? { $_.live -and $_.t -ge 2.0 }) "camp-play" $ch $rs "steady (from 2 s)"))
         }
         # log-overhead control (Rendering 2026-10-24: per-frame SLOWFRAME / FRAME lines are main-thread log I/O at 300+ fps): the same
@@ -183,6 +187,15 @@ foreach ($rs in $Res) { $tag = $rs -replace 'x', '_'
         $kind, $map = $dd.Name -split '_', 2
         $hit += "| $kind | $map | $rs | $($fr.Count) | $top |" } }
 $hit | Set-Content -Encoding UTF8 (Join-Path $OutDir "HITCHES.md")
+# cull-ab (Integration 2026-10-24): the cull_distance.json reader off vs on, Streets (508) + Molten (509), the SAME match per map
+# (lockstep-ab: direct boot, one sim step per frame, SIMHASH-aligned, 31 v 32 bots + the player bot) at each resolution
+if ($Rows -contains "cull-ab") { foreach ($rs in $Res) { foreach ($mp in "508", "509") {
+    $o = Join-Path $OutDir "$($rs -replace 'x', '_')\cull-ab_$mp"
+    $rsArg = if ($rs -ne "2560x1440") { @("-RenderSize", $rs) } else { @() }
+    $envX = "WFC_RENDER_DATA=$RenderData;WFC_ASSETS=$Assets;WFC_FRONTEND_DATA=$(Join-Path $rootDir 'data\frontend')"
+    if (-not $ReportOnly) { & (Join-Path $PSScriptRoot "lockstep-ab.ps1") -OutDir $o -Map $mp -Width 2560 -Height 1440 @rsArg -Arms "off|$rootDir|WFC_NOCULLDIST=1;$envX", "on|$rootDir|$envX" *> (Join-Path $OutDir "cull-ab_$($mp)_$($rs).out") }
+    $sum = Get-ChildItem $o -Filter "*.md" -ErrorAction SilentlyContinue | Select-Object -First 1
+    $results.Add([pscustomobject][ordered]@{ kind = "cull-ab"; map = $mp; res = $rs; scope = "off vs on (lockstep same match)"; frames = ""; avg_fps = ""; low1_fps = ""; low01_fps = ""; worst_ms = ""; worst_fps = ""; worst_frame = ""; worst_bound = ""; worst_where = ""; worst_cpu_ms = ""; worst_gpu_ms = ""; verdict = "-"; note = $(if ($sum) { "see $($sum.FullName)" } else { "not run" }) }) } } }
 $csv = Join-Path $OutDir "minfps.csv"; $results | Export-Csv -NoTypeInformation -Encoding UTF8 $csv
 $md = @("# Min-fps baseline - $(Split-Path $Root -Leaf) - $(Get-Date -Format 'yyyy-MM-dd HH:mm')", "",
         "Target $TargetFps fps (3.33 ms) on the 1% low; the Off look (RT 0, HD 0, VSync 0, no frame limit); window 2560x1440, 4K offscreen. Columns: avg / 1% low / 0.1% low fps, the worst frame (ms, fps, frame no.) and where it lands (GPU-bound when its GPU time >= 90 % of the interval: the largest GPU pass; else CPU: the largest CPU part, 'outside' = sim + the rest).", "",
