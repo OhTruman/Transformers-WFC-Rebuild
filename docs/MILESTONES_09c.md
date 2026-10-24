@@ -4404,3 +4404,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   hand-over doc HANDOVER_GAMEPLAY_2026-10-24.md taken. Systems next: animation-load (lossless), then Static audio.
 2026-10-24 02:00 MERGED 4d338915 parallel animation loads (lossless; 50-70 ms). Decision: the binary animation cache (~0.4 s / load)
   waits for after this build (AssetTools blocked; packaging change). Systems pre-stages the package refresh.
+2026-10-24 02:03 MERGED 070f6705 split step 3 (seat 2 in an online lobby -> setSecondLocal; split screen complete offline + online) and
+  the recursive data walk in build_slim (previews would not have shipped). Systems: refresh STAGED (W: base, X: HD;
+  Static empty -> refresh stops unless ALLOW_EMPTY_DLC=1). Remaining before the cut: Rendering's perf rows + preview
+  captures + mechanism visuals; Frontend's 5-min check.
