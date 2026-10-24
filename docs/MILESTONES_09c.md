@@ -4473,3 +4473,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   again -> match, Scout, PlayerList shot, 20.1 m jitter 0, shots, transform, pause -> Change Character -> back -> InGame,
   quit -> lobby); ESC / CAMP PASS stand from a2e9fbd9 (GfxPresenter-only delta). Section 43: all three flows PASS on the
   final build.
+2026-10-24 10:52 MERGED bd543d9e campaign skeletal set-dressing preload (D1's 4.5 s stall at frame ~201 + 90-260 ms hitches were first-draw
+  glTF loads on the main thread). 300 fps phase-0 harness ready (tools/fidelity/minfps.ps1: camp-play / camp-sweep / esc
+  rows, 1440p + offscreen 4K, Off look; PASS = steady worst frame >= 300 fps); baseline on fast_bd543d9 in the slot after
+  Systems' verify. Gameplay adds WFC_ESC_STARTWAVE / WFC_ESC_INVULN (test only).
