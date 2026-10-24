@@ -214,6 +214,18 @@ gfx::Matrix GfxRendererGL::movieMatrix(const gfx::Player& p, int width, int heig
     return m;
 }
 
+gfx::Matrix GfxRendererGL::movieMatrix(const gfx::Player& p, int x, int y, int width, int height) {
+    gfx::Matrix m = movieMatrix(p, width, height);
+    m.tx += (float)x; m.ty += (float)y;
+    return m;
+}
+
+gfx::Matrix GfxRendererGL::stageMatrix(float stageW, float stageH, int x, int y, int width, int height) {
+    gfx::Matrix m = stageMatrix(stageW, stageH, width, height);
+    m.tx += (float)x; m.ty += (float)y;
+    return m;
+}
+
 gfx::Matrix GfxRendererGL::stageMatrix(float stageW, float stageH, int width, int height) {
     float s = std::min(width / stageW, height / stageH);
     gfx::Matrix m;

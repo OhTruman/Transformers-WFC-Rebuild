@@ -22,6 +22,10 @@ public:
     // Base matrix that maps a movie stage (twips) into the window ("showAll": uniform scale, centred).
     static gfx::Matrix stageMatrix(float stageW, float stageH, int width, int height);
     static gfx::Matrix movieMatrix(const gfx::Player& p, int width, int height);   // honours Stage.scaleMode noScale
+    // (split screen) the same fits into a view rect of the window (pixels, origin top-left: render::splitViewPixels) - one
+    // HUD movie per seat. No clip: a movie's off-stage content can cross into the other view (the stage itself stays inside)
+    static gfx::Matrix stageMatrix(float stageW, float stageH, int x, int y, int width, int height);
+    static gfx::Matrix movieMatrix(const gfx::Player& p, int x, int y, int width, int height);
     void draw(const std::vector<gfx::Player::RenderItem>& items, float alpha = 1.0f);
     // Composites the UI onto the default framebuffer.
     void end();
