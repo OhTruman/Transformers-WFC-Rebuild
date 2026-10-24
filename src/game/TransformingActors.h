@@ -48,7 +48,8 @@ public:
         int clipIndex = -1;
         float posedT = -1.0f;                // the t the collision sets were last posed at
     };
-    // Loads this map's actors (none: an empty list, nothing changes) and adds their collision sets to pawn / weapon.
+    // Loads this map's actors (none: an empty list, nothing changes) and adds their collision sets to pawn / weapon. Rows from
+    // mp_transforming_actors.json, else the map's own maps/<map>/transforming_actors_gameplay.json (the DLC maps).
     bool load(const std::string& mapName, const std::string& manifestRoot, CollisionWorld& pawn, CollisionWorld* weapon);
     // A campaign chapter's actors (every row of the file; glb paths relative to toolsRoot); they start in their authored state.
     bool loadChapter(const std::string& path, const std::string& toolsRoot, CollisionWorld& pawn, CollisionWorld* weapon);

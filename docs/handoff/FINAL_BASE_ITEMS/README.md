@@ -131,3 +131,15 @@ Fix (Experimental's build of edba5bb3): 14 also adds `src/render/SplitScreen.h` 
 includes it from 14 on, and src/render is outside the item paths. No other render header the patched files include is missing from
 af4d0731. Verified: `git apply --check` of 14 on a fresh full af4d0731 + 01–13 passes, and that tree configures and builds
 wfc_rebuild (Release, llvm-mingw) with 0 errors.
+
+## 15: District doors (14 tree -> 0d56afb4 + GAMEPLAY_ESC_DISTRICT_DOORS)
+
+`15_esc_district_doors.patch`: the same paths, from the 14 tree to 0d56afb4 + DISTRICT_DOORS. On these paths 0d56afb4 equals the
+14 tree, so 15 is only that patch:
+- TransformingActors::load falls back to AssetTools' per-map `maps/<map>/transforming_actors_gameplay.json` when
+  mp_transforming_actors.json has no rows for the map (District's 22 doors);
+- the regenerated District Escalation data: the generators' Zone_Manager / Zone subsequence variables flattened into actions
+  (Open Doors -> transform, Enable Survival Zones -> zone on, Disable Volumes -> TriggerVolume off);
+- WFC_ESCTEST's DLC branch buys a door generator and checks its doors and zones.
+Apply it after 14. Verified: a fresh full af4d0731 + 01-15 applies (`git apply --check`), configures and builds wfc_rebuild with 0
+errors, and its District ESCTEST log equals the head build's line for line.

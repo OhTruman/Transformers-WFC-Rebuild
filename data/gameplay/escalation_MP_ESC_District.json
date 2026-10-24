@@ -3196,7 +3196,53 @@
     32.64,
     -87.04
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_11257"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_7329"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_8241"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_4144"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_10113"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5287"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_15679"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_438"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_13640"
+    }
+   ]
   },
   {
    "id": "10106",
@@ -4132,7 +4178,68 @@
     32.64,
     -119.04
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_598"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_710"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_9525"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_13779"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_6379"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5689"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5287"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_15679"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_1764"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_2808"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_14300"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_2932"
+    }
+   ]
   },
   {
    "id": "11915",
@@ -4350,7 +4457,18 @@
     24.08,
     -64.56
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_13595"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_11288"
+    }
+   ]
   },
   {
    "id": "12196",
@@ -4568,7 +4686,38 @@
     9.28,
     -182.72
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_7959"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_8324"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5301"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_841"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_13908"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_1356"
+    }
+   ]
   },
   {
    "id": "12718",
@@ -5045,7 +5194,43 @@
     33.6,
     52.16
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_6492"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_329"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_9042"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_12281"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_14943"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_10059"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_10986"
+    }
+   ]
   },
   {
    "id": "1396",
@@ -5154,7 +5339,28 @@
     24.32,
     -50.88
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_11532"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_3037"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_576"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_1615"
+    }
+   ]
   },
   {
    "id": "14162",
@@ -5263,7 +5469,28 @@
     24.32,
     -24.32
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_11532"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_3037"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_576"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_1615"
+    }
+   ]
   },
   {
    "id": "14275",
@@ -5372,7 +5599,38 @@
     25.28,
     -54.4
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_11738"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_2117"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_15394"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_13316"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_458"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_5245"
+    }
+   ]
   },
   {
    "id": "14543",
@@ -5481,7 +5739,38 @@
     25.28,
     6.4
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_11738"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_2117"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_15394"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_13316"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_458"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_5245"
+    }
+   ]
   },
   {
    "id": "14668",
@@ -6200,7 +6489,48 @@
     25.28,
     -81.92
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_7159"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_7662"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_8713"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_3348"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_841"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_2757"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_10047"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_16359"
+    }
+   ]
   },
   {
    "id": "2342",
@@ -6543,7 +6873,68 @@
     29.12,
     -197.44
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_598"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_710"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_9525"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_13779"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_6379"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5689"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5287"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_15679"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_1764"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_2808"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_14300"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_2932"
+    }
+   ]
   },
   {
    "id": "2821",
@@ -6761,7 +7152,53 @@
     24.32,
     -87.04
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_11257"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_7329"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_8241"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_4144"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_10113"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5287"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_15679"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_438"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_13640"
+    }
+   ]
   },
   {
    "id": "3600",
@@ -7088,7 +7525,43 @@
     40.64,
     -44.48
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_15848"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_13823"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_12281"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5475"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5287"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_3788"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_10343"
+    }
+   ]
   },
   {
    "id": "400",
@@ -7197,7 +7670,68 @@
     44.48,
     -153.28
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_598"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_710"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_9525"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_13779"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_6379"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5689"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5287"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_15679"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_1764"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_2808"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_14300"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_2932"
+    }
+   ]
   },
   {
    "id": "4227",
@@ -7867,7 +8401,48 @@
     25.28,
     -157.76
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_7159"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_7662"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_8713"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_3348"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_841"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_2757"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_10047"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_16359"
+    }
+   ]
   },
   {
    "id": "5011",
@@ -8412,7 +8987,43 @@
     33.6,
     55.36
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_15848"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_13823"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_12281"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5475"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5287"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_3788"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_10343"
+    }
+   ]
   },
   {
    "id": "6432",
@@ -9340,7 +9951,68 @@
     43.84,
     -144.32
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_598"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_710"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_9525"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_13779"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_6379"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5689"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5287"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_15679"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_1764"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_2808"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_14300"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_2932"
+    }
+   ]
   },
   {
    "id": "7463",
@@ -9667,7 +10339,48 @@
     25.28,
     -116.8
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_7159"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_7662"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_8713"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_3348"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_841"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_2757"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_10047"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_16359"
+    }
+   ]
   },
   {
    "id": "7702",
@@ -10018,7 +10731,43 @@
     32.96,
     75.2
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_6492"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_329"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_9042"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_12281"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_14943"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_10059"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_10986"
+    }
+   ]
   },
   {
    "id": "8351",
@@ -10938,7 +11687,38 @@
     9.28,
     -196.48
    ],
-   "actions": []
+   "actions": [
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_7959"
+    },
+    {
+     "op": "transform",
+     "class": "TnTransformingWorldActor",
+     "target": "TnTransformingWorldActor_8324"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_5301"
+    },
+    {
+     "op": "on",
+     "class": "TnSurvivalZoneVolume",
+     "target": "TnSurvivalZoneVolume_841"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_13908"
+    },
+    {
+     "op": "off",
+     "class": "TriggerVolume",
+     "target": "TriggerVolume_1356"
+    }
+   ]
   },
   {
    "id": "9911",

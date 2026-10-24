@@ -32,7 +32,9 @@ std::vector<core::Vec3> boxTris(const core::Mat4& local, const core::Vec3& h) {
 
 bool TransformingActors::load(const std::string& mapName, const std::string& manifestRoot, CollisionWorld& pawn, CollisionWorld* weapon) {
     campaign_ = false;
-    return loadFile(manifestRoot + "/maps/mp_transforming_actors.json", mapName, manifestRoot + "/..", pawn, weapon);
+    if (loadFile(manifestRoot + "/maps/mp_transforming_actors.json", mapName, manifestRoot + "/..", pawn, weapon) && !actors_.empty()) return true;
+    // the DLC maps (District): AssetTools writes their rows to a per-map file in the campaign format instead
+    return loadFile(manifestRoot + "/maps/" + mapName + "/transforming_actors_gameplay.json", mapName, manifestRoot + "/..", pawn, weapon);
 }
 
 bool TransformingActors::loadChapter(const std::string& path, const std::string& toolsRoot, CollisionWorld& pawn, CollisionWorld* weapon) {
