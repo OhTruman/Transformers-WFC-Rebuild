@@ -4487,3 +4487,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 11:09 MERGED bcd70a61 first-use loads moved to map / chapter load (melee weapons, gibs, matinee pawn clips): the reproducible
   sim spikes are gone; left 5-6 ms Kismet steps (fix F per RE's KISMET_VM_SCHEDULING_RE.md) + 3-4 ms matinee. Phase-0
   baseline moves to fast_bcd70a61; GO after Systems' verify. Systems: first-time body load fix in progress.
+2026-10-24 11:12 VERIFY 48e42af6 FAIL (Systems): 7 files missing from the package (dlc_inventory.json = the DLC catalogue, map thumbnails,
+  FluidRed cubemap faces, DLC text .int, Hud reticle); settings 12 / 12, RT, overlay, HD runtime PASS. Packaging fixed
+  (build_slim + Play.bat 5ae93434 -> 307413d6; extras 199 -> 229); repack 48e42af6 (package phase only) + re-verify
+  running. Code fix for the next package: drawReticle uses kAssetRootDefault instead of WFC_ASSETS (Rendering).
