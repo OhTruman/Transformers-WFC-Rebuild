@@ -4323,3 +4323,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Game restored (the PC host-now override was replacing Host in EVERY party lobby: the #9 / #14 TDM-for-Escalation bug;
   now versus only; Escalation shows its Host Options again) + the QA gate hooks. DECISION: versus keeps flow v2 (host now
   + the lobby Game Settings row = the user's own vote); Escalation = the original (no Game Settings row).
+2026-10-23 23:58 MERGED da9b3e48 the local pawn is never occlusion-culled (the 'flicker in and out' while frozen: a pawn stuck in geometry
+  was culled / drawn / culled) + 13cb3355 the rest of the QA gate hooks (nav.check match fields, scripted stick deflection).
+  Pending: Gameplay's frozen-seat one-liner + proof; the Frontend's Escalation / pause / D1 flows; Experimental's gate
+  (card after the repro exes); Rendering's measured settings audit (card).
