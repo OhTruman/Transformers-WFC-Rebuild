@@ -4402,3 +4402,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 01:56 MERGED e36b6654 two local players in an online match (Systems; seat 2 rides the owner's packets; 3 seats on 2 peers
   2,401 ticks status 0, 10 % loss 41 ms stall) -> Frontend split step 3 (joinSeat2 -> setSecondLocal). Gameplay
   hand-over doc HANDOVER_GAMEPLAY_2026-10-24.md taken. Systems next: animation-load (lossless), then Static audio.
+2026-10-24 02:00 MERGED 4d338915 parallel animation loads (lossless; 50-70 ms). Decision: the binary animation cache (~0.4 s / load)
+  waits for after this build (AssetTools blocked; packaging change). Systems pre-stages the package refresh.
