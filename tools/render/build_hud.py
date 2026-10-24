@@ -58,7 +58,8 @@ def main():
     root = sys.argv[1]
     ui = os.path.join(root, '_ui')
     os.makedirs(os.path.join(ui, 'fonts'), exist_ok=True)
-    repo = Repo(['MP_IAC_Streets_BASE_m.xxx'], fallback=['TransGame.xxx'])
+    # (Startup_int: the startup fonts - UI_TransEngineFonts_p.SubtitleFont is cooked there, not in a map package)
+    repo = Repo(['MP_IAC_Streets_BASE_m.xxx'], fallback=['TransGame.xxx', 'Startup_int.xxx'])
     for f in FONTS:
         if not repo.find(f):
             print('font %s: not cooked in the loaded packages, skipped' % f)
