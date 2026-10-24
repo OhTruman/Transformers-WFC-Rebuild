@@ -25,3 +25,9 @@ wfc_rebuild.exe in Release.
 **Not mine:** wfc_fidelity.exe fails to link in this chain (undefined game::MatchSettings::forMode). The base's
 tools/fidelity/CMakeLists.txt (package 6) lacks the head's src/game/Match.cpp in its optional list. My entries only renamed one
 constant in Rig.cpp.
+- **NN_d_esc_mech_game.patch:** the DLC Escalation mechanism presentation, game half (Integration: yes, 2026-10-24).
+  - Files: src/render/Renderer.h gains the setMatineePosition default no-op virtual; src/game/World.h / World.cpp add the hooks
+    (svMechPresent in syncMapPresentation, svMechDrawSentries in draw, svMechEnsureModels in ensureAbilityModels); new
+    src/game/WorldSurvivalMechPresent.cpp is the head a46a87a8 file.
+  - On package 6's renderer the matinee positions are no-ops. The PPV / emitter toggles and the sentry turrets draw.
+  - Verified: on af4d0731 + 01-21 + a + b + c + d, wfc_rebuild.exe builds.
