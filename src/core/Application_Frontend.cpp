@@ -2305,7 +2305,7 @@ void core::Application::runSoloLaunchTest() {
     };
     const game::MatchLaunch solo = build(m);
     check(solo.humans.empty() && solo.localSeat < 0, "alone: no seat order (the pre-phase-2 local path)");
-    check(!(solo.online && !solo.humans.empty()), "alone: the launch starts no lockstep driver");
+    check(!solo.online && solo.remotes.empty(), "alone: an offline launch (no wire seat, no lockstep driver)");
     frontend::MatchLaunch two = m;
     frontend::SessionSlot other; other.kind = frontend::SessionSlot::Kind::Human; other.member.fingerprint = "WFC-SOLO-PEER"; other.team = 1;
     two.onlineSlots.push_back(other);
