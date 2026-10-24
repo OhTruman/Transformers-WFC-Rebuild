@@ -1,6 +1,7 @@
 // Clean-room reconstruction — rendering abstraction.
 // Gameplay/presentation code issues draw calls through this; no GL types leak out.
 #pragma once
+#include "render/SplitScreen.h"
 #include <cstdint>
 #include <utility>
 #include <array>
@@ -70,6 +71,19 @@ public:
     virtual bool init() = 0;
     virtual void beginFrame(const Camera& cam, int viewportW, int viewportH) = 0;
     virtual void endFrame() = 0;
+
+    // ---- split screen (PC EXTENSION, render/SplitScreen.h has the layouts and the frame protocol) ----
+    // setSplitLayout(Horizontal / Vertical) when a second local seat joins, Single when it leaves; the frames after it draw
+    // viewCount() views. Inside beginFrame / endFrame, beginView(v, cam) routes every following draw call to view v (its
+    // camera, its pixel rect, its own temporal / post-process state); one view needs no beginView (today's frame). A renderer
+    // without split support keeps Single (splitScreenSupported() false) and ignores beginView for v > 0.
+    virtual bool splitScreenSupported() const { return false; }
+    virtual void setSplitLayout(SplitLayout layout) { (void)layout; }
+    virtual SplitLayout splitLayout() const { return SplitLayout::Single; }
+    int viewCount() const { return splitViewCount(splitLayout()); }
+    virtual void beginView(int view, const Camera& cam) { (void)view; (void)cam; }
+    // the view currently receiving draw calls (0 outside a split frame)
+    virtual int currentView() const { return 0; }
 
     // Oriented box centred at `center`, full extents `size`, rotated `yaw` about Y.
     virtual void drawBox(const core::Vec3& center, const core::Vec3& size,
