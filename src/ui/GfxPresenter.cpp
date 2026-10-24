@@ -6,6 +6,7 @@
 #include "frontend/DataPaths.h"
 #include "render/SplitScreen.h"
 #include "frontend/FlowTrace.h"
+#include "net/VoiceFrames.h"
 
 #include <algorithm>
 #include <chrono>
@@ -1291,7 +1292,8 @@ bool addVoiceRows(gfx::Player& p, const std::string& linkage, gfx::avm1::Object*
     choice(mode, V(0.0), "$WfcPC.Voice.VoiceOff"); choice(mode, V(1.0), "$WfcPC.Voice.VoicePushToTalk"); choice(mode, V(2.0), "$WfcPC.Voice.VoiceOpenMic");
     choice(aud, V(0.0), "$WfcPC.Voice.VoiceTeamRadio"); choice(aud, V(1.0), "$WfcPC.Voice.VoiceAllRadio");
     choice(aud, V(2.0), "$WfcPC.Voice.VoiceProximity"); choice(aud, V(3.0), "$WfcPC.Voice.VoiceRadioProximity");
-    choice(dev, V(std::string()), "$WfcPC.Voice.InputDeviceDefault");   // the capture devices by name come from Systems' audio layer
+    choice(dev, V(std::string()), "$WfcPC.Voice.InputDeviceDefault");
+    for (const std::string& d : net::voiceCaptureDevices()) choice(dev, V(d), d);   // Systems: the active capture endpoints by name
     pttChoices(vm, ptt, pttKey);
     choice(mic, V(0.0), frontend::GameFlow::micMeterText(0.0f));
     for (int t = 0; t <= 100; t += 10) { choice(vol, V((double)t), std::to_string(t)); choice(pvol, V((double)t), std::to_string(t)); }

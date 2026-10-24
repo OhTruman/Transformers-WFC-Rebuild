@@ -21,6 +21,7 @@
 #include "frontend/Session.h"
 #include "net/NatPortMap.h"
 
+#include <chrono>
 #include <functional>
 #include <map>
 #include <memory>
@@ -111,6 +112,11 @@ public:
     std::vector<int> lobbySeats() const;
     frontend::SessionMemberId memberOfSeat(int seat) const;
     bool inLobby() const { return role_ != Role::Offline && !view_; }   // in a session, no match running here
+    // The Settings > Audio Mic Test meter: the presenter reads micLevel() every frame while the row is on screen, so a read in the
+    // last 0.5 s = the meter is showing (the voice lane then opens the microphone without sending). The level comes from the lane.
+    float micLevel() const override { micAskedMs_ = steadyMs(); return micLevelFn_ ? micLevelFn_() : 0.0f; }
+    void setMicLevelSource(std::function<float()> f) { micLevelFn_ = std::move(f); }
+    bool micMeterShown() const { return micAskedMs_ > 0.0 && steadyMs() - micAskedMs_ < 500.0; }
     uint32_t launchSeed() const { return launchSeed_; }
     const frontend::SessionVoiceSettings& voiceSettings() const { return voice_; }
     bool pushToTalk() const { return pushToTalk_; }
@@ -226,6 +232,9 @@ private:
     double catchUpSentAt_ = -1.0;
     bool catchUpDone_ = false;
     frontend::SessionVoiceSettings voice_;
+    static double steadyMs() { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+    mutable double micAskedMs_ = 0.0;
+    std::function<float()> micLevelFn_;
     bool pushToTalk_ = false;
     std::map<std::string, bool> muted_;
     std::vector<frontend::SessionEvent> out_;

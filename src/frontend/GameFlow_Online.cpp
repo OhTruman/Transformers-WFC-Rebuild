@@ -273,7 +273,8 @@ void GameFlow::fillOnlineLaunch() {   // the match's participants (WFC_SESSIONTE
 
 void GameFlow::syncVoiceSettings() {   // the Audio rows to the session, whenever they change (and when the session starts)
     const LocalProfile::Voice& v = profile_.voice;
-    const std::string key = std::to_string(v.mode) + "|" + std::to_string(v.audience) + "|" + v.device + "|" + std::to_string(v.volume);
+    const std::string key = std::to_string(v.mode) + "|" + std::to_string(v.audience) + "|" + v.device + "|" + std::to_string(v.volume) +
+                            "|" + std::to_string(v.proximityVolume);
     if (key == voiceSent_) return;
     voiceSent_ = key;
     SessionVoiceSettings s;
@@ -281,6 +282,7 @@ void GameFlow::syncVoiceSettings() {   // the Audio rows to the session, wheneve
     s.audience = (SessionVoiceAudience)std::clamp(v.audience, 0, 3);
     s.device = v.device;
     s.volume = v.volume;
+    s.proximityVolume = v.proximityVolume;
     session_->setVoiceSettings(s);
     FlowTrace::emit("online.voiceSettings", {{"mode", std::to_string(v.mode)}, {"audience", std::to_string(v.audience)}});
 }

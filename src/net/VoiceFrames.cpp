@@ -67,7 +67,8 @@ public:
     float level() const override { return 0.0f; }
 };
 }  // namespace
-std::unique_ptr<IVoiceCapture> createVoiceCapture() { return std::make_unique<NullVoiceCapture>(); }
+std::unique_ptr<IVoiceCapture> createVoiceCapture(const std::string&) { return std::make_unique<NullVoiceCapture>(); }
+std::vector<std::string> voiceCaptureDevices() { return {}; }
 #endif
 
 }  // namespace net

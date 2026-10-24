@@ -123,6 +123,7 @@ NetMatchDriver::NetMatchDriver(game::World& world, INetTransport& transport, aud
             const auto& ps = w->match().players();
             if (talker < 0 || listener < 0 || (size_t)talker >= ps.size() || (size_t)listener >= ps.size()) return false;
             if (voiceChannelOpen(*w)) return true;
+            if ((flags & 1) && (flags & 4)) return true;   // All Radio
             if ((flags & 1) && ps[(size_t)talker].team == ps[(size_t)listener].team && ps[(size_t)talker].team != 255) return true;
             if (!(flags & 2)) return false;
             const game::Character* x = w->participantPawn(talker);

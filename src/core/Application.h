@@ -60,6 +60,8 @@ private:
     std::unique_ptr<net::NetMatchDriver> netDriver_;
     std::unique_ptr<net::VoiceSession> lobbyVoice_;   // [Systems] the lobby voice lane (the match lane is the driver's)
     void tickLobbyVoice();
+    void bindMicMeter();                       // [Systems] the Mic Test meter <- the running voice lane's microphone level
+    const void* micMeterFor_ = nullptr;        // the session the meter source was bound to
     void startNetDriver(const std::string& launchUrl, uint32_t seed, int seats, int localSeat);
     void tickNetDriver(double realDt);
     bool escWasDown_ = false;

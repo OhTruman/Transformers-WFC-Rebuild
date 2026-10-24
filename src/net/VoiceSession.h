@@ -33,7 +33,14 @@ class VoiceSession {
 public:
     struct Config {
         bool radio = true, proximity = true;   // this seat's audience flags (Radio + Proximity default)
-        float volume = 1.0f;                   // the voice slider
+        float volume = 1.0f;                   // the voice slider (radio)
+        float proximityVolume = 1.0f;          // the Proximity Volume slider (3D voices in earshot)
+        bool allRadio = false;                 // All Radio: this seat's radio reaches every player, not only its team
+        // The microphone the session owns (the Audio rows): attached whenever this player may talk and opened only while talking or
+        // while the Mic Test meter is on screen (micTest); device = the Input Device row's capture endpoint ("" = the system default).
+        // Off never talks, so switching voice on mid-match works without a new lane. setSource() (the harness) is used when mic is false.
+        bool mic = false, micTest = false;
+        std::string device;
         int jitterFrames = 3;                  // frames buffered before a talker starts playing (60 ms)
         // Open mic: frames go out only while the voice gate is open - a frame above gateDb (dBFS RMS) opens it for hangMs (breathing
         // and room noise do not stream). Push to talk: the key is the gate.
@@ -99,6 +106,9 @@ private:
     audio::IAudio* audio_;
     Config cfg_;
     std::unique_ptr<IVoiceCapture> mic_;
+    bool ownMic_ = false;            // mic_ came from cfg_.mic (replaced on a device change, dropped when mic goes false)
+    std::string micDevice_;
+    double micRetryMs_ = 0.0;        // a device that failed to open is retried after 2 s, not every frame
     float toneHz_ = 0.0f;
     double tonePhase_ = 0.0, toneStartMs_ = -1.0, toneSent_ = 0.0;
     VoiceEncoder enc_;

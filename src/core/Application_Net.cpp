@@ -212,6 +212,7 @@ void Application::runNetMatch() {
         const int a = seatMp[(size_t)talker], b = seatMp[(size_t)listener];
         if (a < 0 || b < 0 || (size_t)a >= ps.size() || (size_t)b >= ps.size()) return false;
         if (net::voiceChannelOpen(world_)) return true;   // FFA / after EndGame: everyone (the original's channels)
+        if ((flags & 1) && (flags & 4)) return true;   // All Radio
         if ((flags & 1) && ps[(size_t)a].team == ps[(size_t)b].team && ps[(size_t)a].team != 255) return true;   // radio
         if (!(flags & 2)) return false;
         const game::Character* x = world_.participantPawn(a);
@@ -451,7 +452,7 @@ void Application::startNetDriver(const std::string& launchUrl, uint32_t seed, in
     c.seats = seats; c.self = localSeat; c.launchHash = lh; c.delay = 0; c.hashEvery = 60;
     if (const char* rp = std::getenv("WFC_NET_RECORD")) c.recordPath = rp;
     c.voice = true;   // everyone hears; the mode decides whether this player talks (Off = listen only)
-    c.voiceMic = udpSession_->voiceSettings().mode != frontend::SessionVoiceMode::Off;
+    c.voiceMic = false;   // the microphone comes with voiceCfg.mic (VoiceSession owns it; Off never talks, so voice can be turned on mid-match)
     c.voiceCfg = voiceConfigFrom(udpSession_->voiceSettings());
     c.voiceMuted = [this](int seat) { return udpSession_ && udpSession_->isMuted(udpSession_->matchMember(seat)); };
     c.step = [this](float dt) {
@@ -483,23 +484,40 @@ void Application::startNetDriver(const std::string& launchUrl, uint32_t seed, in
     LOG_INFO("online: the lockstep driver runs the match (seat %d of %d, launch hash %016llx)", localSeat, seats, (unsigned long long)lh);
 }
 
-// The Audio rows -> the voice lane: volume, who hears this player (TeamRadio: the team by radio; AllRadio: everyone by radio - the
-// host's fan-out treats radio as team only today, so AllRadio maps to radio + proximity until the relay knows it; Proximity; Radio +
-// Proximity), open mic.
+// The Audio rows -> the voice lane: the voice / proximity volumes, who hears this player (TeamRadio: the team by radio; AllRadio:
+// everyone by radio - the All Radio packet flag; Proximity: anyone in earshot; Radio + Proximity), open mic, the input device. The
+// microphone is attached whenever the player is not a lane / harness run (WFC_NOINTERACT) and opens only while talking (Off never
+// talks) or while the Mic Test meter shows; the caller sets micTest.
 net::VoiceSession::Config voiceConfigFrom(const frontend::SessionVoiceSettings& v) {
+    static const bool noInteract = [] { const char* e = std::getenv("WFC_NOINTERACT"); return e && *e && e[0] != '0'; }();
     net::VoiceSession::Config c;
     c.volume = std::max(0, std::min(100, v.volume)) / 100.0f;
+    c.proximityVolume = std::max(0, std::min(100, v.proximityVolume)) / 100.0f;
     using A = frontend::SessionVoiceAudience;
     c.radio = v.audience != A::Proximity;
-    c.proximity = v.audience != A::TeamRadio;
+    c.allRadio = v.audience == A::AllRadio;
+    c.proximity = v.audience == A::Proximity || v.audience == A::RadioPlusProximity;
     c.openMic = v.mode == frontend::SessionVoiceMode::OpenMic;
+    c.mic = !noInteract;
+    c.device = v.device;
     return c;
+}
+
+// The Mic Test meter's level: whichever voice lane runs (the match driver's, else the lobby's).
+void Application::bindMicMeter() {
+    if (!udpSession_ || micMeterFor_ == udpSession_) return;
+    micMeterFor_ = udpSession_;
+    udpSession_->setMicLevelSource([this] {
+        if (netDriver_ && netDriver_->voice()) return netDriver_->voice()->micLevel();
+        return lobbyVoice_ ? lobbyVoice_->micLevel() : 0.0f;
+    });
 }
 
 // [Systems] The lobby voice lane: in a session with no match driver (the game lobby, between matches), everyone hears everyone
 // (2D radio at the voice volume), push to talk / open mic as in the match, local mute, the talking indicators for the lobby list.
 // Created on entering a session, dropped when the match driver takes over or the session ends.
 void Application::tickLobbyVoice() {
+    bindMicMeter();
     const bool want = udpSession_ && !netDriver_ && udpSession_->inLobby() && net::voiceCodecAvailable();
     if (!want) {
         if (lobbyVoice_) { lobbyVoice_.reset(); LOG_INFO("voice: the lobby lane closed"); }
@@ -508,13 +526,12 @@ void Application::tickLobbyVoice() {
     net::UdpSession* s = udpSession_;
     const frontend::SessionVoiceSettings& v = s->voiceSettings();
     net::VoiceSession::Config c = voiceConfigFrom(v);
-    c.radio = true; c.proximity = false;   // the lobby: everyone, 2D
+    c.radio = true; c.proximity = false; c.allRadio = false;   // the lobby: everyone, 2D
+    c.micTest = s->micMeterShown();
     if (!lobbyVoice_) {
         net::VoiceSession::Link link{[s] { return s->sessionSeat(); }, [s](const uint8_t* p, size_t n) { s->sendLobbyVoice(p, n); },
                                      [s](std::function<void(int, const uint8_t*, size_t)> f) { s->setLobbyVoiceSink(std::move(f)); }};
-        lobbyVoice_ = std::make_unique<net::VoiceSession>(link, audio_, c);
-        static const bool noInteract = [] { const char* e = std::getenv("WFC_NOINTERACT"); return e && *e && e[0] != '0'; }();
-        if (v.mode != frontend::SessionVoiceMode::Off && !noInteract) lobbyVoice_->setSource(net::createVoiceCapture());
+        lobbyVoice_ = std::make_unique<net::VoiceSession>(link, audio_, c);   // the microphone: Config::mic (voiceConfigFrom)
         lobbyVoice_->setMuted([s](int seat) { return s->isMuted(s->memberOfSeat(seat)); });
         LOG_INFO("voice: the lobby lane opened (seat %d)", s->sessionSeat());
     }
@@ -531,8 +548,11 @@ void Application::tickNetDriver(double realDt) {
         const frontend::SessionVoiceSettings& v = udpSession_->voiceSettings();
         d.setTalking(v.mode == frontend::SessionVoiceMode::OpenMic || (v.mode == frontend::SessionVoiceMode::PushToTalk && udpSession_->pushToTalk()));
     }
-    if (udpSession_ && d.voice()) {   // the Audio rows stay live (volume / audience / open mic changed in the pause menu)
-        d.voice()->setConfig(voiceConfigFrom(udpSession_->voiceSettings()));
+    bindMicMeter();
+    if (udpSession_ && d.voice()) {   // the Audio rows stay live (volume / audience / open mic / device changed in the pause menu)
+        net::VoiceSession::Config vc = voiceConfigFrom(udpSession_->voiceSettings());
+        vc.micTest = udpSession_->micMeterShown();
+        d.voice()->setConfig(vc);
     }
     d.frame(realDt);
     if (udpSession_ && d.voice()) {   // the talking indicators: every match seat with a member (this player too)
@@ -1042,6 +1062,43 @@ void Application::runVoiceTest() {
     check(clean.state == 2, "the talking indicator: speaking (2) while the tone plays");
     check(muted.frames == 0 && muted.muted > 0 && muted.state == 2, "muted talker: nothing played, its indicator still shows");
 
+    {   // The audience rows: an ENEMY listener (sameTeam false) hears Team Radio as nothing and All Radio as radio (the packet flag).
+        auto heardAsRadio = [&](bool allRadio, long& unheard) {
+            auto group = net::createLoopbackGroup(2);
+            net::Lockstep::Config ca; ca.seats = 2; ca.self = 0; ca.delay = 2;
+            net::Lockstep::Config cb = ca; cb.self = 1;
+            net::Lockstep la(*group[0], ca), lb(*group[1], cb);
+            net::VoiceSession::Config tc; tc.radio = true; tc.proximity = false; tc.allRadio = allRadio;
+            net::VoiceSession va(la, nullptr, tc), vb(lb, nullptr, net::VoiceSession::Config{});
+            va.setSyntheticTone(440.0f);
+            auto enemy = [](int) { return false; };
+            const auto t0 = std::chrono::steady_clock::now();
+            auto secs = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
+            while (secs() < 1.4) {
+                la.pump(); lb.pump();
+                va.update(secs() < 1.0, nullptr, enemy, nullptr, nullptr, core::Vec3{0, 0, 0}, core::Vec3{1, 0, 0});
+                vb.update(false, nullptr, enemy, nullptr, nullptr, core::Vec3{0, 0, 0}, core::Vec3{1, 0, 0});
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+            unheard = vb.stats().unheard;
+            return vb.stats().radio;
+        };
+        long uTeam = 0, uAll = 0;
+        const long rTeam = heardAsRadio(false, uTeam), rAll = heardAsRadio(true, uAll);
+        LOG_INFO("VOICETEST audience: enemy listener - Team Radio %ld radio / %ld unheard, All Radio %ld radio / %ld unheard", rTeam, uTeam, rAll, uAll);
+        check(rTeam == 0 && uTeam > 0 && rAll >= 30 && uAll == 0, "audience: Team Radio never reaches an enemy; All Radio reaches every player");
+    }
+    {   // The Mic Test meter: a micLevel() read (the presenter, every frame while the row shows) opens the meter window for 0.5 s.
+        net::UdpSession::Options o; o.bindIp = "127.0.0.1"; o.hostPort = 24171; o.internet = false;
+        net::UdpSession u(o);
+        const bool before = u.micMeterShown();
+        u.setMicLevelSource([] { return 0.5f; });
+        const float lvl = u.micLevel();
+        const bool during = u.micMeterShown();
+        std::this_thread::sleep_for(std::chrono::milliseconds(650));
+        const bool after = u.micMeterShown();
+        check(!before && lvl == 0.5f && during && !after, "Mic Test: the meter reads the lane's level and holds the microphone open only while it shows");
+    }
     {   // The lobby lane: real UdpSessions on loopback (a host + 2 members); member 1 talks; the host hears it directly, member 2 through
         // the host's relay (everyone in the lobby hears everyone).
         using T = frontend::SessionEvent::Type;

@@ -119,6 +119,7 @@ struct SessionVoiceSettings {
     SessionVoiceAudience audience = SessionVoiceAudience::TeamRadio;   // the original: team-only voice (RE TnVoiceMuteHandler); proximity opt-in
     std::string device;                     // capture device name; "" = the system default
     int volume = 70;                        // playback 0-100
+    int proximityVolume = 70;               // proximity voice playback 0-100 (the Proximity Volume row)
 };
 enum class SessionLeaveReason { Left, Timeout, Kicked, LoadTimeout };
 enum class SessionKickReason { Idle, Host };                             // D5: the original 180 s idle kick

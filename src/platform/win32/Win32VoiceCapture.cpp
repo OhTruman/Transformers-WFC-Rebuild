@@ -11,6 +11,7 @@
 #include <mmdeviceapi.h>
 
 #include <atomic>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -21,8 +22,46 @@ namespace {
 
 template <class T> void release(T*& p) { if (p) { p->Release(); p = nullptr; } }
 
+// PKEY_Device_FriendlyName {a45c254e-df1c-4efd-8020-67d146a850e0}, 14 (defined here: no INITGUID / extra import library)
+const PROPERTYKEY kFriendlyName = {{0xa45c254e, 0xdf1c, 0x4efd, {0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0}}, 14};
+
+std::string utf8(const wchar_t* w) {
+    if (!w) return std::string();
+    const int n = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
+    std::string s(n > 0 ? (size_t)n - 1 : 0, '\0');
+    if (n > 1) WideCharToMultiByte(CP_UTF8, 0, w, -1, &s[0], n, nullptr, nullptr);
+    return s;
+}
+
+// Every active capture endpoint: (friendly name, device). The caller releases the devices.
+std::vector<std::pair<std::string, IMMDevice*>> captureEndpoints(IMMDeviceEnumerator* en) {
+    std::vector<std::pair<std::string, IMMDevice*>> out;
+    IMMDeviceCollection* col = nullptr;
+    if (!en || FAILED(en->EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE, &col))) return out;
+    UINT n = 0;
+    col->GetCount(&n);
+    for (UINT i = 0; i < n; ++i) {
+        IMMDevice* d = nullptr;
+        if (FAILED(col->Item(i, &d))) continue;
+        IPropertyStore* ps = nullptr;
+        std::string name;
+        if (SUCCEEDED(d->OpenPropertyStore(STGM_READ, &ps))) {
+            PROPVARIANT v;
+            PropVariantInit(&v);
+            if (SUCCEEDED(ps->GetValue(kFriendlyName, &v)) && v.vt == VT_LPWSTR) name = utf8(v.pwszVal);
+            PropVariantClear(&v);
+            release(ps);
+        }
+        if (name.empty()) { release(d); continue; }
+        out.emplace_back(name, d);
+    }
+    release(col);
+    return out;
+}
+
 class Win32VoiceCapture final : public IVoiceCapture {
 public:
+    explicit Win32VoiceCapture(std::string device) : device_(std::move(device)) {}
     ~Win32VoiceCapture() override { stop(); }
     bool start() override {
         if (running_) return true;
@@ -50,7 +89,14 @@ private:
         WAVEFORMATEX* wf = nullptr;
         HANDLE ev = CreateEventW(nullptr, FALSE, FALSE, nullptr);
         bool ok = SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&en));
-        if (ok && FAILED(en->GetDefaultAudioEndpoint(eCapture, eCommunications, &dev))) ok = SUCCEEDED(en->GetDefaultAudioEndpoint(eCapture, eConsole, &dev));
+        if (ok && !device_.empty()) {   // the Input Device row's endpoint by name; gone (unplugged) -> the default below
+            for (auto& e : captureEndpoints(en)) {
+                if (!dev && e.first == device_) dev = e.second;
+                else release(e.second);
+            }
+            if (!dev) LOG_WARN("voice capture: input device '%s' not found - using the default", device_.c_str());
+        }
+        if (ok && !dev && FAILED(en->GetDefaultAudioEndpoint(eCapture, eCommunications, &dev))) ok = SUCCEEDED(en->GetDefaultAudioEndpoint(eCapture, eConsole, &dev));
         ok = ok && dev && SUCCEEDED(dev->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, (void**)&ac));
         ok = ok && SUCCEEDED(ac->GetMixFormat(&wf));
         ok = ok && SUCCEEDED(ac->Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, 200000 /* 20 ms */, 0, wf, nullptr));
@@ -98,6 +144,7 @@ private:
         if (com) CoUninitialize();
         if (ok) LOG_INFO("voice capture: stopped");
     }
+    std::string device_;
     VoiceFramer framer_;
     std::thread thread_;
     std::atomic<bool> stopFlag_{false};
@@ -107,6 +154,17 @@ private:
 
 }  // namespace
 
-std::unique_ptr<IVoiceCapture> createVoiceCapture() { return std::make_unique<Win32VoiceCapture>(); }
+std::unique_ptr<IVoiceCapture> createVoiceCapture(const std::string& device) { return std::make_unique<Win32VoiceCapture>(device); }
+
+std::vector<std::string> voiceCaptureDevices() {
+    const bool com = SUCCEEDED(CoInitializeEx(nullptr, COINIT_MULTITHREADED));   // S_FALSE / RPC_E_CHANGED_MODE: already initialised
+    std::vector<std::string> names;
+    IMMDeviceEnumerator* en = nullptr;
+    if (SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&en)))
+        for (auto& e : captureEndpoints(en)) { names.push_back(e.first); release(e.second); }
+    release(en);
+    if (com) CoUninitialize();
+    return names;
+}
 
 }  // namespace net

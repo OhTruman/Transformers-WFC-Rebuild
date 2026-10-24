@@ -16,7 +16,7 @@ namespace {
 double nowMs() {
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
-constexpr uint8_t kVoicePacket = 7, kFlagRadio = 1, kFlagProximity = 2;
+constexpr uint8_t kVoicePacket = 7, kFlagRadio = 1, kFlagProximity = 2, kFlagAllRadio = 4;   // 4: radio for every player (All Radio)
 constexpr double kFrameMs = 20.0;
 // The original's dialog cue (BL_HUD_INTERFACE.DX_SLIDER_VOLUME, DX_DRY): DistanceMin 400 UU, DistanceMax 6400 UU, the FMOD inverse
 // (log) rolloff: full within 4 m, -6 dB per doubling, silent beyond 64 m.
@@ -64,6 +64,12 @@ float VoiceSession::micLevel() const { return mic_ ? mic_->level() : 0.0f; }
 void VoiceSession::update(bool talking, const SeatPos& seatPos, const SameTeam& sameTeam, const Occluded& occluded, const Room& room,
                           const core::Vec3& listener, const core::Vec3& listenerRight) {
     const double now = nowMs();
+    if (cfg_.mic && (!mic_ || !ownMic_ || micDevice_ != cfg_.device)) {   // the owned microphone (Config::mic), on the chosen device
+        mic_ = createVoiceCapture(cfg_.device);
+        ownMic_ = true; micDevice_ = cfg_.device; micRetryMs_ = 0.0;
+    } else if (!cfg_.mic && ownMic_) {
+        mic_.reset(); ownMic_ = false;
+    }
     // ---- send: this seat's 20 ms frames while talking ----
     if (voiceCodecAvailable() && (cfg_.radio || cfg_.proximity)) {
         std::vector<VoiceFrame> frames;
@@ -82,8 +88,9 @@ void VoiceSession::update(bool talking, const SeatPos& seatPos, const SameTeam& 
                 }
             }
         } else if (mic_) {
-            if (talking && !mic_->running()) mic_->start();
-            if (!talking && mic_->running()) mic_->stop();
+            const bool open = talking || cfg_.micTest;   // the Mic Test meter reads the live level without sending
+            if (open && !mic_->running() && now >= micRetryMs_ && !mic_->start()) micRetryMs_ = now + 2000.0;
+            if (!open && mic_->running()) mic_->stop();
             VoiceFrame f;
             while (mic_->pop(f)) {
                 if (!talking) continue;
@@ -102,7 +109,8 @@ void VoiceSession::update(bool talking, const SeatPos& seatPos, const SameTeam& 
             std::vector<uint8_t> opus;
             if (!enc_.encode(f, opus)) continue;
             std::vector<uint8_t> pkt = {kVoicePacket, (uint8_t)link_.self(), (uint8_t)seq_, (uint8_t)(seq_ >> 8),
-                                        (uint8_t)((cfg_.radio ? kFlagRadio : 0) | (cfg_.proximity ? kFlagProximity : 0))};
+                                        (uint8_t)((cfg_.radio ? kFlagRadio : 0) | (cfg_.proximity ? kFlagProximity : 0) |
+                                                  (cfg_.radio && cfg_.allRadio ? kFlagAllRadio : 0))};
             pkt.insert(pkt.end(), opus.begin(), opus.end());
             link_.send(pkt.data(), pkt.size());   // to the host (a client) or fanned out (the host)
             ++seq_; ++stats_.sent;
@@ -163,7 +171,7 @@ void VoiceSession::playTalker(int seat, Talker& t, const SeatPos& seatPos, const
     // Who hears it: radio = the talker's team, 2D at the voice volume; proximity (opt-in: the audience row) = anyone in earshot, as a
     // 3D voice in the cue mix (falloff, pan, the listener's room reverb, occlusion); radio wins for teammates. An open channel (FFA,
     // after EndGame: setOpenChannel) = everyone, 2D.
-    const bool radio = open_ || ((t.lastFlags & kFlagRadio) && sameTeam && sameTeam(seat));
+    const bool radio = open_ || ((t.lastFlags & kFlagRadio) && ((t.lastFlags & kFlagAllRadio) || (sameTeam && sameTeam(seat))));
     if (!radio) {
         core::Vec3 at;
         if (!(t.lastFlags & kFlagProximity) || !seatPos || !seatPos(seat, at)) { ++stats_.unheard; return; }   // not for this listener
@@ -192,7 +200,7 @@ void VoiceSession::playTalker(int seat, Talker& t, const SeatPos& seatPos, const
         if (!audio_) return;
         if (t.pstream < 0) t.pstream = audio_->openPositionalStream(kVoiceRate);
         if (t.pstream < 0) return;
-        audio_->setPositionalStream(t.pstream, at, cfg_.volume * t.occGain, kProxMin, maxD, true);
+        audio_->setPositionalStream(t.pstream, at, cfg_.proximityVolume * t.occGain, kProxMin, maxD, true);
         float mono[kVoiceFrameSamples];
         for (int i = 0; i < kVoiceFrameSamples; ++i) mono[i] = (float)pcm[(size_t)i] / 32768.0f;
         audio_->pushPositionalStream(t.pstream, mono, kVoiceFrameSamples);

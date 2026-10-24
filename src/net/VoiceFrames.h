@@ -10,6 +10,8 @@
 #include <deque>
 #include <memory>
 #include <mutex>
+#include <string>
+#include <vector>
 
 namespace net {
 
@@ -48,6 +50,8 @@ public:
     virtual bool pop(VoiceFrame& out) = 0;
     virtual float level() const = 0;
 };
-std::unique_ptr<IVoiceCapture> createVoiceCapture();
+// device = a capture endpoint's friendly name (voiceCaptureDevices); "" or a name no longer present = the system default.
+std::unique_ptr<IVoiceCapture> createVoiceCapture(const std::string& device = std::string());
+std::vector<std::string> voiceCaptureDevices();   // the active capture endpoints' friendly names (the Input Device row)
 
 }  // namespace net
