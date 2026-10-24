@@ -204,6 +204,9 @@ def main():
                     rows.append(dict(dest='Transformers Rebuild/' + src, source=src, bytes=str(os.path.getsize(os.path.join(dp, f))), action='keep', reason='assettools tree'))
                     have_dest.add('Transformers Rebuild/' + src); at_extra += 1
     camp_files, camp_bytes, camp_skipped_lm, camp_chapters = 0, 0, 0, []
+    # a source the package already ships under another name (an xpr twin: the compressed row of the same file) is not added again
+    # (the overlay check counts the rows naming a source: two would stop the build)
+    have_src = {r['source'] for r in rows}
     ctop = os.path.join(ROOT, CAMPAIGN_RENDER)
     for ch in sorted(os.listdir(ctop)) if os.path.isdir(ctop) else []:
         cdir = os.path.join(ctop, ch)
@@ -246,7 +249,7 @@ def main():
             if not src or src.endswith('.py'):   # (the list names its own export scripts: not game data)
                 continue
             dst = 'Transformers Rebuild/' + src
-            if dst in have_dest:
+            if dst in have_dest or src in have_src:
                 continue
             if not os.path.isfile(os.path.join(ROOT, src)):
                 out_missing += 1
