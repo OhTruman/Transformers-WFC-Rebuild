@@ -4465,3 +4465,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 10:35 MERGED 48e42af6 Private Match Start-after-cancel fix (Frontend proof: cancel at 8, Start again at the same spot, match
   loads) = FINAL BUILD SHA. UNFREEZE sent. Systems refresh #2 + verify_everything on 48e42af6; Experimental mp menu
   flow rerun on 48e42af6; the 300 fps phase starts (code / headless now; phase-0 slot after verify).
+2026-10-24 10:45 300 FPS PHASE 1 started (next package): MERGED 13b03df3 skeletal set dressing follows streaming visibility (the one
+  streaming leak; D1 drew 244 active rows) + the cull-distance sidecar tool (data: ~0 lever on D1 per RE). RE §7a: the
+  active state holds 10-25 % of a chapter's primitives (statics already follow it); no skeletal LODs in the cook.
+  Waiting: Systems refresh #2 + verify on 48e42af6; Experimental mp rerun; then the phase-0 baseline slot.
