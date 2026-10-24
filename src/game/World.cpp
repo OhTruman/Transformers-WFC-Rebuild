@@ -1765,8 +1765,8 @@ void World::queueSelectionAudio(const std::string& chassis, const std::vector<st
 void World::preloadHeldWeaponModels(const std::vector<std::string>& weapons) {
     for (const std::string& n : weapons) {
         const WeaponDef* d = findWeaponDef(n);
-        // Only weapons that can be the held weapon (primary / heavy, and grenade bags: held while tossed) and draw a mesh; the Ion Blaster uses the boot model.
-        if (!d || (d->typeCode != 0 && d->typeCode != 1 && d->typeCode != 4) || !d->meshGltf || !*d->meshGltf || std::string(d->id) == "IonBlaster") continue;
+        // Only weapons that can be the held weapon (primary / heavy, melee, and grenade bags: held while tossed) and draw a mesh; the Ion Blaster uses the boot model.
+        if (!d || (d->typeCode != 0 && d->typeCode != 1 && d->typeCode != 2 && d->typeCode != 4) || !d->meshGltf || !*d->meshGltf || std::string(d->id) == "IonBlaster") continue;
         weaponModelFor(*d);
     }
 }
@@ -2795,6 +2795,7 @@ void World::startLocalMatch(const MatchSettings& s, int localTeam) {
     for (const char* id : {"Poke", "HeavyRocketTurret"})
         if (const WeaponDef* d = findWeaponDef(id)) weaponModelFor(*d);
     ensureAbilityModels();
+    ensureGibModels();   // the first gib (a Shockwave mass kill) loaded them in one step
 }
 
 bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
@@ -8867,6 +8868,31 @@ core::Vec3 World::Corpse::playAt(const char* so) const {
     return at;
 }
 
+// The gib meshes: the static chunks and the two skeletal gib templates (once; at the match load and at the first gib).
+void World::ensureGibModels() {
+    if (!gibMeshesTried_ && renderer_) {
+        gibMeshesTried_ = true;
+        for (int i = 1; i <= 11; ++i) {
+            char nm[96]; std::snprintf(nm, sizeof nm, "/../content/TR_Death_Gibs_p/Static/RB_Gib_%02d_STAT.gltf", i);
+            render::MeshData md;
+            if (assets::loadGlb(assetRoot() + nm, md)) { for (render::Material& M : md.mats) { if (M.wfcName.empty() && !M.sourceName.empty()) M.wfcName = "TR_Death_Gibs_p.Materials." + M.sourceName; M.tex = resolveTexture(M.baseColorUri); M.emissiveTexHandle = resolveTexture(M.emissiveUri); } const render::MeshHandle h = renderer_->uploadMesh(md); if (h != render::kInvalidMesh) gibMeshes_.push_back(h); }
+        }
+    }
+    if (renderer_) {
+        if (!skelGibModelsTried_) {
+            skelGibModelsTried_ = true;
+            for (int g = 0; g < 2; ++g) {
+                std::unique_ptr<assets::SkinnedModel> m = std::make_unique<assets::SkinnedModel>();
+                if (assets::loadSkinnedGlb(assetRoot() + gibMeshPath(g), *m) && m->valid()) {
+                    for (render::Material& mt : m->mats) if (mt.wfcName.empty() && !mt.sourceName.empty()) mt.wfcName = "TR_Death_Gibs_p.Materials." + mt.sourceName;
+                    resolveModelTextures(*m); skelGibModels_[g] = std::move(m);
+                }
+                else LOG_INFO("skeletal gib %s: not loaded", gibMeshPath(g));
+            }
+        }
+    }
+}
+
 void World::gibCorpse(Corpse& c) {
     c.gibbed = true;
     // [Systems] the attached PlayEffect effects end with the dying actor (its PSCs go with it at the gib); their particles fade
@@ -8893,14 +8919,7 @@ void World::gibCorpse(Corpse& c) {
         fxList = std::string(fx) + (psOk ? "@PositionSocket" : "@pos");
         if (renderer_) fxStepSpawn(fx, at, core::Vec3{0, 1, 0}, core::Vec3{0, 0, -1}, -1, true);
     }
-    if (!gibMeshesTried_ && renderer_) {
-        gibMeshesTried_ = true;
-        for (int i = 1; i <= 11; ++i) {
-            char nm[96]; std::snprintf(nm, sizeof nm, "/../content/TR_Death_Gibs_p/Static/RB_Gib_%02d_STAT.gltf", i);
-            render::MeshData md;
-            if (assets::loadGlb(assetRoot() + nm, md)) { for (render::Material& M : md.mats) { if (M.wfcName.empty() && !M.sourceName.empty()) M.wfcName = "TR_Death_Gibs_p.Materials." + M.sourceName; M.tex = resolveTexture(M.baseColorUri); M.emissiveTexHandle = resolveTexture(M.emissiveUri); } const render::MeshHandle h = renderer_->uploadMesh(md); if (h != render::kInvalidMesh) gibMeshes_.push_back(h); }
-        }
-    }
+    ensureGibModels();
     // HmGibsDestructionEffect: NumChunks 4, LinearSpeed U(800, 2000) UU/s (jets U(2000, 4000)) in a 60 deg half-cone about +Z from a
     // 100 UU sphere 100 UU up, AngularSpeed U(12000, 20000) (rotator units / s) about a random axis, LifeSpan 5, TF_Death_GibsTrail_FX.
     for (int i = 0; i < 4 && !gibMeshes_.empty() && (!fxr || fxr->chunks); ++i) {
@@ -8929,17 +8948,7 @@ void World::gibCorpse(Corpse& c) {
     }
     // TnSkeletalGibSpawner (robots): one of the two templates, at PositionSocket in the gib mesh's reference pose, at rest.
     if (!c.vehicle && !c.noSkelGib && renderer_) {
-        if (!skelGibModelsTried_) {
-            skelGibModelsTried_ = true;
-            for (int g = 0; g < 2; ++g) {
-                std::unique_ptr<assets::SkinnedModel> m = std::make_unique<assets::SkinnedModel>();
-                if (assets::loadSkinnedGlb(assetRoot() + gibMeshPath(g), *m) && m->valid()) {
-                    for (render::Material& mt : m->mats) if (mt.wfcName.empty() && !mt.sourceName.empty()) mt.wfcName = "TR_Death_Gibs_p.Materials." + mt.sourceName;
-                    resolveModelTextures(*m); skelGibModels_[g] = std::move(m);
-                }
-                else LOG_INFO("skeletal gib %s: not loaded", gibMeshPath(g));
-            }
-        }
+        ensureGibModels();
         unsigned h = c.rng ^ 0x27d4eb2fu;
         auto hrand = [&h]() { h ^= h << 13; h ^= h >> 17; h ^= h << 5; return (float)(h >> 8) / 16777216.0f; };
         const int g = hrand() < 0.5f ? 0 : 1;   // Templates[Rand(2)]

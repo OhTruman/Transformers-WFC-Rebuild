@@ -1213,6 +1213,7 @@ public:
     void preloadHeldWeaponsOfPawns();
     std::vector<const WeaponDef*> preloadedDefs_;   // weapon defs whose model is cached (sorted; a pointer search, not the string map)
     void ensureAbilityModels();
+    void ensureGibModels();
     // (Escalation DLC mechanisms) the presentation, WorldSurvivalMechPresent.cpp [Rendering]
     void svMechPresent(render::IRenderer& r) const;
     void svMechDrawSentries(render::IRenderer& r) const;

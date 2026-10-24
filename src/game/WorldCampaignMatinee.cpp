@@ -525,6 +525,20 @@ void World::cpLoadPawnGroups() {
         if (!P.chassis.empty()) cpPawnGroups_[g["interp_data"].asString() + "|" + g["group"].asString()] = P;
     }
     LOG_INFO("campaign: %zu matinee pawn groups bound to characters", cpPawnGroups_.size());
+    // Every participant chassis' clips load now (cpPlayPawnClip loaded each at its first play: a 5-38 ms step). Load scheduling only.
+    int preloaded = 0;
+    for (size_t q = 0; q < match_.players().size(); ++q) {
+        const std::string ch = resolveChassis(match_.players()[q].selection, match_.faction((int)q));
+        const ChassisAssets* ca = chassisAssets(ch);
+        if (!ca || !ca->ok) continue;
+        assets::SkinnedModel& model = const_cast<assets::SkinnedModel&>(ca->robot);
+        for (const auto& kv : cpPawnGroups_) {
+            if (std::find(kv.second.chassis.begin(), kv.second.chassis.end(), ch) == kv.second.chassis.end()) continue;
+            for (const auto& cf : kv.second.clipFile)
+                if (model.clipByName(cf.first) < 0) { assets::loadAnimationsByName("F:/Transformers Rebuild/ExtractedAssets/" + cf.second, model); ++preloaded; }
+        }
+    }
+    if (preloaded) LOG_INFO("campaign: %d matinee pawn clip files preloaded", preloaded);
 }
 
 // Play `clip` at `time` on every participant of the group's characters (the human or the squad holding that chassis): the clip is
