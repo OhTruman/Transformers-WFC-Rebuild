@@ -5,14 +5,15 @@
 # the Game Settings bots rows (Game Mode, Team Balancing, Map Selection, Time Limit, Points to Win, Player Limit, Autobot Bots,
 # Decepticon Bots, ...: Down x6 / Right x4 / Down / Right x4; bots for the #27 PlayerList shot), Create a Character (#20) back steps, the map row, the Team click, the countdown cancel, the Scout keys.
 #expect mode TDM
-#expect log FLOW.lobby.bots.field=WfcBotsAutobot
-#expect log FLOW.lobby.bots.field=WfcBotsDecepticon
+#expect log FLOW.lobby.bots.field=autobot.autobot=[1-9]
+#expect log FLOW.lobby.bots.field=decepticon.*decepticon=[1-9]
 #expect log BotsAutobot=[1-9].*BotsDecepticon=[1-9]|BotsDecepticon=[1-9].*BotsAutobot=[1-9]
 #expect state cac.back InLobby
 #expect level cac.back PartyLobby
 #expect log FLOW.gamelobby.map.mapId=
 #expect log FLOW.lobby.team.team=
 #expect log FLOW.gamelobby.countdown.*state=cancelled.by=Back
+#expect log FLOW.lobby.countdownCancelMenu.restored=true
 #expect state countdown.cancelled InLobby
 #expect level countdown.cancelled GameLobby
 #expect chassis Car2|Car4

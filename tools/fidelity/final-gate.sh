@@ -23,6 +23,8 @@ MAPS=${FINAL_MAPS:-"501 502 503 504 505 506 507 508 509 510"}; RES=${FINAL_RES:-
 # takes either; MP_ESC_ maps boot in Escalation). FINAL_MAPS set = exactly those maps.
 DLC_MAPS="511:MP_ORB_Havoc 512:MP_KON_Fortress MP_ESC_Tranquillity MP_ESC_District MP_IAC_Horizon MP_IAC_Metropolis MP_KON_Sector MP_ESC_Pulse MP_ESC_Static"
 RENDER_ROOT=${FINAL_RENDER_ROOT:-"F:/Transformers Rebuild/Rebuild/work/render"}; SM_DLC=""
+# busy(): long-lived desktop-app runtimes (the Codex app's node.exe, alive for days) are not a contending job - they kept the
+# 2026-10-24 a2e9fbd9 gate in 'waiting for a clear card' for 5.5 h. Check what blocks with the same query before a long wait.
 # FINAL_RENDER_SRC=<render root> (e.g. work/final_render: Rebuild/work/render + the shipped DLC maps): the frozen snapshot's source;
 # set FINAL_RENDER_ROOT to the same root so the DLC maps join the rows.
 # FINAL_ASSETS=<VerticalSlice root holding the DLC maps> (e.g. Rebuild/work/assets_dlc/VerticalSlice): passed as WFC_ASSETS to every arm
@@ -32,7 +34,7 @@ st() { echo "$(date +%T) $*" | tee -a $L; pool_guard; }
 pool_guard() { [ $WHATIF = 1 ] && return; local gb; gb=$(powershell -NoProfile -Command "[math]::Round((Get-Counter '\Memory\Pool Nonpaged Bytes').CounterSamples[0].CookedValue/1GB,2)" | tr -d '[:space:]')
   echo "  (pool $gb GB)" >> $L; if awk "BEGIN{exit !($gb > ${GATE_POOL_MAX_GB:-9.5})}"; then rm -f work/PERF_HOLD; echo "$(date +%T) POOL GUARD: $gb GB - stopped (hold removed)" | tee -a $L; exit 3; fi; }
 run() { if [ $WHATIF = 1 ]; then echo "WHATIF: $*" | tee -a $L; else eval "$@"; fi; }
-busy() { powershell -NoProfile -Command "\$n = 'python.exe','node.exe','sqlite3.exe','cmake.exe','ninja.exe','cl.exe','clang.exe','clang++.exe','clang-cl.exe','link.exe','lld-link.exe','dxc.exe','msbuild.exe'; @(Get-CimInstance Win32_Process | ? { ((\$n -contains \$_.Name) -and \"\$(\$_.CommandLine)\" -notlike '*Rebuild-Experimental*final-gate*') -or (\$_.Name -like 'wfc_rebuild*' -and \"\$(\$_.ExecutablePath)\" -notlike '*Rebuild-Experimental*') }).Count" | tr -d '[:space:]'; }
+busy() { powershell -NoProfile -Command "\$n = 'python.exe','node.exe','sqlite3.exe','cmake.exe','ninja.exe','cl.exe','clang.exe','clang++.exe','clang-cl.exe','link.exe','lld-link.exe','dxc.exe','msbuild.exe'; @(Get-CimInstance Win32_Process | ? { ((\$n -contains \$_.Name) -and \"\$(\$_.CommandLine)\" -notlike '*Rebuild-Experimental*final-gate*' -and \"\$(\$_.ExecutablePath)\" -notlike '*codex*') -or (\$_.Name -like 'wfc_rebuild*' -and \"\$(\$_.ExecutablePath)\" -notlike '*Rebuild-Experimental*') }).Count" | tr -d '[:space:]'; }
 recontam() { [ $WHATIF = 1 ] && return; ls $1/*/CONTAMINATED.txt >/dev/null 2>&1 || return 0
   st "  $(basename $1): CONTAMINATED rep - rerun whole"; rm -rf ${1}_contam; mv $1 ${1}_contam; mv $1.out ${1}_contam.out.txt 2>/dev/null; eval "$2"
   ls $1/*/CONTAMINATED.txt >/dev/null 2>&1 && st "  $(basename $1): still CONTAMINATED - report row UNKNOWN"; return 0; }

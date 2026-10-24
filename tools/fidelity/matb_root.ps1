@@ -16,7 +16,7 @@ if (Test-Path $O) {   # junctions inside: remove them with rmdir first, never re
     Remove-Item $O -Recurse -Force
 }
 New-Item -ItemType Directory -Force $O | Out-Null
-$mats = @((Get-Content -Raw $Manifest | ConvertFrom-Json).materials)
+$mats = @(if ($NoCandidate) { } else { (Get-Content -Raw $Manifest | ConvertFrom-Json).materials })   # (-NoCandidate: no manifest needed - the matB handoff may be gone)
 $py = "F:\Transformers Rebuild\AssetTools\bin\py\python.exe"
 $merge = @"
 import json, sys
