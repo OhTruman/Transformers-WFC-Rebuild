@@ -137,6 +137,8 @@ private:
     int pressCount_ = 0;        // pressuntil: presses so far (at most 20)
     int keyUp_ = -1;
     std::string padUp_;
+    std::string padHold_;          // padhold:<button>,<seconds>: held until holdLeft_ runs out (later steps keep running)
+    float holdLeft_ = 0.0f;
 };
 
 class FrontendRuntime {
