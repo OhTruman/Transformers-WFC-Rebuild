@@ -63,7 +63,7 @@ bool MapInfo::compatibleWith(const std::string& tag) const {
 
 std::string Catalog::defaultManifestRoot() {
     if (const char* e = std::getenv("WFC_FRONTEND_MANIFESTS")) return e;
-    return "F:/Transformers Rebuild/AssetTools/manifests";
+    return packageRoot() + "/AssetTools/manifests";
 }
 
 std::string Catalog::defaultExtractedRoot() {
@@ -507,7 +507,7 @@ void Catalog::loadTransLevels(const std::string& extractedRoot, const std::strin
             // Gameplay's chapter World reads <campaign root>/<chapter>/chapter.json (CampaignChapter::root(): WFC_CAMPAIGN_ROOT, else
             // AssetTools' campaign_render export) with Rendering's chapter units; a chapter is selectable once that export exists.
             const char* cr = std::getenv("WFC_CAMPAIGN_ROOT");
-            const std::string campaignRoot = cr ? cr : "F:/Transformers Rebuild/AssetTools/out/campaign_render";
+            const std::string campaignRoot = cr ? cr : packageRoot() + "/AssetTools/out/campaign_render";
             pending.hasRequiredAssets = runtimeFileExists(campaignRoot + "/" + dir + "/chapter.json") ||
                                         (runtimeFileExists(runtimeMapRoot + "/" + dir + "/world.glb") &&
                                          (runtimeFileExists(runtimeMapRoot + "/" + dir + "/render_index.json") ||

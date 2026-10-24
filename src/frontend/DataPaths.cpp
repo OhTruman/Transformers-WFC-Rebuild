@@ -28,6 +28,30 @@ std::string exeDir() {
 #endif
 }
 
+std::string parentOf(std::string p, int levels) {
+    while (!p.empty() && (p.back() == '/' || p.back() == '\\')) p.pop_back();
+    for (int i = 0; i < levels; ++i) {
+        const size_t k = p.find_last_of("/\\");
+        if (k == std::string::npos) return std::string();
+        p = p.substr(0, k);
+    }
+    return p;
+}
+
+std::string findPackageRoot() {
+    auto env = [](const char* k) { const char* e = std::getenv(k); return e && *e ? std::string(e) : std::string(); };
+    if (std::string a = env("WFC_ASSETS"); !a.empty()) if (std::string r = parentOf(a, 2); !r.empty()) return r;
+    if (std::string c = env("WFC_CONTENT"); !c.empty()) if (std::string r = parentOf(c, 2); !r.empty()) return r;
+    if (std::string d = env("WFC_FRONTEND_DATA"); !d.empty()) if (std::string r = parentOf(d, 3); !r.empty()) return r;
+    std::string dir = exeDir();
+    for (int i = 0; i < 8 && !dir.empty(); ++i) {   // the package: <root>/Rebuild/build/release/bin; a dev tree: <root>/<worktree>/...
+        std::error_code ec;
+        if (std::filesystem::is_directory(openPath(dir + "/AssetTools"), ec)) return dir;
+        dir = parentOf(dir, 1);
+    }
+    return exeDir();
+}
+
 std::string resolve() {
     if (const char* e = std::getenv("WFC_FRONTEND_DATA"); e && *e) return e;
     const std::string exe = exeDir();
@@ -39,10 +63,19 @@ std::string resolve() {
             return ec ? c : p.generic_string();
         }
     }
-    return std::string(WFC_SOURCE_DIR) + "/data/frontend";
+    return findPackageRoot() + "/Rebuild/data/frontend";   // the package's Rebuild tree
 }
 
 } // namespace
+
+const std::string& packageRoot() {
+    static const std::string root = [] {
+        std::string r = findPackageRoot();
+        LOG_INFO("frontend package root: %s", r.c_str());
+        return r;
+    }();
+    return root;
+}
 
 const std::string& frontendDataDir() {
     static const std::string dir = [] {
@@ -57,7 +90,10 @@ std::string frontendDataFile(const char* name) { return frontendDataDir() + "/" 
 
 std::string dlcContentRoot() {
     if (const char* e = std::getenv("WFC_DLC_CONTENT")) return e;
-    return "F:/Transformers Rebuild/AssetTools/out/dlc_content/content";
+    // the AssetTools export in a workspace, else the package's ExtractedAssets/content (where the package carries the DLC files)
+    const std::string dev = packageRoot() + "/AssetTools/out/dlc_content/content";
+    std::error_code ec;
+    return std::filesystem::is_directory(openPath(dev), ec) ? dev : packageRoot() + "/ExtractedAssets/content";
 }
 
 std::string settingsPreviewPng(const std::string& row, int value) {
@@ -66,7 +102,7 @@ std::string settingsPreviewPng(const std::string& row, int value) {
 }
 
 std::string dlcTextFile(int pack, const std::string& lang) {
-    const std::string root = std::getenv("WFC_DLC_TEXT") ? std::getenv("WFC_DLC_TEXT") : "F:/Transformers Rebuild/AssetTools/work/dlc";
+    const std::string root = std::getenv("WFC_DLC_TEXT") ? std::getenv("WFC_DLC_TEXT") : packageRoot() + "/AssetTools/work/dlc";
     const std::string dir = pack == 1 ? "DLCMaps" : "DLCMaps2";
     return root + "/MapPack" + std::to_string(pack) + "/files/" + dir + "/" + dir + "__TransGame." + lang;
 }

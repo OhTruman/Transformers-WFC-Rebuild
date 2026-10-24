@@ -2086,6 +2086,14 @@ static void testSplitOnline() {
           std::to_string(lobby) + std::to_string(joined) + std::to_string(added) + " calls=" + std::to_string(r.fake->count("setSecondLocal")));
 }
 
+static void testPackageRoots() {
+    // distributable package: no absolute dev path - the defaults derive from the package root (here the exe's workspace)
+    const std::string root = frontend::packageRoot();
+    const std::string text = frontend::dlcTextFile(1, "int"), man = Catalog::defaultManifestRoot();
+    check(!root.empty() && text.rfind(root, 0) == 0 && (std::getenv("WFC_FRONTEND_MANIFESTS") || man.rfind(root, 0) == 0), "paths.package_root",
+          "root=" + root + " dlcText=" + text + " manifests=" + man);
+}
+
 static void testSettingsPreview() {
     // #5: the preview images resolve per row and value; a value without an image is "" (the panel hides)
     const std::string off = frontend::settingsPreviewPng("RayTracing", 0), none = frontend::settingsPreviewPng("RayTracing", 99);
@@ -2588,6 +2596,7 @@ int main() {
     testEscalationNoXp();
     testLanguageSetting();
     testSettingsPreview();
+    testPackageRoots();
     testSplitOnline();
     testDlcMerge();
     testSplitProfiles();
