@@ -1613,6 +1613,8 @@ private:
     void svSort(int type);
     void svTouch(int zone, int sign);
     bool svSpawn(int slot);
+    int svPlayersNavPiece() const;   // PC ADAPTATION (playtest 4)
+    bool svReachablePoint(core::Vec3& at, int want) const;
     bool svBackpackHit(int victim, int instigator, float amount, const std::string& damageType);   // E3b: the Brute backpack took it
     void svBackpackExplode(SurvivalState::Slot& s);
     void svDropLoot(const KillFeedEntry& e);   // E3b part 2: the loot table on a horde death

@@ -833,10 +833,37 @@ void World::svTouch(int z, int sign) {
 
 // SpawnDude: up to 5 tries, each re-rolling the zone among the type's top 3 (weighted by |score|, no floor) and advancing that zone's
 // round-robin point; a zone without points spends the try; the capsule must fit. False: "Failed to find a place to spawn a dude".
+// PC ADAPTATION (playtest 4): the nav piece the players stand in (closed doors split the nav), else the main piece.
+int World::svPlayersNavPiece() const {
+    for (size_t q = 0; q < match_.players().size(); ++q)
+        if (match_.players()[q].kind != ParticipantKind::Bot) if (const Character* c = participantPawn((int)q)) { const int cell = botNav_.findCell(c->position(), 12.0f); if (cell >= 0) return botNav_.pieceOf(cell); }
+    return botNav_.mainPieceId();
+}
+
+// A spawn point the horde can path from: its own nav cell (4 m) in the players' piece, else a cell of that piece within 40 m on the
+// same storey (the point moves to its centroid). False: our nav does not connect it (the original's path network did).
+bool World::svReachablePoint(core::Vec3& at, int want) const {
+    if (!botNav_.valid()) return true;
+    int c = botNav_.findCell(at, 4.0f);
+    if (c >= 0 && !botNav_.isBlocked(c) && botNav_.pieceOf(c) == want) return true;
+    c = botNav_.findCell(at, 40.0f, 12.0f);
+    if (c < 0 || botNav_.isBlocked(c) || botNav_.pieceOf(c) != want || std::fabs(botNav_.cells()[(size_t)c].centroid.y - at.y) > 12.0f) return false;
+    at = botNav_.cells()[(size_t)c].centroid;
+    return true;
+}
+
 bool World::svSpawn(int slot) {
     const SurvivalState::Slot& s = sv_.slots[(size_t)slot];
     const int t = svData_.enemies[(size_t)s.enemy].spawnType;
-    const std::vector<int>& sorted = sv_.sorted[(size_t)t];
+    // PC ADAPTATION (playtest 4): only zones with a point our bot nav connects to the players (see svReachablePoint)
+    const int want = svPlayersNavPiece();
+    static std::vector<int> reach;
+    reach.clear();
+    for (int z : sv_.sorted[(size_t)t]) {
+        const SurvivalData::Zone& zz = svData_.zones[(size_t)z];
+        for (size_t k = 0; k < zz.spawnPoints.size(); ++k) { core::Vec3 tmp{zz.spawnPoints[k][0], zz.spawnPoints[k][1], zz.spawnPoints[k][2]}; if (svReachablePoint(tmp, want)) { reach.push_back(z); break; } }
+    }
+    const std::vector<int>& sorted = reach.empty() ? sv_.sorted[(size_t)t] : reach;
     const int top = std::min<int>(3, (int)sorted.size());
     if (top <= 0) return false;
     for (int attempt = 0; attempt < 5; ++attempt) {
@@ -870,6 +897,10 @@ bool World::svSpawn(int slot) {
             const float rad = std::min(4.0f, 0.25f * std::min(zone.mx.x - zone.mn.x, zone.mx.z - zone.mn.z));
             const float a = 6.2831853f * (float)idx / (float)std::max(1, zone.points);
             at = {cx + rad * std::cos(a), zone.mx.y, cz + rad * std::sin(a)};
+        }
+        if (!reach.empty() && !svReachablePoint(at, want)) {   // PC ADAPTATION (playtest 4): this point is not reachable: the try is spent
+            if (slog) LOG_INFO("ESCLOG   point %d (%.2f %.2f %.2f): not reachable on the bot nav (zone %s)", idx, at.x, at.y, at.z, zone.id.c_str());
+            continue;
         }
         float gy = 0.0f; core::Vec3 gn;
         if (!collision_.valid() || !collision_.groundHeight(at.x, at.z, at.y + 0.5f, 0.0f, gy, gn)) {
