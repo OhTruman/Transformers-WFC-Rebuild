@@ -4609,3 +4609,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Volumetric / Lens Flare text). Not reproduced yet: Game Settings re-entry (repro script stopped at the leave confirm:
   code reading + one more slot), the vignette (soft edges hold at 2560x1440 fullscreen: ask the user for a shot). RE:
   the ESC closed door = a TnTransformingWorldActor skeletal mesh (never drawn) animating open on purchase -> Rendering.
+2026-10-24 23:24 MERGED e6c3bbae Play.bat reuses / drops stale substs. CLEANUP: Systems' bulk delete (~55 GB of superseded packages,
+  verify output, old refresh trees, plan copies, milestone-08 copies in Rebuild-Systems/work) was DENIED by the
+  permission classifier -> needs the user's OK in the Systems window; preserved: playtest_slim_ae63135a (the user merged
+  the HD pack into it), refresh_ae63135a, dlss_db72, hd_dev_full, vbake, source / Git / toolchains / assets. Experimental
+  asked to drop its superseded gate bases (own worktree). Frontend: Game Settings root cause = the row is cloned from
+  the Create a Character row, gone once Iconic Characters is on (fix built; windowed check pending the card).
