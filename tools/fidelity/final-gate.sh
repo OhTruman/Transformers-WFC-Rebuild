@@ -52,6 +52,9 @@ if [ "$PH" = pre ]; then
   for m in 508 506 505 $SM_DLC; do run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/samematch-$m -Map $m -Arms 'base|$BASE|WFC_NULLRENDER=1$ASX;;head|$HEAD|WFC_NULLRENDER=1$ASX;;neg|$NEG|WFC_NULLRENDER=1$ASX' -Steps 9600 -From 600 -PlayerBot 1 -Reps 1 -Seed 1234 > $O/samematch-$m.out 2>&1"
     sm=$(grep -oE "lockstep\.head\.r1: head: steps [0-9]+ \([0-9-]+\), same match as 'base' [A-Za-z]+" $O/samematch-$m.out 2>/dev/null); ng=$(grep -oE "lockstep\.neg\.r1: neg: steps [0-9]+ \([0-9-]+\), same match as 'base' [A-Za-z]+" $O/samematch-$m.out 2>/dev/null)
     st "map $m same match: ${sm:-?}; negative control: ${ng:-?}"
+    # FINAL_EXPECT_DIFF="<maps>" (Integration 2026-10-24: a head sim change by design with no base item, e.g. the Escalation reachable-spawn
+    # adaptation): those rows are reported as EXPECTED DIFF instead of stopping the gate; every other row must still match
+    if [ $WHATIF != 1 ] && [[ " $FINAL_EXPECT_DIFF " == *" $m "* ]]; then case "$sm" in *True) st "  $m: matches although a difference was expected";; *) st "  $m: EXPECTED DIFF (FINAL_EXPECT_DIFF)";; esac; continue; fi
     [ $WHATIF = 1 ] || case "$sm" in *True) ;; *) st "STOP: the base does not play the head's match on $m - not gating (a sim-only diff is missing)"; exit 2;; esac
   done
   fi
