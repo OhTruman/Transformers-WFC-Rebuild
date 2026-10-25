@@ -29,5 +29,5 @@ Settings
   Realistic preview is the real rendering (measured against a match).
 Disk cleanup: skipped on your word; Experimental freed 25 GB of its own superseded gate builds. The 55 GB candidate list (superseded packages, verify output, old refresh trees in Rebuild-Systems/work) is in MILESTONES_09c.md if you want it later.
 
-## Proof: (pending) scripted MP + Escalation flows (incl. wave 1 completing and wave 2 starting) and the same-match
-gate vs the base chain (01-32).
+## Proof: tools/fidelity/results/FINAL_GATE_2bf2f152.md. The scripted multiplayer flow passes every row; the Escalation flow on Forsaken passes every judged row (the host, the map pick, the load, enemies reaching the player with the test bot kept alive); measured honestly: wave 1 began but the test bot did not clear it within 6 minutes on Forsaken (Pulse reaches wave 3 headless; the test bot is a poor fighter, so please judge wave completion yourself). Same match vs the base chain
+(01-31): all versus rows identical, the Escalation rows differ by design (the reachable-spawn change), negative control differs everywhere. Stability: 38 TDM runs on all 19 maps with 0 errors, campaign 24 / 24, Kismet 10 / 10, voice PASS. Package verify: all rows PASS (the Remnant row ends in a game over because enemies now reach and kill a passive bot).

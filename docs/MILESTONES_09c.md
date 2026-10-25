@@ -4626,3 +4626,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   except Remnant ESC, where the passive player bot now dies at 22 s to a HoloBrute melee = the reachable-spawn fix
   working (0 failing opens; accepted; harness: end on ESC game over next package). Cleanup skipped on the user's word.
   Gate: windowed mp + esc (Tranquillity, INVULN, 360 s) running on fast_2bf2f15.
+2026-10-25 00:34 FINAL GATE 2bf2f152 PASS (Experimental 6f9e572b): MP every row; ESC Tranquillity every judged row (wave 1 begun, not
+  cleared by the test bot in 360 s; Pulse reaches wave 3 headless); versus same-match identical, ESC rows differ by
+  design; 38 TDM runs 0 errors; campaign 24 / 24. PACKAGE 2bf2f152 HANDED OVER (HANDOVER_2026-10-24c.md). GitHub pushed.
+  Usage ~9 %: all lanes stood down.
