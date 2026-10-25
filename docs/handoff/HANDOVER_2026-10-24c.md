@@ -27,7 +27,7 @@ Settings
 - Previews: one size, kept inside the window, hover zooms the content inside the fixed frame toward a per-setting
   focal point; Volumetric and Lens Flare use text (no honest same-view pair shows them at this size); the Ray Tracing
   Realistic preview is the real rendering (measured against a match).
-Disk cleanup: (pending your approval of Systems' deletion prompt: ~55 GB of superseded packages / verify output.)
+Disk cleanup: skipped on your word; Experimental freed 25 GB of its own superseded gate builds. The 55 GB candidate list (superseded packages, verify output, old refresh trees in Rebuild-Systems/work) is in MILESTONES_09c.md if you want it later.
 
 ## Proof: (pending) scripted MP + Escalation flows (incl. wave 1 completing and wave 2 starting) and the same-match
 gate vs the base chain (01-32).
