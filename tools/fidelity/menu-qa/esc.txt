@@ -12,6 +12,14 @@
 #expect moved ingame.spawned ingame.played 2
 #expect still ingame.spawned 2
 #expect level returned PartyLobby
+# Playtest 4 (Integration 2026-10-24): wave 1 must complete and wave 2 start within a 240 s cap, without STARTWAVE; the local player
+# kept alive (TEST ONLY WFC_ESC_INVULN) and driven by the player bot after the scripted moves, so the horde can be cleared
+#env WFC_ESC_INVULN=1
+#env WFC_PLAYERBOT=1
+#env WFC_ESCLOG=1
+#expect log escalation: wave 1 cleared
+#expect log escalation: wave 2 begins
+#expect state esc.wave2 InGame
 wait:ui=FrontEnd
 wait:t=2
 mouse:5,5
@@ -52,6 +60,9 @@ buttonhold:Forward,3
 wait:t=3.5
 navcheck:ingame.played
 shot:07_played.bmp
+wait:t=240
+navcheck:esc.wave2
+shot:07b_wave2.bmp
 showmenu
 wait:t=1
 call:Game.QuitToMainMenu

@@ -21,6 +21,7 @@ foreach ($flow in ($Flows -split ',')) {
     $e = @{ WFC_BOOT = 'frontend'; WFC_SKIPINTRO = '1'; WFC_CHARSELECT = '1'; WFC_FRONTEND_SCRIPT = $script; WFC_FLOW_TIMEOUT = "$TimeoutS";
             WFC_FLOWLOG = (Join-Path $run 'flow.log'); WFC_MUTE = '1'; WFC_NOINTERACT = '1'; WFC_AUTODETECT = '0'; WFC_QA = '1' }
     foreach ($kv in $ExtraEnv) { $k, $v = $kv -split '=', 2; $e[$k] = $v }
+    foreach ($l in (Get-Content $file | ? { $_.StartsWith('#env ') })) { $k, $v = $l.Substring(5).Trim() -split '=', 2; $e[$k] = $v }   # a flow's own '#env K=V' lines (e.g. esc: WFC_ESC_INVULN)
     foreach ($k in $e.Keys) { Set-Item "env:$k" $e[$k] }
     $t0 = Get-Date
     $p = Start-Process -FilePath $Exe -WorkingDirectory $run -PassThru -RedirectStandardOutput (Join-Path $run 'out.txt'); $null = $p.Handle
