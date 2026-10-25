@@ -4596,3 +4596,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 16:40 FINAL GATE ae63135a PASS (Experimental 21358dac): menu flows MP + ESC 76 / 76; same match head = base on 12 rows vs
   final15 (01-31); stability: campaign 24 / 24, Kismet 10 / 10, voice, 38 TDM runs on all 19 versus maps 0 errors, 6 ESC
   maps clean. PACKAGE ae63135a HANDED OVER (HANDOVER_2026-10-24b.md). GitHub pushed.
+2026-10-24 22:33 LAUNCH BLOCKER (user): Play.bat 'Drive already SUBSTed / Could not map drive W:' because W: still pointed at the deleted
+  48e42af6 package (the user's earlier Play.bat mapping). Fixed by `subst W: /d` (PowerShell; git-bash mangles /d into
+  D:\). TODO next package (Systems): Play.bat must skip a letter that is already substed (or drop a stale mapping to a
+  missing folder) instead of failing.
