@@ -793,7 +793,8 @@ void GfxRendererGL::drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial
     glEnable(GL_BLEND);
 }
 
-void GfxRendererGL::drawImage(const uint8_t* rgba, int w, int h, uint64_t key, float x, float y, float dw, float dh, int slot) {
+void GfxRendererGL::drawImage(const uint8_t* rgba, int w, int h, uint64_t key, float x, float y, float dw, float dh, int slot,
+                              float zoom, float fx, float fy) {
     if (!ok_ || !rgba || w <= 0 || h <= 0 || dw <= 0 || dh <= 0 || slot < 0 || slot > 2) return;
     Tex& image_ = this->image_[slot];
     uint64_t& imageKey_ = this->imageKey_[slot];
@@ -828,8 +829,9 @@ void GfxRendererGL::drawImage(const uint8_t* rgba, int w, int h, uint64_t key, f
         drawTriangles(v, id);
     }
     gfx::FillStyle fs;
-    const float sx = dw / (float)w, sy = dh / (float)h;
-    fs.m.a = sx; fs.m.d = sy; fs.m.tx = x; fs.m.ty = y;
+    zoom = std::max(1.0f, zoom);
+    const float sx = dw * zoom / (float)w, sy = dh * zoom / (float)h;
+    fs.m.a = sx; fs.m.d = sy; fs.m.tx = x + fx * dw * (1.0f - zoom); fs.m.ty = y + fy * dh * (1.0f - zoom);
     setFill(fs, id, gfx::CXForm{}, 1.0f, 4);
     glx::Uniform2f(uTexSize_, (float)w, (float)h);
     glBindTexture(GL_TEXTURE_2D, image_.id);
