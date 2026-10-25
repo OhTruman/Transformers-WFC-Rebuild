@@ -4633,3 +4633,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-25 08:27 MERGED d8f492ae human stranded recovery (30 s off-nav -> fall death + respawn; jumps are authored: wall escapes = missing
   blocking geometry, audit open) = the LAST build (usage ~6 %): Systems reduced.sh d8f492ae (package + base verify rows
   only); hand-over 4 drafted.
+2026-10-25 08:55 PACKAGE d8f492ae REDUCED VERIFY PASS (Rebuild-Systems/work/playtest_slim_d8f492ae 19 GB + _HDpack 22 GB). HANDED OVER
+  (HANDOVER_2026-10-25.md). All lanes stood down for good; usage ~5 %. GitHub pushed.
