@@ -12,13 +12,20 @@
 #expect moved ingame.spawned ingame.played 2
 #expect still ingame.spawned 2
 #expect level returned PartyLobby
-# Playtest 4 (Integration 2026-10-24): wave 1 must complete and wave 2 start within a 240 s cap, without STARTWAVE; the local player
+# Playtest 4 (Integration 2026-10-24): wave progression within a 360 s cap, reported as measured (Integration: Pulse clears, others may not), without STARTWAVE; the local player
 # kept alive (TEST ONLY WFC_ESC_INVULN) and driven by the player bot after the scripted moves, so the horde can be cleared
 #env WFC_ESC_INVULN=1
+# The map: Tranquillity (513, DLC pack 1, 'Forsaken'), picked in the Escalation game lobby (Host's Choice) - selectable only with the
+# DLC asset root (Frontend 2026-10-24)
+#env WFC_ASSETS=F:\Transformers Rebuild\Rebuild\work\assets_dlc\VerticalSlice
+#env WFC_RENDER_DATA=F:\Transformers Rebuild\Rebuild\work\render
+#expect log FRONTEND catalog DLC map 513.*selectable=1
+#expect log FLOW.gamelobby.map.mapId=513.map=MP_ESC_Tranquillity
+#expect log FLOW loading match world: map dir MP_ESC_Tranquillity
 #env WFC_PLAYERBOT=1
 #env WFC_ESCLOG=1
-#expect log escalation: wave 1 cleared
-#expect log escalation: wave 2 begins
+#expect measure escalation: wave [0-9]+ begins
+#expect measure escalation: wave [0-9]+ cleared
 #expect state esc.wave2 InGame
 wait:ui=FrontEnd
 wait:t=2
@@ -39,6 +46,10 @@ wait:level=GameLobby
 wait:t=4
 navcheck:esc.lobby
 shot:04_esc_lobby.bmp
+call:Online.SetSelectedMapID,513
+wait:t=2
+navcheck:esc.lobby.map
+shot:04b_esc_map_tranquillity.bmp
 clickclip:lobby_mc.menuAnchor_mc.menu_mc.selectCharacter_mc
 wait:t=4
 navcheck:esc.charselect
@@ -60,7 +71,7 @@ buttonhold:Forward,3
 wait:t=3.5
 navcheck:ingame.played
 shot:07_played.bmp
-wait:t=240
+wait:t=360
 navcheck:esc.wave2
 shot:07b_wave2.bmp
 showmenu

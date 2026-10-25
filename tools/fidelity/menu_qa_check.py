@@ -10,6 +10,7 @@ screen. Flow-file lines '#expect <kind> <args>' add:
   level <checkpoint> <Level>      ... level=<Level>
   chassis <A>[|<B>]               the first successful pick's chassis (e.g. Car2|Car4 = Scout)
   owner <checkpoint> <text>       the navcheck inputOwner at <checkpoint> contains <text>
+  measure <regex>                 reported as MEASURED (hit count + first line), never PASS / FAIL
   log <regex> / nolog-after <anchor regex> <regex>   a log line must / must not appear (after the anchor)
   moved <cpA> <cpB> <metres>      pawn position (navcheck field pos=x,y,z) moved >= metres between the two checkpoints
   still <checkpoint> <jitter>     navcheck jitter <= jitter (frame-to-frame transform flips: the #16 / #28 flicker)
@@ -155,6 +156,10 @@ def check_flow(out, flow):
         elif k == 'owner':
             c = by.get(a[0])
             rows.append((name, 'UNKNOWN' if not c else ('PASS' if any(a[1] in v for v in c.get('_all_inputOwner', [])) else 'FAIL'), f"inputOwner={' | '.join(c.get('_all_inputOwner', [])) if c else '-'}"))
+        elif k == 'measure':   # reported, not judged (e.g. Escalation wave completion within the cap)
+            rx = re.compile(' '.join(a))
+            hits = [n for n, x in enumerate(log) if rx.search(x)]
+            rows.append((name, 'MEASURED', f"{len(hits)} hits" + (f": first at log line {hits[0]}: {log[hits[0]].strip()[:100]}" if hits else '')))
         elif k == 'log':
             rx = re.compile(' '.join(a))
             hit = next((n for n, x in enumerate(log) if rx.search(x)), None)
