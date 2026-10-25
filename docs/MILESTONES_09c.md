@@ -4622,3 +4622,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the horde reaches the player elsewhere) = FINAL SHA for the playtest-4 build. OPEN (Gameplay out of usage): the
   double-jump map escape (blocking volumes already in; wall-top audit), Tranquillity door export (0 actors), item 32.
   Systems everything.sh 2bf2f152; Experimental gate (ESC same-match expected to differ; versus must match).
+2026-10-25 00:23 PACKAGE 2bf2f152 cut + verified (Rebuild-Systems/work/playtest_slim_2bf2f152 19 GB + _HDpack 22 GB): all rows PASS
+  except Remnant ESC, where the passive player bot now dies at 22 s to a HoloBrute melee = the reachable-spawn fix
+  working (0 failing opens; accepted; harness: end on ESC game over next package). Cleanup skipped on the user's word.
+  Gate: windowed mp + esc (Tranquillity, INVULN, 360 s) running on fast_2bf2f15.
