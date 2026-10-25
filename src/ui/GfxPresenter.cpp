@@ -1942,6 +1942,11 @@ void GfxPresenter::syncGameSettings(gfx::Player& p, frontend::GameFlow& flow) {
                       flow.lobby().playlistId < 0;
     // the row (host only)
     gfx::MovieClip* cc = findClipNamed(p.root(), "customCharacters_mc");
+    // playtest 4 #2 (Game Settings vanished after the first open): Iconic Characters On switches the lobby to the iconic menu
+    // (mc_menuMultiplayerIconicPC: Choose Character, no Create a Character row), which the row was cloned from - so the row (and
+    // the way to turn Iconic off again) was gone. The iconic menu's Choose Character row is the template there; Escalation keeps
+    // its own menu without the row.
+    if (!cc && flow.lobby().gameModeTag != "SV") cc = findClipNamed(p.root(), "selectCharacter_mc");
     gfx::MovieClip* sm = findClipNamed(p.root(), "selectMap_mc");
     {   // #25 (the user's countdown cancel): the lobby menu's updateMenu hides Start and Select Map and raises the menu 50 px while
         // both are disabled (the countdown), with no branch that undoes it - the original countdown could not be cancelled. After a
