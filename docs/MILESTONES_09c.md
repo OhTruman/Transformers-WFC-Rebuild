@@ -4615,3 +4615,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the HD pack into it), refresh_ae63135a, dlss_db72, hd_dev_full, vbake, source / Git / toolchains / assets. Experimental
   asked to drop its superseded gate bases (own worktree). Frontend: Game Settings root cause = the row is cloned from
   the Create a Character row, gone once Iconic Characters is on (fix built; windowed check pending the card).
+2026-10-24 23:28 MERGED 2d3b2d54 Game Settings rebuild after re-entry (the row's template vanished with Iconic Characters on; windowed
+  PASS on both paths). Experimental freed 25 GB (own superseded gate arms). Frontend + Rendering done for this build;
+  waiting on Gameplay's ESC / boundary batch + item 32 -> build -> sha -> everything.sh -> gate -> hand-over 3.

@@ -8,7 +8,7 @@ Multiplayer
 - Bot limits follow the team you are on (your side 1 + N-1 bots, the other side N) for every player limit.
 - Game Settings after re-entry: root cause found: the row is cloned from the lobby's Create a Character row, and once
   Iconic Characters is turned on the lobby switches to a menu without that row, so Game Settings could never rebuild.
-  Fixed (the iconic menu's Choose Character row is the template now). (windowed check: pending)
+  Fixed (the iconic menu's Choose Character row is the template now); confirmed windowed on both paths (via Escalation, and with Iconic Characters on).
 - XP popups show one at a time (same-kill updates merge in place).
 - Map escape by double-jumping walls and getting stuck outside: (pending Gameplay's boundary-volume import)
 - Hit registration review: (pending Gameplay's report)
