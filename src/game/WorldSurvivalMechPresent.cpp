@@ -11,8 +11,58 @@
 #include "core/Log.h"
 
 #include <algorithm>
+#include <map>
+#include <memory>
 
 namespace game {
+
+namespace {
+struct EscGeneratorMesh { const char* map; const char* actor; const char* gltf; const char* mats[4]; float pos[3]; float yawDeg; float scale; };
+#include "game/EscGeneratorMeshes.inc"
+} // namespace
+
+void World::svGeneratorsEnsure(const std::string& contentDir) {   // main thread (textures: GL); per map, at its first match step
+    if (svGenMap_ == mapName_ || !onMainThread()) return;
+    svGenMap_ = mapName_;
+    svGenMeshes_.clear(); svGenDraws_.clear();
+    std::map<std::string, int> byKey;
+    std::map<std::string, std::unique_ptr<assets::SkinnedModel>> models;
+    for (const EscGeneratorMesh& g : kEscGeneratorMeshes) {
+        if (mapName_ != g.map) continue;
+        std::string key = g.gltf;
+        for (const char* m : g.mats) key += std::string("|") + m;
+        auto it = byKey.find(key);
+        if (it == byKey.end()) {
+            auto& mdl = models[g.gltf];
+            if (!mdl) {
+                mdl = std::make_unique<assets::SkinnedModel>();
+                if (!assets::loadSkinnedGlb(contentDir + g.gltf, *mdl) || !mdl->valid()) { LOG_WARN("escalation: generator mesh %s unavailable", g.gltf); mdl.reset(); }
+                else resolveModelTextures(*mdl);
+            }
+            int idx = -1;
+            if (mdl) {
+                assets::LocalPose lp; std::vector<core::Mat4> gl;
+                assets::samplePose(*mdl, -1, 0.0f, false, lp);   // the bind / rest pose
+                render::MeshData md;
+                assets::skinPose(*mdl, lp, gl, md);
+                for (size_t s = 0; s < 4 && s < md.mats.size(); ++s) if (g.mats[s][0]) md.mats[s].wfcName = g.mats[s];   // the component's overrides
+                svGenMeshes_.push_back(std::move(md)); idx = (int)svGenMeshes_.size() - 1;
+            }
+            it = byKey.emplace(key, idx).first;
+        }
+        if (it->second < 0) continue;
+        SvGenDraw d; d.model = it->second;
+        d.world = core::Mat4::translate(core::Vec3{g.pos[0], g.pos[1], g.pos[2]}) * core::Mat4::rotateY(-g.yawDeg * 3.14159265f / 180.0f) *
+                  core::Mat4::scale(core::Vec3{g.scale, g.scale, g.scale});
+        svGenDraws_.push_back(d);
+    }
+    if (!svGenDraws_.empty()) LOG_INFO("escalation: %zu generator meshes (%zu distinct)", svGenDraws_.size(), svGenMeshes_.size());
+}
+
+void World::svDrawGenerators(render::IRenderer& r) const {
+    if (svGenMap_ != mapName_) return;
+    for (const SvGenDraw& d : svGenDraws_) r.drawDynamicMesh(svGenMeshes_[(size_t)d.model], d.world, core::Vec3{1, 1, 1});
+}
 
 void World::svMechPresent(render::IRenderer& r) const {
     const SvMech& M = svData_.mech;

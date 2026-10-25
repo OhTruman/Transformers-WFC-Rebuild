@@ -1223,6 +1223,13 @@ public:
     void svMechPresent(render::IRenderer& r) const;
     void svMechDrawSentries(render::IRenderer& r) const;
     void svMechEnsureModels(const std::string& dir);
+    // (Escalation) the TnSurvivalGenerator meshes (EscGeneratorMeshes.inc): one bind-posed mesh per (mesh, material overrides)
+    void svGeneratorsEnsure(const std::string& contentDir);
+    void svDrawGenerators(render::IRenderer& r) const;
+    struct SvGenDraw { int model = -1; core::Mat4 world; };
+    std::vector<render::MeshData> svGenMeshes_;
+    std::vector<SvGenDraw> svGenDraws_;
+    std::string svGenMap_;
     assets::SkinnedModel svSentryModel_[2];         // LightSentry (SentryBlaster), RepairSentry (SentryRepair)
     bool svMechModelsTried_ = false;
     struct SvSentryPose { bool on = false, everOn = false; float since = 0.0f, t = -1.0f; int clip = -1; render::MeshData mesh; };

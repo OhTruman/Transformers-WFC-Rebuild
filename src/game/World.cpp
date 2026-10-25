@@ -5003,6 +5003,7 @@ void World::draw(render::IRenderer& r) const {
         if (se.alive && !se.mesh.positions.empty())
             r.drawDynamicMesh(se.mesh, core::Mat4::translate(se.pos) * core::Mat4::rotateY(se.yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
     svMechDrawSentries(r);   // (Escalation DLC) District's sentry turrets
+    svDrawGenerators(r);     // (Escalation) the generators: vending machines, door / floodgate / breaker switches
     drawMines(r);   // [Gameplay] kamikaze mines (owner 0: the local player's mines, its character colours)
     drawCorpseGibs(r);   // [Gameplay] gib chunks and vehicle hull wrecks
     // Weapon + vehicle boost effects last (translucent/additive over the opaque scene): after the barrier / sentry meshes,
@@ -7037,6 +7038,7 @@ void World::requestBarrier(int owner) {
 // The barrier / sentry meshes load (textures: GL) on the main thread: the local part calls this every step during a match (a flag
 // check after the first time), so an ability actor spawned by the background part never loads.
 void World::ensureAbilityModels() {
+    svGeneratorsEnsure(assetRoot() + "/../content/");   // (Escalation) the generator meshes, once per map
     svMechEnsureModels(assetRoot() + "/../content/WEP_SentryBlaster01_p/");   // (Escalation DLC) District's sentry turrets
     if (!barrierModelTried_ && onMainThread()) {
         barrierModelTried_ = true;
