@@ -212,6 +212,19 @@ void GfxPresenter::hudCall(const std::string& fn, const std::vector<frontend::Br
     Args a;
     for (const frontend::BridgeValue& b : args) a.push_back(toValue(hud_->player().vm(), b));
     if (fn == "_global.GameMessage" && extendedMatch_) { extendedKillFeed(a); return; }
+    if (fn == "_global.PointEvent") {
+        // PC ADAPTATION (user playtest 4 #5, XP notifications overlap): the HUD's transaction queue shows the next popup
+        // TransactionDisplayRate (200 ms) after the previous one starts its 1 s slide-up fade, so consecutive kills overlapped.
+        // The queue now waits for the fade: one popup at a time (same-transaction updates still merge in place).
+        std::function<void(gfx::MovieClip*)> walk = [&](gfx::MovieClip* c) {
+            if (!c) return;
+            if (c->script && hud_->player().vm().get(c->script, "TransactionDisplayRate").isNumber() &&
+                hud_->player().vm().toNumber(hud_->player().vm().get(c->script, "TransactionDisplayRate")) < 1000.0)
+                hud_->player().vm().set(c->script, "TransactionDisplayRate", gfx::avm1::Value(1050.0));
+            for (auto& [depth, child] : c->children) walk(dynamic_cast<gfx::MovieClip*>(child.get()));
+        };
+        walk(hud_->player().root());
+    }
     hud_->invoke(fn, a);
 }
 
@@ -1734,7 +1747,6 @@ void GfxPresenter::syncSettingsPreview(const platform::InputFrame& in) {
     // described in the row's text only (a still cannot show it). Rows: Upscaling (Off / FSR 1 / FSR 3.1 Quality / Balanced /
     // Performance), HD Textures, Ray Tracing, Volumetric Lighting, Lens Flares; images data/frontend/previews/<Row>_<value>.png.
     for (PreviewImage& pi : preview_) pi.png.clear();
-    previewZoom_ = -1;
     gfx::Player* p = graphicsPagePlayer_;
     bool alive = false;
     for (const Open& op : movies_) if (p && &op.movie->player() == p) alive = true;
@@ -1748,12 +1760,12 @@ void GfxPresenter::syncSettingsPreview(const platform::InputFrame& in) {
     const auto& d = rt_.flow().profile().display;
     std::string row;
     int value = 0;
-    if (store == "<PCSettings:Upscaling>") { row = "Upscaling"; value = d.upscaling; }
-    else if (store == "<PCSettings:HDTextures>") { row = "HDTextures"; value = d.hdTextures; }
-    else if (store == "<PCSettings:RayTracing>") { row = "RayTracing"; value = d.rayTracing; }
-    else if (store == "<PCSettings:VolumetricLighting>") { row = "VolumetricLighting"; value = d.volumetricLighting ? 1 : 0; }
-    else if (store == "<PCSettings:LensFlares>") { row = "LensFlares"; value = d.lensFlares; }
-    if (row.empty()) return;
+    // playtest 4: Volumetric Lighting / Lens Flares are described in their row text only (their stills read as identical);
+    // per row the hover zoom's focal point (where the setting shows: texture detail, edges, the lit area)
+    if (store == "<PCSettings:Upscaling>") { row = "Upscaling"; value = d.upscaling; previewFocus_[0] = 0.5f; previewFocus_[1] = 0.45f; }
+    else if (store == "<PCSettings:HDTextures>") { row = "HDTextures"; value = d.hdTextures; previewFocus_[0] = 0.5f; previewFocus_[1] = 0.6f; }
+    else if (store == "<PCSettings:RayTracing>") { row = "RayTracing"; value = d.rayTracing; previewFocus_[0] = 0.5f; previewFocus_[1] = 0.4f; }
+    if (row.empty()) { previewZoom_[0] = previewZoom_[1] = 1.0f; return; }
     preview_[0].png = frontend::settingsPreviewPng(row, 0);
     preview_[1].png = value != 0 ? frontend::settingsPreviewPng(row, value) : std::string();
     if (preview_[0].png.empty() && preview_[1].png.empty()) return;
@@ -1761,8 +1773,10 @@ void GfxPresenter::syncSettingsPreview(const platform::InputFrame& in) {
     gfx::Rect b = menu->boundsIn(menu->worldMatrix());
     const gfx::Matrix mm = GfxRendererGL::movieMatrix(*p, viewW_, viewH_);
     const gfx::Point tl = mm.apply({b.xmin, b.ymin}), br = mm.apply({b.xmax, b.ymax});
-    const float w = viewW_ * 0.22f, h = w * 9.0f / 16.0f, gap = viewW_ * 0.012f;
-    const float left = br.x + viewW_ * 0.03f, top = std::max(8.0f, (tl.y + br.y) * 0.5f - h * 0.5f);
+    // both images one size, the pair kept inside the window (playtest 4: HD's second image ran off the right edge)
+    const float gap = viewW_ * 0.012f, left = br.x + viewW_ * 0.03f;
+    const float w = std::max(32.0f, std::min(viewW_ * 0.22f, (viewW_ - left - gap - 8.0f) * 0.5f)), h = w * 9.0f / 16.0f;
+    const float top = std::max(8.0f, (tl.y + br.y) * 0.5f - h * 0.5f);
     for (int i = 0; i < 2; ++i) {
         PreviewImage& pi = preview_[i];
         if (pi.png.empty()) continue;
@@ -1773,13 +1787,9 @@ void GfxPresenter::syncSettingsPreview(const platform::InputFrame& in) {
             pi.loaded = pi.png;
             ++pi.key;
         }
-        if (in.mouseX >= pi.rect[0] && in.mouseX <= pi.rect[0] + w && in.mouseY >= pi.rect[1] && in.mouseY <= pi.rect[1] + h) previewZoom_ = i;
-    }
-    if (previewZoom_ >= 0) {   // hover: the image at 2x, kept inside the window
-        const float zw = std::min(w * 2.0f, viewW_ * 0.6f), zh = zw * 9.0f / 16.0f;
-        previewZoomRect_[0] = std::max(8.0f, std::min((float)viewW_ - zw - 8.0f, left));
-        previewZoomRect_[1] = std::max(8.0f, std::min((float)viewH_ - zh - 8.0f, top - (zh - h) * 0.5f));
-        previewZoomRect_[2] = zw; previewZoomRect_[3] = zh;
+        // hover: the content zooms to 2x toward the focal point inside the same frame, easing back on leave
+        const bool over = in.mouseX >= pi.rect[0] && in.mouseX <= pi.rect[0] + w && in.mouseY >= pi.rect[1] && in.mouseY <= pi.rect[1] + h;
+        previewZoom_[i] += ((over ? 2.0f : 1.0f) - previewZoom_[i]) * 0.15f;
     }
     static std::string lastPreview;
     if (lastPreview == row + std::to_string(value)) return;
@@ -2650,15 +2660,11 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
         if (fps_) drawMovie(*fps_);
     }
     if (cursor_ && !videoOver_) drawMovie(*cursor_);
-    for (int i = 0; i < 2; ++i) {   // #5: baseline left, selected right; the hovered one again, enlarged, on top
+    for (int i = 0; i < 2; ++i) {   // #5: baseline left, selected right, one size; hover zooms inside the frame
         const PreviewImage& pi = preview_[i];
         if (pi.png.empty() || !pi.image.valid()) continue;
-        gl_.drawImage(pi.image.rgba.data(), pi.image.w, pi.image.h, pi.key, pi.rect[0], pi.rect[1], pi.rect[2], pi.rect[3], i);
-    }
-    if (previewZoom_ >= 0 && !preview_[previewZoom_].png.empty() && preview_[previewZoom_].image.valid()) {
-        const PreviewImage& pi = preview_[previewZoom_];
-        gl_.drawImage(pi.image.rgba.data(), pi.image.w, pi.image.h, pi.key, previewZoomRect_[0], previewZoomRect_[1], previewZoomRect_[2],
-                      previewZoomRect_[3], previewZoom_);
+        gl_.drawImage(pi.image.rgba.data(), pi.image.w, pi.image.h, pi.key, pi.rect[0], pi.rect[1], pi.rect[2], pi.rect[3], i,
+                      previewZoom_[i], previewFocus_[0], previewFocus_[1]);
     }
     gl_.end();
 }

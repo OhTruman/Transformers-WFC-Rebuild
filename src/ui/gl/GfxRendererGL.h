@@ -35,7 +35,9 @@ public:
     // A full-screen movie frame (RGBA8, top row first), letterboxed into the window; serial skips re-uploads.
     void drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial);
     // An RGBA image into a window rect (pixels, top-left origin) with a 2 px UI-cyan frame; re-uploaded when key changes.
-    void drawImage(const uint8_t* rgba, int w, int h, uint64_t key, float x, float y, float dw, float dh, int slot = 0);   // slot 0..2
+    // slot 0..2; zoom >= 1 magnifies the content inside the same frame toward the focal point (fx, fy: 0..1 of the image)
+    void drawImage(const uint8_t* rgba, int w, int h, uint64_t key, float x, float y, float dw, float dh, int slot = 0,
+                   float zoom = 1.0f, float fx = 0.5f, float fy = 0.5f);
     bool ok() const { return ok_; }
     size_t cachedShapes() const { return shapes_.size(); }
     // The tessellation cache is keyed by ShapeDef address: when a movie (and its definitions) is destroyed, a later

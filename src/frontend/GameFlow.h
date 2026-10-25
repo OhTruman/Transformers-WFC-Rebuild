@@ -290,7 +290,9 @@ public:
     void snakeDraftForTest() { publicSnakeDraft(); }
     std::string selfFingerprintForTest() const { return selfId_.fingerprint; }
     const SessionMemberId& selfId() const { return selfId_; }
-    int humanFaction() const { return lobby_.localTeam == 1 ? 1 : 0; }   // 0 Autobots, 1 Decepticons
+    // 0 Autobots, 1 Decepticons: the team the lobby shows for the human (the Team row's preferredTeam before a team is
+    // assigned) - the bot limits follow a team switch (playtest 4: they stayed Autobots 4 / Decepticons 5)
+    int humanFaction() const { return lobby_.shownTeam(onlineMembers_.empty()) == 1 ? 1 : 0; }
     // Gameplay's MatchSettings maxPerTeam / maxPlayers (players incl. the human): the extended limits never exceed them.
     void setBotCapacity(int perTeam, int maxPlayers, int botsPerTeam = 0) {
         gpPerTeam_ = std::max(1, perTeam); gpMaxPlayers_ = std::max(2, maxPlayers); gpBotsPerTeam_ = botsPerTeam > 0 ? botsPerTeam : gpPerTeam_;

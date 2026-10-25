@@ -147,8 +147,8 @@ private:
     bool pickerHeld_ = false;   // #21: a press on the colour square is being held
     struct PreviewImage { std::string png, loaded; render::ImageData image; uint64_t key = 0; float rect[4] = {0, 0, 0, 0}; };
     PreviewImage preview_[2];             // #5: [0] the baseline (value 0, left), [1] the selected value (right)
-    int previewZoom_ = -1;                // the image under the mouse: drawn enlarged
-    float previewZoomRect_[4] = {0, 0, 0, 0};
+    float previewZoom_[2] = {1.0f, 1.0f};  // hover zoom inside the fixed frame, eased in / out
+    float previewFocus_[2] = {0.5f, 0.5f}; // the row's focal point (0..1 of the image)
     void syncFirstLaunchBrightness(gfx::Player& p, frontend::GameFlow& flow);   // the calibration at the first main menu (#34)
     bool firstBrightnessShown_ = false;
     bool lobbyCountingSeen_ = false;      // #25: the lobby's start countdown was running (a cancel restores the menu updateMenu hid)
