@@ -4618,3 +4618,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-24 23:28 MERGED 2d3b2d54 Game Settings rebuild after re-entry (the row's template vanished with Iconic Characters on; windowed
   PASS on both paths). Experimental freed 25 GB (own superseded gate arms). Frontend + Rendering done for this build;
   waiting on Gameplay's ESC / boundary batch + item 32 -> build -> sha -> everything.sh -> gate -> hand-over 3.
+2026-10-24 23:32 MERGED 2bf2f152 ESC spawns prefer reachable zones (wave 1 cleared on none of the 5 ESC maps before; Pulse clears now,
+  the horde reaches the player elsewhere) = FINAL SHA for the playtest-4 build. OPEN (Gameplay out of usage): the
+  double-jump map escape (blocking volumes already in; wall-top audit), Tranquillity door export (0 actors), item 32.
+  Systems everything.sh 2bf2f152; Experimental gate (ESC same-match expected to differ; versus must match).

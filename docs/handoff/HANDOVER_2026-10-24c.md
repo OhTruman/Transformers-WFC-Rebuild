@@ -1,6 +1,6 @@
-# Hand-over note 3, 2026-10-24: build (pending) = the playtest-4 build (MP + Escalation reliability)
+# Hand-over note 3, 2026-10-24: build 2bf2f152 = the playtest-4 build (MP + Escalation reliability)
 
-Package: (pending: Rebuild-Systems/work/playtest_slim_<sha> + _HDpack; self-contained; Play.bat now reuses or drops
+Package: F:/Transformers Rebuild/Rebuild-Systems/work/playtest_slim_2bf2f152 (Play.bat; the HD pack beside it as playtest_slim_2bf2f152_HDpack); self-contained; Play.bat now reuses or drops
 stale drive mappings, so the W: failure cannot recur).
 
 ## Your playtest-4 findings
@@ -10,9 +10,9 @@ Multiplayer
   Iconic Characters is turned on the lobby switches to a menu without that row, so Game Settings could never rebuild.
   Fixed (the iconic menu's Choose Character row is the template now); confirmed windowed on both paths (via Escalation, and with Iconic Characters on).
 - XP popups show one at a time (same-kill updates merge in place).
-- Map escape by double-jumping walls and getting stuck outside: (pending Gameplay's boundary-volume import)
-- Hit registration review: (pending Gameplay's report)
-- Cubes: the Energon / ammo pickups act only when you are hurt or short; (pending the cubes line)
+- Map escape by double-jumping walls: OPEN. The authored blocking volumes are already in our movement collision (71 on Streets), so the escapes need a per-map audit of wall tops and missing volumes; Gameplay ran out of usage before it. Next build.
+- Hit registration: reviewed, no defect (the shot lands within 0.02 px of the crosshair on average).
+- Cubes: Energon cubes restore health and are picked up only below full health; ammo crates only when a weapon is short. Nothing else is placed there.
 - Vignette: not reproduced at 2560x1440 fullscreen (the dark edges stay on); awaiting your answer whether you mean the
   backdrop shot changing when a ship moves into the foreground.
 Escalation
@@ -20,8 +20,8 @@ Escalation
   was ever drawn (skeletal actors the world export never carried), which is why "E to open door for 300" floated at an
   empty doorway.
 - Doors: the closed door is a transforming skeletal actor; on the DLC maps (Forsaken = Tranquillity, District, Pulse,
-  Static) those actors never loaded because the runtime read only the base maps' list. (pending Gameplay's per-map load)
-- Wave 1 stalling / enemies behind the blue barriers / the spider in the wall: (pending Gameplay's wave-1 flow fix)
+  Static) the sim loads them per map (District 22, Static 34, Pulse 2); Forsaken / Tranquillity's export has 0 door actors (an AssetTools gap: its blue barriers are the floodgates, which do load). Door drawing on the DLC maps is the next build.
+- Wave 1 stalling: cause found and fixed. Survivors spawned off our bot navigation or in sealed areas, so the wave could never complete; spawns now prefer zones reachable from the players. Pulse clears wave 1 in the harness; on the other maps the horde now reaches the player (one Tranquillity spider still lacks a path). Please confirm on Forsaken.
 - Water on Forsaken: later.
 Settings
 - Previews: one size, kept inside the window, hover zooms the content inside the fixed frame toward a per-setting
