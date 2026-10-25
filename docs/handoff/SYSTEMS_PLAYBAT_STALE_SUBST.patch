@@ -1,0 +1,19 @@
+--- a/tools/package/slim_template/Play.bat
++++ b/tools/package/slim_template/Play.bat
+@@ -7,9 +7,15 @@
+ set "PKG=%~dp0"
+ if "%PKG:~-1%"=="\" set "PKG=%PKG:~0,-1%"
+ set "L="
++set "REUSE="
++rem A mapping left by an earlier session (a crash, or a package deleted while mapped): reuse the one that is this folder,
++rem drop the ones whose folder is gone ("if not exist X:\" counts such a letter as free, and subst then fails on it).
++for /f "tokens=1" %%A in ('subst 2^>nul ^| findstr /i /e /c:"=> %PKG%"') do if not defined L ( set "L=%%~dA" & set "REUSE=1" )
++if defined L set "L=%L:~0,1%"
++for /f "tokens=1,2,*" %%A in ('subst 2^>nul') do if not exist "%%C\" subst %%~dA /d >nul 2>&1
+ for %%D in (F W V U T S R Q P O N M L K J I H G) do if not defined L if not exist %%D:\ set "L=%%D"
+ if not defined L ( echo No free drive letter to map the game's folder to. & pause & exit /b 1 )
+-subst %L%: "%PKG%"
++if not defined REUSE subst %L%: "%PKG%"
+ if errorlevel 1 ( echo Could not map drive %L%:. & pause & exit /b 1 )
+ set "R=%L%:/Transformers Rebuild"
+ set "WFC_ASSETS=%R%/ExtractedAssets/VerticalSlice"
