@@ -1216,6 +1216,7 @@ public:
     void ensureAbilityModels();
     void ensureGibModels();
     void ensureHullMeshes();
+    float localStrandRun_ = 0.0f; bool strandTestDone_ = false;   // the human stranded rule (playtest 4) / WFC_STRANDTEST
     void applyPerPolyCollision(render::MeshData& m, const std::string& mapDir, bool recordProbe, bool apply);   // PC ADAPTATION (playtest 3 crater)
     void perPolyProbe() const;   // WFC_CRATERPROBE
     std::vector<std::array<float, 16>> perPolyProbe_; std::vector<core::Vec3> perPolyTris_;

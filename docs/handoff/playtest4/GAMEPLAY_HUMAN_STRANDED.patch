@@ -1,0 +1,50 @@
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 1f6ac15b..2bb0fdab 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -2703,6 +2703,33 @@ void World::stepRemainder(float dt) {
+         if (matchActive_) killLocalPlayer(-1, false, "Engine.DmgType_Fell");   // WorldInfo.KillZDamageType [HIGH: stock default]
+         else respawnPlayer();
+     }
++    if (matchActive_ && !cp_.active && !localDead_ && botNav_.valid() && match_.state() == Match::State::InProgress) {
++        Character& lp = player_.pawn();
++        static const bool strandTest = std::getenv("WFC_STRANDTEST") != nullptr;   // TEST ONLY
++        if (strandTest && !strandTestDone_ && match_.matchTime() > 3.0f) {
++            strandTestDone_ = true;
++            core::Vec3 lo{1e9f, 1e9f, 1e9f}, hi{-1e9f, -1e9f, -1e9f};
++            for (const BotNav::Cell& c : botNav_.cells()) { lo = {std::min(lo.x, c.bmin.x), std::min(lo.y, c.bmin.y), std::min(lo.z, c.bmin.z)}; hi = {std::max(hi.x, c.bmax.x), std::max(hi.y, c.bmax.y), std::max(hi.z, c.bmax.z)}; }
++            bool placed = false;
++            for (float x = lo.x; x <= hi.x && !placed; x += 4.0f)
++                for (float z = lo.z; z <= hi.z && !placed; z += 4.0f) {
++                    float gy; core::Vec3 n;
++                    if (!collision_.groundHeight(x, z, hi.y + 60.0f, 0.0f, gy, n) || n.y < 0.8f) continue;
++                    if (botNav_.findCell(core::Vec3{x, gy, z}, 25.0f, 34.0f) >= 0) continue;
++                    lp.setPosition(core::Vec3{x, gy + 0.05f, z}); lp.velocity() = {0, 0, 0}; lp.groundY = gy; placed = true;
++                    LOG_INFO("STRANDTEST: the local pawn placed at (%.1f %.1f %.1f), no nav within 25 m / 34 m below", x, gy, z);
++                }
++            if (!placed) LOG_INFO("STRANDTEST: no stranded surface found");
++        }
++        // the bots' stranded rule for the human (playtest 4): no nav floor in reach for 30 s in robot form -> KillZ's handling
++        const bool stranded = lp.moveForm() == Form::Robot && !lp.isTransforming() && botNav_.findCell(lp.position(), 25.0f, 34.0f) < 0;
++        localStrandRun_ = stranded ? localStrandRun_ + dt : 0.0f;
++        if (localStrandRun_ >= 30.0f) {
++            LOG_INFO("World: local player stranded off the nav for 30 s at (%.1f %.1f %.1f): out-of-world handling (KillZ)", lp.position().x, lp.position().y, lp.position().z);
++            localStrandRun_ = 0.0f;
++            killLocalPlayer(-1, false, "Engine.DmgType_Fell");
++        }
++    }
+     { TickTimer tt(10); for (auto& a : actors_) if (a->alive()) a->tick(*this, dt); }
+     // Pickup glue (Systems M04 integration preview): Gameplay's PickupFactory raises one PickupEvent per
+     // transition. Taken -> Inventory.AnnouncePickup: Systems plays the PickupSound once, attached to the
+diff --git a/src/game/World.h b/src/game/World.h
+index 86bcac3c..7c999fca 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1216,6 +1216,7 @@ public:
+     void ensureAbilityModels();
+     void ensureGibModels();
+     void ensureHullMeshes();
++    float localStrandRun_ = 0.0f; bool strandTestDone_ = false;   // the human stranded rule (playtest 4) / WFC_STRANDTEST
+     void applyPerPolyCollision(render::MeshData& m, const std::string& mapDir, bool recordProbe, bool apply);   // PC ADAPTATION (playtest 3 crater)
+     void perPolyProbe() const;   // WFC_CRATERPROBE
+     std::vector<std::array<float, 16>> perPolyProbe_; std::vector<core::Vec3> perPolyTris_;

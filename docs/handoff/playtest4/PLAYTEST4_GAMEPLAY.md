@@ -31,3 +31,21 @@
    health; ammo crates only when a weapon is short of ammo (as in the original).
 
 FINAL_BASE_ITEMS 32: cut with work/cut_base_items.sh + work/fbi_verify<N>.sh once this patch merges (needs the merge sha).
+
+## Follow-up (Integration, the last usage): stranded recovery + jump values
+
+- **`GAMEPLAY_HUMAN_STRANDED.patch` (on 2bf2f152):** the bots' stranded rule for the local human.
+  - Rule: no nav cell within the stranded search's tolerance (25 m horizontally / 34 m below = MaxFallHeight) for 30 s (the
+    bots' threshold) in robot form -> KillZ's out-of-world handling (Engine.DmgType_Fell death, the normal respawn).
+  - Inert near the nav. Versus and Escalation only.
+  - Headless proof (WFC_STRANDTEST, Streets): the pawn placed on a stranded surface at (12.0 -670.7 -666.0) -> "stranded off
+    the nav for 30 s" -> respawn at TnTeamPlayerStart_10925.
+  - Control: a bot-driven human 120 s with no teleport triggers it 0 times.
+  - SIMHASH changes by design only when it fires.
+- **Jump values: no change, ours are the authored ones.** ChassisDef reads each character.json's acrobatics with the original's
+  defaults:
+  - JumpHeight 500 UU -> JumpZ = sqrt(2 g h) = 17.15 m/s (g 29.4);
+  - DoubleJumpHeight 450 UU (double jump sets vel.Z = sqrt(2 g 4.5) = 16.3 m/s, XY kept);
+  - AirControl 0.4, AirSpeed 1200 UU/s, TerminalVelocity 6000 UU/s.
+  - So the wall escapes are not higher-than-original jumps: they come from missing blocking geometry or wall caps (the audit
+    left open) and are now recoverable through the stranded rule.
