@@ -4605,3 +4605,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the AP_WallSwitch door terminals; the doorway barrier actor itself still open). Frontend: bot counts / XP stack /
   preview frame + zoom done in code; Game Settings re-entry + vignette dumps taken at the user's mode; one patch coming.
   Gameplay: ESC wave-1 flow + boundary volumes + hit-reg review + item 32. Systems: conservative cleanup + Play.bat.
+2026-10-24 23:20 MERGED 8c3bb918 playtest-4 frontend (team-aware bot limits, XP popups one at a time, previews one size + in-frame zoom,
+  Volumetric / Lens Flare text). Not reproduced yet: Game Settings re-entry (repro script stopped at the leave confirm:
+  code reading + one more slot), the vignette (soft edges hold at 2560x1440 fullscreen: ask the user for a shot). RE:
+  the ESC closed door = a TnTransformingWorldActor skeletal mesh (never drawn) animating open on purchase -> Rendering.
