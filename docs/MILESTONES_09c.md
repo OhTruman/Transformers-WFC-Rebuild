@@ -4600,3 +4600,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   48e42af6 package (the user's earlier Play.bat mapping). Fixed by `subst W: /d` (PowerShell; git-bash mangles /d into
   D:\). TODO next package (Systems): Play.bat must skip a letter that is already substed (or drop a stale mapping to a
   missing folder) instead of failing.
+2026-10-24 23:18 PLAYTEST 4 dispatched (USER_PLAYTEST_2026-10-24c.md; ~9 % usage: batch mode, one more build). MERGED 621e0d69 Escalation
+  generators drawn (no TnSurvivalGenerator was ever drawn: skeletal actors absent from world.glb; 288 generators incl.
+  the AP_WallSwitch door terminals; the doorway barrier actor itself still open). Frontend: bot counts / XP stack /
+  preview frame + zoom done in code; Game Settings re-entry + vignette dumps taken at the user's mode; one patch coming.
+  Gameplay: ESC wave-1 flow + boundary volumes + hit-reg review + item 32. Systems: conservative cleanup + Play.bat.
