@@ -4630,3 +4630,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   cleared by the test bot in 360 s; Pulse reaches wave 3 headless); versus same-match identical, ESC rows differ by
   design; 38 TDM runs 0 errors; campaign 24 / 24. PACKAGE 2bf2f152 HANDED OVER (HANDOVER_2026-10-24c.md). GitHub pushed.
   Usage ~9 %: all lanes stood down.
+2026-10-25 08:27 MERGED d8f492ae human stranded recovery (30 s off-nav -> fall death + respawn; jumps are authored: wall escapes = missing
+  blocking geometry, audit open) = the LAST build (usage ~6 %): Systems reduced.sh d8f492ae (package + base verify rows
+  only); hand-over 4 drafted.
